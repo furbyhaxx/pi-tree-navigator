@@ -8,11 +8,11 @@
  * The loader's `readFile` is injected, so these tests touch no real fs and
  * pin the layer/merge/warning matrix without a session.
  *
- * Two fields with deliberately different failure semantics (issue #55):
+ * Fields with deliberately different failure semantics:
  *   - `rewindHintReserveTokens`: field-level invalid disables the hint for the
  *     session with NO cross-layer fallback.
- *   - `anchorStartAfterTurns`: field-level invalid warns and falls through
- *     to the other layer's valid value, else the default 2.
+ *   - `anchorStartAfterTurns` and `parentHandoffMode`: invalid values warn
+ *     and fall through to the other layer's valid value, else their defaults.
  *
  * The removed `rewindHintAtPercent` key (0.3.0) only warns: it never
  * enables, disables, or invalidates the hint.
@@ -24,6 +24,7 @@ import {
   type HintField,
   loadTreeNavigatorConfig,
   mergeTreeNavigatorConfig,
+  type ParentHandoffModeField,
   type ParsedLayer,
   parseTreeNavigatorConfig,
   REWIND_HINT_MAX_RESERVE,
@@ -35,6 +36,7 @@ import {
   type StartAnchorField,
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
+import type { HandoffMode } from "./handoff.ts";
 
 const AGENT_DIR = "/agent";
 const GLOBAL_PATH = `/agent/${TREE_NAVIGATOR_CONFIG_FILENAME}`;
@@ -54,6 +56,8 @@ const warnLegacyPercent = (layerName: string, path: string) =>
 const WARN_INVALID_HINT_PROJECT = `navigate_tree: invalid rewindHintReserveTokens in project config at ${PROJECT_PATH} — expected integer ${REWIND_HINT_MIN_RESERVE}-${REWIND_HINT_MAX_RESERVE} or a disable sentinel (null, false, "off", "disabled"); rewind hint disabled for this session.`;
 const WARN_INVALID_START_GLOBAL = `navigate_tree: invalid anchorStartAfterTurns in global config at ${GLOBAL_PATH} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`;
 const WARN_INVALID_START_PROJECT = `navigate_tree: invalid anchorStartAfterTurns in project config at ${PROJECT_PATH} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`;
+const WARN_INVALID_HANDOFF_GLOBAL = `navigate_tree: invalid parentHandoffMode in global config at ${GLOBAL_PATH} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "full".`;
+const WARN_INVALID_HANDOFF_PROJECT = `navigate_tree: invalid parentHandoffMode in project config at ${PROJECT_PATH} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "full".`;
 
 /** In-memory `readFile` double: returns `files[path]` or throws ENOENT. */
 function readerFor(files: Record<string, string>): {
@@ -98,11 +102,13 @@ function configJsonStart(anchorStartAfterTurns: unknown): string {
 function layer(partial: {
   hint?: HintField;
   startAnchor?: StartAnchorField;
+  parentHandoffMode?: ParentHandoffModeField;
   modelHints?: Array<[string, HintField]>;
 }): ParsedLayer {
   return {
     hint: partial.hint ?? { kind: "absent" },
     startAnchor: partial.startAnchor ?? { kind: "absent" },
+    parentHandoffMode: partial.parentHandoffMode ?? { kind: "absent" },
     modelHints: new Map(partial.modelHints ?? []),
     modelOverridesProblems: {
       notObject: false,
@@ -116,11 +122,13 @@ function cfg(
   hint: number | null,
   start = START_ANCHOR_DEFAULT_TURNS,
   byModel: Array<[string, number | null]> = [],
+  parentHandoffMode: HandoffMode = "full",
 ) {
   return {
     rewindHintReserveTokens: hint,
     rewindHintModelReserveTokens: new Map(byModel),
     anchorStartAfterTurns: start,
+    parentHandoffMode,
   };
 }
 
@@ -273,6 +281,46 @@ describe("parseTreeNavigatorConfig", () => {
       it(label, () => {
         assert.deepEqual(
           parsedLayer({ anchorStartAfterTurns: raw }).startAnchor,
+          { kind: "invalid" },
+        );
+      });
+    }
+  });
+
+  describe("parentHandoffMode: accepts exactly the two supported modes", () => {
+    const accepted: Array<[HandoffMode, HandoffMode]> = [
+      ["full", "full"],
+      ["synthesized", "synthesized"],
+    ];
+    for (const [raw, want] of accepted) {
+      it(raw, () => {
+        assert.deepEqual(
+          parsedLayer({ parentHandoffMode: raw }).parentHandoffMode,
+          {
+            kind: "ok",
+            value: want,
+          },
+        );
+      });
+    }
+  });
+
+  describe("parentHandoffMode: rejects values other than the exact supported modes", () => {
+    const invalid: unknown[] = [
+      "FULL",
+      " Synthesized ",
+      "",
+      "other",
+      1,
+      false,
+      null,
+      {},
+      [],
+    ];
+    for (const raw of invalid) {
+      it(JSON.stringify(raw), () => {
+        assert.deepEqual(
+          parsedLayer({ parentHandoffMode: raw }).parentHandoffMode,
           { kind: "invalid" },
         );
       });
@@ -474,6 +522,71 @@ describe("mergeTreeNavigatorConfig", () => {
     }
   });
 
+  describe("parent-handoff mode field (invalid falls through)", () => {
+    const okGlobal: ParentHandoffModeField = {
+      kind: "ok",
+      value: "full",
+    };
+    const okProject: ParentHandoffModeField = {
+      kind: "ok",
+      value: "synthesized",
+    };
+    const cases: Array<{
+      name: string;
+      global: ParentHandoffModeField;
+      project: ParentHandoffModeField;
+      want: ParentHandoffModeField;
+    }> = [
+      {
+        name: "absent + absent stays absent",
+        global: { kind: "absent" },
+        project: { kind: "absent" },
+        want: { kind: "absent" },
+      },
+      {
+        name: "project absent → global applies",
+        global: okGlobal,
+        project: { kind: "absent" },
+        want: okGlobal,
+      },
+      {
+        name: "project mode wins over global mode",
+        global: okGlobal,
+        project: okProject,
+        want: okProject,
+      },
+      {
+        name: "project invalid + valid global → global applies",
+        global: okGlobal,
+        project: { kind: "invalid" },
+        want: okGlobal,
+      },
+      {
+        name: "project invalid + absent global → invalid (resolves to default)",
+        global: { kind: "absent" },
+        project: { kind: "invalid" },
+        want: { kind: "invalid" },
+      },
+      {
+        name: "global invalid + valid project → project applies",
+        global: { kind: "invalid" },
+        project: okProject,
+        want: okProject,
+      },
+    ];
+    for (const c of cases) {
+      it(c.name, () => {
+        assert.deepEqual(
+          mergeTreeNavigatorConfig(
+            layer({ parentHandoffMode: c.global }),
+            layer({ parentHandoffMode: c.project }),
+          ).parentHandoffMode,
+          c.want,
+        );
+      });
+    }
+  });
+
   it("merges the two fields independently", () => {
     const merged = mergeTreeNavigatorConfig(
       layer({
@@ -493,10 +606,12 @@ describe("loadTreeNavigatorConfig", () => {
       [GLOBAL_PATH]: JSON.stringify({
         rewindHintReserveTokens: "50000",
         anchorStartAfterTurns: 5,
+        parentHandoffMode: "full",
       }),
       [PROJECT_PATH]: JSON.stringify({
         rewindHintReserveTokens: 30000,
         anchorStartAfterTurns: 3,
+        parentHandoffMode: "synthesized",
       }),
     });
     const out = await loadTreeNavigatorConfig({
@@ -505,7 +620,10 @@ describe("loadTreeNavigatorConfig", () => {
       projectTrusted: true,
       readFile: reader.readFile,
     });
-    assert.deepEqual(out, { config: cfg(30000, 3), warnings: [] });
+    assert.deepEqual(out, {
+      config: cfg(30000, 3, [], "synthesized"),
+      warnings: [],
+    });
     assert.deepEqual(reader.paths, [GLOBAL_PATH, PROJECT_PATH]);
   });
 
@@ -514,10 +632,12 @@ describe("loadTreeNavigatorConfig", () => {
       [GLOBAL_PATH]: JSON.stringify({
         rewindHintReserveTokens: "50000",
         anchorStartAfterTurns: 5,
+        parentHandoffMode: "synthesized",
       }),
       [PROJECT_PATH]: JSON.stringify({
         rewindHintReserveTokens: 30000,
         anchorStartAfterTurns: 3,
+        parentHandoffMode: "full",
       }),
     });
     const out = await loadTreeNavigatorConfig({
@@ -526,11 +646,14 @@ describe("loadTreeNavigatorConfig", () => {
       projectTrusted: false,
       readFile: reader.readFile,
     });
-    assert.deepEqual(out, { config: cfg(50000, 5), warnings: [] });
+    assert.deepEqual(out, {
+      config: cfg(50000, 5, [], "synthesized"),
+      warnings: [],
+    });
     assert.deepEqual(reader.paths, [GLOBAL_PATH]);
   });
 
-  it("is silent when both files are missing (ENOENT is the normal state)", async () => {
+  it("defaults to full parent handoff mode when both files are missing", async () => {
     const reader = readerFor({});
     const out = await loadTreeNavigatorConfig({
       agentDir: AGENT_DIR,
@@ -538,8 +661,7 @@ describe("loadTreeNavigatorConfig", () => {
       projectTrusted: true,
       readFile: reader.readFile,
     });
-    // Start anchor is non-optional: no file still resolves to the default 2
-    // with no warning; the hint stays off.
+    // The start anchor defaults to 2, the handoff mode to full, and the hint stays off.
     assert.deepEqual(out, {
       config: cfg(null, START_ANCHOR_DEFAULT_TURNS),
       warnings: [],
@@ -767,6 +889,56 @@ describe("loadTreeNavigatorConfig", () => {
     assert.deepEqual(out, {
       config: cfg(null, START_ANCHOR_DEFAULT_TURNS),
       warnings: [WARN_INVALID_START_GLOBAL],
+    });
+  });
+
+  it("an invalid trusted project handoff mode warns and falls back to global", async () => {
+    const reader = readerFor({
+      [GLOBAL_PATH]: JSON.stringify({ parentHandoffMode: "synthesized" }),
+      [PROJECT_PATH]: JSON.stringify({ parentHandoffMode: "invalid" }),
+    });
+    const out = await loadTreeNavigatorConfig({
+      agentDir: AGENT_DIR,
+      projectPath: PROJECT_PATH,
+      projectTrusted: true,
+      readFile: reader.readFile,
+    });
+    assert.deepEqual(out, {
+      config: cfg(null, START_ANCHOR_DEFAULT_TURNS, [], "synthesized"),
+      warnings: [WARN_INVALID_HANDOFF_PROJECT],
+    });
+  });
+
+  it("an invalid global handoff mode falls through to a valid trusted project", async () => {
+    const reader = readerFor({
+      [GLOBAL_PATH]: JSON.stringify({ parentHandoffMode: true }),
+      [PROJECT_PATH]: JSON.stringify({ parentHandoffMode: "synthesized" }),
+    });
+    const out = await loadTreeNavigatorConfig({
+      agentDir: AGENT_DIR,
+      projectPath: PROJECT_PATH,
+      projectTrusted: true,
+      readFile: reader.readFile,
+    });
+    assert.deepEqual(out, {
+      config: cfg(null, START_ANCHOR_DEFAULT_TURNS, [], "synthesized"),
+      warnings: [WARN_INVALID_HANDOFF_GLOBAL],
+    });
+  });
+
+  it("an invalid handoff mode with no valid layer warns and defaults to full", async () => {
+    const reader = readerFor({
+      [GLOBAL_PATH]: JSON.stringify({ parentHandoffMode: "FULL" }),
+    });
+    const out = await loadTreeNavigatorConfig({
+      agentDir: AGENT_DIR,
+      projectPath: PROJECT_PATH,
+      projectTrusted: false,
+      readFile: reader.readFile,
+    });
+    assert.deepEqual(out, {
+      config: cfg(null, START_ANCHOR_DEFAULT_TURNS, [], "full"),
+      warnings: [WARN_INVALID_HANDOFF_GLOBAL],
     });
   });
 

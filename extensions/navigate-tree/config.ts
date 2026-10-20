@@ -19,6 +19,9 @@
  *     0.3.0): a present legacy key only warns and is otherwise ignored.
  *   - `anchorStartAfterTurns` (issue #55): turn bound for the automatic
  *     `anchor:start` write. Non-optional — an absent key still fires.
+ *   - `parentHandoffMode`: whether completed child reports are included in
+ *     the parent's model context. Invalid values warn and fall through like
+ *     `anchorStartAfterTurns`, defaulting to `full`.
  *   - `modelOverrides` (issue #86): per-model `rewindHintReserveTokens`,
  *     keyed by exact `provider/modelId`, mirroring pi's
  *     `compaction.modelOverrides`. Layers merge per key (project entry over
@@ -36,11 +39,10 @@
  *     disable the hint for the session with NO cross-layer fallback: the
  *     user touched the field, so firing at the other layer's threshold would
  *     be an unintended rewind.
- *   - START-ANCHOR field-level problems (`anchorStartAfterTurns` present but
- *     unusable) warn and fall through to the other layer's valid value, else
- *     the default: a touched-but-invalid value must not disable a
- *     non-optional feature, and any unintended turn index only places a
- *     benign label.
+ *   - START-ANCHOR and parent-handoff field-level problems present but
+ *     unusable warn and fall through to the other layer's valid value, else
+ *     their defaults. An invalid parent handoff mode must not strand the
+ *     session without a valid mode.
  *   - `modelOverrides` problems (#86) are scoped to the entry: an invalid
  *     entry value disables the hint for that model only (no fallback to the
  *     base, same reasoning as the base field); shape problems warn and drop
@@ -55,12 +57,14 @@
 
 import { readFile as fsReadFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { HandoffMode } from "./handoff.ts";
 
 export const TREE_NAVIGATOR_CONFIG_FILENAME = "tree-navigator.json";
 export const REWIND_HINT_MIN_RESERVE = 1_000;
 export const REWIND_HINT_MAX_RESERVE = 1_000_000;
 export const START_ANCHOR_MIN_TURNS = 1;
 export const START_ANCHOR_MAX_TURNS = 50;
+export const PARENT_HANDOFF_MODE_DEFAULT: HandoffMode = "full";
 /**
  * Effective turn bound when `anchorStartAfterTurns` is absent everywhere
  * (or invalid in every layer that touched it). Unlike the hint, the start
@@ -92,15 +96,21 @@ export type HintField =
  *   - `invalid`:  key present, value unusable — falls through to the other
  *                 layer's valid value, else the default (see merge/resolve).
  */
-export type StartAnchorField =
+type FallbackField<T> =
   | { kind: "absent" }
-  | { kind: "ok"; value: number }
+  | { kind: "ok"; value: T }
   | { kind: "invalid" };
+
+export type StartAnchorField = FallbackField<number>;
+
+/** Per-field parse outcome for `parentHandoffMode`. */
+export type ParentHandoffModeField = FallbackField<HandoffMode>;
 
 /** One config layer's parsed fields (file-level failures are all-absent). */
 export interface ParsedLayer {
   hint: HintField;
   startAnchor: StartAnchorField;
+  parentHandoffMode: ParentHandoffModeField;
   /**
    * Per-model hint fields (#86), keyed by exact `provider/modelId`. Only
    * entries that set `rewindHintReserveTokens` (any non-absent outcome)
@@ -212,6 +222,16 @@ function parseStartAnchorField(
   return { kind: "invalid" };
 }
 
+function parseParentHandoffModeField(
+  record: Record<string, unknown>,
+): ParentHandoffModeField {
+  if (!("parentHandoffMode" in record)) return { kind: "absent" };
+  const value = record.parentHandoffMode;
+  return value === "full" || value === "synthesized"
+    ? { kind: "ok", value }
+    : { kind: "invalid" };
+}
+
 /**
  * Parse one already-JSON.parsed config root. A non-object root (null, array,
  * primitive) is `unusable` — a file-level failure so the other layer can
@@ -228,6 +248,7 @@ export function parseTreeNavigatorConfig(raw: unknown): ParsedRoot {
     layer: {
       hint: parseHintField(record),
       startAnchor: parseStartAnchorField(record),
+      parentHandoffMode: parseParentHandoffModeField(record),
       ...parseModelOverrides(record),
     },
   };
@@ -247,15 +268,11 @@ function mergeHintField(
   return projectField.kind === "absent" ? globalField : projectField;
 }
 
-/**
- * Merge the start-anchor field. `absent` falls through; `invalid` falls
- * through only to a VALID other layer (warning + fall through per issue
- * #55) — otherwise it stays invalid and the resolver applies the default.
- */
-function mergeStartAnchorField(
-  globalField: StartAnchorField,
-  projectField: StartAnchorField,
-): StartAnchorField {
+/** Merge fields where invalid values fall through to the other valid layer. */
+function mergeFallbackField<T>(
+  globalField: FallbackField<T>,
+  projectField: FallbackField<T>,
+): FallbackField<T> {
   if (projectField.kind === "ok") return projectField;
   if (projectField.kind === "invalid") {
     return globalField.kind === "ok" ? globalField : projectField;
@@ -274,9 +291,13 @@ export function mergeTreeNavigatorConfig(
 ): ParsedLayer {
   return {
     hint: mergeHintField(globalLayer.hint, projectLayer.hint),
-    startAnchor: mergeStartAnchorField(
+    startAnchor: mergeFallbackField(
       globalLayer.startAnchor,
       projectLayer.startAnchor,
+    ),
+    parentHandoffMode: mergeFallbackField(
+      globalLayer.parentHandoffMode,
+      projectLayer.parentHandoffMode,
     ),
     // Per key, like the base hint field: a project entry wins.
     modelHints: new Map([
@@ -318,6 +339,7 @@ function absentLayer(): ParsedLayer {
   return {
     hint: { kind: "absent" },
     startAnchor: { kind: "absent" },
+    parentHandoffMode: { kind: "absent" },
     modelHints: new Map(),
     modelOverridesProblems: noModelOverridesProblems(),
   };
@@ -404,6 +426,11 @@ async function loadLayer(
       `navigate_tree: invalid anchorStartAfterTurns in ${layer} config at ${path} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`,
     );
   }
+  if (parsed.layer.parentHandoffMode.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid parentHandoffMode in ${layer} config at ${path} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
+    );
+  }
   return { layer: parsed.layer, warnings };
 }
 
@@ -426,6 +453,7 @@ export async function loadTreeNavigatorConfig(opts: {
     rewindHintReserveTokens: number | null;
     rewindHintModelReserveTokens: Map<string, number | null>;
     anchorStartAfterTurns: number;
+    parentHandoffMode: HandoffMode;
   };
   warnings: string[];
 }> {
@@ -465,6 +493,10 @@ export async function loadTreeNavigatorConfig(opts: {
         effective.startAnchor.kind === "ok"
           ? effective.startAnchor.value
           : START_ANCHOR_DEFAULT_TURNS,
+      parentHandoffMode:
+        effective.parentHandoffMode.kind === "ok"
+          ? effective.parentHandoffMode.value
+          : PARENT_HANDOFF_MODE_DEFAULT,
     },
     warnings,
   };
