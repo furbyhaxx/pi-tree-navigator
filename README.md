@@ -141,9 +141,39 @@ The same anchor table (cumulative context % at each anchor, root → leaf) ends 
 
 With no anchors the extension sends **no model message** (a rewind is impossible) and shows a TUI-only warning explaining how to add one manually: `/tree`, select the entry to rewind to, press `shift+l`, label it `anchor:<name>` (e.g. `anchor:context-gathered`), then ask the agent to rewind to it.
 
-### Per-model reserve (`modelOverrides`)
+### Per-model reserve (`modelOverrides` / `model_overrides`)
 
-Different models need different budgets: a model that writes long summaries or grows context fast per turn needs a larger reserve. `modelOverrides` sets `rewindHintReserveTokens` per model. It is keyed like pi's `compaction.modelOverrides`, but each entry takes `rewindHintReserveTokens` (not pi's `reserveTokens`) with this extension's value rules, including the disable sentinels pi does not accept:
+Different models need different budgets: a model that writes long summaries or grows context fast per turn needs a larger reserve. `modelOverrides` (or `model_overrides`) sets `rewindHintReserveTokens` (`rewind_hint_reserve_tokens`) and `auto_navigate` per model or wildcard pattern (`*gemini-4-argon*`, `openrouter/*`, or bare `gemini-4-argon`):
+
+```json
+{
+  "rewind_hint_reserve_tokens": 50000,
+  "auto_navigate": {
+    "enabled": false,
+    "mode": "anchor-and-rewind",
+    "controller_model": "openai/gpt-6-luna:low",
+    "check_every_turns": 6,
+    "min_tokens_since_anchor": 25000,
+    "rewind_at_tokens": 120000,
+    "tools": { "bash": "calls-only", "read": "omit" }
+  },
+  "model_overrides": {
+    "*gemini-4-argon*": {
+      "rewind_hint_reserve_tokens": 120000,
+      "auto_navigate": {
+        "enabled": true,
+        "check_every_turns": 4,
+        "min_tokens_since_anchor": 20000,
+        "rewind_at_tokens": 90000
+      }
+    }
+  }
+}
+```
+
+When `auto_navigate.enabled` is true for the active model, a sidecar controller (`controller_model`, defaulting to `treeProposal.model` or the active model) inspects completed turns since the newest anchor and either sets an `anchor:<name>` milestone or steers an immediate `rewind` once active context reaches `rewind_at_tokens`.
+
+It is keyed like pi's `compaction.modelOverrides`, but each entry takes `rewindHintReserveTokens` (not pi's `reserveTokens`) with this extension's value rules, including the disable sentinels pi does not accept:
 
 ```json
 {

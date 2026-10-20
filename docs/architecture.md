@@ -21,6 +21,8 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `proposal-model.ts`: registry-authenticated, provider-neutral side calls.
 - `proposal-command.ts`: disclosure confirmation, cancellable generation, editable
   plan review and exclusive private-plan saving.
+- `auto-navigate-config.ts`, `auto-navigate.ts`: wildcard `model_overrides`
+  matching and sidecar `auto_navigate` anchor/rewind extraction.
 - `handoff.ts`: report metadata, full/synthesized materialization, unique recorded
   statistics and honest model-facing work context.
 - `handoff-renderer.ts`: guarded native summary-card and tree-row patches.
