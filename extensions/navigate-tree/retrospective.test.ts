@@ -570,6 +570,24 @@ describe("retrospective clone", () => {
       previewRetrospectiveSession(unfinished.planPath),
       /unfinished tool calls/,
     );
+    const reused = await fixture({
+      entries: [
+        ...entries.slice(0, 4),
+        { ...entries[2], id: "new-call" },
+        user("waiting", "Wait for this new call"),
+      ],
+      groups: [
+        { ...group("annotation", "new-call", "waiting"), state: "open" },
+      ],
+    });
+    assert.deepEqual(
+      (await inspectRetrospectiveSession(reused.source)).pendingToolCalls,
+      ["call-1"],
+    );
+    await assert.rejects(
+      previewRetrospectiveSession(reused.planPath),
+      /unfinished tool calls/,
+    );
     const split = await fixture({
       entries,
       groups: [group("split", "call", "call")],

@@ -367,7 +367,7 @@ export async function readSessionSnapshot(
   if (!entries.length) throw new Error("Session has no entries");
   const ids = new Set<string>();
   const safeCuts = new Set([-1]);
-  const pendingById = new Map<string, Set<string>>();
+  const pendingById = new Map<string, Map<string, string>>();
   const completedById = new Map<string, Set<string>>();
   const completedAnywhere = new Set<string>();
   const byId = new Map<string, SessionEntry>();
@@ -396,7 +396,7 @@ export async function readSessionSnapshot(
       !ids.has(entry.fromId)
     )
       throw new Error(`Invalid branch summary fromId at ${entry.id}`);
-    const pending = new Set(
+    const pending = new Map(
       entry.parentId === null ? [] : pendingById.get(entry.parentId),
     );
     const completed = new Set(
@@ -404,8 +404,11 @@ export async function readSessionSnapshot(
     );
     if (entry.type === "branch_summary" && entry.fromId !== "root") {
       const archivedCompleted = completedById.get(entry.fromId);
-      for (const call of pending)
-        if (archivedCompleted?.has(call)) pending.delete(call);
+      for (const [call, occurrence] of pending) {
+        if (!archivedCompleted?.has(occurrence)) continue;
+        pending.delete(call);
+        completed.add(occurrence);
+      }
     }
     if (entry.parentId !== null) parents.add(entry.parentId);
     ids.add(entry.id);
@@ -415,20 +418,20 @@ export async function readSessionSnapshot(
         if (block.type !== "toolCall") continue;
         if (pending.has(block.id))
           throw new Error(`Duplicate outstanding tool call ${block.id}`);
-        pending.add(block.id);
+        pending.set(block.id, JSON.stringify([entry.id, block.id]));
       }
     } else if (
       entry.type === "message" &&
       entry.message.role === "toolResult"
     ) {
-      if (!pending.delete(entry.message.toolCallId))
+      const occurrence = pending.get(entry.message.toolCallId);
+      if (!occurrence)
         throw new Error(
           `Orphan tool result ${entry.id}: no outstanding call ${entry.message.toolCallId}`,
         );
-    }
-    if (entry.type === "message" && entry.message.role === "toolResult") {
-      completed.add(entry.message.toolCallId);
-      completedAnywhere.add(entry.message.toolCallId);
+      pending.delete(entry.message.toolCallId);
+      completed.add(occurrence);
+      completedAnywhere.add(occurrence);
     }
     completedById.set(entry.id, completed);
     pendingById.set(entry.id, pending);
@@ -449,7 +452,8 @@ export async function readSessionSnapshot(
         entries
           .filter((entry) => !parents.has(entry.id))
           .flatMap((entry) => [...(pendingById.get(entry.id) ?? [])])
-          .filter((call) => !completedAnywhere.has(call)),
+          .filter(([, occurrence]) => !completedAnywhere.has(occurrence))
+          .map(([call]) => call),
       ),
     ],
   };
