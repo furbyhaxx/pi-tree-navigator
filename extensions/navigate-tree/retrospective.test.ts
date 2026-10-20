@@ -84,13 +84,26 @@ function defaultGroups(): TestGroup[] {
 }
 
 async function fixture(
-  options: { entries?: TestEntry[]; groups?: TestGroup[] } = {},
+  options: {
+    entries?: TestEntry[];
+    groups?: TestGroup[];
+    parentSession?: string;
+  } = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), "tree-retrospective-"));
   directories.push(dir);
   const source = join(dir, "source.jsonl");
   const records = [
-    { type: "session", version: 3, id: "original", cwd: dir, timestamp },
+    {
+      type: "session",
+      version: 3,
+      id: "original",
+      cwd: dir,
+      timestamp,
+      ...(options.parentSession === undefined
+        ? {}
+        : { parentSession: options.parentSession }),
+    },
     ...linear(
       options.entries ?? [
         { type: "session_info", id: "name", name: "Original" },
@@ -136,7 +149,11 @@ describe("retrospective clone", () => {
     const clone = SessionManager.open(result.path);
     assert.notEqual(clone.getSessionId(), "original");
     assert.equal(clone.getSessionName(), "Original (restructured)");
-    assert.equal(clone.getHeader()?.parentSession, f.source);
+    assert.equal(clone.getHeader()?.parentSession, undefined);
+    assert.equal(
+      Object.hasOwn(clone.getHeader() ?? {}, "parentSession"),
+      false,
+    );
     assert.equal((await stat(result.path)).mode & 0o777, 0o600);
     assert.equal(
       clone.getEntries().filter((entry) => entry.type === "message").length,
@@ -169,6 +186,26 @@ describe("retrospective clone", () => {
       reloaded.buildSessionContext(),
       clone.buildSessionContext(),
     );
+  });
+
+  it("inherits the source parent so the clone is a sibling in session discovery", async () => {
+    const parentSession = "/sessions/shared-parent.jsonl";
+    const f = await fixture({ parentSession });
+    const before = await readFile(f.source);
+    const preview = await previewRetrospectiveSession(f.planPath);
+    const result = await cloneRetrospectiveSession(
+      f.planPath,
+      preview.previewToken,
+    );
+    const clone = SessionManager.open(result.path);
+    assert.equal(clone.getHeader()?.parentSession, parentSession);
+    const sessions = await SessionManager.list(f.dir, f.dir);
+    assert.equal(
+      sessions.find((session) => session.id === result.sessionId)
+        ?.parentSessionPath,
+      parentSession,
+    );
+    assert.deepEqual(await readFile(f.source), before);
   });
 
   it("refuses a changed source or changed plan after preview without publishing a clone", async () => {

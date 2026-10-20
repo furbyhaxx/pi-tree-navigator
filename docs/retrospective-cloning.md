@@ -141,8 +141,11 @@ its native branching semantics.
   tool declarations are replayed using explicit deltas. Plain system text may
   only be appended; an incompatible replacement is refused. Effective runtime
   state is compared at original entries and summary continuations.
-- The new file has a new ID, `parentSession` provenance, and a suffixed name. A
-  provenance entry records the source hash, full plan, and changed parent links.
+- The new file has a new ID and a suffixed name. It inherits the source header's
+  `parentSession` unchanged: a source with a parent produces a sibling clone;
+  a source without a parent produces a top-level clone in `/resume`. A separate
+  provenance entry records the source path, source hash, full plan, and changed
+  parent links.
 - Publication uses a private `0600` temporary file, flushes it, reloads it with
   Pi to check context, and publishes with an exclusive filesystem link. An
   existing destination cannot be overwritten. Failure removes the temporary

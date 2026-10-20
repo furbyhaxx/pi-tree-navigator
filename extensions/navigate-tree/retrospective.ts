@@ -426,7 +426,6 @@ export async function cloneRetrospectiveSession(
     ...snapshot.header,
     id: sessionId,
     timestamp: clone.timestamp,
-    parentSession: snapshot.path,
   };
   const data = `${[header, ...clone.entries].map((entry) => JSON.stringify(entry)).join("\n")}\n`;
   const handle = await open(temporary, "wx", 0o600);
