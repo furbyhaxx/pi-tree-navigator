@@ -394,6 +394,15 @@ export function buildContextMessages(
     sourceEntry: entry,
     messages: sessionEntryToContextMessages(entry),
   }));
+  // Stale usage (#101): an assistant's `usage` measures the whole context it
+  // was sent with. One produced after a `context_edit`'s target existed but
+  // before that edit applied was sent with the edited-away content counted, so
+  // pi's output clamp (window - estimate - 4096, floored at 1) would size
+  // max_tokens from an overstated count. Zero those (see staleUsageFlags); pi-ai
+  // then falls back to an older exact usage or chars/3.5. Assistants before the
+  // target, and after the edit, keep their exact usage. Computed before the
+  // frozen slice: overflow withholding appends its edits after the instruction.
+  let stale = staleUsageFlags(entries);
   // Frozen view (#90, O2): while a rewind waits for its summary, the
   // request ends at its instruction, so every attempt re-sends the same
   // messages — late input and hidden attempts never reach it. Keyed by the
@@ -402,7 +411,10 @@ export function buildContextMessages(
     const at = entries.findIndex(
       (e) => e.sourceEntry?.id === pendingInstructionEntryId,
     );
-    if (at >= 0) entries = entries.slice(0, at + 1);
+    if (at >= 0) {
+      entries = entries.slice(0, at + 1);
+      stale = stale.slice(0, at + 1);
+    }
   }
   // A failed / aborted rewind reads as a failed tool call (#90, O5): its
   // tool result's content is already replaced by a persisted `context_edit`,
@@ -410,14 +422,6 @@ export function buildContextMessages(
   // mutate the session's own message objects). Keyed by the tool-result
   // entry id the outcome recorded.
   const outcomes = collectRewindOutcomes(sm);
-  // Stale usage (#101): an assistant's `usage` measures the whole context it
-  // was sent with. One produced after a `context_edit`'s target existed but
-  // before that edit applied was sent with the edited-away content counted, so
-  // pi's output clamp (window - estimate - 4096, floored at 1) would size
-  // max_tokens from an overstated count. Zero those (see staleUsageFlags); pi-ai
-  // then falls back to an older exact usage or chars/3.5. Assistants before the
-  // target, and after the edit, keep their exact usage.
-  const stale = staleUsageFlags(entries);
   const messages = entries.flatMap((e, i) => {
     const text = e.sourceEntry ? outcomes.get(e.sourceEntry.id) : undefined;
     const withOutcome =

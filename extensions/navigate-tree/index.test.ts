@@ -1211,6 +1211,96 @@ describe("context event handler", () => {
     assert.equal(estimate.usageTokens, 5_000);
   });
 
+  it("the frozen summary view zeroes usage made stale by edits after the instruction (#101)", async () => {
+    // An overflow while a rewind waits for its summary withholds a result
+    // before the rewind call, but the edit lands after the instruction, where
+    // the frozen view is cut. The rewind call's usage still counted the
+    // withheld result, so pi's clamp left the retried summary ~1.6k output
+    // tokens and it was cut off again at a fraction of the window.
+    const { sm } = setup();
+    const at = Date.now();
+    const model = {
+      api: "anthropic",
+      provider: "claude",
+      model: "claude-sonnet-4-5",
+    };
+    sm.appendMessage({
+      role: "user",
+      content: [{ type: "text", text: "read it" }],
+      timestamp: at,
+    } as never);
+    sm.appendMessage({
+      role: "assistant",
+      content: [{ type: "toolCall", id: "c1", name: "read", arguments: {} }],
+      ...model,
+      stopReason: "toolUse",
+      timestamp: at,
+      usage: usageOf(10),
+    } as never);
+    const resultId = sm.appendMessage({
+      role: "toolResult",
+      toolCallId: "c1",
+      toolName: "read",
+      content: [{ type: "text", text: "x".repeat(40_000) }],
+      isError: false,
+      timestamp: at,
+    } as never);
+    sm.appendMessage({
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "r1",
+          name: TOOL_NAME,
+          arguments: { action: "rewind" },
+        },
+      ],
+      ...model,
+      stopReason: "toolUse",
+      timestamp: at,
+      usage: usageOf(95_000),
+    } as never);
+    sm.appendMessage({
+      role: "toolResult",
+      toolCallId: "r1",
+      toolName: TOOL_NAME,
+      content: [{ type: "text", text: "accepted" }],
+      isError: false,
+      timestamp: at,
+    } as never);
+    const instructionId = sm.appendCustomMessageEntry(
+      "navigate-tree-summary-request",
+      [{ type: "text", text: "summarize" }],
+      true,
+    );
+    const attemptId = sm.appendMessage({
+      role: "assistant",
+      content: [{ type: "text", text: "## Goal" }],
+      ...model,
+      stopReason: "length",
+      timestamp: at,
+      usage: usageOf(96_000),
+    } as never);
+    sm.appendContextEdit(attemptId, null);
+    sm.appendContextEdit(resultId, {
+      content: [{ type: "text", text: "[navigate_tree] Output withheld" }],
+    } as never);
+
+    const projected = __testHooks.buildContextMessages(sm, instructionId);
+    assert.deepEqual(
+      projected.flatMap((m) =>
+        m.role === "assistant" ? [m.usage.totalTokens] : [],
+      ),
+      [10, 0],
+    );
+    const estimate = await piAiEstimateContextTokens(projected);
+    assert.equal(estimate.usageTokens, 10);
+    assert.ok(
+      estimate.trailingTokens < 1_000,
+      `trailing estimate should be chars/3.5, got ${estimate.trailingTokens}`,
+    );
+  });
+
   it("without context_edits the projection keeps every assistant's usage (#101)", () => {
     const { sm } = setup();
     appendTurn(sm, "u1", "a1", 100);
