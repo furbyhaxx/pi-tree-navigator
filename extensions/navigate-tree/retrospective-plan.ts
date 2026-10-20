@@ -31,6 +31,8 @@ export interface RetrospectivePlan {
   readonly sourceSha256: string;
   readonly nameSuffix: string;
   readonly parentHandoffMode: HandoffMode;
+  readonly recurse: boolean;
+  readonly descendantPlans: readonly string[];
   readonly groups: readonly RetrospectiveGroup[];
 }
 
@@ -86,6 +88,8 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
       "nameSuffix",
       "groups",
       "parentHandoffMode",
+      "recurse",
+      "descendantPlans",
     ],
     "plan",
   );
@@ -176,6 +180,24 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
     sourceSha256: hash,
     nameSuffix,
     parentHandoffMode: mode(plan.parentHandoffMode ?? "full"),
+    recurse:
+      plan.recurse === undefined
+        ? false
+        : (() => {
+            if (typeof plan.recurse !== "boolean")
+              throw new Error("recurse must be a boolean");
+            return plan.recurse;
+          })(),
+    descendantPlans:
+      plan.descendantPlans === undefined
+        ? []
+        : (() => {
+            if (!Array.isArray(plan.descendantPlans))
+              throw new Error("descendantPlans must be an array of plan paths");
+            return plan.descendantPlans.map((path) =>
+              string(path, "descendant plan path"),
+            );
+          })(),
     groups: parsedGroups,
   };
 }
@@ -188,7 +210,13 @@ export async function readRetrospectivePlan(
   const plan = parseRetrospectivePlan(
     JSON.parse(await readFile(planPath, "utf8")),
   );
-  return { ...plan, source: resolve(dirname(planPath), plan.source) };
+  return {
+    ...plan,
+    source: resolve(dirname(planPath), plan.source),
+    descendantPlans: plan.descendantPlans.map((path) =>
+      resolve(dirname(planPath), path),
+    ),
+  };
 }
 
 function validateRecord(value: unknown, line: number): void {

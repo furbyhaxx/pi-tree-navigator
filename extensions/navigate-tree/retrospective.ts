@@ -13,6 +13,10 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import {
+  discoverDescendantSessions,
+  planDescendantCopies,
+} from "./descendant-sessions.ts";
+import {
   type HistoryGroup,
   type HistoryManifest,
   makeHandoff,
@@ -43,6 +47,11 @@ export interface RetrospectivePreview {
     summary: string;
     state: "folded" | "open";
     mode: "full" | "synthesized";
+  }[];
+  readonly descendants: readonly {
+    source: string;
+    sourceSha256: string;
+    mode: "copied" | "restructured";
   }[];
   readonly warnings: readonly string[];
 }
@@ -463,11 +472,63 @@ async function prepare(path: string) {
       "Source snapshot changed: inspect it again and review the plan against the new hash",
     );
   const clone = buildClone(snapshot, plan);
+  const descendants = await discoverDescendantSessions(snapshot.path);
+  const descendantClones = new Map<
+    string,
+    { plan: RetrospectivePlan; clone: ReturnType<typeof buildClone> }
+  >();
+  if (!plan.recurse && plan.descendantPlans.length)
+    throw new Error(
+      "descendantPlans requires recurse: true; otherwise descendant histories are copied unchanged",
+    );
+  if (plan.recurse) {
+    for (const planPath of plan.descendantPlans) {
+      const childPlan = await readRetrospectivePlan(planPath);
+      const child = await readSessionSnapshot(childPlan.source);
+      if (!descendants.some((descendant) => descendant.path === child.path))
+        throw new Error(
+          `Plan source is not a descendant of this session: ${child.path}`,
+        );
+      if (child.sha256 !== childPlan.sourceSha256)
+        throw new Error(`Descendant snapshot changed: ${child.path}`);
+      if (descendantClones.has(child.path))
+        throw new Error(`Duplicate descendant plan: ${child.path}`);
+      descendantClones.set(child.path, {
+        plan: childPlan,
+        clone: buildClone(child, childPlan),
+      });
+    }
+    const missing = descendants.filter(
+      (descendant) => !descendantClones.has(descendant.path),
+    );
+    if (missing.length)
+      throw new Error(
+        `Recursive restructuring requires a reviewed plan for every descendant. Missing ${missing.length}: ${missing.map((item) => item.path).join(", ")}. Supply descendantPlans or leave recurse off to copy their histories unchanged.`,
+      );
+  }
+  const family = descendants.map((descendant) => ({
+    source: descendant.path,
+    sourceSha256: descendant.sha256,
+    mode: descendantClones.has(descendant.path)
+      ? ("restructured" as const)
+      : ("copied" as const),
+  }));
   const preview: RetrospectivePreview = {
     source: snapshot.path,
     sourceSha256: snapshot.sha256,
     name: clone.name,
-    previewToken: sha256(JSON.stringify({ source: snapshot.path, plan })),
+    previewToken: sha256(
+      JSON.stringify({
+        source: snapshot.path,
+        plan,
+        family,
+        descendantPlans: [...descendantClones].map(([source, item]) => ({
+          source,
+          plan: item.plan,
+        })),
+      }),
+    ),
+    descendants: family,
     originalEntries: snapshot.entries.length,
     addedEntries: clone.entries.length - snapshot.entries.length,
     groups: clone.groups,
@@ -476,7 +537,7 @@ async function prepare(path: string) {
       "Extension-specific custom state remains on its original branch; external provider histories and extension sidecar files are not cloned.",
     ],
   };
-  return { snapshot, clone, preview };
+  return { snapshot, clone, preview, descendants, descendantClones };
 }
 
 /** Validate a conversion and return its complete review surface without creating a session. */
@@ -491,7 +552,8 @@ export async function cloneRetrospectiveSession(
   planPath: string,
   previewToken: string,
 ) {
-  const { snapshot, clone, preview } = await prepare(planPath);
+  const { snapshot, clone, preview, descendants, descendantClones } =
+    await prepare(planPath);
   if (previewToken !== preview.previewToken)
     throw new Error(
       "Preview changed or missing; preview the plan again before creating a clone",
@@ -502,22 +564,54 @@ export async function cloneRetrospectiveSession(
     dir,
     `${clone.timestamp.replace(/[:.]/g, "-")}_${sessionId}.jsonl`,
   );
-  const temporary = join(dir, `.tree-clone-${sessionId}.tmp`);
   const header = {
     ...snapshot.header,
     id: sessionId,
     timestamp: clone.timestamp,
   };
   const data = `${[header, ...clone.entries].map((entry) => JSON.stringify(entry)).join("\n")}\n`;
-  const handle = await open(temporary, "wx", 0o600);
-  let published = false;
-  let failure: { error: unknown } | undefined;
+  const copied = planDescendantCopies(descendants, snapshot.path, path).map(
+    (copy) => {
+      const replacement = descendantClones.get(copy.source.path);
+      if (!replacement) return copy;
+      const newline = copy.bytes.indexOf(10);
+      const childHeader: unknown = JSON.parse(
+        copy.bytes.subarray(0, newline).toString("utf8"),
+      );
+      return {
+        ...copy,
+        bytes: Buffer.from(
+          `${[childHeader, ...replacement.clone.entries].map((entry) => JSON.stringify(entry)).join("\n")}\n`,
+        ),
+      };
+    },
+  );
+  const files = [
+    ...copied.map((copy) => ({ path: copy.path, bytes: copy.bytes })),
+    { path, bytes: Buffer.from(data) },
+  ];
+  const staged: { path: string; temporary: string }[] = [];
+  const published: string[] = [];
   const warnings: string[] = [];
+  let failure: { error: unknown } | undefined;
   try {
-    await handle.writeFile(data, "utf8");
-    await handle.sync();
-    await handle.close();
-    const reopened = SessionManager.open(temporary);
+    for (const file of files) {
+      const temporary = join(
+        dirname(file.path),
+        `.tree-clone-${randomUUID()}.tmp`,
+      );
+      const handle = await open(temporary, "wx", 0o600);
+      staged.push({ path: file.path, temporary });
+      try {
+        await handle.writeFile(file.bytes);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+    }
+    const root = staged.at(-1);
+    if (!root) throw new Error("Missing staged root");
+    const reopened = SessionManager.open(root.temporary);
     if (
       reopened.getSessionId() !== sessionId ||
       reopened.getSessionName() !== preview.name ||
@@ -527,7 +621,7 @@ export async function cloneRetrospectiveSession(
     }
     if (
       !isDeepStrictEqual(
-        reopened.buildSessionContext(),
+        buildSessionContext(reopened.getEntries()),
         buildSessionContext(clone.entries),
       )
     )
@@ -536,32 +630,58 @@ export async function cloneRetrospectiveSession(
       throw new Error(
         "Source changed during conversion; no clone was published",
       );
-    await link(temporary, path);
-    published = true;
+    for (const descendant of descendants)
+      if (sha256(await readFile(descendant.path)) !== descendant.sha256)
+        throw new Error(
+          `Descendant changed during conversion: ${descendant.path}`,
+        );
+    const currentFamily = await discoverDescendantSessions(snapshot.path);
+    if (
+      !isDeepStrictEqual(
+        currentFamily.map((item) => [item.path, item.sha256]),
+        descendants.map((item) => [item.path, item.sha256]),
+      )
+    )
+      throw new Error(
+        "Descendant family changed during conversion; preview again",
+      );
+    for (const file of staged) {
+      await link(file.temporary, file.path);
+      published.push(file.path);
+    }
   } catch (error) {
     failure = { error };
-  }
-  await handle.close();
-  try {
-    await unlink(temporary);
-  } catch (error) {
-    if (!published)
-      throw new AggregateError(
-        [failure?.error, error],
-        `Conversion failed; remove temporary file ${temporary}`,
-      );
-    warnings.push(
-      `Clone published, but temporary file cleanup failed: ${temporary}`,
+    const rollback = await Promise.allSettled(
+      published.map((path) => unlink(path)),
     );
+    const incomplete = rollback.flatMap((result, index) =>
+      result.status === "rejected" ? [published[index]] : [],
+    );
+    if (incomplete.length)
+      failure = {
+        error: new Error(
+          `Conversion failed and rollback left cloned files: ${incomplete.join(", ")}`,
+          { cause: error },
+        ),
+      };
+  }
+  for (const file of staged) {
+    try {
+      await unlink(file.temporary);
+    } catch {
+      warnings.push(`Temporary file cleanup failed: ${file.temporary}`);
+    }
   }
   if (failure) throw failure.error;
   if (process.platform !== "win32") {
     try {
-      const directory = await open(dir, "r");
-      try {
-        await directory.sync();
-      } finally {
-        await directory.close();
+      for (const location of new Set(files.map((file) => dirname(file.path)))) {
+        const directory = await open(location, "r");
+        try {
+          await directory.sync();
+        } finally {
+          await directory.close();
+        }
       }
     } catch {
       warnings.push(
@@ -576,5 +696,11 @@ export async function cloneRetrospectiveSession(
     name: preview.name,
     source: snapshot.path,
     sourceSha256: snapshot.sha256,
+    descendants: copied.map((copy) => ({
+      source: copy.source.path,
+      path: copy.path,
+      sessionId: copy.sessionId,
+      mode: descendantClones.has(copy.source.path) ? "restructured" : "copied",
+    })),
   };
 }

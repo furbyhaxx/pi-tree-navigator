@@ -16,6 +16,7 @@ import {
   buildSessionContext,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import { installHandoffProjection } from "./handoff-projection.ts";
 import {
   cloneRetrospectiveSession,
   previewRetrospectiveSession,
@@ -260,6 +261,29 @@ describe("retrospective clone", () => {
       ),
       /CHILD_FACT/,
     );
+  });
+
+  it("can publish inside the loaded extension with its safe runtime projection installed", async () => {
+    const f = await fixture();
+    const restore = installHandoffProjection();
+    try {
+      const preview = await previewRetrospectiveSession(f.planPath);
+      const result = await cloneRetrospectiveSession(
+        f.planPath,
+        preview.previewToken,
+      );
+      assert.ok(
+        SessionManager.open(result.path)
+          .buildSessionContext()
+          .messages.some(
+            (message) =>
+              message.role === "custom" &&
+              message.customType === "navigate-tree-handoff",
+          ),
+      );
+    } finally {
+      restore();
+    }
   });
 
   it("inherits the source parent so the clone is a sibling in session discovery", async () => {
@@ -718,6 +742,82 @@ describe("retrospective clone", () => {
       );
       assert.equal((await readdir(f.dir)).length, 2);
     }
+  });
+
+  it("copies descendant histories by default and requires reviewed plans for recursive restructuring", async () => {
+    const f = await fixture();
+    const childPath = join(f.dir, "child.jsonl");
+    const records = [
+      {
+        type: "session",
+        version: 3,
+        id: "child-session",
+        cwd: f.dir,
+        timestamp,
+        parentSession: f.source,
+      },
+      { ...user("child-work", "CHILD_HISTORY"), parentId: null, timestamp },
+    ];
+    const childBytes = `${records.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
+    await writeFile(childPath, childBytes);
+    const preview = await previewRetrospectiveSession(f.planPath);
+    assert.equal(preview.descendants.length, 1);
+    const copied = await cloneRetrospectiveSession(
+      f.planPath,
+      preview.previewToken,
+    );
+    assert.equal(copied.descendants.length, 1);
+    const childClone = await readFile(copied.descendants[0].path, "utf8");
+    assert.equal(
+      childClone.slice(childClone.indexOf("\n") + 1),
+      childBytes.slice(childBytes.indexOf("\n") + 1),
+    );
+    assert.equal(
+      JSON.parse(childClone.split("\n")[0]).parentSession,
+      copied.path,
+    );
+    assert.equal(await readFile(childPath, "utf8"), childBytes);
+    const recursivePlan = {
+      ...f.plan,
+      recurse: true,
+      descendantPlans: [] as string[],
+    };
+    await writeFile(f.planPath, JSON.stringify(recursivePlan));
+    await assert.rejects(
+      previewRetrospectiveSession(f.planPath),
+      /reviewed plan for every descendant/,
+    );
+    const childPlan = join(f.dir, "child-plan.json");
+    await writeFile(
+      childPlan,
+      JSON.stringify({
+        version: 1,
+        source: childPath,
+        sourceSha256: createHash("sha256").update(childBytes).digest("hex"),
+        groups: [
+          group("child-phase", "child-work", "child-work", "CHILD_HANDOFF"),
+        ],
+      }),
+    );
+    recursivePlan.descendantPlans = [childPlan];
+    await writeFile(f.planPath, JSON.stringify(recursivePlan));
+    const recursePreview = await previewRetrospectiveSession(f.planPath);
+    const restructured = await cloneRetrospectiveSession(
+      f.planPath,
+      recursePreview.previewToken,
+    );
+    const childSession = SessionManager.open(restructured.descendants[0].path);
+    assert.equal(childSession.getHeader()?.parentSession, restructured.path);
+    assert.match(
+      JSON.stringify(childSession.buildSessionContext().messages),
+      /CHILD_HANDOFF/,
+    );
+    assert.equal(await readFile(childPath, "utf8"), childBytes);
+    await writeFile(childPath, `${childBytes} `);
+    await assert.rejects(
+      cloneRetrospectiveSession(f.planPath, recursePreview.previewToken),
+      /Descendant snapshot changed/,
+    );
   });
 
   it("creates independent session IDs without overwriting earlier clones", async () => {
