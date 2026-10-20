@@ -231,14 +231,15 @@ export function getHandoff(entry: SessionEntry): HandoffData | undefined {
 export function handoffContext(
   entry: SessionEntry | null,
   messages: AgentMessage[],
+  legacyNavigatorOwned = false,
 ): AgentMessage[] {
-  if (!entry || !getHandoff(entry)) return messages;
+  if (!entry || (!getHandoff(entry) && !legacyNavigatorOwned)) return messages;
   return messages.map((message) =>
     message.role === "branchSummary"
       ? {
           role: "custom" as const,
           customType: "navigate-tree-handoff",
-          content: message.summary,
+          content: stripHandoffPreamble(message.summary),
           display: false,
           timestamp: message.timestamp,
         }

@@ -55,10 +55,21 @@ Keep each section concise. Keep the complete summary under about 4000 characters
  * focus. Mirrors upstream's `customInstructions` append shape
  * (`${PROMPT}\n\nAdditional focus: ...`).
  */
-export function buildSummaryInstruction(first: number, focus: string): string {
+export function buildSummaryInstruction(
+  first: number,
+  focus: string,
+  parent?: { mode: "full" | "synthesized"; childCount: number },
+): string {
   // Substitute in the prompt only: a focus that quotes `{first}` stays
   // verbatim.
-  const prompt = REWIND_SUMMARY_PROMPT.replaceAll("{first}", String(first));
+  let prompt = REWIND_SUMMARY_PROMPT.replaceAll("{first}", String(first));
+  if (parent && parent.childCount > 0) {
+    prompt = prompt.replace(
+      "Keep the complete summary under about 4000 characters while preserving all decisions.",
+      "This parent folds completed child handoffs. Use the length needed to preserve what remains relevant to this parent; there is no fixed 4000-character cap.",
+    );
+    prompt += `\n\nThis is a work handoff, not an alternative conversation. There are ${parent.childCount} child handoffs in scope. ${parent.mode === "full" ? "Child reports will be attached verbatim once each; write the parent's own scope, final outcome, superseding decisions and remaining work without recopying child reports." : "Synthesize the child reports into this parent's handoff. Keep their relevant decisions, rejected or superseded approaches, deliverables, verification evidence and limits, commits, deferred/open work, and key facts needed for subsequent work. Omit child detail only when it is no longer relevant to the parent."} Include explicit Delivered, Verification, Rejected or Superseded, Commits, and Open or Deferred sections when supported by the evidence. Distinguish historical next steps from still-open work.`;
+  }
   return `${prompt}\n\nAdditional focus: ${focus}`;
 }
 
@@ -67,8 +78,12 @@ export function buildSummaryInstruction(first: number, focus: string): string {
  * a `[navigate_tree]` source line, then the instruction. The message reaches
  * the provider as a user message right after the rewind's tool result.
  */
-export function buildSummaryRequestText(first: number, focus: string): string {
-  return `[navigate_tree]\n${buildSummaryInstruction(first, focus)}`;
+export function buildSummaryRequestText(
+  first: number,
+  focus: string,
+  parent?: { mode: "full" | "synthesized"; childCount: number },
+): string {
+  return `[navigate_tree]\n${buildSummaryInstruction(first, focus, parent)}`;
 }
 
 /**

@@ -93,8 +93,6 @@ import {
   REWIND_HINT_CUSTOM_TYPE,
 } from "./rewind-hint.ts";
 import {
-  BRANCH_SUMMARY_PREAMBLE,
-  buildStoredSummary,
   buildSummaryInstruction,
   buildSummaryRequestText,
 } from "./summary-prompt.ts";
@@ -1288,10 +1286,11 @@ describe("context event handler", () => {
     // Ends with branch_summary then the continuation.
     const last = messages[messages.length - 1];
     const prev = messages[messages.length - 2];
-    assert.equal(prev.role, "branchSummary");
+    assert.equal(prev.role, "custom");
+    assert.equal(prev.customType, "navigate-tree-handoff");
     assert.equal(
-      prev.summary,
-      buildStoredSummary(SUMMARY_TEXT, [], []),
+      prev.content,
+      `# Work handoff: end\n\n${SUMMARY_TEXT}`,
       "the projected summary is the stored text",
     );
     assert.equal(last.role, "custom");
@@ -2717,14 +2716,22 @@ describe("rewind phase 2: completion", () => {
     assert.equal(rewindMessages(f.pi)[0].message.details.summaryAttempts, 1);
   });
 
-  it("branches from the anchor with preamble + summary, labels it, and moves the leaf", async () => {
+  it("branches from the anchor with a work handoff, labels it, and moves the leaf", async () => {
     const f = await rewindFixture();
     const summaryId = f.done.message.details.summaryId as string;
     const entry = f.sm.getEntry(summaryId);
     assert.ok(entry && entry.type === "branch_summary");
     assert.equal(entry.parentId, f.anchorId, "child of the anchor entry");
-    assert.equal(entry.summary, `${BRANCH_SUMMARY_PREAMBLE}${SUMMARY_TEXT}`);
-    assert.deepEqual(entry.details, { readFiles: [], modifiedFiles: [] });
+    assert.equal(entry.summary, `# Work handoff: end\n\n${SUMMARY_TEXT}`);
+    const details = entry.details as {
+      readFiles: string[];
+      modifiedFiles: string[];
+      treeNavigator: { title: string; children: string[] };
+    };
+    assert.deepEqual(details.readFiles, []);
+    assert.deepEqual(details.modifiedFiles, []);
+    assert.equal(details.treeNavigator.title, "end");
+    assert.deepEqual(details.treeNavigator.children, []);
     // Extension-provided summary, as pi's navigateTree marks it.
     assert.equal(entry.fromHook, true);
     assert.equal(f.sm.getLabel(summaryId), "anchor:end");
@@ -2832,7 +2839,7 @@ describe("rewind phase 2: completion", () => {
     });
     const entry = f.sm.getEntry(f.done.message.details.summaryId as string);
     assert.ok(entry && entry.type === "branch_summary");
-    assert.equal(entry.summary, buildStoredSummary(SUMMARY_TEXT, [], []));
+    assert.equal(entry.summary, `# Work handoff: end\n\n${SUMMARY_TEXT}`);
   });
 
   it("appends read/modified file tags from read/edit/write calls in the collapsed segment", async () => {
@@ -2862,12 +2869,14 @@ describe("rewind phase 2: completion", () => {
     assert.ok(entry && entry.type === "branch_summary");
     assert.equal(
       entry.summary,
-      `${BRANCH_SUMMARY_PREAMBLE}${SUMMARY_TEXT}\n\n<read-files>\nsrc/a.ts\n</read-files>\n\n<modified-files>\nsrc/b.ts\nsrc/c.ts\n</modified-files>`,
+      `# Work handoff: end\n\n${SUMMARY_TEXT}\n\n<read-files>\nsrc/a.ts\n</read-files>\n\n<modified-files>\nsrc/b.ts\nsrc/c.ts\n</modified-files>`,
     );
-    assert.deepEqual(entry.details, {
-      readFiles: ["src/a.ts"],
-      modifiedFiles: ["src/b.ts", "src/c.ts"],
-    });
+    const fileDetails = entry.details as {
+      readFiles: string[];
+      modifiedFiles: string[];
+    };
+    assert.deepEqual(fileDetails.readFiles, ["src/a.ts"]);
+    assert.deepEqual(fileDetails.modifiedFiles, ["src/b.ts", "src/c.ts"]);
   });
 
   it("emits session_tree after the rewind so history mirrors rebuild (#79)", async () => {
@@ -3025,6 +3034,61 @@ describe("rewind phase 2: completion", () => {
     );
     assert.equal(f.sm.getLabel(tA.assistantId), "anchor:a");
     assert.equal(f.sm.getEntry(f.sm.getLeafId() as string)?.parentId, sumC);
+  });
+
+  it("folds an earlier child handoff into a parent once and projects honest work context", async () => {
+    const f = await rewindFixture({ commit: true });
+    const childId = f.done.message.details.summaryId as string;
+    appendTurn(f.sm, "parent-work", "parent-delivery", 24000);
+    appendTurn(f.sm, "parent-verification", "parent-result", 30000);
+    await requestRewind(
+      f,
+      { ...REWIND_ARGS, rewindTo: "start", newLabel: "parent" },
+      "tc-parent",
+    );
+    const requests = f.sm
+      .getEntries()
+      .filter(
+        (entry) =>
+          entry.type === "custom_message" &&
+          entry.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
+      );
+    const instruction = requests.at(-1);
+    assert.ok(instruction?.type === "custom_message");
+    assert.match(String(instruction.content), /no fixed 4000-character cap/);
+    const parentReport =
+      "## Goal\nParent scope\n\n## Progress\nParent final outcome\n\n## Next Steps\nContinue.";
+    await summaryTurn(f, parentReport, "stop", { commit: true });
+    const latest = rewindMessages(f.pi).at(-1);
+    assert.ok(latest);
+    const parent = f.sm.getEntry(latest.message.details.summaryId as string);
+    assert.ok(parent?.type === "branch_summary");
+    assert.equal(
+      parent.summary.split("Test the rewind happy path.").length - 1,
+      1,
+    );
+    assert.match(parent.summary, /Parent final outcome/);
+    const details = parent.details as {
+      treeNavigator: { children: string[]; sourceIds: string[] };
+    };
+    assert.deepEqual(details.treeNavigator.children, [childId]);
+    assert.equal(
+      new Set(details.treeNavigator.sourceIds).size,
+      details.treeNavigator.sourceIds.length,
+    );
+    const projected = __testHooks.buildContextMessages(f.sm);
+    assert.equal(
+      projected.filter(
+        (message) =>
+          message.role === "custom" &&
+          message.customType === "navigate-tree-handoff",
+      ).length,
+      1,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(projected),
+      /explored a different conversation|came back from/,
+    );
   });
 
   it("immediate re-rewind of a just-landed summary is refused and leaves nothing pending", async () => {
@@ -4586,7 +4650,7 @@ describe("rewind phase 2: multi-block text and late entries", () => {
     assert.equal(done.details.status, "done");
     const entry = f.sm.getEntry(done.details.summaryId as string);
     assert.ok(entry && entry.type === "branch_summary");
-    assert.equal(entry.summary, `${BRANCH_SUMMARY_PREAMBLE}${SUMMARY_TEXT}`);
+    assert.equal(entry.summary, `# Work handoff: end\n\n${SUMMARY_TEXT}`);
   });
 
   it("a heading split across blocks is joined with a newline, not glued", async () => {
@@ -4601,7 +4665,7 @@ describe("rewind phase 2: multi-block text and late entries", () => {
     assert.ok(entry && entry.type === "branch_summary");
     assert.equal(
       entry.summary,
-      `${BRANCH_SUMMARY_PREAMBLE}## Goal\nShip it.\n\n## Next Steps\n1. x`,
+      `# Work handoff: end\n\n## Goal\nShip it.\n\n## Next Steps\n1. x`,
     );
   });
 

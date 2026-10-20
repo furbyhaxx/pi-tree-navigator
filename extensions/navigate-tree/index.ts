@@ -87,6 +87,13 @@ import {
   splitContextEstimate,
 } from "./context-tokens.ts";
 import {
+  getHandoff,
+  type HandoffMode,
+  handoffContext,
+  makeHandoff,
+  materializeHandoff,
+} from "./handoff.ts";
+import {
   type AnchorTableRow,
   BRANCH_LABEL_PREFIX,
   extractTextContent,
@@ -121,9 +128,9 @@ import {
   RewindHintTracker,
 } from "./rewind-hint.ts";
 import {
-  buildStoredSummary,
   buildSummaryRequestText,
   computeFileLists,
+  formatFileOperations,
 } from "./summary-prompt.ts";
 
 /**
@@ -348,6 +355,7 @@ export function buildContextMessages(
       messages: AgentMessage[];
     };
     getBranch?(): SessionEntry[];
+    getLabel?(id: string): string | undefined;
   },
   pendingInstructionEntryId?: string | null,
 ): ReturnType<typeof sessionEntryToContextMessages> {
@@ -407,7 +415,12 @@ export function buildContextMessages(
                 }
               : message,
           );
-    return stale[i] ? withOutcome.map(dropStaleUsage) : withOutcome;
+    const legacyOwned =
+      e.sourceEntry?.type === "branch_summary" &&
+      e.sourceEntry.fromHook === true &&
+      sm.getLabel?.(e.sourceEntry.id)?.startsWith(LABEL_PREFIX) === true;
+    const projected = handoffContext(e.sourceEntry, withOutcome, legacyOwned);
+    return stale[i] ? projected.map(dropStaleUsage) : projected;
   });
   return messages.filter((message) => message.role !== "system");
 }
@@ -1012,6 +1025,8 @@ interface PendingRewind {
   /** `{first}` of the summary instruction. */
   first: number;
   summaryFocus: string;
+  handoffMode: HandoffMode;
+  childCount: number;
   /** Estimated context at the anchor (before the summary is added). */
   tokensAtTarget: number;
   /** The rewind's tool-result entry, set when its turn ends. */
@@ -1158,7 +1173,10 @@ function summaryRequestDraft(pending: PendingRewind): SessionBoundaryDraft {
   return {
     type: "custom_message",
     customType: SUMMARY_REQUEST_CUSTOM_TYPE,
-    content: buildSummaryRequestText(pending.first, pending.summaryFocus),
+    content: buildSummaryRequestText(pending.first, pending.summaryFocus, {
+      mode: pending.handoffMode,
+      childCount: pending.childCount,
+    }),
     display: true,
     details: {
       toolCallId: pending.toolCallId,
@@ -1629,6 +1647,7 @@ export default function (pi: ExtensionAPI) {
   // Pending in-band rewinds (#80), keyed by session id: set by the rewind
   // tool call, completed or ended by a later boundary / event (#90).
   const pendingRewinds = new Map<string, PendingRewind>();
+  const parentModes = new Map<string, HandoffMode>();
   // pi-codemode nested calls (#103): nested calls seen so far per codemode
   // call, and the codemode call each accepted nested rewind lands on.
   const nestedCallCounts = new Map<string, number>();
@@ -2254,10 +2273,45 @@ export default function (pi: ExtensionAPI) {
       // `fromExtension: true`, as pi's own navigateTree does for an
       // extension-provided summary.
       leafBeforeBranch = sm.getLeafId();
+      const children = entries.filter(
+        (entry) => entry.type === "branch_summary",
+      );
+      const all = new Map(sm.getEntries().map((entry) => [entry.id, entry]));
+      const sourceIds = new Set(
+        entries
+          .filter((entry) => entry.type !== "branch_summary")
+          .map((entry) => entry.id),
+      );
+      for (const child of children) {
+        const metadata = getHandoff(child);
+        if (metadata) for (const id of metadata.sourceIds) sourceIds.add(id);
+        else if (child.type === "branch_summary") {
+          const path = sm.getBranch(child.fromId);
+          const at = path.findIndex((entry) => entry.id === child.parentId);
+          for (const entry of path.slice(at + 1)) sourceIds.add(entry.id);
+        }
+      }
+      const handoff = makeHandoff({
+        name: pending.newLabel,
+        report: summaryText + formatFileOperations(readFiles, modifiedFiles),
+        mode: pending.handoffMode,
+        children: children.map((child) => child.id),
+        sourceEntries: [...sourceIds].flatMap((id) => {
+          const entry = all.get(id);
+          return entry ? [entry] : [];
+        }),
+      });
       summaryId = sm.branchWithSummary(
         pending.target,
-        buildStoredSummary(summaryText, readFiles, modifiedFiles),
-        { readFiles, modifiedFiles },
+        materializeHandoff(
+          handoff,
+          children.flatMap((child) =>
+            child.type === "branch_summary"
+              ? [{ id: child.id, summary: child.summary }]
+              : [],
+          ),
+        ),
+        { readFiles, modifiedFiles, treeNavigator: handoff },
         true,
       );
     } catch (err) {
@@ -3144,6 +3198,7 @@ export default function (pi: ExtensionAPI) {
     let byModel: ReadonlyMap<string, number | null> = new Map();
     let startTurns = START_ANCHOR_DEFAULT_TURNS;
     let warnings: string[] = [];
+    let parentMode: HandoffMode = "full";
     try {
       const loaded = await loadTreeNavigatorConfig({
         agentDir,
@@ -3153,6 +3208,7 @@ export default function (pi: ExtensionAPI) {
       reserve = loaded.config.rewindHintReserveTokens;
       byModel = loaded.config.rewindHintModelReserveTokens;
       startTurns = loaded.config.anchorStartAfterTurns;
+      parentMode = loaded.config.parentHandoffMode;
       warnings = loaded.warnings;
     } catch {
       // The loader is fail-closed and should never throw; this guard exists
@@ -3167,6 +3223,7 @@ export default function (pi: ExtensionAPI) {
     rewindHintReserveTokens = reserve;
     hintByModel = byModel;
     anchorStartTurnsBySession.set(sessionId, startTurns);
+    parentModes.set(sessionId, parentMode);
     // Fresh leg: the per-session gate re-arms on the next
     // `before_agent_start`; absent = fail-open in the meantime.
     toolActiveBySession.delete(sessionId);
@@ -3865,6 +3922,9 @@ Operations (set \`action\`):
         contextWindow,
         first,
         summaryFocus: p.summaryFocus,
+        handoffMode: parentModes.get(sessionId) ?? "full",
+        childCount: entries.filter((entry) => entry.type === "branch_summary")
+          .length,
         tokensAtTarget,
         hiddenEntryIds: [],
         attempts: 0,
