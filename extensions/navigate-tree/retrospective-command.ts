@@ -3,6 +3,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { handleTreeProposal } from "./proposal-command.ts";
 import {
   cloneRetrospectiveSession,
   previewRetrospectiveSession,
@@ -10,10 +11,15 @@ import {
 import { inspectRetrospectiveSession } from "./retrospective-plan.ts";
 
 const USAGE =
-  "Usage: /tree-clone [inspect <session.jsonl>|preview <plan.json>|create <plan.json>]";
+  "Usage: /tree-clone [inspect <session.jsonl>|propose [session.jsonl] [--llm] [--model provider/model:thinking] [--output plan.json] [--omit-tool name] [--calls-only-tool name]|preview <plan.json>|create <plan.json>]";
 
 const SUBCOMMANDS = [
   { name: "inspect", path: "<session.jsonl>", summary: "inspect a session" },
+  {
+    name: "propose",
+    path: "[session.jsonl] [--llm] [--model provider/model:thinking]",
+    summary: "derive a reviewable tree plan",
+  },
   { name: "preview", path: "<plan.json>", summary: "review a clone plan" },
   { name: "create", path: "<plan.json>", summary: "create a confirmed clone" },
 ] as const;
@@ -83,10 +89,25 @@ function notifyCreateNotIdle(ctx: ExtensionCommandContext): void {
 export function registerRetrospectiveCommand(pi: ExtensionAPI): void {
   pi.registerCommand("tree-clone", {
     description:
-      "[inspect <session.jsonl>|preview <plan.json>|create <plan.json>] — inspect or create a retrospective clone",
+      "[inspect <session.jsonl>|propose [session.jsonl] [--llm] [--model provider/model:thinking]|preview <plan.json>|create <plan.json>] — inspect, derive or clone a session tree",
     getArgumentCompletions(argumentText) {
       const input = argumentText.trimStart();
-      if (/\s/.test(input)) return null;
+      if (/\s/.test(input)) {
+        const flags = [
+          "--llm",
+          "--model",
+          "--output",
+          "--omit-tool",
+          "--calls-only-tool",
+          "--full-tool",
+        ];
+        const match = /^(propose\s[\s\S]*?)(--[\w-]*)$/.exec(input);
+        return match
+          ? flags
+              .filter((flag) => flag.startsWith(match[2]))
+              .map((flag) => ({ value: `${match[1]}${flag} `, label: flag }))
+          : null;
+      }
       const query = input.toLowerCase();
       const matches = SUBCOMMANDS.filter((command) =>
         command.name.startsWith(query),
@@ -130,6 +151,10 @@ export function registerRetrospectiveCommand(pi: ExtensionAPI): void {
       }
 
       try {
+        if (operation === "propose") {
+          await handleTreeProposal(match?.[2] ?? "", ctx, pi);
+          return;
+        }
         const path = await getPath(operation, match?.[2], ctx);
         if (operation === "inspect") {
           const inspected = await inspectRetrospectiveSession(path);

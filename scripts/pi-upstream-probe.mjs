@@ -222,6 +222,10 @@ try {
     ["native tree input", codingAgent.TreeSelectorComponent?.prototype, "handleInput"],
     ["native tree list access", codingAgent.TreeSelectorComponent?.prototype, "getTreeList"],
     ["native session projection", SessionManager?.prototype, "buildSessionProjection"],
+    ["proposal model lookup", codingAgent.ModelRegistry?.prototype, "find"],
+    ["proposal model authentication", codingAgent.ModelRegistry?.prototype, "hasConfiguredAuth"],
+    ["proposal provider-neutral streaming", codingAgent.ModelRegistry?.prototype, "streamSimple"],
+    ["offline proposal model runtime", codingAgent.ModelRuntime, "create"],
   ]) {
     check(name, typeof prototype?.[method] === "function", typeof prototype?.[method]);
   }
