@@ -58,6 +58,11 @@
 import { readFile as fsReadFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { HandoffMode } from "./handoff.ts";
+import {
+  mergeProposalOptions,
+  type ProposalOptions,
+  parseProposalOptions,
+} from "./proposal-options.ts";
 
 export const TREE_NAVIGATOR_CONFIG_FILENAME = "tree-navigator.json";
 export const REWIND_HINT_MIN_RESERVE = 1_000;
@@ -111,6 +116,10 @@ export interface ParsedLayer {
   hint: HintField;
   startAnchor: StartAnchorField;
   parentHandoffMode: ParentHandoffModeField;
+  /** Invalid disclosure settings block model proposals rather than falling back. */
+  proposal?:
+    | { kind: "ok"; value: ProposalOptions }
+    | { kind: "invalid"; error: string };
   /**
    * Per-model hint fields (#86), keyed by exact `provider/modelId`. Only
    * entries that set `rewindHintReserveTokens` (any non-absent outcome)
@@ -250,6 +259,48 @@ export function parseTreeNavigatorConfig(raw: unknown): ParsedRoot {
       startAnchor: parseStartAnchorField(record),
       parentHandoffMode: parseParentHandoffModeField(record),
       ...parseModelOverrides(record),
+      ...parseProposalField(record),
+    },
+  };
+}
+
+function parseProposalField(
+  record: Record<string, unknown>,
+): Pick<ParsedLayer, "proposal"> {
+  if (!("treeProposal" in record)) return {};
+  try {
+    return {
+      proposal: {
+        kind: "ok",
+        value: parseProposalOptions(record.treeProposal),
+      },
+    };
+  } catch (error) {
+    return {
+      proposal: {
+        kind: "invalid",
+        error: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
+function mergeProposalField(
+  globalLayer: ParsedLayer,
+  projectLayer: ParsedLayer,
+): Pick<ParsedLayer, "proposal"> {
+  const global = globalLayer.proposal;
+  const project = projectLayer.proposal;
+  if (project?.kind === "invalid") return { proposal: project };
+  if (global?.kind === "invalid") return { proposal: global };
+  if (!global && !project) return {};
+  return {
+    proposal: {
+      kind: "ok",
+      value: mergeProposalOptions(
+        global?.value ?? { tools: {} },
+        project?.value ?? {},
+      ),
     },
   };
 }
@@ -305,6 +356,7 @@ export function mergeTreeNavigatorConfig(
       ...projectLayer.modelHints,
     ]),
     modelOverridesProblems: noModelOverridesProblems(),
+    ...mergeProposalField(globalLayer, projectLayer),
   };
 }
 
@@ -431,6 +483,11 @@ async function loadLayer(
       `navigate_tree: invalid parentHandoffMode in ${layer} config at ${path} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
     );
   }
+  if (parsed.layer.proposal?.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid treeProposal in ${layer} config at ${path} — ${parsed.layer.proposal.error}; model proposals are blocked until this is corrected.`,
+    );
+  }
   return { layer: parsed.layer, warnings };
 }
 
@@ -454,6 +511,8 @@ export async function loadTreeNavigatorConfig(opts: {
     rewindHintModelReserveTokens: Map<string, number | null>;
     anchorStartAfterTurns: number;
     parentHandoffMode: HandoffMode;
+    proposal?: ProposalOptions;
+    proposalError?: string;
   };
   warnings: string[];
 }> {
@@ -497,6 +556,12 @@ export async function loadTreeNavigatorConfig(opts: {
         effective.parentHandoffMode.kind === "ok"
           ? effective.parentHandoffMode.value
           : PARENT_HANDOFF_MODE_DEFAULT,
+      ...(effective.proposal?.kind === "ok"
+        ? { proposal: effective.proposal.value }
+        : {}),
+      ...(effective.proposal?.kind === "invalid"
+        ? { proposalError: effective.proposal.error }
+        : {}),
     },
     warnings,
   };
