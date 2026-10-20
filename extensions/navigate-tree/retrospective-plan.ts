@@ -342,7 +342,7 @@ function validateRecord(value: unknown, line: number): void {
   }
 }
 
-/** Read a linear session strictly; malformed JSON and non-linear histories are refused. */
+/** Read an append-ordered session graph without changing source bytes. */
 export async function readSessionSnapshot(
   path: string,
 ): Promise<SessionSnapshot> {
@@ -367,17 +367,39 @@ export async function readSessionSnapshot(
   if (!entries.length) throw new Error("Session has no entries");
   const ids = new Set<string>();
   const safeCuts = new Set([-1]);
-  const pending = new Set<string>();
-  let previous: string | null = null;
+  const pendingById = new Map<string, Set<string>>();
+  const byId = new Map<string, SessionEntry>();
+  const parents = new Set<string>();
   for (const [index, entry] of entries.entries()) {
     if (ids.has(entry.id)) throw new Error(`Duplicate entry id: ${entry.id}`);
-    if (entry.parentId !== previous) {
+    if (entry.parentId !== null && !ids.has(entry.parentId))
       throw new Error(
-        `Source must be linear: ${entry.id} does not follow the previous record. Export a single branch first.`,
+        `Invalid parent ${entry.parentId} at ${entry.id}: parents must exist earlier`,
       );
+    const ancestors = new Set<string>();
+    let parent = entry.parentId;
+    while (parent !== null) {
+      ancestors.add(parent);
+      parent = byId.get(parent)?.parentId ?? null;
     }
+    if (entry.type === "compaction" && !ancestors.has(entry.firstKeptEntryId))
+      throw new Error(`Invalid compaction target at ${entry.id}`);
+    if (entry.type === "context_edit" && !ancestors.has(entry.targetId))
+      throw new Error(`Invalid context edit target at ${entry.id}`);
+    if (entry.type === "label" && !ids.has(entry.targetId))
+      throw new Error(`Invalid label target at ${entry.id}`);
+    if (
+      entry.type === "branch_summary" &&
+      entry.fromId !== "root" &&
+      !ids.has(entry.fromId)
+    )
+      throw new Error(`Invalid branch summary fromId at ${entry.id}`);
+    const pending = new Set(
+      entry.parentId === null ? [] : pendingById.get(entry.parentId),
+    );
+    if (entry.parentId !== null) parents.add(entry.parentId);
     ids.add(entry.id);
-    previous = entry.id;
+    byId.set(entry.id, entry);
     if (entry.type === "message" && entry.message.role === "assistant") {
       for (const block of entry.message.content) {
         if (block.type !== "toolCall") continue;
@@ -394,6 +416,7 @@ export async function readSessionSnapshot(
           `Orphan tool result ${entry.id}: no outstanding call ${entry.message.toolCallId}`,
         );
     }
+    pendingById.set(entry.id, pending);
     if (!pending.size) safeCuts.add(index);
   }
   let name = header.id;
@@ -406,7 +429,13 @@ export async function readSessionSnapshot(
     entries,
     name,
     safeCuts,
-    pendingToolCalls: [...pending],
+    pendingToolCalls: [
+      ...new Set(
+        entries
+          .filter((entry) => !parents.has(entry.id))
+          .flatMap((entry) => [...(pendingById.get(entry.id) ?? [])]),
+      ),
+    ],
   };
 }
 
@@ -421,6 +450,32 @@ export async function inspectRetrospectiveSession(path: string) {
     entries: snapshot.entries.length,
     lastEntryId: snapshot.entries.at(-1)?.id,
     pendingToolCalls: snapshot.pendingToolCalls,
+    graph: {
+      linear: snapshot.entries.every(
+        (entry, index) =>
+          entry.parentId === (snapshot.entries[index - 1]?.id ?? null),
+      ),
+      roots: snapshot.entries
+        .filter((entry) => entry.parentId === null)
+        .map((entry) => entry.id),
+      leaves: snapshot.entries
+        .filter(
+          (entry) =>
+            !snapshot.entries.some((child) => child.parentId === entry.id),
+        )
+        .map((entry) => entry.id),
+      branchingPoints: snapshot.entries
+        .filter(
+          (entry) =>
+            snapshot.entries.filter((child) => child.parentId === entry.id)
+              .length > 1,
+        )
+        .map((entry) => entry.id),
+      summaries: snapshot.entries.filter(
+        (entry) => entry.type === "branch_summary",
+      ),
+      labels: snapshot.entries.filter((entry) => entry.type === "label"),
+    },
     turns: snapshot.entries.flatMap((entry, index) =>
       entry.type === "message" && entry.message.role === "user"
         ? [

@@ -110,13 +110,34 @@ function validateRanges(
           `${group.name}: sibling ranges must be ordered and non-overlapping`,
         );
       previousEnd = end;
+      const incomingParent = entries[start].parentId;
       if (
         group.state === "folded" &&
-        (!safeCuts.has(start - 1) || !safeCuts.has(end))
+        (!safeCuts.has(
+          incomingParent === null ? -1 : (indices.get(incomingParent) ?? -2),
+        ) ||
+          !safeCuts.has(end))
       ) {
         throw new Error(
           `${group.name}: boundary splits a tool call from its results; move it to a completed tool batch`,
         );
+      }
+      if (group.state === "folded") {
+        const inside = new Set(
+          entries.slice(start, end + 1).map((entry) => entry.id),
+        );
+        const incoming = new Set(
+          entries
+            .slice(start, end + 1)
+            .filter(
+              (entry) => entry.parentId === null || !inside.has(entry.parentId),
+            )
+            .map((entry) => entry.parentId),
+        );
+        if (incoming.size !== 1)
+          throw new Error(
+            `${group.name}: unsafe graph cut has multiple external incoming parents`,
+          );
       }
       for (const entry of entries) {
         if (entry.type !== "context_edit") continue;
@@ -160,6 +181,15 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
       entry.type === "label" && entry.label ? [entry.label] : [],
     ),
   );
+  const completed = new Map<string, string>();
+  const overrides: { parent: string | null; marker: string }[] = [];
+  function resolveParent(parent: string | null): string | null {
+    for (let index = overrides.length - 1; index >= 0; index--) {
+      const override = overrides[index];
+      if (override.parent === parent) return override.marker;
+    }
+    return parent === null ? null : (completed.get(parent) ?? parent);
+  }
   let leaf: string | null = null;
   const id = () => randomUUID();
   const base = () => ({ id: id(), parentId: leaf, timestamp });
@@ -237,7 +267,8 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
     let cursor = first;
     for (const range of children) {
       copy(cursor, range.first - 1);
-      const parent = leaf;
+      const originalParent = original[range.first].parentId;
+      const parent = resolveParent(originalParent);
       groups.push({
         name: range.group.name,
         depth,
@@ -255,7 +286,7 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
       const title = range.group.title ?? range.group.name.replaceAll("-", " ");
       const startEntry: SessionEntry = {
         id: startId,
-        parentId: leaf,
+        parentId: parent,
         timestamp,
         type: "custom",
         customType: "tree-phase",
@@ -267,6 +298,7 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
         },
       };
       append(startEntry);
+      overrides.push({ parent: originalParent, marker: startId });
       const childGroups = emit(
         range.first,
         range.last,
@@ -275,6 +307,7 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
       );
       const sourceEntries = original.slice(range.first, range.last + 1);
       if (range.group.state === "open") {
+        overrides.pop();
         labels.push({ targetId: startId, label: `anchor:${range.group.name}` });
         history.push({
           name: range.group.name,
@@ -288,6 +321,7 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
         cursor = range.last + 1;
         continue;
       }
+      overrides.pop();
       append({
         ...base(),
         type: "custom",
@@ -332,6 +366,7 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
           lastEntryId: range.group.lastEntryId,
         },
       });
+      completed.set(range.group.lastEntryId, summaryId);
       labels.push({ targetId: summaryId, label: `anchor:${range.group.name}` });
       history.push({
         name: range.group.name,
@@ -350,13 +385,14 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
   function copy(first: number, last: number) {
     for (let index = first; index <= last; index++) {
       const entry = original[index];
-      if (entry.parentId !== leaf)
+      const parentId = resolveParent(entry.parentId);
+      if (entry.parentId !== parentId)
         changes.push({
           id: entry.id,
           originalParentId: entry.parentId,
-          parentId: leaf,
+          parentId,
         });
-      append({ ...entry, parentId: leaf });
+      append({ ...entry, parentId });
     }
   }
   const history: HistoryManifest = {
@@ -447,21 +483,39 @@ function validateClone(
       );
     }
   }
-  const beforeProjection = buildSessionProjection(original);
-  const afterProjection = buildSessionProjection(entries, activeLeaf);
-  const beforeById = new Map(
-    beforeProjection.entries.map((entry) => [
-      entry.sourceEntry.id,
-      entry.messages,
-    ]),
-  );
-  for (const entry of afterProjection.entries) {
-    const before = beforeById.get(entry.sourceEntry.id);
-    if (before && !isDeepStrictEqual(before, entry.messages))
-      throw new Error(
-        `Context edits would change surviving entry ${entry.sourceEntry.id}`,
-      );
+  const parents = new Set(original.map((entry) => entry.parentId));
+  const checkpoints = original
+    .filter((entry) => entry.type === "context_edit" || !parents.has(entry.id))
+    .map((entry) => entry.id);
+  function compare(beforeLeaf: string | null, afterLeaf: string | null) {
+    const beforeProjection = buildSessionProjection(original, beforeLeaf);
+    const afterProjection = buildSessionProjection(entries, afterLeaf);
+    const beforeById = new Map(
+      beforeProjection.entries.map((entry) => [
+        entry.sourceEntry.id,
+        entry.messages,
+      ]),
+    );
+    for (const entry of afterProjection.entries) {
+      const before = beforeById.get(entry.sourceEntry.id);
+      if (before && !isDeepStrictEqual(before, entry.messages))
+        throw new Error(
+          `Context edits would change surviving entry ${entry.sourceEntry.id}`,
+        );
+    }
   }
+  compare(original.at(-1)?.id ?? null, activeLeaf);
+  for (const checkpoint of checkpoints) compare(checkpoint, checkpoint);
+}
+
+/** Validate a plan entirely in memory without discovering or publishing sessions. */
+export function validateRetrospectivePlan(
+  snapshot: SessionSnapshot,
+  plan: RetrospectivePlan,
+): void {
+  if (snapshot.sha256 !== plan.sourceSha256)
+    throw new Error("Source snapshot changed");
+  buildClone(snapshot, plan);
 }
 
 async function prepare(path: string) {

@@ -484,6 +484,35 @@ describe("retrospective clone", () => {
       }),
       user("tail", "Continue"),
     ];
+    const siblingResults = await fixture({
+      entries: [
+        ...entries.slice(0, 4),
+        { ...entries[3], id: "sibling-result", parentId: "call" },
+      ],
+      groups: [group("batch", "call", "sibling-result")],
+    });
+    await previewRetrospectiveSession(siblingResults.planPath);
+    const unfinished = await fixture({
+      entries: [
+        ...entries.slice(0, 3),
+        {
+          type: "branch_summary",
+          id: "rewound",
+          parentId: "before",
+          fromId: "call",
+          summary: "Rewound",
+        },
+      ],
+      groups: [group("batch", "call", "rewound")],
+    });
+    assert.deepEqual(
+      (await inspectRetrospectiveSession(unfinished.source)).pendingToolCalls,
+      ["call-1"],
+    );
+    await assert.rejects(
+      previewRetrospectiveSession(unfinished.planPath),
+      /unfinished tool calls/,
+    );
     const split = await fixture({
       entries,
       groups: [group("split", "call", "call")],
@@ -659,18 +688,120 @@ describe("retrospective clone", () => {
     );
   });
 
-  it("refuses branched sources and duplicate entry IDs", async () => {
+  it("preserves native rewinds, archived edits and root summaries through equal-boundary folds", async () => {
+    const f = await fixture({
+      entries: [
+        user("root", "Start"),
+        user("target", "Original payload"),
+        {
+          type: "context_edit",
+          id: "edit",
+          targetId: "target",
+          replacement: { content: "Edited payload" },
+        },
+        {
+          type: "branch_summary",
+          id: "rewind-one",
+          parentId: "root",
+          fromId: "edit",
+          summary: "First rewind",
+        },
+        user("work", "Second branch"),
+        {
+          type: "branch_summary",
+          id: "rewind-two",
+          parentId: "rewind-one",
+          fromId: "work",
+          summary: "Second rewind",
+        },
+        { type: "label", id: "label", targetId: "target", label: "archived" },
+        user("tail", "Continue"),
+      ],
+      groups: [
+        group("outer", "target", "label", "Outer", [
+          group("inner", "target", "label", "Inner"),
+        ]),
+      ],
+    });
+    const inspected = await inspectRetrospectiveSession(f.source);
+    assert.equal(inspected.graph.linear, false);
+    assert.deepEqual(inspected.graph.branchingPoints, ["root", "rewind-one"]);
+    const preview = await previewRetrospectiveSession(f.planPath);
+    const clone = await cloneRetrospectiveSession(
+      f.planPath,
+      preview.previewToken,
+    );
+    const original = SessionManager.open(f.source).getEntries();
+    const reopened = SessionManager.open(clone.path);
+    const copied = reopened.getEntries();
+    for (const entry of original) {
+      const actual = copied.find((item) => item.id === entry.id);
+      assert.ok(actual);
+      const { parentId: _before, ...before } = entry;
+      const { parentId: _after, ...after } = actual;
+      assert.deepEqual(after, before);
+    }
+    assert.ok(
+      JSON.stringify(buildSessionContext(copied, "edit").messages).includes(
+        "Edited payload",
+      ),
+    );
+    const outer = copied.find(
+      (entry) =>
+        entry.type === "branch_summary" &&
+        entry.fromHook &&
+        entry.summary.includes("Outer"),
+    );
+    assert.ok(outer);
+    assert.equal(
+      copied.find((entry) => entry.id === "tail")?.parentId,
+      outer.id,
+    );
+    const rootSummary = await fixture({
+      entries: [
+        user("base", "Start"),
+        {
+          type: "branch_summary",
+          id: "summary",
+          parentId: "base",
+          fromId: "root",
+          summary: "Native root",
+        },
+        user("end", "End"),
+      ],
+      groups: [group("phase", "summary", "summary")],
+    });
+    await previewRetrospectiveSession(rootSummary.planPath);
+  });
+
+  it("refuses unsafe multi-incoming graph cuts", async () => {
+    const f = await fixture({
+      entries: [
+        user("a", "A"),
+        user("b", "B"),
+        user("c", "C"),
+        { ...user("d", "D"), parentId: "a" },
+      ],
+      groups: [group("phase", "c", "d")],
+    });
+    await assert.rejects(
+      previewRetrospectiveSession(f.planPath),
+      /multiple external incoming parents/,
+    );
+  });
+
+  it("refuses malformed parents and duplicate entry IDs", async () => {
     const branched = await fixture({
       entries: [
         { type: "session_info", id: "name", name: "Original" },
         user("one", "First branch"),
-        { ...user("two", "Second branch"), parentId: "name" },
+        { ...user("two", "Second branch"), parentId: "missing" },
       ],
       groups: [group("phase", "one", "two")],
     });
     await assert.rejects(
       previewRetrospectiveSession(branched.planPath),
-      /Source must be linear/i,
+      /Invalid parent/i,
     );
 
     const duplicate = await fixture({
