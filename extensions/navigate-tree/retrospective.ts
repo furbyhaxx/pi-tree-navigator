@@ -29,6 +29,7 @@ import {
   readSessionSnapshot,
   type SessionSnapshot,
   sha256,
+  validateCompleteToolCalls,
 } from "./retrospective-plan.ts";
 
 /** Reviewable conversion output; its token binds both the source and complete plan. */
@@ -86,10 +87,7 @@ function validateRanges(
   const { entries } = snapshot;
   const indices = new Map(entries.map((entry, index) => [entry.id, index]));
   const safeCuts = snapshot.safeCuts;
-  if (snapshot.pendingToolCalls.length)
-    throw new Error(
-      `Source has unfinished tool calls: ${snapshot.pendingToolCalls.join(", ")}. Wait for the source session to finish before cloning.`,
-    );
+  validateCompleteToolCalls(snapshot);
   function visit(
     groups: readonly RetrospectiveGroup[],
     first: number,

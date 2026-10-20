@@ -15,7 +15,7 @@ import {
   cloneRetrospectiveSession,
   previewRetrospectiveSession,
 } from "../extensions/navigate-tree/retrospective.ts";
-import { inspectRetrospectiveSession, readSessionSnapshot } from "../extensions/navigate-tree/retrospective-plan.ts";
+import { inspectRetrospectiveSession, readSessionSnapshot, validateCompleteToolCalls } from "../extensions/navigate-tree/retrospective-plan.ts";
 
 const usage = `Usage:
   node scripts/restructure-session.mjs inspect <session.jsonl>
@@ -49,6 +49,7 @@ try {
       const parsed = parseProposalArguments(args);
       if (!parsed.source) throw new Error(`Propose requires a session path.\n${usage}`);
       const snapshot = await readSessionSnapshot(resolve(parsed.source));
+      validateCompleteToolCalls(snapshot);
       const loaded = await loadTreeNavigatorConfig({ agentDir: getAgentDir(), projectPath: join(process.cwd(), ".pi", TREE_NAVIGATOR_CONFIG_FILENAME), projectTrusted: false });
       for (const warning of loaded.warnings) console.error(warning);
       if (parsed.llm && loaded.config.proposalError) throw new Error(loaded.config.proposalError);

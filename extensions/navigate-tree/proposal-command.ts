@@ -31,6 +31,7 @@ import {
   readSessionSnapshot,
   type SessionSnapshot,
   sha256,
+  validateCompleteToolCalls,
 } from "./retrospective-plan.ts";
 
 /** Explicit opt-in to remote analysis; tool rules apply to this proposal only. */
@@ -311,6 +312,7 @@ export async function handleTreeProposal(
       "No session file is available; provide a session.jsonl path",
     );
   const snapshot = await readSessionSnapshot(resolve(ctx.cwd, source));
+  validateCompleteToolCalls(snapshot);
   const loaded = await loadTreeNavigatorConfig({
     agentDir: getAgentDir(),
     projectPath: join(ctx.cwd, CONFIG_DIR_NAME, TREE_NAVIGATOR_CONFIG_FILENAME),

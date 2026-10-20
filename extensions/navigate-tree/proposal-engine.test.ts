@@ -71,6 +71,24 @@ function runner(
   };
 }
 
+it("refuses unfinished source batches before making a paid model request", async () => {
+  const source = { ...snapshot(), pendingToolCalls: ["pending-call"] };
+  let calls = 0;
+  await assert.rejects(
+    proposeTree(source, {
+      model: {
+        ...runner(source, []),
+        async complete() {
+          calls++;
+          return { text: "{}" };
+        },
+      },
+    }),
+    /unfinished tool calls/,
+  );
+  assert.equal(calls, 0);
+});
+
 it("returns a deterministic no-model proposal with zero calls", async () => {
   const source = snapshot();
   const result = await proposeTree(source);

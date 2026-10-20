@@ -106,6 +106,10 @@ is not established, heuristic groups stay open rather than inventing a report.
 The model receives that baseline and the permitted textual history to refine
 markers, labels, nesting, goals, outcomes and completed handoffs.
 
+Inspection can report an in-progress source. Proposals, preview and creation
+require completed recorded tool batches; known unfinished calls are rejected
+before any model request rather than charging for an unusable plan.
+
 Model analysis requires explicit `--llm` or `--model` and a disclosure/charge
 confirmation. It uses Pi's model registry and existing credentials without
 switching the current session model. The default model and thinking level are

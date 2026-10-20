@@ -6,6 +6,7 @@ import {
   type RetrospectiveGroup,
   type RetrospectivePlan,
   type SessionSnapshot,
+  validateCompleteToolCalls,
 } from "./retrospective-plan.ts";
 
 /** Caller-owned model adapter; no provider or registry is accessed by this module. */
@@ -104,6 +105,7 @@ export async function proposeTree(
   } = {},
 ): Promise<TreeProposal> {
   options.signal?.throwIfAborted();
+  validateCompleteToolCalls(snapshot);
   const warnings: string[] = [];
   const plan = buildHeuristicPlan(snapshot, (message) =>
     warnings.push(message),

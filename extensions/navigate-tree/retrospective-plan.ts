@@ -47,6 +47,14 @@ export interface SessionSnapshot {
   readonly pendingToolCalls: readonly string[];
 }
 
+/** Refuse incomplete source batches before conversion or paid proposal work. */
+export function validateCompleteToolCalls(snapshot: SessionSnapshot): void {
+  if (snapshot.pendingToolCalls.length)
+    throw new Error(
+      `Source has unfinished tool calls: ${snapshot.pendingToolCalls.join(", ")}. Wait for the source session's tool results before deriving or cloning a tree.`,
+    );
+}
+
 /** Hash source bytes or a preview contract. */
 export function sha256(content: string | Buffer): string {
   return createHash("sha256").update(content).digest("hex");
