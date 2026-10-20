@@ -368,25 +368,70 @@ export async function readSessionSnapshot(
   const ids = new Set<string>();
   const safeCuts = new Set([-1]);
   const pendingById = new Map<string, Map<string, string>>();
-  const completedById = new Map<string, Set<string>>();
+  // Completion evidence lives at result/summary nodes, never in copied histories.
+  const completionEntries = new Map<string, string[]>();
   const completedAnywhere = new Set<string>();
-  const byId = new Map<string, SessionEntry>();
-  const parents = new Set<string>();
-  for (const [index, entry] of entries.entries()) {
+  const children = new Map<string | null, string[]>();
+  for (const entry of entries) {
     if (ids.has(entry.id)) throw new Error(`Duplicate entry id: ${entry.id}`);
     if (entry.parentId !== null && !ids.has(entry.parentId))
       throw new Error(
         `Invalid parent ${entry.parentId} at ${entry.id}: parents must exist earlier`,
       );
-    const ancestors = new Set<string>();
-    let parent = entry.parentId;
-    while (parent !== null) {
-      ancestors.add(parent);
-      parent = byId.get(parent)?.parentId ?? null;
+    ids.add(entry.id);
+    const siblings = children.get(entry.parentId) ?? [];
+    siblings.push(entry.id);
+    children.set(entry.parentId, siblings);
+  }
+  ids.clear();
+  // Euler intervals answer raw ancestry without walking every record's parents.
+  const starts = new Map<string, number>();
+  const ends = new Map<string, number>();
+  const stack: { id: string; exiting: boolean }[] = (
+    children.get(null) ?? []
+  ).map((id) => ({ id, exiting: false }));
+  let clock = 0;
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node) break;
+    if (node.exiting) {
+      ends.set(node.id, clock);
+      continue;
     }
-    if (entry.type === "compaction" && !ancestors.has(entry.firstKeptEntryId))
+    starts.set(node.id, clock++);
+    stack.push({ id: node.id, exiting: true });
+    for (const id of children.get(node.id) ?? [])
+      stack.push({ id, exiting: false });
+  }
+  const isAncestor = (ancestor: string, descendant: string) => {
+    const start = starts.get(ancestor);
+    const end = ends.get(ancestor);
+    const target = starts.get(descendant);
+    return (
+      start !== undefined &&
+      end !== undefined &&
+      target !== undefined &&
+      start <= target &&
+      target < end
+    );
+  };
+  const recordCompletion = (occurrence: string, id: string) => {
+    const evidence = completionEntries.get(occurrence) ?? [];
+    evidence.push(id);
+    completionEntries.set(occurrence, evidence);
+  };
+  const parents = new Set<string>();
+  for (const [index, entry] of entries.entries()) {
+    if (
+      entry.type === "compaction" &&
+      (entry.parentId === null ||
+        !isAncestor(entry.firstKeptEntryId, entry.parentId))
+    )
       throw new Error(`Invalid compaction target at ${entry.id}`);
-    if (entry.type === "context_edit" && !ancestors.has(entry.targetId))
+    if (
+      entry.type === "context_edit" &&
+      (entry.parentId === null || !isAncestor(entry.targetId, entry.parentId))
+    )
       throw new Error(`Invalid context edit target at ${entry.id}`);
     if (entry.type === "label" && !ids.has(entry.targetId))
       throw new Error(`Invalid label target at ${entry.id}`);
@@ -396,29 +441,38 @@ export async function readSessionSnapshot(
       !ids.has(entry.fromId)
     )
       throw new Error(`Invalid branch summary fromId at ${entry.id}`);
-    const pending = new Map(
-      entry.parentId === null ? [] : pendingById.get(entry.parentId),
-    );
-    const completed = new Set(
-      entry.parentId === null ? [] : completedById.get(entry.parentId),
-    );
+    let pending =
+      entry.parentId === null
+        ? new Map<string, string>()
+        : (pendingById.get(entry.parentId) ?? new Map<string, string>());
+    let mutable = entry.parentId === null;
+    const writablePending = () => {
+      if (!mutable) {
+        pending = new Map(pending);
+        mutable = true;
+      }
+      return pending;
+    };
     if (entry.type === "branch_summary" && entry.fromId !== "root") {
-      const archivedCompleted = completedById.get(entry.fromId);
       for (const [call, occurrence] of pending) {
-        if (!archivedCompleted?.has(occurrence)) continue;
-        pending.delete(call);
-        completed.add(occurrence);
+        if (
+          !completionEntries
+            .get(occurrence)
+            ?.some((id) => isAncestor(id, entry.fromId))
+        )
+          continue;
+        writablePending().delete(call);
+        recordCompletion(occurrence, entry.id);
       }
     }
     if (entry.parentId !== null) parents.add(entry.parentId);
     ids.add(entry.id);
-    byId.set(entry.id, entry);
     if (entry.type === "message" && entry.message.role === "assistant") {
       for (const block of entry.message.content) {
         if (block.type !== "toolCall") continue;
         if (pending.has(block.id))
           throw new Error(`Duplicate outstanding tool call ${block.id}`);
-        pending.set(block.id, JSON.stringify([entry.id, block.id]));
+        writablePending().set(block.id, JSON.stringify([entry.id, block.id]));
       }
     } else if (
       entry.type === "message" &&
@@ -429,11 +483,10 @@ export async function readSessionSnapshot(
         throw new Error(
           `Orphan tool result ${entry.id}: no outstanding call ${entry.message.toolCallId}`,
         );
-      pending.delete(entry.message.toolCallId);
-      completed.add(occurrence);
+      writablePending().delete(entry.message.toolCallId);
+      recordCompletion(occurrence, entry.id);
       completedAnywhere.add(occurrence);
     }
-    completedById.set(entry.id, completed);
     pendingById.set(entry.id, pending);
     if (!pending.size) safeCuts.add(index);
   }
@@ -462,6 +515,14 @@ export async function readSessionSnapshot(
 /** Inspect stable IDs and user-turn boundaries without sending transcript data to a model. */
 export async function inspectRetrospectiveSession(path: string) {
   const snapshot = await readSessionSnapshot(path);
+  const childCounts = new Map<string, number>();
+  for (const entry of snapshot.entries) {
+    if (entry.parentId !== null)
+      childCounts.set(
+        entry.parentId,
+        (childCounts.get(entry.parentId) ?? 0) + 1,
+      );
+  }
   return {
     source: snapshot.path,
     sourceSha256: snapshot.sha256,
@@ -479,17 +540,10 @@ export async function inspectRetrospectiveSession(path: string) {
         .filter((entry) => entry.parentId === null)
         .map((entry) => entry.id),
       leaves: snapshot.entries
-        .filter(
-          (entry) =>
-            !snapshot.entries.some((child) => child.parentId === entry.id),
-        )
+        .filter((entry) => !childCounts.has(entry.id))
         .map((entry) => entry.id),
       branchingPoints: snapshot.entries
-        .filter(
-          (entry) =>
-            snapshot.entries.filter((child) => child.parentId === entry.id)
-              .length > 1,
-        )
+        .filter((entry) => (childCounts.get(entry.id) ?? 0) > 1)
         .map((entry) => entry.id),
       summaries: snapshot.entries.filter(
         (entry) => entry.type === "branch_summary",
