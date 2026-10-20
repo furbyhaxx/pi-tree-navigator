@@ -685,6 +685,40 @@ function estimateAtEntry(
 }
 
 /**
+ * When `targetId` lies before the latest compaction cut on `activeBranch`,
+ * the active branch already compressed those older turns into a compaction
+ * summary. Estimate `targetId`'s footprint relative to that compaction baseline
+ * so rewinding to a pre-compaction anchor does not report negative savings.
+ */
+function effectiveTargetTokensOnBranch(
+  activeBranch: readonly SessionEntry[],
+  entries: SessionEntry[],
+  targetId: string,
+  byId: Map<string, SessionEntry>,
+): number {
+  const raw = estimateAtEntry(entries, targetId, byId);
+  const compactionIdx = activeBranch.findLastIndex(
+    (e) => e.type === "compaction",
+  );
+  if (compactionIdx < 0) return raw;
+  const compaction = activeBranch[compactionIdx];
+  if (compaction.type !== "compaction") return raw;
+  const targetIdx = activeBranch.findIndex((e) => e.id === targetId);
+  if (targetIdx >= 0 && targetIdx <= compactionIdx) {
+    const compactedMessages = projectHandoffs(
+      buildSessionProjection(entries, compaction.id, byId),
+      entries,
+    ).messages;
+    let charEstimate = 0;
+    for (const msg of compactedMessages) {
+      if (msg.role !== "system") charEstimate += estimateTokens(msg);
+    }
+    return Math.min(raw, charEstimate);
+  }
+  return raw;
+}
+
+/**
  * Every active anchor — chronological root→leaf, same walk order as `list`
  * — with its cumulative context percentage, rendered as the shared anchor
  * table (#101, D19). Shared by the min-savings rejection, the rewind hint
@@ -702,14 +736,18 @@ function formatActiveAnchors(
 ): { names: string[]; text: string } {
   const names: string[] = [];
   const rows: AnchorTableRow[] = [];
-  for (const e of sm.getBranch()) {
+  const branch = sm.getBranch();
+  for (const e of branch) {
     const lbl = sm.getLabel(e.id);
     if (!lbl?.startsWith(LABEL_PREFIX)) continue;
     const name = lbl.slice(LABEL_PREFIX.length);
     if (!isValidName(name)) continue;
     names.push(name);
     rows.push({
-      pct: formatPct1(estimateAtEntry(allEntries, e.id, byId), cw),
+      pct: formatPct1(
+        effectiveTargetTokensOnBranch(branch, allEntries, e.id, byId),
+        cw,
+      ),
       name,
     });
   }
@@ -874,6 +912,47 @@ interface WithholdPlan {
  * usage. An explicit error, or no usage, gives `undefined`: the estimate is
  * then used as is (ratio 1).
  */
+function parseErrorOverflowTokens(errorMessage: string | undefined): {
+  promptTokens?: number;
+  outputReservedTokens?: number;
+} {
+  if (!errorMessage) return {};
+  const openrouterMatch =
+    /requested about (\d+) tokens \((\d+) of text input,\s*(\d+) of tool input,\s*(\d+) in the output\)/i.exec(
+      errorMessage,
+    );
+  if (openrouterMatch) {
+    const textInput = Number(openrouterMatch[2]);
+    const toolInput = Number(openrouterMatch[3]);
+    const outputReserved = Number(openrouterMatch[4]);
+    return {
+      ...(Number.isFinite(textInput + toolInput) && textInput + toolInput > 0
+        ? { promptTokens: textInput + toolInput }
+        : {}),
+      ...(Number.isFinite(outputReserved) && outputReserved > 0
+        ? { outputReservedTokens: outputReserved }
+        : {}),
+    };
+  }
+  const inputAndOutput =
+    /(\d+)\s+input tokens.*?(\d+)\s+(?:output|max_tokens|completion)/i.exec(
+      errorMessage,
+    );
+  if (inputAndOutput) {
+    const promptTokens = Number(inputAndOutput[1]);
+    const outputReservedTokens = Number(inputAndOutput[2]);
+    return {
+      ...(Number.isFinite(promptTokens) && promptTokens > 0
+        ? { promptTokens }
+        : {}),
+      ...(Number.isFinite(outputReservedTokens) && outputReservedTokens > 0
+        ? { outputReservedTokens }
+        : {}),
+    };
+  }
+  return {};
+}
+
 function overflowRequestTokens(
   sm: SessionManager,
   entryId: string,
@@ -884,8 +963,12 @@ function overflowRequestTokens(
   }
   const reply = entry.message as {
     stopReason?: string;
+    errorMessage?: string;
     usage?: { input?: number; cacheRead?: number; cacheWrite?: number };
   };
+  if (reply.stopReason === "error") {
+    return parseErrorOverflowTokens(reply.errorMessage).promptTokens;
+  }
   if (reply.stopReason !== "length" && reply.stopReason !== "stop") {
     return undefined;
   }
@@ -893,6 +976,31 @@ function overflowRequestTokens(
   const total =
     (usage?.input ?? 0) + (usage?.cacheRead ?? 0) + (usage?.cacheWrite ?? 0);
   return total > 0 ? total : undefined;
+}
+
+function effectiveOverflowTarget(
+  sm: SessionManager,
+  entryId: string,
+  baseTarget: number,
+  contextWindow: number,
+): number {
+  const entry = sm.getEntry(entryId);
+  if (entry?.type !== "message" || entry.message.role !== "assistant") {
+    return baseTarget;
+  }
+  const reply = entry.message as {
+    stopReason?: string;
+    errorMessage?: string;
+  };
+  if (reply.stopReason !== "error") return baseTarget;
+  const parsed = parseErrorOverflowTokens(reply.errorMessage);
+  if (
+    parsed.outputReservedTokens &&
+    contextWindow > parsed.outputReservedTokens
+  ) {
+    return Math.min(baseTarget, contextWindow - parsed.outputReservedTokens);
+  }
+  return baseTarget;
 }
 
 /**
@@ -1847,7 +1955,7 @@ export default function (pi: ExtensionAPI) {
         sm,
         pending.rewindEntryId,
         failedIds,
-        at.target,
+        effectiveOverflowTarget(sm, failedEntryId, at.target, at.contextWindow),
         instructionEntryId,
         overflowRequestTokens(sm, failedEntryId),
       );
@@ -1896,7 +2004,7 @@ export default function (pi: ExtensionAPI) {
       sm,
       failedEntryId,
       failedIds,
-      at.target,
+      effectiveOverflowTarget(sm, failedEntryId, at.target, at.contextWindow),
       undefined,
       overflowRequestTokens(sm, failedEntryId),
     );
@@ -3000,12 +3108,14 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_compact", (_event, ctx) => {
     try {
       const sm = ctx.sessionManager as SessionManager;
+      const sessionId = sm.getSessionId();
       endPendingOutsideBoundary(
         sm,
-        sm.getSessionId(),
+        sessionId,
         "failed",
         "the context was compacted",
       );
+      anchorStartSettled.delete(sessionId);
     } catch {
       // Stale ctx: the next turn_end / context call ends it.
     }
@@ -3684,7 +3794,12 @@ Operations (set \`action\`):
           const lbl = sm.getLabel(e.id);
           if (lbl?.startsWith(LABEL_PREFIX)) {
             const name = lbl.slice(LABEL_PREFIX.length);
-            const tokensAt = estimateAtEntry(allEntries, e.id, byId);
+            const tokensAt = effectiveTargetTokensOnBranch(
+              path,
+              allEntries,
+              e.id,
+              byId,
+            );
             const hint = findLabelHint(sm, e.id, LIST_HINT_MAX_LENGTH);
             rows.push({
               pct: formatPct1(tokensAt, cw),
@@ -3859,7 +3974,12 @@ Operations (set \`action\`):
       } else {
         beforeTokens = estimateActiveBranchTokens(sm);
       }
-      const tokensAtTarget = estimateAtEntry(allEntries, target, byId);
+      const tokensAtTarget = effectiveTargetTokensOnBranch(
+        sm.getBranch(),
+        allEntries,
+        target,
+        byId,
+      );
       const contextWindow = ctx.model?.contextWindow ?? 0;
 
       const { entries } = collectEntriesForBranchSummary(sm, oldLeaf, target);

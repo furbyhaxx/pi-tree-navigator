@@ -8394,6 +8394,59 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  it("withholds tool results when an OpenRouter 400 reserves a huge output cap", async () => {
+    const f = await forcedSetup({ issuerTokens: 15_000 });
+    try {
+      const message = {
+        ...assistantMessage([], "error", 0),
+        provider: "claude",
+        errorMessage:
+          '400: {"message":"This endpoint\'s maximum context length is 100000 tokens. However, you requested about 119000 tokens (30000 of text input, 9000 of tool input, 80000 in the output)."}',
+      };
+      f.sm.appendMessage(message as never);
+      const { settle } = await runErrorEnd(f, message);
+      assert.equal(settle.continue, true);
+      assert.ok(withheldTargets(settle.entries).length > 0);
+      assert.match(
+        forcedDrafts(settle)[0].content,
+        /tool results? (?:was|were) withheld/,
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("allows rewinding to a pre-compaction anchor without false negative savings", async () => {
+    const { sm, pi, tool, ctx } = setup({ contextWindow: 1_000_000 });
+    const t1 = appendTurn(sm, "u1", "a1", 200_000);
+    pi.pi.setLabel(t1.assistantId, "anchor:plan-published");
+    const t2 = appendTurn(sm, "u2", "a2", 280_000);
+    sm.appendCompaction("Compacted summary", t2.userId, 280_000);
+    appendTurn(sm, "u3", "a3", 60_000);
+    appendTurn(sm, "u4", "a4", 65_000);
+    const res = await tool.execute(
+      "tc-post-compact",
+      {
+        action: "rewind",
+        rewindTo: "plan-published",
+        newLabel: "wave-done",
+        summaryFocus:
+          "1. User instruction verbatim: approved, go ahead. 2. Done: completed wave 1 units. 3. Next: finish wave 2.",
+      },
+      undefined,
+      undefined,
+      ctx,
+    );
+    assert.equal(res.isError, undefined);
+    assert.ok(
+      (res.details as { contextBefore: number; tokensAtTarget: number })
+        .contextBefore -
+        (res.details as { contextBefore: number; tokensAtTarget: number })
+          .tokensAtTarget >=
+        4_000,
+    );
+  });
+
   it("gate: only a direct rewind passes; blocked calls terminate the batch", async () => {
     const f = await forcedSetup();
     try {
