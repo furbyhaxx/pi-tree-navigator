@@ -239,6 +239,7 @@ test("registration probes only UI sessions and uses fresh session context after 
   const original = prototype.updateDisplay;
   const ctx = {
     hasUI: false,
+    mode: "tui",
     sessionManager: { getEntries: () => [summary] },
     ui: {
       theme,

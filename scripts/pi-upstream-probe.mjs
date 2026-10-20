@@ -6,6 +6,9 @@
  * dependencies) still exist with the required shape in the installed
  * @earendil-works/pi-coding-agent / @earendil-works/pi-agent-core.
  *
+ * Native work-handoff hooks also require summary-card updateDisplay, tree
+ * render/input/list presentation, and the SessionManager projection method.
+ *
  * Reflection points (after #14, #79, #80):
  *   1. `AgentSession.prototype.prompt` — must be a writable plain data
  *      property (not `#`-private, not a getter-only accessor). The
@@ -212,6 +215,19 @@ try {
     typeof SessionManager?.prototype?.getSessionId === "function",
     typeof SessionManager?.prototype?.getSessionId,
   );
+
+  for (const [name, prototype, method] of [
+    ["native handoff updateDisplay", codingAgent.BranchSummaryMessageComponent?.prototype, "updateDisplay"],
+    ["native tree render", codingAgent.TreeSelectorComponent?.prototype, "render"],
+    ["native tree input", codingAgent.TreeSelectorComponent?.prototype, "handleInput"],
+    ["native tree list access", codingAgent.TreeSelectorComponent?.prototype, "getTreeList"],
+    ["native session projection", SessionManager?.prototype, "buildSessionProjection"],
+  ]) {
+    check(name, typeof prototype?.[method] === "function", typeof prototype?.[method]);
+  }
+  codingAgent.initTheme();
+  const nativeTree = new codingAgent.TreeSelectorComponent([], null, 20, () => {}, () => {});
+  check("native tree row presentation", typeof Object.getPrototypeOf(nativeTree.getTreeList()).getEntryDisplayText === "function");
 
   // --- 7d. AgentSession._extensionRunner + ExtensionRunner.emit (#79) ---
   // After a rewind the extension emits `session_tree` through the captured

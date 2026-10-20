@@ -155,7 +155,7 @@ export function registerRetrospectiveCommand(pi: ExtensionAPI): void {
         const warningNote = preview.warnings.length
           ? `, ${preview.warnings.length} warning(s)`
           : "";
-        const summary = `Preview for "${preview.name}": ${preview.groups.length} groups and ${preview.addedEntries} added entries${warningNote}.`;
+        const summary = `Preview for "${preview.name}": ${preview.groups.length} groups, ${preview.addedEntries} added entries and ${preview.descendants.length} descendant sessions${warningNote}.`;
         if (operation === "preview") {
           if (ctx.hasUI) {
             await ctx.ui.editor(
@@ -194,7 +194,7 @@ export function registerRetrospectiveCommand(pi: ExtensionAPI): void {
           preview.previewToken,
         );
         ctx.ui.notify(
-          `Created clone "${clone.name}" at ${clone.path}. The original session was left untouched.${clone.warnings.length ? ` ${clone.warnings.join(" ")}` : ""}`,
+          `Created clone "${clone.name}" at ${clone.path}, with ${clone.descendants.length} descendant sessions. The original session was left untouched.${clone.warnings.length ? ` ${clone.warnings.join(" ")}` : ""}`,
           clone.warnings.length ? "warning" : "info",
         );
       } catch (error) {

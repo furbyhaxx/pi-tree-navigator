@@ -2,6 +2,7 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   keyHint,
+  keyText,
   type SessionEntry,
   type Theme,
   TreeSelectorComponent,
@@ -193,7 +194,18 @@ export function buildHistoryOutline(
         i += g.sourceIds.length - 1;
       } else {
         const e = byId.get(id);
-        if (e)
+        if (
+          e &&
+          (e.type === "custom_message" ||
+            e.type === "branch_summary" ||
+            e.type === "compaction" ||
+            (e.type === "message" &&
+              e.message.role !== "system" &&
+              !(
+                e.message.role === "assistant" &&
+                e.message.content.every((block) => block.type === "toolCall")
+              )))
+        )
           all.push({
             id,
             text: entryText(e),
@@ -213,7 +225,8 @@ export function buildHistoryOutline(
     if (
       !source.has(e.id) &&
       ancestry.has(e.id) &&
-      (e.type === "message" || e.id === leaf)
+      e.type === "message" &&
+      e.message.role !== "system"
     ) {
       const parents = currentGroup
         ? [
@@ -252,7 +265,7 @@ export function registerHistoryOutline(pi: ExtensionAPI): void {
   let restore: (() => void) | undefined;
   const states = new WeakMap<object, State>();
   pi.on("session_start", async (_event, ctx) => {
-    context = ctx.hasUI ? ctx : undefined;
+    context = ctx.hasUI && ctx.mode === "tui" ? ctx : undefined;
     if (restore || !context) return;
     try {
       const proto = TreeSelectorComponent?.prototype as unknown as
@@ -365,7 +378,7 @@ export function registerHistoryOutline(pi: ExtensionAPI): void {
           ),
         );
         lines.push(
-          `  ${keyHint("tui.select.up", "up")} ${keyHint("tui.select.down", "down")} · ${keyHint("tui.select.confirm", "toggle / resume")} · Space toggle`,
+          `  ${keyText("tui.select.up")}/${keyText("tui.select.down")} move · ${keyHint("tui.select.confirm", "toggle / resume")} · Space toggle`,
         );
         lines.push(
           `  r resume AFTER handoff · / search · ${keyHint("tui.select.cancel", "clear / close")} · F2 raw`,

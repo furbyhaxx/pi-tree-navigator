@@ -13,8 +13,10 @@ const usage = `Usage:
 
 Inspect prints stable user-turn IDs and the source SHA-256.
 Preview validates the entire plan without writing a session.
-Create publishes a new session next to the source; the source is never changed.
-Review every summary before using the preview token. No model calls are made.`;
+Create publishes a new session family; source files are never changed.
+Descendant histories are copied unchanged unless the plan opts into recurse
+and supplies reviewed descendantPlans. Review the complete family preview.
+Review every handoff before using the preview token. No model calls are made.`;
 
 const [action, path, token, ...extra] = process.argv.slice(2);
 try {

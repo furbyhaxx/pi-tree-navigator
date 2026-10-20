@@ -6,7 +6,14 @@ import {
   type Theme,
   TreeSelectorComponent,
 } from "@earendil-works/pi-coding-agent";
-import { Container, Markdown, MouseRegion, Text } from "@earendil-works/pi-tui";
+import {
+  Container,
+  Markdown,
+  MouseRegion,
+  Text,
+  truncateToWidth,
+  wrapTextWithAnsi,
+} from "@earendil-works/pi-tui";
 import { getHandoff, type HandoffData, makeHandoff } from "./handoff.ts";
 
 type Summary = Extract<SessionEntry, { type: "branch_summary" }>;
@@ -74,7 +81,13 @@ export function handoffView(
 /** Compact inclusive accounting, shared by transcript cards and native tree rows. */
 export function handoffUsage(data: HandoffData): string {
   const s = data.stats;
-  return `${s.messages} messages · ${s.toolCalls} tool calls · tokens in ${s.input} / out ${s.output} / cache read ${s.cacheRead} / write ${s.cacheWrite} · recorded inclusive $${s.cost.toFixed(4)}`;
+  const compact = (n: number) =>
+    n >= 1_000_000
+      ? `${(n / 1_000_000).toFixed(1)}M`
+      : n >= 1_000
+        ? `${(n / 1_000).toFixed(1)}k`
+        : String(n);
+  return `${s.messages} messages · ${s.toolCalls} tool calls · tokens in ${compact(s.input)} / out ${compact(s.output)} / cache read ${compact(s.cacheRead)} / write ${compact(s.cacheWrite)} · recorded inclusive $${s.cost.toFixed(4)}`;
 }
 
 /** Native tree row body; the native list still owns selection and clipping. */
@@ -97,16 +110,22 @@ export function handoffCard(
   body.addChild(
     new Text(theme.fg("customMessageLabel", theme.bold(data.title)), 0, 0),
   );
-  body.addChild(
-    new Text(
-      theme.fg(
-        "customMessageText",
-        `Goal: ${data.goal}\nOutcome: ${data.outcome}`,
-      ),
-      0,
-      0,
-    ),
-  );
+  for (const text of [`Goal: ${data.goal}`, `Outcome: ${data.outcome}`]) {
+    body.addChild({
+      render(width) {
+        if (width <= 0) return [];
+        const lines = wrapTextWithAnsi(
+          theme.fg("customMessageText", text),
+          width,
+        );
+        if (expanded || lines.length <= 3) return lines;
+        const kept = lines.slice(0, 3);
+        kept[2] = truncateToWidth(`${kept[2]} …`, width);
+        return kept;
+      },
+      invalidate() {},
+    });
+  }
   body.addChild(new Text(theme.fg("muted", handoffUsage(data)), 0, 0));
   body.addChild(
     new Text(
@@ -285,7 +304,7 @@ export function registerHandoffRenderer(pi: ExtensionAPI): void {
   let dispose: (() => void) | undefined;
   pi.on("session_start", (_event, ctx) => {
     dispose?.();
-    if (!ctx.hasUI) return;
+    if (!ctx.hasUI || ctx.mode !== "tui") return;
     dispose = installHandoffPatches({
       entries: () => ctx.sessionManager.getEntries(),
       theme: () => ctx.ui.theme,

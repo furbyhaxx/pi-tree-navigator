@@ -153,6 +153,7 @@ test("native patch navigates real IDs, supports raw escape and session replaceme
   const ctx = (sm: SessionManager) =>
     ({
       hasUI: true,
+      mode: "tui",
       sessionManager: sm,
       ui: { theme },
     }) as unknown as ExtensionContext;
