@@ -75,7 +75,14 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
+  AUTO_NAVIGATE_REWIND_CUSTOM_TYPE,
+  buildAutoNavigateRewindSteerText,
+  evaluateAutoNavigateTurn,
+} from "./auto-navigate.ts";
+import type { AutoNavigatePartial } from "./auto-navigate-config.ts";
+import {
   loadTreeNavigatorConfig,
+  resolveAutoNavigateConfig,
   resolveRewindHintReserve,
   START_ANCHOR_DEFAULT_TURNS,
   TREE_NAVIGATOR_CONFIG_FILENAME,
@@ -113,6 +120,11 @@ import {
   toOneLine,
 } from "./helpers.ts";
 import { registerHistoryOutline } from "./history-outline.ts";
+import {
+  createProposalModelRunner,
+  resolveProposalModel,
+} from "./proposal-model.ts";
+import type { ProposalOptions } from "./proposal-options.ts";
 import { registerRetrospectiveCommand } from "./retrospective-command.ts";
 import {
   buildForcedRewindText,
@@ -2670,7 +2682,9 @@ export default function (pi: ExtensionAPI) {
     if (!pending) {
       // A forced-rewind attempt (#101, D6): anything but an accepted
       // `rewind` (which makes the rewind pending) is hidden and re-sent.
-      if (!forcedActive(sessionId)) return;
+      if (!forcedActive(sessionId)) {
+        return await maybeRunAutoNavigate(sm, sessionId, message, event, ctx);
+      }
       rewindTurns.add(message);
       let aborted = message.stopReason === "aborted";
       try {
@@ -3195,6 +3209,14 @@ export default function (pi: ExtensionAPI) {
   let toolActive = true;
   let rewindHintReserveTokens: number | null = null;
   let hintByModel: ReadonlyMap<string, number | null> = new Map();
+  let autoNavigateBase: AutoNavigatePartial | undefined;
+  let autoNavigateByModel: ReadonlyMap<string, AutoNavigatePartial | null> =
+    new Map();
+  let proposalConfig: ProposalOptions | undefined;
+  const autoNavigateStateBySession = new Map<
+    string,
+    { turnsSinceCheck: number; lastAnchorEntryId?: string }
+  >();
   let hintTracker = new RewindHintTracker();
 
   // Auto start-anchor closure state (#55). All of it is keyed by session id
@@ -3309,6 +3331,10 @@ export default function (pi: ExtensionAPI) {
     resolveOrphanRewinds(sm);
     rewindHintReserveTokens = null;
     hintByModel = new Map();
+    autoNavigateBase = undefined;
+    autoNavigateByModel = new Map();
+    proposalConfig = undefined;
+    autoNavigateStateBySession.delete(sessionId);
     hintTracker = new RewindHintTracker();
     toolActive = true;
     let reserve: number | null = null;
@@ -3316,6 +3342,10 @@ export default function (pi: ExtensionAPI) {
     let startTurns = START_ANCHOR_DEFAULT_TURNS;
     let warnings: string[] = [];
     let parentMode: HandoffMode = "full";
+    let loadedAutoBase: AutoNavigatePartial | undefined;
+    let loadedAutoByModel: ReadonlyMap<string, AutoNavigatePartial | null> =
+      new Map();
+    let loadedProposal: ProposalOptions | undefined;
     try {
       const loaded = await loadTreeNavigatorConfig({
         agentDir,
@@ -3326,6 +3356,9 @@ export default function (pi: ExtensionAPI) {
       byModel = loaded.config.rewindHintModelReserveTokens;
       startTurns = loaded.config.anchorStartAfterTurns;
       parentMode = loaded.config.parentHandoffMode;
+      loadedAutoBase = loaded.config.autoNavigate;
+      loadedAutoByModel = loaded.config.autoNavigateByModel ?? new Map();
+      loadedProposal = loaded.config.proposal;
       warnings = loaded.warnings;
     } catch {
       // The loader is fail-closed and should never throw; this guard exists
@@ -3335,10 +3368,16 @@ export default function (pi: ExtensionAPI) {
       reserve = null;
       byModel = new Map();
       startTurns = START_ANCHOR_DEFAULT_TURNS;
+      loadedAutoBase = undefined;
+      loadedAutoByModel = new Map();
+      loadedProposal = undefined;
       warnings = [];
     }
     rewindHintReserveTokens = reserve;
     hintByModel = byModel;
+    autoNavigateBase = loadedAutoBase;
+    autoNavigateByModel = loadedAutoByModel;
+    proposalConfig = loadedProposal;
     anchorStartTurnsBySession.set(sessionId, startTurns);
     parentModes.set(sessionId, parentMode);
     // Fresh leg: the per-session gate re-arms on the next
@@ -3684,6 +3723,154 @@ export default function (pi: ExtensionAPI) {
       );
     }
   });
+
+  // Sidecar auto_navigate controller: when enabled for the active model
+  // (globally or via wildcard model_overrides), periodically inspects the
+  // completed segment since the latest anchor and either sets an anchor label
+  // or steers an immediate rewind.
+  async function maybeRunAutoNavigate(
+    sm: SessionManager,
+    sessionId: string,
+    message: {
+      role?: string;
+      stopReason?: string;
+      content?: unknown;
+    },
+    event: { entries?: SessionBoundaryDraft[] },
+    ctx: {
+      model?: OverflowModel;
+      modelRegistry?: Parameters<typeof resolveProposalModel>[0]["registry"] &
+        Parameters<typeof createProposalModelRunner>[0]["registry"];
+      signal?: AbortSignal;
+    },
+  ): Promise<
+    { entries: SessionBoundaryDraft[]; continue: boolean } | undefined
+  > {
+    if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
+    if (message.stopReason === "error" || message.stopReason === "aborted") {
+      return;
+    }
+    if (rewindTurns.has(message) || overflowedTurns.has(message)) return;
+    let activeModel: OverflowModel | undefined;
+    try {
+      activeModel = ctx.model;
+    } catch {
+      return;
+    }
+    if (!activeModel) return;
+    const modelKey = `${activeModel.provider}/${activeModel.id}`;
+    const autoConfig = resolveAutoNavigateConfig(
+      {
+        autoNavigate: autoNavigateBase,
+        autoNavigateByModel,
+        proposal: proposalConfig,
+      },
+      modelKey,
+    );
+    if (!autoConfig.enabled) return;
+
+    const calledNavigateTree =
+      Array.isArray(message.content) &&
+      (message.content as Array<{ type?: string; name?: string }>).some(
+        (b) => b?.type === "toolCall" && b.name === TOOL_NAME,
+      );
+    const state = autoNavigateStateBySession.get(sessionId) ?? {
+      turnsSinceCheck: 0,
+    };
+    if (calledNavigateTree) {
+      state.turnsSinceCheck = 0;
+      autoNavigateStateBySession.set(sessionId, state);
+      return;
+    }
+    state.turnsSinceCheck++;
+    autoNavigateStateBySession.set(sessionId, state);
+
+    let branch: SessionEntry[];
+    let allEntries: SessionEntry[];
+    try {
+      branch = sm.getBranch();
+      allEntries = sm.getEntries();
+    } catch {
+      return;
+    }
+    if (branch.length < 2) return;
+    const byId = new Map<string, SessionEntry>();
+    for (const e of allEntries) byId.set(e.id, e);
+    const activeTokens = estimateActiveBranchTokens(sm);
+    let newestAnchorId: string | undefined;
+    for (let i = branch.length - 1; i >= 0; i--) {
+      const lbl = sm.getLabel(branch[i].id);
+      if (lbl?.startsWith(LABEL_PREFIX)) {
+        newestAnchorId = branch[i].id;
+        break;
+      }
+    }
+    const anchorTokens = newestAnchorId
+      ? effectiveTargetTokensOnBranch(branch, allEntries, newestAnchorId, byId)
+      : 0;
+    const tokensSinceLastAnchor = Math.max(0, activeTokens - anchorTokens);
+    const canRewind =
+      autoConfig.mode === "anchor-and-rewind" &&
+      activeTokens >= autoConfig.rewindAtTokens;
+    if (
+      !canRewind &&
+      state.turnsSinceCheck < autoConfig.checkEveryTurns &&
+      tokensSinceLastAnchor < autoConfig.minTokensSinceAnchor
+    ) {
+      return;
+    }
+
+    let runner: ReturnType<typeof createProposalModelRunner>;
+    try {
+      const registry = ctx.modelRegistry;
+      if (!registry || typeof registry.streamSimple !== "function") return;
+      const currentThinking =
+        typeof pi.getThinkingLevel === "function"
+          ? pi.getThinkingLevel()
+          : ("off" as const);
+      const selected = resolveProposalModel({
+        registry,
+        currentModel: activeModel as never,
+        currentThinking,
+        selector: autoConfig.controllerModel,
+      });
+      runner = createProposalModelRunner({ registry, ...selected });
+    } catch {
+      return;
+    }
+
+    state.turnsSinceCheck = 0;
+    const decision = await evaluateAutoNavigateTurn({
+      config: autoConfig,
+      runner,
+      branch,
+      getLabel: (id) => sm.getLabel(id),
+      activeTokens,
+      tokensSinceLastAnchor,
+      turnsSinceLastCheck: autoConfig.checkEveryTurns,
+      signal: ctx.signal,
+    });
+    if (decision.action === "anchor") {
+      writeLabel(sm, decision.targetEntryId, LABEL_PREFIX + decision.name);
+      state.lastAnchorEntryId = decision.targetEntryId;
+      return;
+    }
+    if (decision.action === "rewind") {
+      const text = buildAutoNavigateRewindSteerText(decision);
+      return {
+        entries: keepValidDrafts(sm, [
+          ...(event.entries ?? []),
+          {
+            type: "custom_message",
+            customType: AUTO_NAVIGATE_REWIND_CUSTOM_TYPE,
+            content: text,
+            display: true,
+          },
+        ]),
+        continue: true,
+      };
+    }
+  }
 
   // Auto start anchor (#55) run-end fallback: a run that finishes before its
   // X-th turn still settles (a one-turn first run anchors at turn 1).

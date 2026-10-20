@@ -8416,6 +8416,123 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  it("auto_navigate sidecar matches wildcard *gemini-4-argon* and sets an anchor or steers a rewind", async () => {
+    const fixture = makeConfigFixture();
+    writeGlobalConfig(
+      fixture,
+      JSON.stringify({
+        auto_navigate: {
+          enabled: false,
+          controller_model: "openai/gpt-6-luna:low",
+          check_every_turns: 2,
+          min_tokens_since_anchor: 10_000,
+          rewind_at_tokens: 90_000,
+          tools: { read: "omit" },
+        },
+        model_overrides: {
+          "*gemini-4-argon*": {
+            auto_navigate: {
+              enabled: true,
+              check_every_turns: 1,
+            },
+          },
+        },
+      }),
+    );
+    try {
+      const f = setup({
+        contextWindow: 1_048_576,
+      });
+      f.ctx.model = {
+        api: "openai-completions",
+        contextWindow: 1_048_576,
+        provider: "openrouter",
+        id: "google/gemini-4-argon",
+      };
+      f.ctx.cwd = fixture.projectDir;
+      let nextReply =
+        '{"action":"anchor","name":"w1-ready","target_entry_id":"UNSET"}';
+      (
+        f.ctx as unknown as {
+          modelRegistry: {
+            find: (provider: string, id: string) => unknown;
+            hasConfiguredAuth: () => boolean;
+            streamSimple: () => { result: () => Promise<unknown> };
+          };
+        }
+      ).modelRegistry = {
+        find: (provider: string, id: string) => ({
+          provider,
+          id,
+          name: id,
+          api: "openai-completions",
+          baseUrl: "http://localhost",
+          reasoning: true,
+          input: ["text"],
+          contextWindow: 128_000,
+          maxTokens: 8_000,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        }),
+        hasConfiguredAuth: () => true,
+        streamSimple: () => ({
+          result: async () => ({
+            role: "assistant",
+            content: [{ type: "text", text: nextReply }],
+            api: "openai-completions",
+            provider: "openai",
+            model: "gpt-6-luna",
+            stopReason: "stop",
+            timestamp: 1,
+            usage: {
+              input: 10,
+              output: 5,
+              cacheRead: 0,
+              cacheWrite: 0,
+              totalTokens: 15,
+              cost: {
+                input: 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                total: 0,
+              },
+            },
+          }),
+        }),
+      };
+      await runSessionStart(f.pi, f.ctx, fixture);
+      const t1 = appendTurn(f.sm, "u1", "a1", 20_000);
+      f.pi.pi.setLabel(t1.assistantId, "anchor:start");
+      const t2 = appendTurn(f.sm, "u2", "a2", 45_000);
+      nextReply = JSON.stringify({
+        action: "anchor",
+        name: "w1-ready",
+        target_entry_id: t2.assistantId,
+      });
+      const msg2 = f.sm.getEntry(t2.assistantId);
+      assert.ok(msg2?.type === "message");
+      await fireTurnEndAll(f.pi, f.ctx, msg2.message);
+      assert.equal(f.sm.getLabel(t2.assistantId), "anchor:w1-ready");
+
+      const t3 = appendTurn(f.sm, "u3", "a3", 105_000);
+      nextReply = JSON.stringify({
+        action: "rewind",
+        rewind_to: "w1-ready",
+        new_label: "w1-folded",
+        summary_focus:
+          "1. User instruction verbatim: u3. 2. Done: completed W1. 3. Next: proceed to W2.",
+      });
+      const msg3 = f.sm.getEntry(t3.assistantId);
+      assert.ok(msg3?.type === "message");
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, msg3.message);
+      assert.equal(boundary.continue, true);
+      assert.equal(boundary.entries.length, 1);
+      assert.equal(boundary.entries[0].customType, "navigate-tree-auto-rewind");
+    } finally {
+      cleanupConfigFixture(fixture);
+    }
+  });
+
   it("allows rewinding to a pre-compaction anchor without false negative savings", async () => {
     const { sm, pi, tool, ctx } = setup({ contextWindow: 1_000_000 });
     const t1 = appendTurn(sm, "u1", "a1", 200_000);
