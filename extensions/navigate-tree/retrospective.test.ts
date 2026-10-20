@@ -478,6 +478,14 @@ describe("retrospective clone", () => {
     assert.deepEqual(getCurrentSystemMessage(after.messages)?.toolsAdded, [
       newTool,
     ]);
+    const anchor = clone
+      .getEntries()
+      .find((entry) => clone.getLabel(entry.id) === "anchor:phase");
+    assert.ok(anchor);
+    const selected = buildSessionContext(clone.getEntries(), anchor.id);
+    assert.deepEqual(selected.model, before.model);
+    assert.equal(selected.thinkingLevel, before.thinkingLevel);
+    assert.deepEqual(systemState(selected), systemState(before));
   });
 
   it("refuses a folded checkpoint that replaces unreplayable plain system text", async () => {
@@ -571,6 +579,30 @@ describe("retrospective clone", () => {
     assert.equal(cloneEntry.message.role, "bashExecution");
     assert.deepEqual(cloneEntry.message, sourceEntry.message);
     assert.ok(!("content" in cloneEntry.message));
+  });
+
+  it("rejects unsupported roles and orphan tool results", async () => {
+    for (const invalid of [
+      { role: "invented", content: "invalid", timestamp: 1 },
+      {
+        role: "toolResult",
+        toolCallId: "missing",
+        toolName: "read",
+        content: [{ type: "text", text: "orphan" }],
+        isError: false,
+        timestamp: 1,
+      },
+    ]) {
+      const f = await fixture({
+        entries: [user("first", "Question"), message("bad", invalid)],
+        groups: [group("phase", "first", "bad")],
+      });
+      await assert.rejects(
+        previewRetrospectiveSession(f.planPath),
+        /unsupported|orphan|outstanding/i,
+      );
+      assert.equal((await readdir(f.dir)).length, 2);
+    }
   });
 
   it("creates independent session IDs without overwriting earlier clones", async () => {

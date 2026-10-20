@@ -34,6 +34,8 @@ export interface SessionSnapshot {
   readonly header: SessionHeader;
   readonly entries: SessionEntry[];
   readonly name: string;
+  readonly safeCuts: ReadonlySet<number>;
+  readonly pendingToolCalls: readonly string[];
 }
 
 /** Hash source bytes or a preview contract. */
@@ -147,11 +149,69 @@ function validateRecord(value: unknown, line: number): void {
     return;
   }
   if (line === 1) throw new Error("Line 1 must be a session header");
+  if (
+    ![
+      "message",
+      "model_change",
+      "thinking_level_change",
+      "usage",
+      "compaction",
+      "context_edit",
+      "branch_summary",
+      "custom",
+      "custom_message",
+      "label",
+      "session_info",
+    ].includes(String(entry.type))
+  )
+    throw new Error(`Line ${line}: unsupported entry type ${entry.type}`);
   if (entry.parentId !== null) string(entry.parentId, `Line ${line} parentId`);
   if (entry.type === "message") {
     const message = object(entry.message, `Line ${line} message`);
     string(message.role, `Line ${line} message role`);
     if (
+      ![
+        "user",
+        "assistant",
+        "toolResult",
+        "system",
+        "custom",
+        "bashExecution",
+        "branchSummary",
+        "compactionSummary",
+      ].includes(String(message.role))
+    )
+      throw new Error(`Line ${line}: unsupported message role ${message.role}`);
+    if (
+      typeof message.timestamp !== "number" ||
+      !Number.isFinite(message.timestamp)
+    )
+      throw new Error(`Line ${line}: invalid message timestamp`);
+    if (message.role === "bashExecution") {
+      if (
+        typeof message.command !== "string" ||
+        typeof message.output !== "string" ||
+        typeof message.cancelled !== "boolean" ||
+        typeof message.truncated !== "boolean"
+      )
+        throw new Error(`Line ${line}: invalid shell execution message`);
+    }
+    if (
+      message.role === "branchSummary" ||
+      message.role === "compactionSummary"
+    )
+      string(message.summary, `Line ${line} summary`);
+    if (message.role === "assistant") {
+      string(message.provider, `Line ${line} provider`);
+      string(message.model, `Line ${line} model`);
+      string(message.api, `Line ${line} api`);
+      string(message.stopReason, `Line ${line} stopReason`);
+      object(message.usage, `Line ${line} usage`);
+    }
+    if (
+      ["user", "assistant", "toolResult", "system", "custom"].includes(
+        String(message.role),
+      ) &&
       typeof message.content !== "string" &&
       !Array.isArray(message.content)
     ) {
@@ -164,12 +224,23 @@ function validateRecord(value: unknown, line: number): void {
       for (const raw of message.content) {
         const block = object(raw, `Line ${line} content block`);
         string(block.type, `Line ${line} content type`);
-        if (block.type === "toolCall")
+        if (block.type === "toolCall") {
+          if (message.role !== "assistant")
+            throw new Error(
+              `Line ${line}: tool calls require an assistant message`,
+            );
           string(block.id, `Line ${line} tool call id`);
+          string(block.name, `Line ${line} tool name`);
+          object(block.arguments, `Line ${line} tool arguments`);
+        }
       }
     }
-    if (message.role === "toolResult")
+    if (message.role === "toolResult") {
       string(message.toolCallId, `Line ${line} toolCallId`);
+      string(message.toolName, `Line ${line} toolName`);
+      if (typeof message.isError !== "boolean")
+        throw new Error(`Line ${line}: tool result requires isError`);
+    }
   }
   if (entry.type === "compaction") {
     string(entry.firstKeptEntryId, `Line ${line} firstKeptEntryId`);
@@ -213,8 +284,10 @@ export async function readSessionSnapshot(
   );
   if (!entries.length) throw new Error("Session has no entries");
   const ids = new Set<string>();
+  const safeCuts = new Set([-1]);
+  const pending = new Set<string>();
   let previous: string | null = null;
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     if (ids.has(entry.id)) throw new Error(`Duplicate entry id: ${entry.id}`);
     if (entry.parentId !== previous) {
       throw new Error(
@@ -223,11 +296,36 @@ export async function readSessionSnapshot(
     }
     ids.add(entry.id);
     previous = entry.id;
+    if (entry.type === "message" && entry.message.role === "assistant") {
+      for (const block of entry.message.content) {
+        if (block.type !== "toolCall") continue;
+        if (pending.has(block.id))
+          throw new Error(`Duplicate outstanding tool call ${block.id}`);
+        pending.add(block.id);
+      }
+    } else if (
+      entry.type === "message" &&
+      entry.message.role === "toolResult"
+    ) {
+      if (!pending.delete(entry.message.toolCallId))
+        throw new Error(
+          `Orphan tool result ${entry.id}: no outstanding call ${entry.message.toolCallId}`,
+        );
+    }
+    if (!pending.size) safeCuts.add(index);
   }
   let name = header.id;
   for (const entry of entries)
     if (entry.type === "session_info" && entry.name) name = entry.name;
-  return { path: canonicalPath, sha256: sha256(bytes), header, entries, name };
+  return {
+    path: canonicalPath,
+    sha256: sha256(bytes),
+    header,
+    entries,
+    name,
+    safeCuts,
+    pendingToolCalls: [...pending],
+  };
 }
 
 /** Inspect stable IDs and user-turn boundaries without sending transcript data to a model. */
@@ -240,6 +338,7 @@ export async function inspectRetrospectiveSession(path: string) {
     name: snapshot.name,
     entries: snapshot.entries.length,
     lastEntryId: snapshot.entries.at(-1)?.id,
+    pendingToolCalls: snapshot.pendingToolCalls,
     turns: snapshot.entries.flatMap((entry, index) =>
       entry.type === "message" && entry.message.role === "user"
         ? [

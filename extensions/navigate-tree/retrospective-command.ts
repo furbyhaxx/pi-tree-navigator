@@ -79,6 +79,7 @@ function notifyCreateNotIdle(ctx: ExtensionCommandContext): void {
   );
 }
 
+/** Register read-only inspection and confirmed clone creation without switching sessions. */
 export function registerRetrospectiveCommand(pi: ExtensionAPI): void {
   pi.registerCommand("tree-clone", {
     description:
@@ -193,8 +194,8 @@ export function registerRetrospectiveCommand(pi: ExtensionAPI): void {
           preview.previewToken,
         );
         ctx.ui.notify(
-          `Created clone "${clone.name}" at ${clone.path}. The original session was left untouched.`,
-          "info",
+          `Created clone "${clone.name}" at ${clone.path}. The original session was left untouched.${clone.warnings.length ? ` ${clone.warnings.join(" ")}` : ""}`,
+          clone.warnings.length ? "warning" : "info",
         );
       } catch (error) {
         ctx.ui.notify(errorText(error), "warning");

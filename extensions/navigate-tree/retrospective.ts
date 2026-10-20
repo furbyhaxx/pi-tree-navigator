@@ -69,20 +69,11 @@ function validateRanges(
 ): IndexedGroup[] {
   const { entries } = snapshot;
   const indices = new Map(entries.map((entry, index) => [entry.id, index]));
-  const safeCuts = new Set([-1]);
-  const pending = new Set<string>();
-  for (const [index, entry] of entries.entries()) {
-    if (entry.type === "message" && entry.message.role === "assistant") {
-      for (const block of entry.message.content)
-        if (block.type === "toolCall") pending.add(block.id);
-    } else if (
-      entry.type === "message" &&
-      entry.message.role === "toolResult"
-    ) {
-      pending.delete(entry.message.toolCallId);
-    }
-    if (!pending.size) safeCuts.add(index);
-  }
+  const safeCuts = snapshot.safeCuts;
+  if (snapshot.pendingToolCalls.length)
+    throw new Error(
+      `Source has unfinished tool calls: ${snapshot.pendingToolCalls.join(", ")}. Wait for the source session to finish before cloning.`,
+    );
   function visit(
     groups: readonly RetrospectiveGroup[],
     first: number,
@@ -249,6 +240,7 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
       if (!fromId) throw new Error("Missing archived branch endpoint");
       labels.push({ targetId: fromId, label: `branch:${range.group.name}` });
       leaf = parent;
+      restoreState(range.group.lastEntryId);
       const summaryId = id();
       append({
         id: summaryId,
@@ -266,7 +258,6 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
         },
       });
       labels.push({ targetId: summaryId, label: `anchor:${range.group.name}` });
-      restoreState(range.group.lastEntryId);
       cursor = range.last + 1;
     }
     copy(cursor, last);
@@ -439,6 +430,9 @@ export async function cloneRetrospectiveSession(
   };
   const data = `${[header, ...clone.entries].map((entry) => JSON.stringify(entry)).join("\n")}\n`;
   const handle = await open(temporary, "wx", 0o600);
+  let published = false;
+  let failure: { error: unknown } | undefined;
+  const warnings: string[] = [];
   try {
     await handle.writeFile(data, "utf8");
     await handle.sync();
@@ -463,12 +457,41 @@ export async function cloneRetrospectiveSession(
         "Source changed during conversion; no clone was published",
       );
     await link(temporary, path);
-  } finally {
-    await handle.close();
+    published = true;
+  } catch (error) {
+    failure = { error };
+  }
+  await handle.close();
+  try {
     await unlink(temporary);
+  } catch (error) {
+    if (!published)
+      throw new AggregateError(
+        [failure?.error, error],
+        `Conversion failed; remove temporary file ${temporary}`,
+      );
+    warnings.push(
+      `Clone published, but temporary file cleanup failed: ${temporary}`,
+    );
+  }
+  if (failure) throw failure.error;
+  if (process.platform !== "win32") {
+    try {
+      const directory = await open(dir, "r");
+      try {
+        await directory.sync();
+      } finally {
+        await directory.close();
+      }
+    } catch {
+      warnings.push(
+        "Clone published, but directory sync failed; crash durability could not be confirmed.",
+      );
+    }
   }
   return {
     path,
+    warnings,
     sessionId,
     name: preview.name,
     source: snapshot.path,
