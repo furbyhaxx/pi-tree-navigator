@@ -57,6 +57,15 @@
 
 import { readFile as fsReadFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  type AutoNavigateConfig,
+  type AutoNavigatePartial,
+  matchesModelPattern,
+  materializeAutoNavigateConfig,
+  mergeAutoNavigatePartial,
+  modelPatternSpecificity,
+  parseAutoNavigatePartial,
+} from "./auto-navigate-config.ts";
 import type { HandoffMode } from "./handoff.ts";
 import {
   mergeProposalOptions,
@@ -120,12 +129,22 @@ export interface ParsedLayer {
   proposal?:
     | { kind: "ok"; value: ProposalOptions }
     | { kind: "invalid"; error: string };
+  /** Sidecar auto-navigation policy (`auto_navigate`). */
+  autoNavigate?:
+    | { kind: "ok"; value: AutoNavigatePartial }
+    | { kind: "invalid"; error: string };
   /**
-   * Per-model hint fields (#86), keyed by exact `provider/modelId`. Only
-   * entries that set `rewindHintReserveTokens` (any non-absent outcome)
+   * Per-model hint fields (#86), keyed by exact `provider/modelId` or wildcard.
+   * Only entries that set `rewindHintReserveTokens` (or `rewind_hint_reserve_tokens`)
    * are present.
    */
   modelHints: Map<string, HintField>;
+  /** Per-model `auto_navigate` overrides keyed by exact `provider/modelId` or wildcard. */
+  modelAutoNavigate?: Map<
+    string,
+    | { kind: "ok"; value: AutoNavigatePartial }
+    | { kind: "invalid"; error: string }
+  >;
   /** Shape problems for the loader to warn about (each is ignored). */
   modelOverridesProblems: ModelOverridesProblems;
 }
@@ -173,13 +192,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function parseModelOverrides(
   record: Record<string, unknown>,
-): Pick<ParsedLayer, "modelHints" | "modelOverridesProblems"> {
+): Pick<
+  ParsedLayer,
+  "modelHints" | "modelAutoNavigate" | "modelOverridesProblems"
+> {
   const modelHints = new Map<string, HintField>();
+  const modelAutoNavigate = new Map<
+    string,
+    | { kind: "ok"; value: AutoNavigatePartial }
+    | { kind: "invalid"; error: string }
+  >();
   const problems = noModelOverridesProblems();
-  if (!("modelOverrides" in record)) {
+  const hasCamel = "modelOverrides" in record;
+  const hasSnake = "model_overrides" in record;
+  if (!hasCamel && !hasSnake) {
     return { modelHints, modelOverridesProblems: problems };
   }
-  const overrides = record.modelOverrides;
+  const overrides = hasSnake ? record.model_overrides : record.modelOverrides;
   if (!isPlainObject(overrides)) {
     problems.notObject = true;
     return { modelHints, modelOverridesProblems: problems };
@@ -191,13 +220,40 @@ function parseModelOverrides(
     }
     const hint = parseHintField(entry);
     if (hint.kind !== "absent") modelHints.set(key, hint);
+    if ("auto_navigate" in entry || "autoNavigate" in entry) {
+      const rawAuto =
+        "auto_navigate" in entry ? entry.auto_navigate : entry.autoNavigate;
+      try {
+        modelAutoNavigate.set(key, {
+          kind: "ok",
+          value: parseAutoNavigatePartial(
+            rawAuto,
+            `modelOverrides[${JSON.stringify(key)}].auto_navigate`,
+          ),
+        });
+      } catch (error) {
+        modelAutoNavigate.set(key, {
+          kind: "invalid",
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
-  return { modelHints, modelOverridesProblems: problems };
+  return {
+    modelHints,
+    ...(modelAutoNavigate.size > 0 ? { modelAutoNavigate } : {}),
+    modelOverridesProblems: problems,
+  };
 }
 
 function parseHintField(record: Record<string, unknown>): HintField {
-  if (!("rewindHintReserveTokens" in record)) return { kind: "absent" };
-  const value = record.rewindHintReserveTokens;
+  const hasSnake = "rewind_hint_reserve_tokens" in record;
+  if (!hasSnake && !("rewindHintReserveTokens" in record)) {
+    return { kind: "absent" };
+  }
+  const value = hasSnake
+    ? record.rewind_hint_reserve_tokens
+    : record.rewindHintReserveTokens;
   if (value === null || value === false) return { kind: "disabled" };
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -216,8 +272,13 @@ function parseHintField(record: Record<string, unknown>): HintField {
 function parseStartAnchorField(
   record: Record<string, unknown>,
 ): StartAnchorField {
-  if (!("anchorStartAfterTurns" in record)) return { kind: "absent" };
-  const value = record.anchorStartAfterTurns;
+  const hasSnake = "anchor_start_after_turns" in record;
+  if (!hasSnake && !("anchorStartAfterTurns" in record)) {
+    return { kind: "absent" };
+  }
+  const value = hasSnake
+    ? record.anchor_start_after_turns
+    : record.anchorStartAfterTurns;
   if (typeof value === "string") {
     const trimmed = value.trim();
     // Digits only, mirroring the hint's string tolerance. There are no
@@ -234,8 +295,11 @@ function parseStartAnchorField(
 function parseParentHandoffModeField(
   record: Record<string, unknown>,
 ): ParentHandoffModeField {
-  if (!("parentHandoffMode" in record)) return { kind: "absent" };
-  const value = record.parentHandoffMode;
+  const hasSnake = "parent_handoff_mode" in record;
+  if (!hasSnake && !("parentHandoffMode" in record)) return { kind: "absent" };
+  const value = hasSnake
+    ? record.parent_handoff_mode
+    : record.parentHandoffMode;
   return value === "full" || value === "synthesized"
     ? { kind: "ok", value }
     : { kind: "invalid" };
@@ -260,6 +324,7 @@ export function parseTreeNavigatorConfig(raw: unknown): ParsedRoot {
       parentHandoffMode: parseParentHandoffModeField(record),
       ...parseModelOverrides(record),
       ...parseProposalField(record),
+      ...parseAutoNavigateField(record),
     },
   };
 }
@@ -267,12 +332,15 @@ export function parseTreeNavigatorConfig(raw: unknown): ParsedRoot {
 function parseProposalField(
   record: Record<string, unknown>,
 ): Pick<ParsedLayer, "proposal"> {
-  if (!("treeProposal" in record)) return {};
+  const hasSnake = "tree_proposal" in record;
+  if (!hasSnake && !("treeProposal" in record)) return {};
   try {
     return {
       proposal: {
         kind: "ok",
-        value: parseProposalOptions(record.treeProposal),
+        value: parseProposalOptions(
+          hasSnake ? record.tree_proposal : record.treeProposal,
+        ),
       },
     };
   } catch (error) {
@@ -283,6 +351,70 @@ function parseProposalField(
       },
     };
   }
+}
+
+function parseAutoNavigateField(
+  record: Record<string, unknown>,
+): Pick<ParsedLayer, "autoNavigate"> {
+  const hasSnake = "auto_navigate" in record;
+  if (!hasSnake && !("autoNavigate" in record)) return {};
+  try {
+    return {
+      autoNavigate: {
+        kind: "ok",
+        value: parseAutoNavigatePartial(
+          hasSnake ? record.auto_navigate : record.autoNavigate,
+        ),
+      },
+    };
+  } catch (error) {
+    return {
+      autoNavigate: {
+        kind: "invalid",
+        error: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
+}
+
+function mergeAutoNavigateField(
+  globalLayer: ParsedLayer,
+  projectLayer: ParsedLayer,
+): Pick<ParsedLayer, "autoNavigate" | "modelAutoNavigate"> {
+  const global = globalLayer.autoNavigate;
+  const project = projectLayer.autoNavigate;
+  let autoNavigate: ParsedLayer["autoNavigate"];
+  if (project?.kind === "invalid") autoNavigate = project;
+  else if (global?.kind === "invalid") autoNavigate = global;
+  else if (global?.kind === "ok" || project?.kind === "ok") {
+    const merged = mergeAutoNavigatePartial(global?.value, project?.value);
+    if (merged) autoNavigate = { kind: "ok", value: merged };
+  }
+  const mergedByModel = new Map<
+    string,
+    | { kind: "ok"; value: AutoNavigatePartial }
+    | { kind: "invalid"; error: string }
+  >();
+  for (const [key, entry] of globalLayer.modelAutoNavigate ?? []) {
+    mergedByModel.set(key, entry);
+  }
+  for (const [key, entry] of projectLayer.modelAutoNavigate ?? []) {
+    const prev = mergedByModel.get(key);
+    if (entry.kind === "invalid") {
+      mergedByModel.set(key, entry);
+    } else if (prev?.kind === "invalid") {
+      mergedByModel.set(key, entry);
+    } else if (prev?.kind === "ok") {
+      const merged = mergeAutoNavigatePartial(prev.value, entry.value);
+      if (merged) mergedByModel.set(key, { kind: "ok", value: merged });
+    } else {
+      mergedByModel.set(key, entry);
+    }
+  }
+  return {
+    ...(autoNavigate ? { autoNavigate } : {}),
+    ...(mergedByModel.size > 0 ? { modelAutoNavigate: mergedByModel } : {}),
+  };
 }
 
 function mergeProposalField(
@@ -357,6 +489,7 @@ export function mergeTreeNavigatorConfig(
     ]),
     modelOverridesProblems: noModelOverridesProblems(),
     ...mergeProposalField(globalLayer, projectLayer),
+    ...mergeAutoNavigateField(globalLayer, projectLayer),
   };
 }
 
@@ -365,10 +498,32 @@ function hintReserve(field: HintField): number | null {
   return field.kind === "ok" ? field.value : null;
 }
 
+function bestPatternEntry<T>(
+  byModel: ReadonlyMap<string, T>,
+  modelKey: string,
+): [string, T] | undefined {
+  if (byModel.has(modelKey)) {
+    return [modelKey, byModel.get(modelKey) as T];
+  }
+  let bestKey: string | undefined;
+  let bestVal: T | undefined;
+  let bestScore = -1;
+  for (const [pattern, val] of byModel) {
+    if (!matchesModelPattern(pattern, modelKey)) continue;
+    const score = modelPatternSpecificity(pattern, modelKey);
+    if (score >= bestScore) {
+      bestScore = score;
+      bestKey = pattern;
+      bestVal = val;
+    }
+  }
+  return bestKey !== undefined ? [bestKey, bestVal as T] : undefined;
+}
+
 /**
  * The reserve for `modelKey` (`provider/modelId`, #86): a matching
- * `modelOverrides` entry wins (including `null` from a sentinel or an
- * invalid entry), else the base `rewindHintReserveTokens`.
+ * `modelOverrides` entry (exact or wildcard) wins (including `null` from a
+ * sentinel or an invalid entry), else the base `rewindHintReserveTokens`.
  */
 export function resolveRewindHintReserve(
   config: {
@@ -378,10 +533,56 @@ export function resolveRewindHintReserve(
   modelKey: string | undefined,
 ): number | null {
   if (modelKey !== undefined) {
-    const byModel = config.rewindHintModelReserveTokens;
-    if (byModel.has(modelKey)) return byModel.get(modelKey) ?? null;
+    const matched = bestPatternEntry(
+      config.rewindHintModelReserveTokens,
+      modelKey,
+    );
+    if (matched) return matched[1];
   }
   return config.rewindHintReserveTokens;
+}
+
+/**
+ * Resolve the effective `AutoNavigateConfig` for `modelKey` (`provider/modelId`),
+ * applying base `auto_navigate` and any matching wildcard or exact
+ * `model_overrides` entry (ordered from least specific to most specific so
+ * fields inherit cleanly while specific patterns win).
+ */
+export function resolveAutoNavigateConfig(
+  config: {
+    autoNavigate?: AutoNavigatePartial;
+    autoNavigateByModel?: ReadonlyMap<string, AutoNavigatePartial | null>;
+    proposal?: ProposalOptions;
+  },
+  modelKey: string | undefined,
+): AutoNavigateConfig {
+  let effective = config.autoNavigate;
+  if (modelKey !== undefined && config.autoNavigateByModel) {
+    const matches: Array<{
+      pattern: string;
+      partial: AutoNavigatePartial | null;
+      score: number;
+    }> = [];
+    for (const [pattern, partial] of config.autoNavigateByModel) {
+      if (!matchesModelPattern(pattern, modelKey)) continue;
+      matches.push({
+        pattern,
+        partial,
+        score: modelPatternSpecificity(pattern, modelKey),
+      });
+    }
+    matches.sort((a, b) => a.score - b.score);
+    for (const match of matches) {
+      if (match.partial === null) {
+        return materializeAutoNavigateConfig(
+          { ...effective, enabled: false },
+          config.proposal,
+        );
+      }
+      effective = mergeAutoNavigatePartial(effective, match.partial);
+    }
+  }
+  return materializeAutoNavigateConfig(effective, config.proposal);
 }
 
 type LayerName = "global" | "project";
@@ -488,6 +689,17 @@ async function loadLayer(
       `navigate_tree: invalid treeProposal in ${layer} config at ${path} — ${parsed.layer.proposal.error}; model proposals are blocked until this is corrected.`,
     );
   }
+  if (parsed.layer.autoNavigate?.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid auto_navigate in ${layer} config at ${path} — ${parsed.layer.autoNavigate.error}; auto_navigate is disabled for this session.`,
+    );
+  }
+  for (const [key, field] of parsed.layer.modelAutoNavigate ?? []) {
+    if (field.kind !== "invalid") continue;
+    warnings.push(
+      `navigate_tree: invalid modelOverrides[${JSON.stringify(key)}].auto_navigate in ${layer} config at ${path} — ${field.error}; auto_navigate is disabled for that model pattern.`,
+    );
+  }
   return { layer: parsed.layer, warnings };
 }
 
@@ -513,6 +725,8 @@ export async function loadTreeNavigatorConfig(opts: {
     parentHandoffMode: HandoffMode;
     proposal?: ProposalOptions;
     proposalError?: string;
+    autoNavigate?: AutoNavigatePartial;
+    autoNavigateByModel?: Map<string, AutoNavigatePartial | null>;
   };
   warnings: string[];
 }> {
@@ -561,6 +775,21 @@ export async function loadTreeNavigatorConfig(opts: {
         : {}),
       ...(effective.proposal?.kind === "invalid"
         ? { proposalError: effective.proposal.error }
+        : {}),
+      ...(effective.autoNavigate?.kind === "ok"
+        ? { autoNavigate: effective.autoNavigate.value }
+        : effective.autoNavigate?.kind === "invalid"
+          ? { autoNavigate: { enabled: false } }
+          : {}),
+      ...(effective.modelAutoNavigate && effective.modelAutoNavigate.size > 0
+        ? {
+            autoNavigateByModel: new Map(
+              [...effective.modelAutoNavigate].map(([key, field]) => [
+                key,
+                field.kind === "ok" ? field.value : null,
+              ]),
+            ),
+          }
         : {}),
     },
     warnings,
