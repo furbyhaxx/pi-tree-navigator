@@ -79,6 +79,16 @@ it("returns a deterministic no-model proposal with zero calls", async () => {
   assert.equal(result.calls, 0);
 });
 
+it("refines a fitting full history in one request without an intermediate summary", async () => {
+  const source = snapshot();
+  const requests: string[] = [];
+  const result = await proposeTree(source, { model: runner(source, requests) });
+  assert.equal(result.method, "model");
+  assert.equal(result.calls, 1);
+  for (let index = 0; index < 3; index++)
+    assert.match(requests[0], new RegExp(`RECORD_${index}_`));
+});
+
 it("covers every large record across bounded extraction calls before refinement", async () => {
   const source = snapshot(12, 5000);
   const requests: string[] = [];
@@ -206,8 +216,8 @@ it("falls back for malformed, unknown-key, hallucinated, crossing and missing-ta
       model: runner(source, [], final),
     });
     assert.equal(result.method, "heuristic");
-    assert.equal(result.calls, 2);
-    assert.equal(result.usage.length, 2);
+    assert.equal(result.calls, 1);
+    assert.equal(result.usage.length, 1);
     assert.match(result.warnings.join(" "), /using deterministic/);
   }
 });
@@ -315,4 +325,74 @@ it("reports budget and non-progress consolidation fallback explicitly", async ()
   });
   assert.equal(result.method, "heuristic");
   assert.match(result.warnings.join(" "), /consolidation|budget/);
+});
+
+it("rejects an oversized structural outline before making any model requests", async () => {
+  const source = snapshot(100);
+  let attempted = 0;
+  const result = await proposeTree(source, {
+    model: {
+      ...runner(source, []),
+      contextWindow: 5000,
+      async complete() {
+        attempted++;
+        return { text: "{}" };
+      },
+    },
+  });
+  assert.equal(result.method, "heuristic");
+  assert.equal(result.calls, 0);
+  assert.equal(attempted, 0);
+  assert.match(result.warnings.join(" "), /Outline cannot fit/);
+});
+
+it("can compress a single evidence report to make room for the final outline", async () => {
+  const source = snapshot(2, 1000);
+  const requests: string[] = [];
+  const result = await proposeTree(source, {
+    model: {
+      ...runner(source, requests),
+      contextWindow: 5000,
+      maxOutputTokens: 1000,
+      async complete(request) {
+        requests.push(request.text);
+        return {
+          text: request.text.startsWith("Refine")
+            ? JSON.stringify({ groups: buildHeuristicPlan(source).groups })
+            : JSON.stringify({
+                evidence: request.text.startsWith("Consolidate")
+                  ? "Open tasks, not verified complete."
+                  : "x".repeat(2400),
+              }),
+        };
+      },
+    },
+  });
+  assert.equal(result.method, "model");
+  assert.ok(requests.some((request) => request.startsWith("Consolidate")));
+});
+
+it("stops costly consolidation that makes only negligible progress", async () => {
+  const source = snapshot(3, 3000);
+  let extracted = 0;
+  let consolidated = 0;
+  const result = await proposeTree(source, {
+    model: {
+      ...runner(source, []),
+      contextWindow: 5000,
+      maxOutputTokens: 1000,
+      async complete(request) {
+        if (request.text.startsWith("Extract")) {
+          extracted++;
+          return { text: JSON.stringify({ evidence: "z".repeat(1700) }) };
+        }
+        assert.ok(request.text.startsWith("Consolidate"));
+        consolidated++;
+        return { text: JSON.stringify({ evidence: "z".repeat(1699) }) };
+      },
+    },
+  });
+  assert.equal(result.method, "heuristic");
+  assert.ok(consolidated > 0 && consolidated <= extracted);
+  assert.match(result.warnings.join(" "), /25%/);
 });

@@ -298,3 +298,73 @@ it("filters exact tools through call IDs, including result details, and counts b
   assert.doesNotMatch(JSON.stringify(full.records), /IMAGE_BYTES|OPAQUE/);
   assert.match(full.warnings.join(" "), /2 non-text/);
 });
+
+it("applies bash disclosure to native shell records and their context replacements", () => {
+  const source = snapshot([
+    user("root", null, "Inspect shell history"),
+    {
+      type: "message",
+      id: "shell",
+      parentId: "root",
+      timestamp,
+      message: {
+        role: "bashExecution",
+        command: "PRIVATE_SHELL_COMMAND",
+        output: "PRIVATE_SHELL_OUTPUT",
+        exitCode: 0,
+        cancelled: false,
+        truncated: false,
+        timestamp: 1,
+      },
+    },
+    {
+      type: "context_edit",
+      id: "edit",
+      parentId: "shell",
+      timestamp,
+      targetId: "shell",
+      replacement: { content: "PRIVATE_SHELL_REPLACEMENT" },
+    },
+  ]);
+  const omitted = JSON.stringify(
+    buildProposalRecords(source, { tools: { bash: "omit" } }).records,
+  );
+  assert.doesNotMatch(omitted, /PRIVATE_SHELL_/);
+  const calls = JSON.stringify(
+    buildProposalRecords(source, { tools: { bash: "calls-only" } }).records,
+  );
+  assert.match(calls, /PRIVATE_SHELL_COMMAND/);
+  assert.doesNotMatch(calls, /PRIVATE_SHELL_OUTPUT|PRIVATE_SHELL_REPLACEMENT/);
+  assert.match(
+    JSON.stringify(buildProposalRecords(source, { tools: {} }).records),
+    /PRIVATE_SHELL_OUTPUT/,
+  );
+});
+
+it("keeps deep existing history inside valid 32-level annotations with an explicit warning", () => {
+  const entries: SessionEntry[] = Array.from({ length: 36 }, (_, index) =>
+    user(`u${index}`, index ? `u${index - 1}` : null, `Work ${index}`),
+  );
+  let leaf = "u35";
+  for (let index = 34; index >= 0; index--) {
+    entries.push({
+      type: "branch_summary",
+      id: `s${index}`,
+      parentId: `u${index}`,
+      fromId: leaf,
+      timestamp,
+      summary: `Recorded phase ${index}`,
+    });
+    leaf = `s${index}`;
+  }
+  entries.push(user("tail", leaf, "Current work"));
+  const source = snapshot(entries);
+  const before = JSON.stringify(source.entries);
+  const warnings: string[] = [];
+  const plan = buildHeuristicPlan(source, (warning) => warnings.push(warning));
+  assert.doesNotThrow(() => parseRetrospectivePlan(plan));
+  assert.match(warnings.join(" "), /32 levels/);
+  assert.equal(plan.groups[0].firstEntryId, "u0");
+  assert.equal(plan.groups[0].lastEntryId, "tail");
+  assert.equal(JSON.stringify(source.entries), before);
+});

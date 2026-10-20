@@ -8,6 +8,7 @@ import type {
 /** Construct chronological open phases without claiming unverified completion. */
 export function buildHeuristicPlan(
   snapshot: SessionSnapshot,
+  onWarning?: (message: string) => void,
 ): RetrospectivePlan {
   const entries = snapshot.entries;
   const positions = new Map(entries.map((entry, i) => [entry.id, i]));
@@ -107,30 +108,42 @@ export function buildHeuristicPlan(
     parent.children.push(interval);
     stack.push(interval);
   }
-  const expand = (interval: Interval): RetrospectiveGroup => {
-    const children = [...interval.children];
-    const occupied = (index: number) =>
-      children.some((child) => child.first <= index && index <= child.last);
-    const starts = entries.flatMap((entry, i) =>
-      i >= interval.first &&
-      i <= interval.last &&
-      !occupied(i) &&
-      (entry.type === "label" ||
-        (entry.type === "message" && entry.message.role === "user"))
-        ? [i]
-        : [],
-    );
+  let depthLimited = false;
+  const expand = (interval: Interval, depth: number): RetrospectiveGroup => {
+    const occupied = [...interval.children].sort((a, b) => a.first - b.first);
+    const children = [...occupied];
+    const starts: number[] = [];
+    let childIndex = 0;
+    for (let index = interval.first; index <= interval.last; index++) {
+      const child = occupied[childIndex];
+      if (child && index >= child.first) {
+        index = child.last;
+        childIndex++;
+        continue;
+      }
+      const entry = entries[index];
+      if (
+        entry.type === "label" ||
+        (entry.type === "message" && entry.message.role === "user")
+      )
+        starts.push(index);
+    }
+    childIndex = 0;
     for (let n = 0; n < starts.length; n++) {
       const first = starts[n];
+      while (occupied[childIndex] && occupied[childIndex].first <= first)
+        childIndex++;
       const boundary = Math.min(
         starts[n + 1] ?? interval.last + 1,
-        ...children
-          .filter((child) => child.first > first)
-          .map((child) => child.first),
+        occupied[childIndex]?.first ?? interval.last + 1,
       );
       const last = boundary - 1;
       if (first === interval.first && last === interval.last) continue;
       children.push({ first, last, title: titleAt(first), children: [] });
+    }
+    if (depth === 31 && children.length) {
+      depthLimited = true;
+      children.length = 0;
     }
     children.sort((a, b) => a.first - b.first);
     return {
@@ -140,22 +153,14 @@ export function buildHeuristicPlan(
       lastEntryId: entries[interval.last].id,
       state: "open",
       summary: interval.report ?? "Open phase; completion is not established.",
-      children: children.map((child) =>
-        child.children.length
-          ? expand(child)
-          : {
-              name: nameFor(child.title),
-              title: child.title,
-              firstEntryId: entries[child.first].id,
-              lastEntryId: entries[child.last].id,
-              state: "open",
-              summary:
-                child.report ?? "Open phase; completion is not established.",
-              children: [],
-            },
-      ),
+      children: children.map((child) => expand(child, depth + 1)),
     };
   };
+  const groups = entries.length ? [expand(root, 0)] : [];
+  if (depthLimited)
+    onWarning?.(
+      "Heuristic annotations were limited to 32 levels; deeper history remains verbatim in its enclosing open phase.",
+    );
   return {
     version: 1,
     source: snapshot.path,
@@ -164,7 +169,7 @@ export function buildHeuristicPlan(
     parentHandoffMode: "full",
     recurse: false,
     descendantPlans: [],
-    groups: entries.length ? [expand(root)] : [],
+    groups,
   };
 }
 
@@ -249,7 +254,9 @@ export function buildProposalRecords(
         "base64",
       ].includes(String(object.type)) ||
       (typeof object.mimeType === "string" &&
-        /^(image|audio|video)\//.test(object.mimeType))
+        /^(?:image\/|audio\/|video\/|application\/(?:pdf|octet-stream)$)/.test(
+          object.mimeType,
+        ))
     ) {
       binary++;
       return { type: object.type, omitted: "non-text payload" };
@@ -260,7 +267,10 @@ export function buildProposalRecords(
         binary++;
         continue;
       }
-      result[key] = clean(item);
+      Object.defineProperty(result, key, {
+        value: clean(item),
+        enumerable: true,
+      });
     }
     return result;
   };
@@ -287,6 +297,24 @@ export function buildProposalRecords(
         }
       }
     }
+    if (
+      entry.type === "message" &&
+      entry.message.role === "bashExecution" &&
+      modeFor("bash") !== "full"
+    ) {
+      const mode = modeFor("bash");
+      omitted++;
+      value = {
+        id: entry.id,
+        parentId: entry.parentId,
+        type: entry.type,
+        message: {
+          role: "bashExecution",
+          ...(mode === "calls-only" ? { command: entry.message.command } : {}),
+          omitted: `${mode}: native shell content withheld`,
+        },
+      };
+    }
     if (entry.type === "context_edit" && entry.replacement !== null) {
       const target = byId.get(entry.targetId);
       const resultMode = resultModes.get(entry.targetId);
@@ -299,7 +327,10 @@ export function buildProposalRecords(
         );
       if (
         (resultMode !== undefined && resultMode !== "full") ||
-        hiddenAssistant
+        hiddenAssistant ||
+        (target?.type === "message" &&
+          target.message.role === "bashExecution" &&
+          modeFor("bash") !== "full")
       ) {
         omitted++;
         value = {
