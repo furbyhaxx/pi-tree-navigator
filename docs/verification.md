@@ -95,11 +95,26 @@ refusal and create paths on a disposable fixture. Reopen the result through Pi's
 `SessionManager` and verify the source bytes are unchanged, the clone has a new
 ID/suffixed name, nested summaries are browsable, and the retained tail is active.
 Check refusal of crossed tool batches, context edits and compaction references.
+Check that a parent contains full child reports once, synthesized mode keeps its
+reviewed report only, and an open parent can contain a nested current tail. Verify
+native pre-request context estimates ignore historical assistant usage without
+changing recorded costs, while future assistant usage remains valid.
+
+For family cloning, compare every copied descendant body byte-for-byte and check
+all new parent links. Preview must bind family membership and source hashes.
+Recursive restructuring requires reviewed descendant plans; missing plans must
+fail rather than silently copying them.
 
 Drive `/tree-clone` in an interactive session: inspect/preview dialogs, cancel
 without writing, create with confirmation, and `/tree` navigation in the result.
-No provider call is required: summary text is reviewed input. Use a disposable
-copy for live UI validation; do not resume a user's source for a test.
+Exercise the rich native card in collapsed/expanded states with Ctrl+O and a
+fullscreen mouse click, at 60 and 130 columns. Verify nested single-child outline
+indentation, chronological order, `[current]` inside an open parent, search,
+real-ID navigation, F2 raw-graph fallback, switching sessions and `/reload`.
+No provider call is required for clone/UI validation: summary text is reviewed
+input. Use a disposable copy; do not resume a user's source for a test.
+Live rewind prompt changes still require provider/cache validation under §5;
+offline handler tests are not that evidence.
 
 ## 6. Closeout
 

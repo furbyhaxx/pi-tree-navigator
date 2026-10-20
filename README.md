@@ -38,7 +38,19 @@ new ID and a ` (restructured)` name suffix, and both sessions remain resumable.
 Use `/tree-clone inspect <session.jsonl>`, prepare a nested range/summary plan,
 then `/tree-clone preview <plan.json>` and `/tree-clone create <plan.json>`.
 Creation requires confirmation and never switches sessions automatically.
+Descendant sessions are copied with unchanged histories by default; a plan's
+`recurse` option restructures them only with reviewed descendant plans.
 An offline CLI is also available; neither interface makes model calls.
+
+This fork also renders useful native handoff cards: title, goal, outcome and
+recorded inclusive token/cost statistics appear before expansion. Converted
+sessions open a chronological, nested `/tree` outline with `[current]` inside
+its open phase; F2 returns to Pi's raw conversation graph.
+
+`parentHandoffMode` in `tree-navigator.json` selects `full` (default: retain child
+handoffs once each) or `synthesized` (a relevance-focused parent report, with room
+for more detail). Plans may override the mode per group. The agent receives full
+handoff text, not the collapsed UI label.
 
 See [Retrospective session cloning](docs/retrospective-cloning.md) for the plan
 format, safety checks, CLI commands, and limitations. See
@@ -268,7 +280,7 @@ Earlier releases summarized with a separate request: first pi's cold `generateBr
 1. **`rewind` (tool call).** Refuses a rewind that shares its assistant message with other tool calls (`rewind must be the only tool call in its message — re-issue only the rewind, alone. The other calls in this message ran normally.`) and a rewind issued from a codemode script that is not the script's first nested call (`rewind from a codemode script must be the script's first nested call`). A script whose first nested call is a `rewind` is accepted like a direct one only if the script issues no other nested call: a sibling still in flight refuses it with the batch message above, and the siblings run normally. Otherwise validates as before (names, `summaryFocus`, label uniqueness, the minimum-savings floor), records a pending rewind for the session, and returns a short result: `[navigate_tree] Rewind to '<rewindTo>' accepted (collapse as '<newLabel>'). Follow the navigate_tree message below to complete it.` The tree does not move yet.
 2. **The instruction message.** The rewind turn's `turn_end` returns a `navigate-tree-summary-request` custom message as a boundary entry with `continue: true`: `[navigate_tree]`, a newline, then the eval-approved r5d instruction with `{first}` (the 1-based number of the first collapsed message in the projection the model sees) and `Additional focus: <summaryFocus>`. pi commits it right after the rewind's tool result and before queued steers. The model receives it as a user message rather than as a tool result, so it no longer reads like an instruction injected through a tool. In the TUI it renders as one line, `[rewind to '<rewindTo>' · collapse as '<newLabel>'] · summarizing · context 30.4% → ~12.0% of 1.0M` (the `~` figure is the estimate at the anchor before the summary is added), and expands to the full text.
 3. **The summary turn.** The model's next reply is the summary: an append to the live conversation, so it is served from the prompt cache like any other turn. While the rewind is pending, the request is frozen at the instruction message: the `context` handler drops everything after it, so steers and other extensions' messages that arrive meanwhile are not sent, and every retry sends the same messages. Every tool call is blocked (TUI-only reason: `navigate_tree: blocked: the model tried to call a tool instead of summarizing.`).
-4. **`turn_end`.** A text-only turn with the r5d `## Goal` heading completes the rewind: any preamble before `## Goal` is dropped, the summary turn is labeled `branch:<newLabel>`, the stored `branch_summary` gets upstream's preamble and `<read-files>`/`<modified-files>` lists (tool calls of hidden attempts excluded), `branchWithSummary` forks from the anchor, the label is written, `agent.state.messages` is refreshed and `session_tree` is emitted. The continuation message (`customType: "navigate-tree-rewind"`) is delivered in the same run, so the rewound context reaches a real turn — and the footer's token count updates — without a user prompt.
+4. **`turn_end`.** A text-only turn with the r5d `## Goal` heading completes the rewind: any preamble before `## Goal` is dropped, the summary turn is labeled `branch:<newLabel>`, the stored `branch_summary` gets an honest work-handoff title, structured display/accounting metadata, the configured child reports and `<read-files>`/`<modified-files>` lists (tool calls of hidden attempts excluded), `branchWithSummary` forks from the anchor, the label is written, `agent.state.messages` is refreshed and `session_tree` is emitted. The continuation message (`customType: "navigate-tree-rewind"`) is delivered in the same run, so the rewound context reaches a real turn — and the footer's token count updates — without a user prompt.
 
 A summary attempt fails when it calls a tool, has no `## Goal` summary (including an empty or thinking-only reply), or is cut off (`stopReason: "length"`); a cut-off reply that also calls a tool counts as cut off. A failed attempt is hidden from model context (`context_edit` with `null` on the assistant and all its tool results, together) and the same request is sent again with nothing appended. After `MAX_SUMMARY_ATTEMPTS` (3 in total) the rewind fails: the instruction and the attempts are hidden, the rewind's tool result is replaced with the failure text for the last attempt's cause, and it is sent as a tool error (`isError: true`):
 

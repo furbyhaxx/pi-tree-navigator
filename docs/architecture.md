@@ -13,6 +13,14 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `retrospective-plan.ts`: strict source snapshots, inspection and nested-plan parsing.
 - `retrospective.ts`: range validation, clone construction, state checks and publication.
 - `retrospective-command.ts`: `/tree-clone` inspection, preview and confirmation.
+- `handoff.ts`: report metadata, full/synthesized materialization, unique recorded
+  statistics and honest model-facing work context.
+- `handoff-renderer.ts`: guarded native summary-card and tree-row patches.
+- `handoff-projection.ts`: shared native projection patch; historical assistant
+  usage stays in accounting but cannot act as a post-conversion context baseline.
+- `history-outline.ts`: manifest-gated chronological containment in `/tree`, with
+  a raw native graph escape and navigation through real entry IDs.
+- `descendant-sessions.ts`: bounded family discovery and immutable-body copy plans.
 - `scripts/restructure-session.mjs`: offline JSON CLI for the same clone engine.
 
 Tests live beside the extension modules and use Node's test runner. The clone
@@ -34,6 +42,13 @@ for the clone workflow and supported inputs.
 - Conversion must preserve original payloads and accounting, valid tree references,
   completed tool batches, effective context edits, and replayable runtime state.
   Unsafe plans fail before a clone is published.
+- Parent context policy is frozen at fold time. Full mode inserts each child
+  handoff once in child order; synthesized mode keeps the reviewed parent report.
+  Inclusive statistics union unique source IDs; they never create new billing.
+- Chronological containment is presentation metadata, not context ancestry.
+  Native tree navigation always targets a real persisted entry ID.
+- Descendant copies retain original bodies and receive new header IDs/remapped
+  parent paths. The root inherits its source parent rather than linking to it.
 - Plans and previews are bound to source bytes. Summaries are reviewed input,
   not evidence that the converter independently checked historical claims.
 - Preview and inspection never append content to the inspected session, and
