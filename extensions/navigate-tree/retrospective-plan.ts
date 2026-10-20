@@ -368,6 +368,8 @@ export async function readSessionSnapshot(
   const ids = new Set<string>();
   const safeCuts = new Set([-1]);
   const pendingById = new Map<string, Set<string>>();
+  const completedById = new Map<string, Set<string>>();
+  const completedAnywhere = new Set<string>();
   const byId = new Map<string, SessionEntry>();
   const parents = new Set<string>();
   for (const [index, entry] of entries.entries()) {
@@ -397,6 +399,14 @@ export async function readSessionSnapshot(
     const pending = new Set(
       entry.parentId === null ? [] : pendingById.get(entry.parentId),
     );
+    const completed = new Set(
+      entry.parentId === null ? [] : completedById.get(entry.parentId),
+    );
+    if (entry.type === "branch_summary" && entry.fromId !== "root") {
+      const archivedCompleted = completedById.get(entry.fromId);
+      for (const call of pending)
+        if (archivedCompleted?.has(call)) pending.delete(call);
+    }
     if (entry.parentId !== null) parents.add(entry.parentId);
     ids.add(entry.id);
     byId.set(entry.id, entry);
@@ -416,6 +426,11 @@ export async function readSessionSnapshot(
           `Orphan tool result ${entry.id}: no outstanding call ${entry.message.toolCallId}`,
         );
     }
+    if (entry.type === "message" && entry.message.role === "toolResult") {
+      completed.add(entry.message.toolCallId);
+      completedAnywhere.add(entry.message.toolCallId);
+    }
+    completedById.set(entry.id, completed);
     pendingById.set(entry.id, pending);
     if (!pending.size) safeCuts.add(index);
   }
@@ -433,7 +448,8 @@ export async function readSessionSnapshot(
       ...new Set(
         entries
           .filter((entry) => !parents.has(entry.id))
-          .flatMap((entry) => [...(pendingById.get(entry.id) ?? [])]),
+          .flatMap((entry) => [...(pendingById.get(entry.id) ?? [])])
+          .filter((call) => !completedAnywhere.has(call)),
       ),
     ],
   };

@@ -461,10 +461,20 @@ function validateClone(
   }
   const active = activeLeaf ? byId.get(activeLeaf) : undefined;
   const activeIds = active ? ancestors(active) : new Set<string>();
+  const originalIds = new Set(original.map((entry) => entry.id));
+  const newActiveHandoffs = entries.filter(
+    (entry) =>
+      entry.type === "branch_summary" &&
+      !originalIds.has(entry.id) &&
+      activeIds.has(entry.id),
+  );
   if (
-    entries.some(
-      (entry) => entry.type === "compaction" && activeIds.has(entry.id),
-    )
+    entries.some((entry) => {
+      if (entry.type !== "compaction" || !activeIds.has(entry.id)) return false;
+      const kept = byId.get(entry.firstKeptEntryId);
+      const hidden = kept ? ancestors(kept) : new Set<string>();
+      return newActiveHandoffs.some((handoff) => hidden.has(handoff.id));
+    })
   ) {
     throw new Error(
       "A compaction remains on the active path and could hide the new summaries. Include it in a completed top-level range.",

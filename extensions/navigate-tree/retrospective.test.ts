@@ -492,6 +492,63 @@ describe("retrospective clone", () => {
       groups: [group("batch", "call", "sibling-result")],
     });
     await previewRetrospectiveSession(siblingResults.planPath);
+    const rewoundEntries = [
+      ...entries.slice(0, 4),
+      {
+        type: "branch_summary",
+        id: "rewound",
+        parentId: "call",
+        fromId: "result",
+        summary: "Completed archived lookup",
+      },
+      user("continued", "Continue after rewind"),
+    ];
+    const rewound = await fixture({
+      entries: rewoundEntries,
+      groups: [
+        { ...group("annotation", "rewound", "continued"), state: "open" },
+      ],
+    });
+    assert.deepEqual(
+      (await inspectRetrospectiveSession(rewound.source)).pendingToolCalls,
+      [],
+    );
+    const annotationPreview = await previewRetrospectiveSession(
+      rewound.planPath,
+    );
+    const annotation = await cloneRetrospectiveSession(
+      rewound.planPath,
+      annotationPreview.previewToken,
+    );
+    assert.deepEqual(
+      SessionManager.open(annotation.path).buildSessionContext(),
+      SessionManager.open(rewound.source).buildSessionContext(),
+    );
+    const outer = await fixture({
+      entries: rewoundEntries,
+      groups: [group("outer", "call", "continued")],
+    });
+    await previewRetrospectiveSession(outer.planPath);
+    const rewoundSplit = await fixture({
+      entries: rewoundEntries,
+      groups: [group("split", "result", "result")],
+    });
+    await assert.rejects(
+      previewRetrospectiveSession(rewoundSplit.planPath),
+      /boundary splits a tool call/,
+    );
+    const fork = await fixture({
+      entries: [
+        ...entries.slice(0, 4),
+        { ...user("fork", "Before sibling result"), parentId: "call" },
+      ],
+      groups: [{ ...group("annotation", "fork", "fork"), state: "open" }],
+    });
+    assert.deepEqual(
+      (await inspectRetrospectiveSession(fork.source)).pendingToolCalls,
+      [],
+    );
+    await previewRetrospectiveSession(fork.planPath);
     const unfinished = await fixture({
       entries: [
         ...entries.slice(0, 3),
@@ -546,6 +603,33 @@ describe("retrospective clone", () => {
     assert.deepEqual(clone.getEntry("result"), source.getEntry("result"));
     assert.ok(branch.some((entry) => entry.id === "call"));
     assert.ok(branch.some((entry) => entry.id === "result"));
+  });
+
+  it("allows open annotations over unchanged active compactions", async () => {
+    const f = await fixture({
+      entries: [
+        user("old", "Old"),
+        user("kept", "Kept"),
+        {
+          type: "compaction",
+          id: "compact",
+          firstKeptEntryId: "kept",
+          summary: "Earlier work",
+          tokensBefore: 100,
+        },
+        user("tail", "Continue"),
+      ],
+      groups: [{ ...group("annotation", "kept", "tail"), state: "open" }],
+    });
+    const preview = await previewRetrospectiveSession(f.planPath);
+    const clone = await cloneRetrospectiveSession(
+      f.planPath,
+      preview.previewToken,
+    );
+    assert.deepEqual(
+      SessionManager.open(clone.path).buildSessionContext(),
+      SessionManager.open(f.source).buildSessionContext(),
+    );
   });
 
   it("preserves model, thinking, system sections, and tools across folded changes", async () => {
