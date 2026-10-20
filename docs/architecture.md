@@ -10,9 +10,17 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `config.ts`: layered global/trusted-project configuration.
 - `context-tokens.ts`, `rewind-hint.ts`: context estimates and rewind hints.
 - `summary-prompt.ts`: summary instructions, stored-summary preamble and file lists.
-- `retrospective-plan.ts`: strict source snapshots, inspection and nested-plan parsing.
+- `retrospective-plan.ts`: strict graph snapshots, branch-local tool accounting,
+  inspection and nested-plan parsing.
 - `retrospective.ts`: range validation, clone construction, state checks and publication.
-- `retrospective-command.ts`: `/tree-clone` inspection, preview and confirmation.
+- `retrospective-command.ts`: `/tree-clone` inspection, proposal dispatch, preview
+  and confirmation.
+- `proposal-options.ts`: exact model/thinking selectors and tool disclosure rules.
+- `proposal-source.ts`: deterministic outlines and filtered full-text source records.
+- `proposal-engine.ts`: optional bounded model analysis and explicit heuristic fallback.
+- `proposal-model.ts`: registry-authenticated, provider-neutral side calls.
+- `proposal-command.ts`: disclosure confirmation, cancellable generation, editable
+  plan review and exclusive private-plan saving.
 - `handoff.ts`: report metadata, full/synthesized materialization, unique recorded
   statistics and honest model-facing work context.
 - `handoff-renderer.ts`: guarded native summary-card and tree-row patches.
@@ -53,3 +61,9 @@ for the clone workflow and supported inputs.
   not evidence that the converter independently checked historical claims.
 - Preview and inspection never append content to the inspected session, and
   clone creation never implicitly resumes it or triggers a provider request.
+- Model analysis is opt-in. Configured tool exclusions apply before requests;
+  invalid disclosure policies block analysis. Generated IDs/ranges/provenance are
+  validated locally, and cancellation never publishes a plan or session.
+- Existing graph edges remain unless an explicit completed fold redirects a
+  continuation. Native rewind summaries can establish completion of tool calls
+  through real results in their referenced archived history; no results are invented.

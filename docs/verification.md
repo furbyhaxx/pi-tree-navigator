@@ -116,6 +116,27 @@ input. Use a disposable copy; do not resume a user's source for a test.
 Live rewind prompt changes still require provider/cache validation under §5;
 offline handler tests are not that evidence.
 
+For graph inputs, inspect a native rewind tree and preserve its archived context
+edits, labels, summary `fromId` targets and per-entry runtime state. Include a
+rewind to an assistant tool-call anchor whose real result is on the archived
+leg, repeated provider call IDs, and a genuinely unresolved occurrence. Inspect
+a long tool-heavy snapshot under a bounded heap to catch retained-state growth.
+
+For tree proposals, verify local heuristics make zero provider requests and every
+saved plan parses under the schema (including deep native trees). Exercise a
+local mock provider through the real model registry: assert provider-neutral
+thinking, source/plan binding, native shell and tool exclusions, usage capture,
+private exclusive plan creation, preview/create and clone reload. Fitting inputs
+should need one refinement request; oversized inputs must cover all permitted
+records or produce an explicit fallback without silent truncation. Confirm the
+consolidation-round/progress bounds stop low-value requests.
+
+Drive proposal review/save/cancel at 60/130 columns and cancel a delayed local
+provider from the native loader. Assert the request aborts, no plan/session is
+published, and the current model/thinking remains unchanged. A local mock proves
+the registry/UI transport flow, not the quality or availability of a paid model;
+state separately when real-provider semantic quality was not exercised.
+
 ## 6. Closeout
 
 - [ ] CI green on the exact PR head SHA (all checks listed in §2).

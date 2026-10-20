@@ -31,16 +31,22 @@ pi install git:github.com/cad0p/pi-tree-navigator
 
 ## Restructure an existing session
 
-This fork adds retrospective cloning: turn completed work in a linear session
-into nested summary branches without modifying the original. The clone gets a
+This fork adds retrospective cloning: turn completed work in a linear or branched
+session into nested summary branches without modifying the original. The clone gets a
 new ID and a ` (restructured)` name suffix, and both sessions remain resumable.
 
-Use `/tree-clone inspect <session.jsonl>`, prepare a nested range/summary plan,
-then `/tree-clone preview <plan.json>` and `/tree-clone create <plan.json>`.
-Creation requires confirmation and never switches sessions automatically.
+Use `/tree-clone inspect <session.jsonl>`, then `/tree-clone propose <session.jsonl>`
+to derive a local heuristic tree. Add `--llm` to refine it with the current model,
+or `--model openai/gpt-6-luna:high` to select another provider/model and thinking
+level. Review and save the proposed plan, then `/tree-clone preview <plan.json>`
+and `/tree-clone create <plan.json>`. Creation requires confirmation and never
+switches sessions automatically.
 Descendant sessions are copied with unchanged histories by default; a plan's
 `recurse` option restructures them only with reviewed descendant plans.
-An offline CLI is also available; neither interface makes model calls.
+An offline CLI is also available. Model analysis is explicit and optional;
+inspection, heuristic proposals, preview and creation make no model calls.
+`treeProposal` settings select the default model and which tools' calls/results
+may be sent. Existing rewind branches and native summary references are preserved.
 
 This fork also renders useful native handoff cards: title, goal, outcome and
 recorded inclusive token/cost statistics appear before expansion. Converted
