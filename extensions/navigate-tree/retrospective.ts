@@ -13,6 +13,12 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import {
+  type HistoryGroup,
+  type HistoryManifest,
+  makeHandoff,
+  materializeHandoff,
+} from "./handoff.ts";
+import {
   type RetrospectiveGroup,
   type RetrospectivePlan,
   readRetrospectivePlan,
@@ -20,7 +26,6 @@ import {
   type SessionSnapshot,
   sha256,
 } from "./retrospective-plan.ts";
-import { buildStoredSummary } from "./summary-prompt.ts";
 
 /** Reviewable conversion output; its token binds both the source and complete plan. */
 export interface RetrospectivePreview {
@@ -36,6 +41,8 @@ export interface RetrospectivePreview {
     firstEntryId: string;
     lastEntryId: string;
     summary: string;
+    state: "folded" | "open";
+    mode: "full" | "synthesized";
   }[];
   readonly warnings: readonly string[];
 }
@@ -94,7 +101,10 @@ function validateRanges(
           `${group.name}: sibling ranges must be ordered and non-overlapping`,
         );
       previousEnd = end;
-      if (!safeCuts.has(start - 1) || !safeCuts.has(end)) {
+      if (
+        group.state === "folded" &&
+        (!safeCuts.has(start - 1) || !safeCuts.has(end))
+      ) {
         throw new Error(
           `${group.name}: boundary splits a tool call from its results; move it to a completed tool batch`,
         );
@@ -107,7 +117,7 @@ function validateRanges(
           throw new Error(`Invalid context edit ${entry.id}`);
         const targetInside = target >= start && target <= end;
         const editInside = edit >= start && edit <= end;
-        if (targetInside !== editInside) {
+        if (group.state === "folded" && targetInside !== editInside) {
           throw new Error(
             `${group.name}: context edit ${entry.id} and target ${entry.targetId} must stay in the same range`,
           );
@@ -213,7 +223,8 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
     last: number,
     children: IndexedGroup[],
     depth: number,
-  ) {
+  ): HistoryGroup[] {
+    const history: HistoryGroup[] = [];
     let cursor = first;
     for (const range of children) {
       copy(cursor, range.first - 1);
@@ -224,12 +235,50 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
         firstEntryId: range.group.firstEntryId,
         lastEntryId: range.group.lastEntryId,
         summary: range.group.summary,
+        state: range.group.state,
+        mode: range.group.mode ?? plan.parentHandoffMode,
       });
       for (const prefix of ["anchor:", "branch:"]) {
         if (reservedLabels.has(`${prefix}${range.group.name}`))
           throw new Error(`Label already exists: ${prefix}${range.group.name}`);
       }
-      emit(range.first, range.last, range.children, depth + 1);
+      const startId = id();
+      const title = range.group.title ?? range.group.name.replaceAll("-", " ");
+      const startEntry: SessionEntry = {
+        id: startId,
+        parentId: leaf,
+        timestamp,
+        type: "custom",
+        customType: "tree-phase",
+        data: {
+          name: range.group.name,
+          title,
+          state: range.group.state,
+          goal: range.group.goal,
+        },
+      };
+      append(startEntry);
+      const childGroups = emit(
+        range.first,
+        range.last,
+        range.children,
+        depth + 1,
+      );
+      const sourceEntries = original.slice(range.first, range.last + 1);
+      if (range.group.state === "open") {
+        labels.push({ targetId: startId, label: `anchor:${range.group.name}` });
+        history.push({
+          name: range.group.name,
+          title,
+          entryId: startId,
+          startId,
+          state: "open",
+          sourceIds: sourceEntries.map((entry) => entry.id),
+          children: childGroups,
+        });
+        cursor = range.last + 1;
+        continue;
+      }
       append({
         ...base(),
         type: "custom",
@@ -242,25 +291,52 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
       leaf = parent;
       restoreState(range.group.lastEntryId);
       const summaryId = id();
+      const handoff = makeHandoff({
+        name: range.group.name,
+        title,
+        goal: range.group.goal,
+        outcome: range.group.outcome,
+        report: range.group.summary,
+        mode: range.group.mode ?? plan.parentHandoffMode,
+        children: childGroups.map((group) => group.entryId),
+        sourceEntries,
+      });
+      const childReports = childGroups.map((group) => {
+        const entry = entries.find((entry) => entry.id === group.entryId);
+        if (entry?.type !== "branch_summary")
+          throw new Error(`Missing child handoff ${group.name}`);
+        return { id: entry.id, summary: entry.summary };
+      });
       append({
         id: summaryId,
         parentId: leaf,
         timestamp,
         type: "branch_summary",
         fromId,
-        summary: buildStoredSummary(range.group.summary, [], []),
+        summary: materializeHandoff(handoff, childReports),
         fromHook: true,
         details: {
           retrospective: true,
+          treeNavigator: handoff,
           sourceSessionId: snapshot.header.id,
           firstEntryId: range.group.firstEntryId,
           lastEntryId: range.group.lastEntryId,
         },
       });
       labels.push({ targetId: summaryId, label: `anchor:${range.group.name}` });
+      history.push({
+        name: range.group.name,
+        title,
+        entryId: summaryId,
+        startId,
+        state: "folded",
+        sourceIds: handoff.sourceIds,
+        children: childGroups,
+      });
       cursor = range.last + 1;
     }
     copy(cursor, last);
+    return history;
   }
   function copy(first: number, last: number) {
     for (let index = first; index <= last; index++) {
@@ -274,7 +350,11 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
       append({ ...entry, parentId: leaf });
     }
   }
-  emit(0, original.length - 1, ranges, 0);
+  const history: HistoryManifest = {
+    version: 1,
+    sourceOrder: original.map((entry) => entry.id),
+    groups: emit(0, original.length - 1, ranges, 0),
+  };
   const activeLeaf = leaf;
   validateClone(original, entries, activeLeaf);
   const name = `${snapshot.name}${plan.nameSuffix}`;
@@ -288,6 +368,7 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
       sourceSessionId: snapshot.header.id,
       sourceSha256: snapshot.sha256,
       plan,
+      history,
       changes,
     },
   });

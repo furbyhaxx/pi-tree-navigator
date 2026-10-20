@@ -41,6 +41,8 @@ type TestGroup = {
   lastEntryId: string;
   summary: string;
   children: TestGroup[];
+  state?: "folded" | "open";
+  mode?: "full" | "synthesized";
 };
 
 function group(
@@ -185,6 +187,78 @@ describe("retrospective clone", () => {
     assert.deepEqual(
       reloaded.buildSessionContext(),
       clone.buildSessionContext(),
+    );
+  });
+
+  it("keeps child facts in full mode and can leave the current branch inside an open phase", async () => {
+    const f = await fixture({
+      groups: [
+        {
+          ...group(
+            "implementation",
+            "one",
+            "tail",
+            "Implementation remains open",
+            [
+              group("completed", "one", "three", "PARENT_OUTCOME", [
+                group("decision", "one", "one", "CHILD_FACT"),
+              ]),
+              {
+                ...group("current", "tail", "tail", "Current work"),
+                state: "open",
+              },
+            ],
+          ),
+          state: "open",
+        },
+      ],
+    });
+    const preview = await previewRetrospectiveSession(f.planPath);
+    const result = await cloneRetrospectiveSession(
+      f.planPath,
+      preview.previewToken,
+    );
+    const clone = SessionManager.open(result.path);
+    const text = JSON.stringify(clone.buildSessionContext().messages);
+    assert.match(text, /CHILD_FACT/);
+    assert.equal(text.split("CHILD_FACT").length - 1, 1);
+    assert.match(text, /Question tail/);
+    assert.doesNotMatch(text, /explored a different conversation/);
+    const parent = clone
+      .getEntries()
+      .find(
+        (entry) =>
+          entry.type === "branch_summary" &&
+          clone.getLabel(entry.id) === "anchor:completed",
+      );
+    assert.ok(parent?.type === "branch_summary");
+    const archived = clone.getBranch(parent.fromId);
+    assert.ok(
+      archived.some(
+        (entry) => entry.type === "custom" && entry.customType === "tree-phase",
+      ),
+    );
+    assert.equal(
+      clone
+        .getBranch()
+        .filter(
+          (entry) =>
+            entry.type === "custom" && entry.customType === "tree-phase",
+        ).length,
+      2,
+    );
+    f.plan.groups[0].children[0].mode = "synthesized";
+    await writeFile(f.planPath, JSON.stringify(f.plan));
+    const synthesized = await previewRetrospectiveSession(f.planPath);
+    const other = await cloneRetrospectiveSession(
+      f.planPath,
+      synthesized.previewToken,
+    );
+    assert.doesNotMatch(
+      JSON.stringify(
+        SessionManager.open(other.path).buildSessionContext().messages,
+      ),
+      /CHILD_FACT/,
     );
   });
 
@@ -411,7 +485,11 @@ describe("retrospective clone", () => {
       .find((entry) => clone.getLabel(entry.id) === "branch:batch");
     assert.ok(archived);
     const branch = clone.getBranch(archived.id);
-    assert.deepEqual(clone.getEntry("call"), source.getEntry("call"));
+    const call = clone.getEntry("call");
+    const sourceCall = source.getEntry("call");
+    assert.ok(call?.type === "message" && sourceCall?.type === "message");
+    assert.deepEqual(call.message, sourceCall.message);
+    assert.equal(clone.getEntry(call.parentId ?? "")?.type, "custom");
     assert.deepEqual(clone.getEntry("result"), source.getEntry("result"));
     assert.ok(branch.some((entry) => entry.id === "call"));
     assert.ok(branch.some((entry) => entry.id === "result"));

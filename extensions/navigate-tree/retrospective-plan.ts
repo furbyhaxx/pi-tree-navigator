@@ -7,6 +7,7 @@ import {
   type SessionEntry,
   type SessionHeader,
 } from "@earendil-works/pi-coding-agent";
+import type { HandoffMode } from "./handoff.ts";
 import { extractTextContent, isValidName } from "./helpers.ts";
 
 /** A completed range, inclusive of both endpoints, optionally divided into subphases. */
@@ -15,6 +16,11 @@ export interface RetrospectiveGroup {
   readonly firstEntryId: string;
   readonly lastEntryId: string;
   readonly summary: string;
+  readonly title?: string;
+  readonly goal?: string;
+  readonly outcome?: string;
+  readonly state: "folded" | "open";
+  readonly mode?: HandoffMode;
   readonly children: readonly RetrospectiveGroup[];
 }
 
@@ -24,6 +30,7 @@ export interface RetrospectivePlan {
   readonly source: string;
   readonly sourceSha256: string;
   readonly nameSuffix: string;
+  readonly parentHandoffMode: HandoffMode;
   readonly groups: readonly RetrospectiveGroup[];
 }
 
@@ -72,13 +79,25 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
   const plan = object(value, "Plan");
   knownKeys(
     plan,
-    ["version", "source", "sourceSha256", "nameSuffix", "groups"],
+    [
+      "version",
+      "source",
+      "sourceSha256",
+      "nameSuffix",
+      "groups",
+      "parentHandoffMode",
+    ],
     "plan",
   );
   if (plan.version !== 1) throw new Error("Plan version must be 1");
   const hash = string(plan.sourceSha256, "sourceSha256");
   if (!/^[a-f0-9]{64}$/.test(hash))
     throw new Error("sourceSha256 must be a SHA-256 hex digest");
+  const mode = (value: unknown): HandoffMode => {
+    if (value !== "full" && value !== "synthesized")
+      throw new Error("Handoff mode must be full or synthesized");
+    return value;
+  };
   const names = new Set<string>();
   function groups(value: unknown, depth: number): RetrospectiveGroup[] {
     if (!Array.isArray(value))
@@ -88,7 +107,18 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
       const group = object(raw, "Group");
       knownKeys(
         group,
-        ["name", "firstEntryId", "lastEntryId", "summary", "children"],
+        [
+          "name",
+          "title",
+          "goal",
+          "outcome",
+          "state",
+          "mode",
+          "firstEntryId",
+          "lastEntryId",
+          "summary",
+          "children",
+        ],
         "group",
       );
       const name = string(group.name, "Group name");
@@ -98,12 +128,35 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
         );
       }
       names.add(name);
+      const state = group.state ?? "folded";
+      if (state !== "folded" && state !== "open")
+        throw new Error(`${name}.state must be folded or open`);
+      const optionalText = (key: string) =>
+        group[key] === undefined
+          ? undefined
+          : string(group[key], `${name}.${key}`);
+      const children = groups(group.children ?? [], depth + 1);
+      if (
+        state === "folded" &&
+        children.some((child) => child.state === "open")
+      )
+        throw new Error(
+          `${name}: an open child cannot be folded into its parent`,
+        );
       return {
         name,
         firstEntryId: string(group.firstEntryId, `${name}.firstEntryId`),
         lastEntryId: string(group.lastEntryId, `${name}.lastEntryId`),
-        summary: string(group.summary, `${name}.summary`).trim(),
-        children: groups(group.children ?? [], depth + 1),
+        summary:
+          state === "open" && group.summary === undefined
+            ? ""
+            : string(group.summary, `${name}.summary`).trim(),
+        title: optionalText("title"),
+        goal: optionalText("goal"),
+        outcome: optionalText("outcome"),
+        state,
+        mode: group.mode === undefined ? undefined : mode(group.mode),
+        children,
       };
     });
   }
@@ -122,6 +175,7 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
     source: string(plan.source, "source"),
     sourceSha256: hash,
     nameSuffix,
+    parentHandoffMode: mode(plan.parentHandoffMode ?? "full"),
     groups: parsedGroups,
   };
 }
