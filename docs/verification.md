@@ -87,6 +87,20 @@ Live proof means running the real flow against the real surface and capturing th
 
 Live-run hygiene: back up any global extension config you must modify (`~/.pi/agent/tree-navigator.json`, etc.) and restore/remove it afterwards; never leave test thresholds or credentials behind.
 
+### Retrospective clone verification
+
+For changes to `retrospective*.ts` or `/tree-clone`, run the focused clone tests
+and the normal offline gates. Exercise the CLI's inspect, preview, stale-token
+refusal and create paths on a disposable fixture. Reopen the result through Pi's
+`SessionManager` and verify the source bytes are unchanged, the clone has a new
+ID/suffixed name, nested summaries are browsable, and the retained tail is active.
+Check refusal of crossed tool batches, context edits and compaction references.
+
+Drive `/tree-clone` in an interactive session: inspect/preview dialogs, cancel
+without writing, create with confirmation, and `/tree` navigation in the result.
+No provider call is required: summary text is reviewed input. Use a disposable
+copy for live UI validation; do not resume a user's source for a test.
+
 ## 6. Closeout
 
 - [ ] CI green on the exact PR head SHA (all checks listed in §2).

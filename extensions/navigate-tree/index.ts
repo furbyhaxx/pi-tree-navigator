@@ -101,6 +101,7 @@ import {
   TOOL_NAME,
   toOneLine,
 } from "./helpers.ts";
+import { registerRetrospectiveCommand } from "./retrospective-command.ts";
 import {
   buildForcedRewindText,
   buildNoAnchorText,
@@ -1622,6 +1623,7 @@ function toolError(
 }
 
 export default function (pi: ExtensionAPI) {
+  registerRetrospectiveCommand(pi);
   patchAgentSessionPrototype();
 
   // Pending in-band rewinds (#80), keyed by session id: set by the rewind

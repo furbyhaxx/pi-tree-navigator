@@ -29,6 +29,21 @@ You can also install directly from the git source when testing unreleased branch
 pi install git:github.com/cad0p/pi-tree-navigator
 ```
 
+## Restructure an existing session
+
+This fork adds retrospective cloning: turn completed work in a linear session
+into nested summary branches without modifying the original. The clone gets a
+new ID and a ` (restructured)` name suffix, and both sessions remain resumable.
+
+Use `/tree-clone inspect <session.jsonl>`, prepare a nested range/summary plan,
+then `/tree-clone preview <plan.json>` and `/tree-clone create <plan.json>`.
+Creation requires confirmation and never switches sessions automatically.
+An offline CLI is also available; neither interface makes model calls.
+
+See [Retrospective session cloning](docs/retrospective-cloning.md) for the plan
+format, safety checks, CLI commands, and limitations. See
+[Code overview and invariants](docs/architecture.md) for implementation boundaries.
+
 ## Publishing
 
 This repo uses [`cad0p/semver-calver-release`](https://github.com/cad0p/semver-calver-release)'s npm-package workflow:
@@ -39,11 +54,11 @@ This repo uses [`cad0p/semver-calver-release`](https://github.com/cad0p/semver-c
 
 ### Requirements
 
-- **pi 0.87+** (node ≥22.19, which pi 0.87+ itself requires) with at least one model provider configured. The floor is set by `SessionManager.buildSessionProjection` (the context-edit-aware projection used both for the wire context and to number the summary's `{first}` branch start; added in 0.87.0).
+- **pi 1.3+** (Node ≥22.19). This fork raises the host floor for retrospective cloning's system/tool-state replay checks; live rewinds still require a configured model provider. Offline clone inspection, preview and creation do not.
 - Peer dependencies (the source of truth is `package.json` `peerDependencies`):
-  - `@earendil-works/pi-coding-agent >=0.87.0`
-  - `@earendil-works/pi-agent-core >=0.87.0`
-  - `@earendil-works/pi-ai >=0.87.0` (`isContextOverflow` / `isRecoverableLength`, the overflow checks rewind-driven compaction shares with pi)
+  - `@earendil-works/pi-coding-agent >=1.3.0`
+  - `@earendil-works/pi-agent-core >=1.3.0`
+  - `@earendil-works/pi-ai >=1.3.0` (`isContextOverflow` / `isRecoverableLength`, the overflow checks rewind-driven compaction shares with pi)
   - `typebox ^1.0.0` (used to declare the tool's parameter schema; bundled with pi but listed explicitly so a standalone install resolves correctly).
 - The reflection bootstrap depends on plain (not `#`-private) internal pi/agent fields: `AgentSession.prototype.prompt` (patched for session capture) and `agent.state.messages` (refreshed after a rewind so the next prompt snapshots the rewound chain). After a rewind the extension also emits `session_tree` through the captured session's plain `_extensionRunner` field (#79; see [History-mirroring providers](#history-mirroring-providers-pi-claude-bridge)). Per-turn in-loop context refresh runs through the **public** `context` extension event (see “In-loop context refresh” below) — no `agent.prepareNextTurn*` reflection. The rewind's same-run continuation relies on pi's `turn_end` boundary contract (handlers awaited before the steering drain, returned entries committed, `continue` honoured; public since 0.87). Verified against pi 1.3.0 via `scripts/pi-upstream-probe.mjs`.
 

@@ -218,6 +218,7 @@ function makeFakePi(sm: SessionManager): FakePi {
     registerTool(tool: CapturedTool) {
       registered.push(tool);
     },
+    registerCommand() {},
     setLabel(entryId: string, label: string | undefined) {
       setLabelCalls.push([entryId, label]);
       // Route the label through the SessionManager so reads via

@@ -28,7 +28,11 @@
     "!extensions/**/*.test.ts",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/retrospective-cloning.md",
+    "docs/architecture.md",
+    "scripts/restructure-session.mjs",
+    "docs/verification.md"
   ],
   "pi": {
     "extensions": [
@@ -51,10 +55,10 @@
     "typescript": "^5.8.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-agent-core": ">=0.87.0",
-    "@earendil-works/pi-ai": ">=0.87.0",
-    "@earendil-works/pi-coding-agent": ">=0.87.0",
-    "@earendil-works/pi-tui": ">=0.87.0",
+    "@earendil-works/pi-agent-core": ">=1.3.0",
+    "@earendil-works/pi-ai": ">=1.3.0",
+    "@earendil-works/pi-coding-agent": ">=1.3.0",
+    "@earendil-works/pi-tui": ">=1.3.0",
     "typebox": "^1.0.0"
   },
   "license": "MIT"

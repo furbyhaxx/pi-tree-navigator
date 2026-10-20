@@ -43,7 +43,7 @@ describe("package.json dependencies", () => {
       .filter(([name]) => name.startsWith("@earendil-works/"))
       .map(([, range]) => range);
     assert.ok(ranges.length > 0);
-    assert.deepEqual(new Set(ranges), new Set([">=0.87.0"]));
+    assert.deepEqual(new Set(ranges), new Set([">=1.3.0"]));
   });
 
   it("pi dev copies are pinned to one version (the one pi-coding-agent resolves to)", () => {
