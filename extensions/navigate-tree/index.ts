@@ -54,7 +54,6 @@ import {
 } from "@earendil-works/pi-ai";
 import {
   AgentSession,
-  buildSessionContext,
   buildSessionProjection,
   CONFIG_DIR_NAME,
   collectEntriesForBranchSummary,
@@ -94,6 +93,11 @@ import {
   materializeHandoff,
 } from "./handoff.ts";
 import {
+  installHandoffProjection,
+  projectHandoffs,
+} from "./handoff-projection.ts";
+import { registerHandoffRenderer } from "./handoff-renderer.ts";
+import {
   type AnchorTableRow,
   BRANCH_LABEL_PREFIX,
   extractTextContent,
@@ -108,6 +112,7 @@ import {
   TOOL_NAME,
   toOneLine,
 } from "./helpers.ts";
+import { registerHistoryOutline } from "./history-outline.ts";
 import { registerRetrospectiveCommand } from "./retrospective-command.ts";
 import {
   buildForcedRewindText,
@@ -674,7 +679,8 @@ function estimateAtEntry(
   byId: Map<string, SessionEntry>,
 ): number {
   return estimateContextTokens(
-    buildSessionContext(entries, entryId, byId).messages,
+    projectHandoffs(buildSessionProjection(entries, entryId, byId), entries)
+      .messages,
   );
 }
 
@@ -2283,6 +2289,7 @@ export default function (pi: ExtensionAPI) {
           .map((entry) => entry.id),
       );
       for (const child of children) {
+        sourceIds.add(child.id);
         const metadata = getHandoff(child);
         if (metadata) for (const id of metadata.sourceIds) sourceIds.add(id);
         else if (child.type === "branch_summary") {
@@ -3950,6 +3957,10 @@ Operations (set \`action\`):
       };
     },
   });
+  registerHandoffRenderer(pi);
+  registerHistoryOutline(pi);
+  const restoreProjection = installHandoffProjection();
+  pi.on("session_shutdown", restoreProjection);
 }
 
 /**

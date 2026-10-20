@@ -3091,6 +3091,43 @@ describe("rewind phase 2: completion", () => {
     );
   });
 
+  it("includes a native child summary’s own generation usage in parent recorded statistics", async () => {
+    const f = setup();
+    const anchor = appendTurn(f.sm, "root-user", "root-answer", 6000);
+    f.pi.pi.setLabel(anchor.assistantId, "anchor:start");
+    appendTurn(f.sm, "child-user", "child-answer", 12000);
+    const childId = f.sm.branchWithSummary(
+      anchor.assistantId,
+      "## Goal\nNative child",
+      {},
+      true,
+      {
+        input: 1,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 2,
+        cost: { input: 7, output: 0, cacheRead: 0, cacheWrite: 0, total: 7 },
+      },
+    );
+    f.pi.pi.setLabel(childId, "anchor:child");
+    appendTurn(f.sm, "parent-work", "parent-delivery", 24000);
+    __testHooks.captureSession(
+      makeFakeSession(f.sm) as unknown as AgentSession,
+    );
+    await requestRewind(f, { ...REWIND_ARGS, newLabel: "parent" });
+    await summaryTurn(f);
+    const done = rewindMessages(f.pi).at(-1);
+    assert.ok(done);
+    const entry = f.sm.getEntry(done.message.details.summaryId as string);
+    assert.ok(entry?.type === "branch_summary");
+    const details = entry.details as {
+      treeNavigator: { sourceIds: string[]; stats: { cost: number } };
+    };
+    assert.ok(details.treeNavigator.sourceIds.includes(childId));
+    assert.equal(details.treeNavigator.stats.cost, 7);
+  });
+
   it("immediate re-rewind of a just-landed summary is refused and leaves nothing pending", async () => {
     const f = await rewindFixture();
     const { result } = await requestRewind(
@@ -5940,11 +5977,12 @@ async function runSessionStart(
 ): Promise<void> {
   const handlers = pi.onCalls.get("session_start");
   assert.ok(handlers, "factory must register a session_start handler");
-  assert.equal(handlers.length, 1);
+  assert.equal(handlers.length, 3);
   const prevAgentDir = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = fixture.agentDir;
   try {
-    await handlers[0]({ type: "session_start", reason } as never, ctx as never);
+    for (const handler of handlers)
+      await handler({ type: "session_start", reason } as never, ctx as never);
   } finally {
     if (prevAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = prevAgentDir;

@@ -113,6 +113,22 @@ describe("buildSummaryInstruction", () => {
     assert.ok(text.endsWith(`\n\nAdditional focus: ${focus}`));
   });
 
+  it("allows relevance-focused parent synthesis to grow beyond the leaf report limit", () => {
+    const text = buildSummaryInstruction(1, "preserve later-work context", {
+      mode: "synthesized",
+      childCount: 3,
+    });
+    assert.match(text, /no fixed 4000-character cap/);
+    assert.match(text, /Synthesize the child reports/);
+    assert.match(text, /rejected or superseded approaches/);
+    assert.doesNotMatch(text, /Keep the complete summary under about 4000/);
+    const full = buildSummaryInstruction(1, "parent outcome only", {
+      mode: "full",
+      childCount: 3,
+    });
+    assert.match(full, /attached verbatim once each/);
+  });
+
   it("leaves a literal {first} inside the focus verbatim", () => {
     // Only the prompt's placeholder is substituted; the focus is the agent's
     // own text and must reach the summary turn unchanged.

@@ -175,7 +175,7 @@ export function materializeHandoff(
   const seen = new Set<string>();
   const reports = children
     .filter((child) => !seen.has(child.id) && Boolean(seen.add(child.id)))
-    .map((child) => child.summary);
+    .map((child) => stripHandoffPreamble(child.summary));
   return `${own}\n\n---\n\n## Child handoffs in chronological order\n\nThese are historical reports at each child's completion. The parent report above records the later outcome and superseding decisions.\n\n${reports.join("\n\n---\n\n")}`;
 }
 
