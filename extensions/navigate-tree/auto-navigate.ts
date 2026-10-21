@@ -1,12 +1,14 @@
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import type { AutoNavigateConfig } from "./auto-navigate-config.ts";
-import { isValidName, LABEL_PREFIX } from "./helpers.ts";
-
-const MIN_AUTO_SUMMARY_FOCUS_LENGTH = 60;
-
+import { BRANCH_LABEL_PREFIX, isValidName, LABEL_PREFIX } from "./helpers.ts";
 import type { ProposalModelRunner } from "./proposal-engine.ts";
 import { buildProposalRecords } from "./proposal-source.ts";
 import type { SessionSnapshot } from "./retrospective-plan.ts";
+
+const MIN_AUTO_SUMMARY_FOCUS_LENGTH = 60;
+// A token covers at least one byte, so a byte budget bounds tokens; the reserve covers provider framing.
+const REQUEST_RESERVE_BYTES = 2_048;
+const utf8Bytes = (text: string) => Buffer.byteLength(text, "utf8");
 
 /** Sidecar decision returned by the auto-navigation controller. */
 export type AutoNavigateDecision =
@@ -35,7 +37,9 @@ const CONTROLLER_SYSTEM_PROMPT = [
   '  {"action":"rewind","rewind_to":"<existing-anchor-name>","new_label":"<fresh-kebab-case-max-40-chars>","summary_focus":"<1. latest user instruction verbatim; 2. what is done; 3. what remains (>=60 chars)>"}',
   "Rules:",
   "- Do not rewind while a user question/decision is pending.",
-  "- Only use entry IDs from the provided segment and anchor names from the provided active_anchors list.",
+  "- Only use entry IDs present in segment_records; target_entry_id is required and must not belong to a record that already has a label.",
+  "- omitted_older_records counts older records withheld from segment_records; never claim knowledge of them.",
+  "- Rewind only to a name in active_anchors; each one has its complete anchor-to-leaf segment in segment_records.",
   "- Never reuse a name already in existing_labels.",
 ].join("\n");
 
@@ -142,52 +146,92 @@ export async function evaluateAutoNavigateTurn(options: {
     tokensSinceLastAnchor >= config.minTokensSinceAnchor;
   if (!shouldCheck) return { action: "none" };
 
-  const activeAnchors: string[] = [];
+  const activeAnchors: Array<{ name: string; index: number }> = [];
   const existingLabels = new Set<string>();
   let lastAnchorIndex = -1;
   for (let i = 0; i < branch.length; i++) {
     const lbl = getLabel(branch[i].id);
-    if (!lbl?.startsWith(LABEL_PREFIX)) continue;
+    if (lbl === undefined) continue;
+    existingLabels.add(
+      lbl.startsWith(LABEL_PREFIX)
+        ? lbl.slice(LABEL_PREFIX.length)
+        : lbl.startsWith(BRANCH_LABEL_PREFIX)
+          ? lbl.slice(BRANCH_LABEL_PREFIX.length)
+          : lbl,
+    );
+    if (!lbl.startsWith(LABEL_PREFIX)) continue;
     const name = lbl.slice(LABEL_PREFIX.length);
     if (!isValidName(name)) continue;
-    activeAnchors.push(name);
-    existingLabels.add(name);
+    activeAnchors.push({ name, index: i });
     lastAnchorIndex = i;
   }
 
-  const segment = branch.slice(Math.max(0, lastAnchorIndex));
+  const segmentStart = Math.max(0, lastAnchorIndex);
+  const segment = branch.slice(segmentStart);
   if (segment.length < 2) return { action: "none" };
-  const snapshot = syntheticSnapshot(segment);
-  const { records } = buildProposalRecords(snapshot, { tools: config.tools });
-  const leafId = branch.at(-1)?.id;
-  if (!leafId) return { action: "none" };
-
-  const maxInputBytes = Math.max(
-    2_048,
-    Math.floor(runner.contextWindow - runner.maxOutputTokens - 2_048),
-  );
-  const tailRecords: Array<{ id: string; text: string }> = [];
-  let usedBytes = 0;
-  for (let i = records.length - 1; i >= 0; i--) {
-    const item = records[i];
-    const itemBytes = Buffer.byteLength(item.text, "utf8") + 32;
-    if (usedBytes + itemBytes > maxInputBytes && tailRecords.length > 0) break;
-    tailRecords.unshift(item);
-    usedBytes += itemBytes;
-  }
-
-  const payload = JSON.stringify({
-    mode:
-      canRewind && activeAnchors.length > 0
-        ? "anchor-or-rewind"
-        : "anchor-only",
-    active_tokens: activeTokens,
-    rewind_at_tokens: config.rewindAtTokens,
-    active_anchors: activeAnchors,
-    existing_labels: [...existingLabels],
-    default_target_entry_id: leafId,
-    segment_records: tailRecords,
+  const { records } = buildProposalRecords(syntheticSnapshot(segment), {
+    tools: config.tools,
   });
+  const sendable = records.map((record, i) => {
+    const label = getLabel(segment[i].id);
+    return label === undefined ? record : { ...record, label };
+  });
+
+  const budget = Math.floor(
+    runner.contextWindow - runner.maxOutputTokens - REQUEST_RESERVE_BYTES,
+  );
+  if (!Number.isFinite(budget) || budget <= 0) return { action: "none" };
+  const candidates = activeAnchors.filter((a) => a.index >= segmentStart);
+  const serialize = (
+    exposedAnchors: readonly string[],
+    omittedOlder: number,
+    included: readonly object[],
+  ) =>
+    JSON.stringify({
+      mode:
+        canRewind && exposedAnchors.length > 0
+          ? "anchor-or-rewind"
+          : "anchor-only",
+      active_tokens: activeTokens,
+      rewind_at_tokens: config.rewindAtTokens,
+      active_anchors: exposedAnchors,
+      existing_labels: [...existingLabels],
+      omitted_older_records: omittedOlder,
+      segment_records: included,
+    });
+
+  // Largest possible framing: every candidate anchor exposed, widest omitted count.
+  const framingBytes =
+    utf8Bytes(CONTROLLER_SYSTEM_PROMPT) +
+    utf8Bytes(
+      serialize(
+        candidates.map((a) => a.name),
+        sendable.length,
+        [],
+      ),
+    );
+  let remaining = budget - framingBytes;
+  let firstIncluded = sendable.length;
+  for (let i = sendable.length - 1; i >= 0; i--) {
+    const recordBytes = utf8Bytes(JSON.stringify(sendable[i])) + 1;
+    if (recordBytes > remaining) break;
+    remaining -= recordBytes;
+    firstIncluded = i;
+  }
+  if (firstIncluded === sendable.length) return { action: "none" };
+
+  const exposedAnchors = candidates
+    .filter((a) => a.index - segmentStart >= firstIncluded)
+    .map((a) => a.name);
+  const payload = serialize(
+    exposedAnchors,
+    firstIncluded,
+    sendable.slice(firstIncluded),
+  );
+  if (utf8Bytes(CONTROLLER_SYSTEM_PROMPT) + utf8Bytes(payload) > budget) {
+    return { action: "none" };
+  }
+  const sentIds = new Set(sendable.slice(firstIncluded).map((r) => r.id));
 
   try {
     const reply = await runner.complete({
@@ -199,18 +243,21 @@ export async function evaluateAutoNavigateTurn(options: {
     if (!parsed) return { action: "none" };
     if (parsed.action === "anchor") {
       const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
-      if (!isValidName(name) || existingLabels.has(name)) {
-        return { action: "none" };
-      }
-      const requestedId =
+      const targetEntryId =
         typeof parsed.target_entry_id === "string"
           ? parsed.target_entry_id.trim()
-          : leafId;
-      const validIds = new Set(segment.map((e) => e.id));
-      const targetEntryId = validIds.has(requestedId) ? requestedId : leafId;
+          : "";
+      if (
+        !isValidName(name) ||
+        existingLabels.has(name) ||
+        !sentIds.has(targetEntryId) ||
+        getLabel(targetEntryId) !== undefined
+      ) {
+        return { action: "none" };
+      }
       return { action: "anchor", name, targetEntryId };
     }
-    if (parsed.action === "rewind" && canRewind && activeAnchors.length > 0) {
+    if (parsed.action === "rewind" && canRewind && exposedAnchors.length > 0) {
       const rewindTo =
         typeof parsed.rewind_to === "string" ? parsed.rewind_to.trim() : "";
       const newLabel =
@@ -220,7 +267,7 @@ export async function evaluateAutoNavigateTurn(options: {
           ? parsed.summary_focus.trim()
           : "";
       if (
-        !activeAnchors.includes(rewindTo) ||
+        !exposedAnchors.includes(rewindTo) ||
         !isValidName(newLabel) ||
         existingLabels.has(newLabel) ||
         summaryFocus.length < MIN_AUTO_SUMMARY_FOCUS_LENGTH
