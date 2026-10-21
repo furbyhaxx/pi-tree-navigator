@@ -6,7 +6,7 @@ import { buildProposalRecords } from "./proposal-source.ts";
 import type { SessionSnapshot } from "./retrospective-plan.ts";
 
 const MIN_AUTO_SUMMARY_FOCUS_LENGTH = 60;
-// A token covers at least one byte, so a byte budget bounds tokens; the reserve covers provider framing.
+// UTF-8 bytes conservatively estimate text tokens; reserve additional provider framing.
 const REQUEST_RESERVE_BYTES = 2_048;
 const utf8Bytes = (text: string) => Buffer.byteLength(text, "utf8");
 
@@ -112,8 +112,8 @@ function extractJsonObject(raw: string): Record<string, unknown> | null {
 }
 
 /**
- * Evaluate the active branch tail since the newest anchor using the configured
- * sidecar model and disclosure rules. Invalid or unsafe model output resolves
+ * Evaluate a bounded active-branch tail using the configured sidecar and disclosure rules.
+ * Rewind checks consider older anchors only when their complete evidence fits. Invalid or unsafe model output resolves
  * to `{ action: "none" }`.
  */
 export async function evaluateAutoNavigateTurn(options: {
@@ -166,7 +166,10 @@ export async function evaluateAutoNavigateTurn(options: {
     lastAnchorIndex = i;
   }
 
-  const segmentStart = Math.max(0, lastAnchorIndex);
+  const segmentStart =
+    canRewind && activeAnchors.length > 0
+      ? activeAnchors[0].index
+      : Math.max(0, lastAnchorIndex);
   const segment = branch.slice(segmentStart);
   if (segment.length < 2) return { action: "none" };
   const { records } = buildProposalRecords(syntheticSnapshot(segment), {

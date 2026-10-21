@@ -9,6 +9,8 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `helpers.ts`: label conventions, validation and formatting.
 - `config.ts`: layered global/trusted-project configuration.
 - `context-tokens.ts`, `rewind-hint.ts`: context estimates and rewind hints.
+- `output-budget.ts`: conservative wire-level output caps for overflow recovery;
+  request metadata is scoped to the session/model/run, never persisted.
 - `summary-prompt.ts`: summary instructions, stored-summary preamble and file lists.
 - `retrospective-plan.ts`: strict graph snapshots, branch-local tool accounting,
   inspection and nested-plan parsing.

@@ -173,6 +173,21 @@ Different models need different budgets: a model that writes long summaries or g
 
 When `auto_navigate.enabled` is true for the active model, a sidecar controller (`controller_model`, defaulting to `treeProposal.model` or the active model) inspects completed turns since the newest anchor and either sets an `anchor:<name>` milestone or steers an immediate `rewind` once active context reaches `rewind_at_tokens`.
 
+Crossing that threshold triggers one check, rather than a check on every turn
+above it. Later checks require `check_every_turns` completed turns or
+`min_tokens_since_anchor` fresh estimated tokens since the last check (or newest
+anchor). An ignored rewind steer is not repeated until enough fresh work arrives
+or the newest anchor changes. Steers must meet the same 4,000-token apparent
+savings floor as the tool itself. Results are discarded if the branch, active
+model, session state or cancellation signal changes while the controller runs.
+
+Controller requests use a conservative UTF-8 byte budget including JSON framing
+and the system prompt. If the newest record cannot fit, no request is sent.
+Omitted older records are disclosed; only transmitted, unlabeled entries may
+become anchors. Rewind checks consider older anchors too, but offer a target
+only when its full anchor-to-leaf evidence fits the request.
+Existing labels are never replaced by controller decisions.
+
 It is keyed like pi's `compaction.modelOverrides`, but each entry takes `rewindHintReserveTokens` (not pi's `reserveTokens`) with this extension's value rules, including the disable sentinels pi does not accept:
 
 ```json
@@ -199,10 +214,29 @@ Independent of the hint, the tool ships two static `promptGuidelines` bullets, p
 
 It acts only on a real overflow, detected with pi's own checks (`isContextOverflow` / `isRecoverableLength` from `@earendil-works/pi-ai`): the provider's context-length error, a silent overflow (input over the window), or a reply cut short because the context left no room for output. Only a reply from the active model counts, as in pi. There is no prediction and no capping of tool output.
 
-On an overflow, in the same run:
+Before forcing a rewind, an explicit provider error that reports both input and
+reserved output is checked for an output-reservation failure. If the input fits,
+the extension retries once with a smaller output cap instead of discarding tool
+results or requiring an anchor. The cap is at most 32,768 tokens and leaves 4,096
+tokens of headroom beyond the reported input, with at least 1,024 tokens
+available for recovery output. It stays active for that session
+and model until the run settles; another model does not inherit it. A repeated
+output-only rejection ends recovery rather than looping.
+
+This path requires an observed, safely editable request from the OpenAI Chat
+Completions, Responses, or Azure Responses adapter, with an explicit numeric
+`max_tokens`, `max_completion_tokens`, or `max_output_tokens`. Explicit numeric
+thinking budgets and custom chat-template budgets are left unchanged; those
+requests and other adapters use the existing rewind recovery path. Supported
+forced-rewind and summary requests also lower oversized output reservations.
+Recovery uses at least 1,024 output tokens; its input target reserves that budget
+plus headroom even when the configured compaction reserve is smaller. No normal request is
+capped before recovery or a pending summary.
+
+For an actual input overflow, in the same run:
 
 1. The failed reply is hidden from the model (a provider error, or a cut-off reply and its failed tool calls; a silent overflow's complete reply stays).
-2. The newest tool results of the batch that caused it are replaced, one by one, until the estimate fits `contextWindow − compaction.reserveTokens` (pi's reserve for the active model, `compaction.modelOverrides` included). When the failed reply carries usage (a cut-off reply or a silent overflow), the estimate's tail is scaled by the provider's real count: ratio = (real input + cache read + cache write − newest usage) ÷ (estimated tail), never below 1. Each one reads: `[navigate_tree] Output withheld: adding it overflowed the context window (~19k tokens). The call ran; only its output was dropped. Rewind first, then re-run it if you still need the output.` User messages and other extensions' messages are never withheld.
+2. The newest tool results of the batch that caused it are replaced, one by one, until the estimate fits `contextWindow − compaction.reserveTokens` (pi's reserve for the active model, `compaction.modelOverrides` included). When the failed reply carries usage (a cut-off reply or a silent overflow), the estimate's tail is scaled by the provider's real count: ratio = (real input + cache read + cache write − newest usage) ÷ (estimated tail), never below 1. Each one reads: `[navigate_tree] Output withheld: adding it overflowed the context window (~19k tokens). The call ran; only its output was dropped. Rewind first, then re-run it if you still need the output.` User messages and other extensions' messages are never withheld. Results smaller than their replacement notice are kept. If withholding cannot meet the recovery target, recovery stops without applying partial withholding or issuing another oversized request.
 3. The model gets the forced-rewind message:
 
 ```text

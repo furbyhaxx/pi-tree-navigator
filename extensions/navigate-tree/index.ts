@@ -120,6 +120,7 @@ import {
   toOneLine,
 } from "./helpers.ts";
 import { registerHistoryOutline } from "./history-outline.ts";
+import { capRecoveryOutput } from "./output-budget.ts";
 import {
   createProposalModelRunner,
   resolveProposalModel,
@@ -209,6 +210,9 @@ export const MIN_SUMMARY_FOCUS_LENGTH = 20;
 // rewind burns a summary turn, forks a junk branch_summary, consumes
 // a milestone label, and GROWS live context.
 export const MIN_REWIND_SAVINGS_TOKENS = 4000;
+const RECOVERY_MAX_OUTPUT_TOKENS = 32_768;
+const RECOVERY_MIN_OUTPUT_TOKENS = 1_024;
+const RECOVERY_HEADROOM_TOKENS = 4_096;
 // Summary attempts a pending rewind gets in total (#80, #90 S5). An attempt
 // fails when it calls a tool (blocked while the rewind is pending), carries
 // no `## Goal` summary, or is cut off; a failed attempt is hidden from the
@@ -886,6 +890,7 @@ function rewindMessageDraft(
 
 /** The model fields rewind-driven compaction reads (#101). */
 interface OverflowModel {
+  api?: string;
   provider: string;
   id: string;
   contextWindow?: number;
@@ -1077,6 +1082,9 @@ function planWithhold(
   const split = splitContextEstimate(messages);
   let baseline = split.baseline;
   let tail = split.tail;
+  if (tail <= 0 && realTokens !== undefined && realTokens > baseline) {
+    baseline = realTokens;
+  }
   const ratio =
     realTokens === undefined || tail <= 0
       ? 1
@@ -1107,6 +1115,7 @@ function planWithhold(
     const text = buildWithheldNoticeText(original);
     const content = [{ type: "text" as const, text }];
     const saving = original - estimateTokens({ ...entry.message, content });
+    if (saving <= 0) continue;
     // A result before the newest usage is already in its real count, so its
     // saving comes off the baseline, as the unscaled estimate (it under-credits
     // a dense result, which only withholds more). It must not go on the tail:
@@ -1811,6 +1820,71 @@ export default function (pi: ExtensionAPI) {
     string,
     { attempts: number; ended?: boolean }
   >();
+  const outputBudgets = new Map<
+    string,
+    Map<string, { canClamp: boolean; cap?: number; retried?: boolean }>
+  >();
+
+  pi.on("before_provider_request", (event, ctx) => {
+    let sm: SessionManager;
+    let model: typeof ctx.model;
+    let sessionId: string;
+    try {
+      sm = ctx.sessionManager as SessionManager;
+      sessionId = sm.getSessionId();
+      model = ctx.model;
+    } catch {
+      return;
+    }
+    if (!model) return;
+    const prior = outputBudgets
+      .get(sessionId)
+      ?.get(`${model.provider}/${model.id}`);
+    if (prior) prior.canClamp = false;
+    const payload = event.payload;
+    if (
+      payload &&
+      typeof payload === "object" &&
+      "model" in payload &&
+      payload.model !== model.id
+    )
+      return;
+    const at = rewindCompactionTarget(sm, sessionId, model);
+    if (!at) return;
+    if (
+      model.api !== "openai-completions" &&
+      model.api !== "openai-responses" &&
+      model.api !== "azure-openai-responses"
+    )
+      return;
+    if (
+      model.compat &&
+      "thinkingTokenBudgetField" in model.compat &&
+      model.compat.thinkingTokenBudgetField
+    )
+      return;
+    let budgets = outputBudgets.get(sessionId);
+    if (!budgets) {
+      budgets = new Map();
+      outputBudgets.set(sessionId, budgets);
+    }
+    const state = budgets.get(at.modelKey) ?? { canClamp: false };
+    state.canClamp = capRecoveryOutput(event.payload, 16) !== undefined;
+    budgets.set(at.modelKey, state);
+    const recoveryCap = Math.max(
+      RECOVERY_MIN_OUTPUT_TOKENS,
+      Math.min(
+        RECOVERY_MAX_OUTPUT_TOKENS,
+        at.contextWindow - at.target - RECOVERY_HEADROOM_TOKENS,
+      ),
+    );
+    const cap =
+      state.cap ??
+      (forcedActive(sessionId) || livePending(sm, sessionId)
+        ? recoveryCap
+        : undefined);
+    if (cap !== undefined) return capRecoveryOutput(event.payload, cap);
+  });
 
   // Where pi's settings are read from (#101, S4): the session's cwd, agent
   // dir and project trust, set at `session_start`. `null` = cannot tell.
@@ -1864,7 +1938,7 @@ export default function (pi: ExtensionAPI) {
     sm: SessionManager,
     sessionId: string,
     model: OverflowModel | undefined,
-  ): { contextWindow: number; target: number } | null {
+  ): { contextWindow: number; target: number; modelKey: string } | null {
     if (!model || !(model.contextWindow && model.contextWindow > 0)) {
       return null;
     }
@@ -1884,6 +1958,7 @@ export default function (pi: ExtensionAPI) {
     return {
       contextWindow: model.contextWindow,
       target: model.contextWindow - pc.reserveTokens,
+      modelKey: `${model.provider}/${model.id}`,
     };
   }
 
@@ -1930,14 +2005,81 @@ export default function (pi: ExtensionAPI) {
   function startRewindCompaction(
     sm: SessionManager,
     sessionId: string,
-    at: { contextWindow: number; target: number },
+    at: { contextWindow: number; target: number; modelKey: string },
     failedEntryId: string,
     failedIds: readonly string[],
   ): { drafts: SessionBoundaryDraft[]; continue: boolean } | null {
     const record = forcedRewinds.get(sessionId);
     // A final error already ended it in this run: pi ends the run.
     if (record?.ended) return null;
+    const realTokens = overflowRequestTokens(sm, failedEntryId);
+    const budget = outputBudgets.get(sessionId)?.get(at.modelKey);
+    const entry = sm.getEntry(failedEntryId);
+    const parsed =
+      entry?.type === "message" &&
+      entry.message.role === "assistant" &&
+      entry.message.stopReason === "error"
+        ? parseErrorOverflowTokens(entry.message.errorMessage)
+        : {};
     const pending = livePending(sm, sessionId);
+    if (
+      !record &&
+      budget?.canClamp &&
+      parsed.promptTokens !== undefined &&
+      parsed.outputReservedTokens !== undefined &&
+      parsed.promptTokens <= at.target &&
+      parsed.promptTokens + parsed.outputReservedTokens > at.contextWindow
+    ) {
+      const cap = Math.min(
+        RECOVERY_MAX_OUTPUT_TOKENS,
+        at.contextWindow - parsed.promptTokens - RECOVERY_HEADROOM_TOKENS,
+      );
+      if (
+        !budget.retried &&
+        cap >= RECOVERY_MIN_OUTPUT_TOKENS &&
+        cap < parsed.outputReservedTokens
+      ) {
+        budget.cap = cap;
+        budget.retried = true;
+        if (pending) pending.hiddenEntryIds.push(...failedIds);
+        return { drafts: hideDrafts(failedIds), continue: true };
+      }
+      if (budget.retried) {
+        return {
+          drafts: [
+            ...(pending
+              ? endAtBoundary(
+                  sm,
+                  sessionId,
+                  pending,
+                  "failed",
+                  COMPACTION_FAILED_OVERFLOWED_AGAIN,
+                  failedIds,
+                )
+              : hideDrafts(failedIds)),
+            ...compactionFailed(sessionId, COMPACTION_FAILED_OVERFLOWED_AGAIN),
+          ],
+          continue: false,
+        };
+      }
+    }
+    if (budget?.canClamp) {
+      budget.cap = Math.max(
+        RECOVERY_MIN_OUTPUT_TOKENS,
+        Math.min(
+          budget.cap ?? RECOVERY_MAX_OUTPUT_TOKENS,
+          at.contextWindow - at.target - RECOVERY_HEADROOM_TOKENS,
+        ),
+      );
+    }
+    const effTarget = budget?.canClamp
+      ? Math.min(
+          at.target,
+          at.contextWindow -
+            RECOVERY_MIN_OUTPUT_TOKENS -
+            RECOVERY_HEADROOM_TOKENS,
+        )
+      : effectiveOverflowTarget(sm, failedEntryId, at.target, at.contextWindow);
     // S6: one recovery per overflow.
     if (record) {
       const ending = pending
@@ -1971,9 +2113,9 @@ export default function (pi: ExtensionAPI) {
         sm,
         pending.rewindEntryId,
         failedIds,
-        effectiveOverflowTarget(sm, failedEntryId, at.target, at.contextWindow),
+        effTarget,
         instructionEntryId,
-        overflowRequestTokens(sm, failedEntryId),
+        realTokens,
       );
       // D11 runs before #93's classification: a squeezed summary is
       // handled here, even with nothing to withhold.
@@ -2020,10 +2162,19 @@ export default function (pi: ExtensionAPI) {
       sm,
       failedEntryId,
       failedIds,
-      effectiveOverflowTarget(sm, failedEntryId, at.target, at.contextWindow),
+      effTarget,
       undefined,
-      overflowRequestTokens(sm, failedEntryId),
+      realTokens,
     );
+    if (!plan.fits) {
+      return {
+        drafts: [
+          ...hideDrafts(failedIds),
+          ...compactionFailed(sessionId, COMPACTION_FAILED_STILL_OVER),
+        ],
+        continue: false,
+      };
+    }
     forcedRewinds.set(sessionId, { attempts: 0 });
     hintTracker.markSpent();
     return {
@@ -3085,6 +3236,7 @@ export default function (pi: ExtensionAPI) {
     }
     const record = forcedRewinds.get(sessionId);
     forcedRewinds.delete(sessionId);
+    outputBudgets.delete(sessionId);
     if (!record || record.ended) return;
     const reason = aborted
       ? COMPACTION_FAILED_ABORTED
@@ -3113,9 +3265,10 @@ export default function (pi: ExtensionAPI) {
   pi.on("session_shutdown", (_event, ctx) => {
     clearNestedCalls();
     try {
-      forcedRewinds.delete(
-        (ctx.sessionManager as SessionManager).getSessionId(),
-      );
+      const sessionId = ctx.sessionManager.getSessionId();
+      forcedRewinds.delete(sessionId);
+      outputBudgets.delete(sessionId);
+      autoNavigateStateBySession.delete(sessionId);
     } catch {
       // Fail-open: session_start clears it too.
     }
@@ -3217,10 +3370,15 @@ export default function (pi: ExtensionAPI) {
   let autoNavigateByModel: ReadonlyMap<string, AutoNavigatePartial | null> =
     new Map();
   let proposalConfig: ProposalOptions | undefined;
-  const autoNavigateStateBySession = new Map<
-    string,
-    { turnsSinceCheck: number; lastAnchorEntryId?: string }
-  >();
+  interface AutoNavigateState {
+    modelKey: string;
+    turnsSinceCheck: number;
+    lastAnchorEntryId?: string;
+    lastCheckTokens?: number;
+    lastSteerTokens?: number;
+    aboveRewindThreshold?: boolean;
+  }
+  const autoNavigateStateBySession = new Map<string, AutoNavigateState>();
   let hintTracker = new RewindHintTracker();
 
   // Auto start-anchor closure state (#55). All of it is keyed by session id
@@ -3330,6 +3488,7 @@ export default function (pi: ExtensionAPI) {
     settleCommittingEnding(sm, sessionId);
     pendingRewinds.delete(sessionId);
     forcedRewinds.delete(sessionId);
+    outputBudgets.delete(sessionId);
     // O8 (#90): a rewind that died mid-flight (restart, crash) left its
     // instruction in context with nothing waiting for it — end it.
     resolveOrphanRewinds(sm);
@@ -3416,6 +3575,7 @@ export default function (pi: ExtensionAPI) {
       const overrides = settings.getSettings().compaction?.modelOverrides;
       for (const key of Object.keys(overrides ?? {})) keys.add(key);
       for (const key of keys) {
+        if (key.includes("*")) continue;
         const slash = key.indexOf("/");
         if (slash <= 0) continue;
         // Per key: one model's invalid setting does not skip the others.
@@ -3498,6 +3658,7 @@ export default function (pi: ExtensionAPI) {
     // session's auto-anchor gate.
     try {
       const sessionId = ctx.sessionManager.getSessionId();
+      outputBudgets.delete(sessionId);
       toolActiveBySession.set(sessionId, toolActive);
       // A new prompt is not a retry (pi retries via `agent.continue()`,
       // which skips this event): a rewind still waiting is aborted (#90, O6).
@@ -3778,10 +3939,17 @@ export default function (pi: ExtensionAPI) {
       (message.content as Array<{ type?: string; name?: string }>).some(
         (b) => b?.type === "toolCall" && b.name === TOOL_NAME,
       );
-    const state = autoNavigateStateBySession.get(sessionId) ?? {
-      turnsSinceCheck: 0,
-    };
+    const previousState = autoNavigateStateBySession.get(sessionId);
+    const state: AutoNavigateState =
+      previousState?.modelKey === modelKey
+        ? previousState
+        : { modelKey, turnsSinceCheck: 0 };
     if (calledNavigateTree) {
+      try {
+        state.lastCheckTokens = estimateActiveBranchTokens(sm);
+      } catch {
+        return;
+      }
       state.turnsSinceCheck = 0;
       autoNavigateStateBySession.set(sessionId, state);
       return;
@@ -3813,16 +3981,35 @@ export default function (pi: ExtensionAPI) {
       ? effectiveTargetTokensOnBranch(branch, allEntries, newestAnchorId, byId)
       : 0;
     const tokensSinceLastAnchor = Math.max(0, activeTokens - anchorTokens);
+    if (state.lastAnchorEntryId !== newestAnchorId) {
+      state.lastAnchorEntryId = newestAnchorId;
+      state.lastCheckTokens =
+        activeTokens < (state.lastCheckTokens ?? 0)
+          ? anchorTokens
+          : Math.max(state.lastCheckTokens ?? 0, anchorTokens);
+      state.lastSteerTokens = undefined;
+    }
     const canRewind =
       autoConfig.mode === "anchor-and-rewind" &&
       activeTokens >= autoConfig.rewindAtTokens;
+    const crossedThreshold = canRewind && !state.aboveRewindThreshold;
+    state.aboveRewindThreshold = canRewind;
     if (
-      !canRewind &&
-      state.turnsSinceCheck < autoConfig.checkEveryTurns &&
-      tokensSinceLastAnchor < autoConfig.minTokensSinceAnchor
-    ) {
+      state.lastSteerTokens !== undefined &&
+      activeTokens >= state.lastSteerTokens &&
+      activeTokens - state.lastSteerTokens < autoConfig.minTokensSinceAnchor
+    )
       return;
-    }
+    const tokensSinceCheck = Math.max(
+      0,
+      activeTokens - (state.lastCheckTokens ?? anchorTokens),
+    );
+    if (
+      !crossedThreshold &&
+      state.turnsSinceCheck < autoConfig.checkEveryTurns &&
+      tokensSinceCheck < autoConfig.minTokensSinceAnchor
+    )
+      return;
 
     let runner: ReturnType<typeof createProposalModelRunner>;
     try {
@@ -3844,6 +4031,9 @@ export default function (pi: ExtensionAPI) {
     }
 
     state.turnsSinceCheck = 0;
+    state.lastCheckTokens = activeTokens;
+    const leafId = sm.getLeafId();
+    const signal = ctx.signal;
     const decision = await evaluateAutoNavigateTurn({
       config: autoConfig,
       runner,
@@ -3852,27 +4042,61 @@ export default function (pi: ExtensionAPI) {
       activeTokens,
       tokensSinceLastAnchor,
       turnsSinceLastCheck: autoConfig.checkEveryTurns,
-      signal: ctx.signal,
+      signal,
     });
-    if (decision.action === "anchor") {
-      writeLabel(sm, decision.targetEntryId, LABEL_PREFIX + decision.name);
-      state.lastAnchorEntryId = decision.targetEntryId;
+    try {
+      if (
+        signal?.aborted ||
+        sm.getLeafId() !== leafId ||
+        autoNavigateStateBySession.get(sessionId) !== state ||
+        `${ctx.model?.provider}/${ctx.model?.id}` !== modelKey ||
+        livePending(sm, sessionId) ||
+        forcedActive(sessionId) ||
+        (toolActiveBySession.get(sessionId) ?? toolActive) === false
+      )
+        return;
+      if (decision.action === "anchor") {
+        if (
+          sm.getLabel(decision.targetEntryId) !== undefined ||
+          findLabeledEntry(sm, LABEL_PREFIX + decision.name)
+        )
+          return;
+        if (
+          writeLabel(sm, decision.targetEntryId, LABEL_PREFIX + decision.name)
+        ) {
+          state.lastAnchorEntryId = decision.targetEntryId;
+          state.lastSteerTokens = undefined;
+        }
+        return;
+      }
+      if (decision.action === "rewind") {
+        const target = findLabeledEntry(sm, LABEL_PREFIX + decision.rewindTo);
+        if (!target || findLabeledEntry(sm, LABEL_PREFIX + decision.newLabel))
+          return;
+        const targetTokens = effectiveTargetTokensOnBranch(
+          branch,
+          allEntries,
+          target,
+          byId,
+        );
+        if (activeTokens - targetTokens < MIN_REWIND_SAVINGS_TOKENS) return;
+        state.lastSteerTokens = activeTokens;
+        const text = buildAutoNavigateRewindSteerText(decision);
+        return {
+          entries: keepValidDrafts(sm, [
+            ...(event.entries ?? []),
+            {
+              type: "custom_message",
+              customType: AUTO_NAVIGATE_REWIND_CUSTOM_TYPE,
+              content: text,
+              display: true,
+            },
+          ]),
+          continue: true,
+        };
+      }
+    } catch {
       return;
-    }
-    if (decision.action === "rewind") {
-      const text = buildAutoNavigateRewindSteerText(decision);
-      return {
-        entries: keepValidDrafts(sm, [
-          ...(event.entries ?? []),
-          {
-            type: "custom_message",
-            customType: AUTO_NAVIGATE_REWIND_CUSTOM_TYPE,
-            content: text,
-            display: true,
-          },
-        ]),
-        continue: true,
-      };
     }
   }
 

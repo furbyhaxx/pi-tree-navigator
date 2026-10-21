@@ -65,6 +65,14 @@ Notes:
 
 - Node ≥22.19 is required (pi 0.87+; native TS type-stripping for `node --test` on `.ts`). CI uses Node 24.
 - The suite is fully offline: the in-band summary turn is simulated by appending an assistant message and firing the `turn_end` handlers.
+- Output-reservation regressions also exercise the real OpenAI-compatible SDK
+  adapter with an injected local transport: an oversized reservation receives a
+  simulated 400, the payload hook lowers the retry cap, and the streamed retry
+  succeeds without withholding history. This proves request serialization and
+  bounded recovery, not real-provider tokenization, cache reuse or model quality.
+- Auto-navigation regressions cover complete serialized request budgets, evidence
+  omissions, existing labels, older rewind targets, cadence, ignored-steer
+  suppression, minimum savings and decisions invalidated by late input.
 - Scope discipline: a feature PR must not edit `CHANGELOG.md` or the `package.json` version (release policy); release PRs own them.
 
 ## 5. Live proof per change type

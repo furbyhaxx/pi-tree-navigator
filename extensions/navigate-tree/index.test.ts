@@ -32,6 +32,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { streamSimple } from "@earendil-works/pi-ai/api/openai-completions";
+import { normalizeContext } from "@earendil-works/pi-ai/utils/transcript";
 import {
   type AgentSession,
   CONFIG_DIR_NAME,
@@ -8225,14 +8227,15 @@ Active anchors (root → leaf, % of 100k):
       const { settle } = await runErrorEnd(f, err.message);
       assert.deepEqual(
         withheldTargets(settle.entries),
-        [r3, f.r2, f.r1],
-        "the walk does not stop at T2's assistant; T1's results are withheld after T2's",
+        [f.r2, f.r1],
+        "the walk skips T2's tiny result and continues to T1's larger results",
       );
       assert.ok(!withheldTargets(settle.entries).includes(nav));
+      assert.ok(!withheldTargets(settle.entries).includes(r3));
       const [d5] = forcedDrafts(settle);
       assert.deepEqual(d5.details, {
         status: "forced",
-        withheld: 3,
+        withheld: 2,
         contextWindow: WINDOW,
       });
     } finally {
@@ -8245,7 +8248,8 @@ Active anchors (root → leaf, % of 100k):
     try {
       const err = errorOverflow(f.sm);
       const { settle } = await runErrorEnd(f, err.message);
-      assert.deepEqual(withheldTargets(settle.entries), [r3, f.r2]);
+      assert.deepEqual(withheldTargets(settle.entries), [f.r2]);
+      assert.ok(!withheldTargets(settle.entries).includes(r3));
     } finally {
       cleanupConfigFixture(f.fixture);
     }
@@ -8273,6 +8277,24 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  it("keeps tiny results whose withholding notice would grow context", async () => {
+    const f = await forcedSetup();
+    try {
+      appendToolCallAssistant(
+        f.sm,
+        [{ id: "tiny", name: "read", arguments: { path: "small" } }],
+        84_000,
+      );
+      const tiny = appendToolResult(f.sm, "tiny", "read", "ok");
+      const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(settle.continue, true);
+      assert.deepEqual(withheldTargets(settle.entries), [f.r2]);
+      assert.ok(!withheldTargets(settle.entries).includes(tiny));
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("the walk stops at a compaction: nothing above it is withheld (#101)", async () => {
     const f = await forcedSetup({ issuerTokens: 60_000 });
     try {
@@ -8286,10 +8308,15 @@ Active anchors (root → leaf, % of 100k):
         [{ id: "t3", name: "read", arguments: { path: "c" } }],
         99_300,
       );
-      const r3 = appendToolResult(f.sm, "t3", "read", "ok");
+      appendToolResult(f.sm, "t3", "read", "ok");
       const err = errorOverflow(f.sm);
       const { settle } = await runErrorEnd(f, err.message);
-      assert.deepEqual(withheldTargets(settle.entries), [r3]);
+      assert.deepEqual(withheldTargets(settle.entries), []);
+      assert.equal(settle.continue, false);
+      assert.equal(
+        forcedDrafts(settle)[0].details.reason,
+        COMPACTION_FAILED_STILL_OVER,
+      );
     } finally {
       cleanupConfigFixture(f.fixture);
     }
@@ -8484,9 +8511,204 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
-  it("withholds tool results when an OpenRouter 400 reserves a huge output cap", async () => {
+  async function providerPayload(
+    f: Forced,
+    payload: unknown,
+  ): Promise<unknown> {
+    let current = payload;
+    for (const handler of f.pi.onCalls.get("before_provider_request") ?? []) {
+      current =
+        (await handler(
+          { type: "before_provider_request", payload: current } as never,
+          f.ctx as never,
+        )) ?? current;
+    }
+    return current;
+  }
+
+  it("retries the reported output-reservation failure without hiding history or requiring anchors", async () => {
+    const f = await forcedSetup({ anchor: false, issuerTokens: 15_000 });
+    try {
+      f.ctx.model = {
+        ...f.ctx.model,
+        api: "openai-completions",
+        provider: "openrouter",
+        id: "test-large-output",
+        contextWindow: 1_048_576,
+      };
+      const payload = {
+        model: "test-large-output",
+        max_tokens: 914_703,
+        messages: [],
+      };
+      assert.deepEqual(await providerPayload(f, payload), payload);
+      const message = {
+        ...assistantMessage([], "error", 0),
+        provider: "openrouter",
+        model: "test-large-output",
+        errorMessage:
+          '400: {"message":"This endpoint\'s maximum context length is 1048576 tokens. However, you requested about 1048815 tokens (113602 of text input, 20510 of tool input, 914703 in the output)."}',
+      };
+      const failedId = f.sm.appendMessage(message as never);
+      const { settle } = await runErrorEnd(f, message);
+      assert.equal(settle.continue, true);
+      assert.deepEqual(withheldTargets(settle.entries), []);
+      assert.ok(hiddenIds(f.sm).has(failedId));
+      assert.deepEqual(forcedDrafts(settle), []);
+      const retry = (await providerPayload(f, payload)) as typeof payload;
+      assert.ok(retry.max_tokens <= 32_768);
+      assert.ok(113_602 + 20_510 + retry.max_tokens < 1_048_576);
+      assert.equal(payload.max_tokens, 914_703);
+      const originalModel = f.ctx.model;
+      f.ctx.model = { ...originalModel, id: "other-model" };
+      assert.deepEqual(await providerPayload(f, payload), payload);
+      f.ctx.model = originalModel;
+      assert.deepEqual(await providerPayload(f, payload), retry);
+      assert.deepEqual(
+        await providerPayload(f, { ...payload, max_tokens: 1024 }),
+        { ...payload, max_tokens: 1024 },
+      );
+      f.sm.appendMessage(message as never);
+      const second = await runErrorEnd(f, message);
+      assert.equal(second.settle.continue, false);
+      for (const handler of f.pi.onCalls.get("agent_settled") ?? []) {
+        await handler({ type: "agent_settled" } as never, f.ctx as never);
+      }
+      assert.deepEqual(await providerPayload(f, payload), payload);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("keeps usable summary output with a small compaction reserve", async () => {
+    const f = await forcedSetup({
+      piSettings: { compaction: { enabled: false, reserveTokens: 2_000 } },
+    });
+    try {
+      assert.ok(f.ctx.model);
+      f.ctx.model = { ...f.ctx.model, api: "openai-responses" };
+      await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+      assert.deepEqual(
+        await providerPayload(f, { max_output_tokens: 64_000 }),
+        { max_output_tokens: 1_024 },
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("does not retry an output-only request that the payload hook cannot safely cap", async () => {
+    for (const payload of [
+      { messages: [] },
+      { max_tokens: 80_000, thinking: { budget_tokens: 40_000 } },
+    ]) {
+      const f = await forcedSetup({ anchor: false });
+      try {
+        assert.ok(f.ctx.model);
+        f.ctx.model = { ...f.ctx.model, api: "openai-completions" };
+        assert.deepEqual(await providerPayload(f, payload), payload);
+        const message = {
+          ...assistantMessage([], "error", 0),
+          errorMessage:
+            "requested about 119000 tokens (30000 of text input, 9000 of tool input, 80000 in the output); maximum context length is 100000 tokens",
+        };
+        f.sm.appendMessage(message as never);
+        const { settle } = await runErrorEnd(f, message);
+        assert.equal(settle.continue, false);
+        assert.equal(
+          forcedDrafts(settle)[0].details.reason,
+          COMPACTION_FAILED_NO_ANCHOR,
+        );
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    }
+  });
+
+  it("recovers through the real SDK adapter with an offline provider transport", async () => {
+    const f = await forcedSetup({ anchor: false });
+    try {
+      const model = {
+        api: "openai-completions" as const,
+        provider: "openrouter",
+        id: "offline-budget-test",
+        name: "Offline budget test",
+        baseUrl: "https://offline.invalid/v1",
+        reasoning: false,
+        input: ["text" as const],
+        contextWindow: 1_048_576,
+        maxTokens: 943_718,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        compat: { maxTokensField: "max_tokens" as const },
+      };
+      f.ctx.model = model;
+      const caps: number[] = [];
+      const request = () =>
+        streamSimple(
+          model,
+          normalizeContext({
+            messages: [
+              { role: "user", content: "Continue the task.", timestamp: 1 },
+            ],
+          }),
+          {
+            apiKey: "offline-test-only",
+            maxRetries: 0,
+            onPayload: (payload) => providerPayload(f, payload),
+            fetch: async (_input, init) => {
+              assert.equal(typeof init?.body, "string");
+              const body = JSON.parse(String(init?.body));
+              const cap = body.max_tokens;
+              assert.equal(typeof cap, "number");
+              caps.push(cap);
+              if (134_112 + cap > model.contextWindow) {
+                return new Response(
+                  JSON.stringify({
+                    error: {
+                      message: `This endpoint's maximum context length is 1048576 tokens. However, you requested about ${134_112 + cap} tokens (113602 of text input, 20510 of tool input, ${cap} in the output).`,
+                    },
+                  }),
+                  {
+                    status: 400,
+                    headers: { "content-type": "application/json" },
+                  },
+                );
+              }
+              return new Response(
+                [
+                  'data: {"id":"offline","choices":[{"index":0,"delta":{"role":"assistant","content":"Recovered"},"finish_reason":null}]}',
+                  'data: {"id":"offline","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}',
+                  "data: [DONE]",
+                  "",
+                ].join("\n\n"),
+                { headers: { "content-type": "text/event-stream" } },
+              );
+            },
+          },
+        ).result();
+      const failed = await request();
+      assert.equal(failed.stopReason, "error");
+      f.sm.appendMessage(failed);
+      const recovery = await runErrorEnd(f, failed);
+      assert.equal(recovery.settle.continue, true);
+      assert.deepEqual(withheldTargets(recovery.settle.entries), []);
+      const recovered = await request();
+      assert.equal(recovered.stopReason, "stop");
+      assert.deepEqual(caps, [943_718, 32_768]);
+      assert.deepEqual(recovered.content, [
+        { type: "text", text: "Recovered" },
+      ]);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("reduces an oversized output reservation before withholding tool results", async () => {
     const f = await forcedSetup({ issuerTokens: 15_000 });
     try {
+      assert.ok(f.ctx.model);
+      f.ctx.model = { ...f.ctx.model, api: "openai-completions" };
+      await providerPayload(f, { max_tokens: 80_000 });
       const message = {
         ...assistantMessage([], "error", 0),
         provider: "claude",
@@ -8496,11 +8718,197 @@ Active anchors (root → leaf, % of 100k):
       f.sm.appendMessage(message as never);
       const { settle } = await runErrorEnd(f, message);
       assert.equal(settle.continue, true);
-      assert.ok(withheldTargets(settle.entries).length > 0);
-      assert.match(
-        forcedDrafts(settle)[0].content,
-        /tool results? (?:was|were) withheld/,
+      assert.deepEqual(withheldTargets(settle.entries), []);
+      assert.deepEqual(forcedDrafts(settle), []);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  async function autoFixture(
+    reply: () => Promise<string>,
+    config: Record<string, unknown> = {},
+  ) {
+    const f = await forcedSetup({
+      config: {
+        auto_navigate: {
+          enabled: true,
+          controller_model: "test/controller",
+          check_every_turns: 3,
+          min_tokens_since_anchor: 100_000,
+          rewind_at_tokens: 80_000,
+          ...config,
+        },
+      },
+    });
+    Object.assign(f.ctx, {
+      modelRegistry: {
+        find: () => ({
+          provider: "test",
+          id: "controller",
+          name: "controller",
+          api: "openai-completions",
+          reasoning: false,
+          input: ["text"],
+          contextWindow: 128_000,
+          maxTokens: 4_000,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        }),
+        hasConfiguredAuth: () => true,
+        streamSimple: () => ({
+          result: async () =>
+            assistantMessage(
+              [{ type: "text", text: await reply() }],
+              "stop",
+              10,
+            ),
+        }),
+      },
+    });
+    return f;
+  }
+
+  async function autoTurn(f: Forced, tokens: number) {
+    const turn = appendTurn(f.sm, "continue", "working", tokens);
+    const entry = f.sm.getEntry(turn.assistantId);
+    assert.ok(entry?.type === "message");
+    return fireTurnEndAll(f.pi, f.ctx, entry.message);
+  }
+
+  it("auto_navigate checks once on threshold crossing, then respects cadence", async () => {
+    let calls = 0;
+    const f = await autoFixture(async () => {
+      calls++;
+      return '{"action":"none"}';
+    });
+    try {
+      await autoTurn(f, 90_000);
+      assert.equal(calls, 1);
+      await autoTurn(f, 91_000);
+      await autoTurn(f, 92_000);
+      assert.equal(calls, 1);
+      await autoTurn(f, 93_000);
+      assert.equal(calls, 2);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate does not recount old work after anchoring an earlier milestone", async () => {
+    let calls = 0;
+    let target = "";
+    const f = await autoFixture(
+      async () => {
+        calls++;
+        return JSON.stringify({
+          action: "anchor",
+          name: "earlier-milestone",
+          target_entry_id: target,
+        });
+      },
+      { min_tokens_since_anchor: 10_000, rewind_at_tokens: 500_000 },
+    );
+    try {
+      target = appendTurn(f.sm, "earlier", "ready", 20_000).assistantId;
+      await autoTurn(f, 90_000);
+      assert.equal(calls, 1);
+      assert.equal(f.sm.getLabel(target), "anchor:earlier-milestone");
+      await autoTurn(f, 91_000);
+      assert.equal(calls, 1);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate does not repeat an ignored rewind steer without fresh work", async () => {
+    let calls = 0;
+    const f = await autoFixture(
+      async () => {
+        calls++;
+        return JSON.stringify({
+          action: "rewind",
+          rewind_to: "start",
+          new_label: "folded-work",
+          summary_focus:
+            "The user asked to continue. Work is complete and verified; preserve its facts and proceed with the remaining task.",
+        });
+      },
+      { check_every_turns: 1 },
+    );
+    try {
+      const first = await autoTurn(f, 90_000);
+      assert.equal(
+        first.entries.filter(
+          (e) => e.customType === "navigate-tree-auto-rewind",
+        ).length,
+        1,
       );
+      await autoTurn(f, 91_000);
+      await autoTurn(f, 92_000);
+      assert.equal(calls, 1);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate rejects rewind steers below the tool savings floor", async () => {
+    const f = await autoFixture(
+      async () =>
+        JSON.stringify({
+          action: "rewind",
+          rewind_to: "recent",
+          new_label: "tiny-fold",
+          summary_focus:
+            "The user asked to continue. Work is complete and verified; preserve its facts and proceed with the remaining task.",
+        }),
+      { check_every_turns: 1 },
+    );
+    try {
+      const anchor = appendTurn(f.sm, "recent work", "ready", 90_000);
+      f.pi.pi.setLabel(anchor.assistantId, "anchor:recent");
+      const turn = await autoTurn(f, 92_000);
+      assert.deepEqual(
+        turn.entries.filter(
+          (e) => e.customType === "navigate-tree-auto-rewind",
+        ),
+        [],
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate discards a decision after new input arrives during its request", async () => {
+    let release: (text: string) => void = () => {};
+    let started: () => void = () => {};
+    const ready = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const reply = new Promise<string>((resolve) => {
+      release = resolve;
+    });
+    const f = await autoFixture(() => {
+      started();
+      return reply;
+    });
+    try {
+      const pending = autoTurn(f, 90_000);
+      await ready;
+      const oldLeaf = f.sm.getLeafId();
+      f.sm.appendMessage({
+        role: "user",
+        content: "Stop; the requirements changed.",
+        timestamp: 1,
+      });
+      release(
+        JSON.stringify({
+          action: "anchor",
+          name: "obsolete",
+          target_entry_id: oldLeaf,
+        }),
+      );
+      await pending;
+      assert.equal(f.sm.getLabel(oldLeaf as string), undefined);
     } finally {
       cleanupConfigFixture(f.fixture);
     }
@@ -8768,8 +9176,9 @@ Active anchors (root → leaf, % of 100k):
         undefined,
         "no start anchor at the limit",
       );
-      // Settled: the next run gets a fresh forced rewind.
+      // Settled: a fresh run with enough room can start recovery again.
       await fireAgentSettled(f.pi, f.ctx);
+      appendTurn(f.sm, "resume after reducing context", "working", 60_000);
       const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
       assert.equal(settle.continue, true);
       assert.equal(forcedDrafts(settle)[0].details.status, "forced");
@@ -9427,6 +9836,45 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  it("uses the provider input count when the estimated tail is empty", async () => {
+    const f = await forcedSetup({ issuerTokens: 20_000 });
+    try {
+      f.sm.appendContextEdit(f.r1, null);
+      f.sm.appendContextEdit(f.r2, null);
+      const message = {
+        ...assistantMessage([], "error", 0),
+        errorMessage:
+          "maximum context length is 100000 tokens; requested about 143000 tokens (130000 of text input, 5000 of tool input, 8000 in the output)",
+      };
+      f.sm.appendMessage(message as never);
+      const { settle } = await runErrorEnd(f, message);
+      assert.equal(settle.continue, false);
+      assert.equal(
+        forcedDrafts(settle)[0].details.reason,
+        COMPACTION_FAILED_STILL_OVER,
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("stops before a forced request when withholding cannot make the input fit", async () => {
+    const f = await forcedSetup({ issuerTokens: 200_000 });
+    try {
+      f.sm.appendContextEdit(f.r1, null);
+      f.sm.appendContextEdit(f.r2, null);
+      const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(settle.continue, false);
+      assert.equal(
+        forcedDrafts(settle)[0].details.reason,
+        COMPACTION_FAILED_STILL_OVER,
+      );
+      assert.equal(fireToolCall(f.pi, f.ctx), undefined);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("D11: nothing to withhold on a squeezed summary — still over: D8, no #93 re-send (the D11 check runs first)", async () => {
     const f = await forcedSetup();
     try {
@@ -9577,6 +10025,24 @@ Active anchors (root → leaf, % of 100k):
       } finally {
         cleanupConfigFixture(f.fixture);
       }
+    }
+  });
+
+  it("warns for the concrete active model rather than treating wildcard patterns as models", async () => {
+    const f = await forcedSetup({
+      config: {
+        model_overrides: { "claude/*": { rewind_hint_reserve_tokens: 10_000 } },
+      },
+    });
+    try {
+      assert.deepEqual(f.ctx.notifyCalls, [
+        [
+          buildReserveOrderWarning(10_000, 16_384, "claude/claude-sonnet-4-5"),
+          "warning",
+        ],
+      ]);
+    } finally {
+      cleanupConfigFixture(f.fixture);
     }
   });
 

@@ -296,7 +296,7 @@ describe("auto-navigate sidecar controller", () => {
       );
     });
 
-    it("exposes only the newest anchor and rejects earlier unseen anchors", async () => {
+    it("offers older anchors when their complete evidence fits", async () => {
       const entries = chain(8, (i) => `step ${i}`);
       const labels = new Map([
         ["e1", "anchor:old"],
@@ -317,7 +317,12 @@ describe("auto-navigate sidecar controller", () => {
           branch: entries,
           getLabel: (id) => labels.get(id),
         });
-      assert.deepEqual(await ask("old"), { action: "none" });
+      assert.deepEqual(await ask("old"), {
+        action: "rewind",
+        rewindTo: "old",
+        newLabel: "folded",
+        summaryFocus: FOCUS,
+      });
       assert.deepEqual(await ask("new"), {
         action: "rewind",
         rewindTo: "new",
@@ -325,9 +330,37 @@ describe("auto-navigate sidecar controller", () => {
         summaryFocus: FOCUS,
       });
       const payload = JSON.parse(requests[0].text);
-      assert.deepEqual(payload.active_anchors, ["new"]);
+      assert.deepEqual(payload.active_anchors, ["old", "new"]);
       assert.equal(payload.mode, "anchor-or-rewind");
-      assert.equal(payload.segment_records[0].id, "e4");
+      assert.equal(payload.segment_records[0].id, "e1");
+    });
+
+    it("rejects older anchors when only the newer anchor's evidence fits", async () => {
+      const entries = chain(8, (i) =>
+        i === 2 ? "oversized ".repeat(20_000) : `step ${i}`,
+      );
+      const labels = new Map([
+        ["e1", "anchor:old"],
+        ["e4", "anchor:new"],
+      ]);
+      const requests: CapturedRequest[] = [];
+      const decision = await autoCall({
+        runner: fakeRunner(
+          JSON.stringify({
+            action: "rewind",
+            rewind_to: "old",
+            new_label: "folded",
+            summary_focus: FOCUS,
+          }),
+          requests,
+        ),
+        branch: entries,
+        getLabel: (id) => labels.get(id),
+      });
+      assert.deepEqual(decision, { action: "none" });
+      const payload = JSON.parse(requests[0].text);
+      assert.deepEqual(payload.active_anchors, ["new"]);
+      assert.ok(payload.omitted_older_records > 0);
     });
 
     it("does not offer rewind when the anchor-to-leaf segment is truncated", async () => {
