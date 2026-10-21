@@ -70,6 +70,20 @@ Notes:
   simulated 400, the payload hook lowers the retry cap, and the streamed retry
   succeeds without withholding history. This proves request serialization and
   bounded recovery, not real-provider tokenization, cache reuse or model quality.
+- Projection regressions invalidate stale usage after context edits, compaction
+  and runtime-state changes without mutating recorded billing. Include an edit
+  targeting the usage-bearing assistant itself and edits on abandoned branches.
+- Recovery regressions cross branch summaries and retained compaction ranges,
+  preserve tool-call/result envelopes, include effective system state, and prove
+  infeasible plans apply no partial removals. Failure receipts distinguish proposed
+  and applied changes. Reproject candidates that invalidate a usage baseline,
+  recalibrating against the same surviving baseline. Reject a boundary from a
+  later handler and prove its missing failure receipt is delivered at settlement;
+  a committed receipt must not be duplicated. The SDK transport test also proves
+  an aborted infeasible request makes zero transport calls; it is not live-provider evidence.
+- Fold regressions include full child reports, late input and continuation
+  overhead; non-reducing materializations preserve history without writing a new
+  summary branch or completion label.
 - Auto-navigation regressions cover complete serialized request budgets, evidence
   omissions, existing labels, older rewind targets, cadence, ignored-steer
   suppression, minimum savings and decisions invalidated by late input.

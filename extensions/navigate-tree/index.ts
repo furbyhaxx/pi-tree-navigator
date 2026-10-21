@@ -45,10 +45,12 @@
  * (#80): no out-of-loop summarization request exists.
  */
 
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   type AssistantMessage,
+  getCurrentSystemMessage,
   isContextOverflow,
   isRecoverableLength,
 } from "@earendil-works/pi-ai";
@@ -56,6 +58,7 @@ import {
   AgentSession,
   buildSessionProjection,
   CONFIG_DIR_NAME,
+  type ContextEditableContent,
   collectEntriesForBranchSummary,
   convertToLlm,
   type ExtensionAPI,
@@ -88,8 +91,9 @@ import {
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
 import {
+  estimateContentTokens,
   estimateContextTokens,
-  newestUsageIndex,
+  estimateRequestTokens,
   splitContextEstimate,
 } from "./context-tokens.ts";
 import {
@@ -101,6 +105,7 @@ import {
 } from "./handoff.ts";
 import {
   installHandoffProjection,
+  invalidateStaleUsage,
   projectHandoffs,
 } from "./handoff-projection.ts";
 import { registerHandoffRenderer } from "./handoff-renderer.ts";
@@ -267,6 +272,8 @@ interface PiInternals {
    * pi decides compaction from. Optional: older pi versions may lack it.
    */
   settingsManager?: SettingsManager;
+  // Pi applies a forced prompt after extension context transforms.
+  _runSystemPromptOptions?: { forceSystemPrompt?: string };
 }
 
 function asInternals(session: AgentSession): PiInternals {
@@ -374,6 +381,7 @@ export function buildContextMessages(
     buildSessionProjection?(): {
       entries?: Array<{ sourceEntry: SessionEntry; messages: AgentMessage[] }>;
       messages: AgentMessage[];
+      model?: { provider: string; modelId: string } | null;
     };
     getBranch?(): SessionEntry[];
     getLabel?(id: string): string | undefined;
@@ -383,9 +391,11 @@ export function buildContextMessages(
   let entries:
     | Array<{ sourceEntry: SessionEntry | null; messages: AgentMessage[] }>
     | undefined;
+  let model: { provider: string; modelId: string } | null | undefined;
   try {
     if (typeof sm.buildSessionProjection === "function") {
       const projection = sm.buildSessionProjection();
+      model = projection.model;
       entries = Array.isArray(projection.entries)
         ? projection.entries
         : [{ sourceEntry: null, messages: projection.messages }];
@@ -398,15 +408,8 @@ export function buildContextMessages(
     sourceEntry: entry,
     messages: sessionEntryToContextMessages(entry),
   }));
-  // Stale usage (#101): an assistant's `usage` measures the whole context it
-  // was sent with. One produced after a `context_edit`'s target existed but
-  // before that edit applied was sent with the edited-away content counted, so
-  // pi's output clamp (window - estimate - 4096, floored at 1) would size
-  // max_tokens from an overstated count. Zero those (see staleUsageFlags); pi-ai
-  // then falls back to an older exact usage or chars/3.5. Assistants before the
-  // target, and after the edit, keep their exact usage. Computed before the
-  // frozen slice: overflow withholding appends its edits after the instruction.
-  let stale = staleUsageFlags(entries);
+  // Withholding can append edits after the frozen summary instruction.
+  entries = invalidateStaleUsage(entries, model);
   // Frozen view (#90, O2): while a rewind waits for its summary, the
   // request ends at its instruction, so every attempt re-sends the same
   // messages — late input and hidden attempts never reach it. Keyed by the
@@ -417,7 +420,6 @@ export function buildContextMessages(
     );
     if (at >= 0) {
       entries = entries.slice(0, at + 1);
-      stale = stale.slice(0, at + 1);
     }
   }
   // A failed / aborted rewind reads as a failed tool call (#90, O5): its
@@ -426,7 +428,7 @@ export function buildContextMessages(
   // mutate the session's own message objects). Keyed by the tool-result
   // entry id the outcome recorded.
   const outcomes = collectRewindOutcomes(sm);
-  const messages = entries.flatMap((e, i) => {
+  const messages = entries.flatMap((e) => {
     const text = e.sourceEntry ? outcomes.get(e.sourceEntry.id) : undefined;
     const withOutcome =
       text === undefined
@@ -444,59 +446,9 @@ export function buildContextMessages(
       e.sourceEntry?.type === "branch_summary" &&
       e.sourceEntry.fromHook === true &&
       sm.getLabel?.(e.sourceEntry.id)?.startsWith(LABEL_PREFIX) === true;
-    const projected = handoffContext(e.sourceEntry, withOutcome, legacyOwned);
-    return stale[i] ? projected.map(dropStaleUsage) : projected;
+    return handoffContext(e.sourceEntry, withOutcome, legacyOwned);
   });
   return messages.filter((message) => message.role !== "system");
-}
-
-/**
- * Per entry, whether its assistant usage is stale (#101). An entry at `i` is
- * stale iff some `context_edit` at `e` targets an entry at `t` with
- * `t < i < e`: it was produced after the target existed but before the edit
- * applied. Indices are branch order over the projection, which keeps the
- * `context_edit` entries themselves (with no messages). Targets outside it are
- * ignored.
- */
-function staleUsageFlags(
-  entries: Array<{ sourceEntry: SessionEntry | null }>,
-): boolean[] {
-  const position = new Map<string, number>();
-  for (const [i, e] of entries.entries()) {
-    if (e.sourceEntry && !position.has(e.sourceEntry.id)) {
-      position.set(e.sourceEntry.id, i);
-    }
-  }
-  const stale = entries.map(() => false);
-  for (const [edit, e] of entries.entries()) {
-    const source = e.sourceEntry;
-    if (source?.type !== "context_edit" || !source.targetId) continue;
-    const target = position.get(source.targetId);
-    if (target === undefined) continue;
-    for (let i = target + 1; i < edit; i++) stale[i] = true;
-  }
-  return stale;
-}
-
-/**
- * `message` with a zeroed usage when it is an assistant with one (#101). Zeroed,
- * not deleted: pi-ai reads `usage.totalTokens` unguarded and would throw. Zero
- * totals are skipped, and every field is zeroed because `calculateContextTokens`
- * falls back to the four parts when `totalTokens` is 0.
- */
-function dropStaleUsage(message: AgentMessage): AgentMessage {
-  if (message.role !== "assistant" || !message.usage) return message;
-  return {
-    ...message,
-    usage: {
-      ...message.usage,
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-    },
-  };
 }
 
 /** True for the summary instruction entry of the rewind `toolCallId` (#90). */
@@ -920,10 +872,42 @@ function overflowed(
   }
 }
 
+function requestAccounting(sm: SessionManager, messages: AgentMessage[]) {
+  const session = findOwningSession(sm);
+  const forcedPrompt = session
+    ? asInternals(session)._runSystemPromptOptions?.forceSystemPrompt
+    : undefined;
+  const currentSystem = getCurrentSystemMessage(messages);
+  const effective: AgentMessage[] =
+    forcedPrompt === undefined
+      ? messages
+      : [
+          {
+            role: "system",
+            content: forcedPrompt,
+            ...(currentSystem?.toolsAdded
+              ? { toolsAdded: currentSystem.toolsAdded }
+              : {}),
+            timestamp: currentSystem?.timestamp ?? 0,
+          },
+          ...messages.filter((message) => message.role !== "system"),
+        ];
+  return {
+    messages: effective,
+    tokens:
+      estimateRequestTokens(effective) +
+      (forcedPrompt === undefined ? Math.ceil(ANCHOR_MANDATE.length / 3.5) : 0),
+  };
+}
+
 /** What withholding tool results plans (#101, D3/D4). */
 interface WithholdPlan {
   drafts: SessionBoundaryDraft[];
   withheld: number;
+  proposedWithheld: number;
+  beforeTokens: number;
+  afterTokens: number;
+  target: number;
   fits: boolean;
 }
 
@@ -1028,18 +1012,18 @@ function effectiveOverflowTarget(
  * Withhold the tool results that overflowed (#101, D3): walk back from
  * `fromEntryId` (excluded) through every older turn, and replace their
  * content newest-first with the D4 notice until the estimate fits `target`.
- * The walk stops at a compaction or branch summary (a context boundary: what
- * is above it is not projected). User and custom messages are never
+ * Membership in the canonical projection defines the eligible retained range,
+ * including ancestors before branch summaries and retained compaction entries.
+ * User and custom messages are never
  * withheld; a navigate_tree result, a result already hidden or replaced, and
  * a result not in the projection are skipped. The estimate is the projection without
  * `hiddenIds` (sliced at `instructionEntryId`, the frozen request of a
- * pending rewind), minus what each notice saves.
+ * pending rewind), with every proposed edit reprojected before estimating.
  *
- * #101, A: `realTokens` (the overflowed request's provider count) scales the
- * estimate's tail after the newest usage baseline by `ratio` =
- * (real − baseline) / tail, clamped to at least 1; the planner then fits
- * `baseline + ratio × tail` under `target`. Without `realTokens` the
- * ratio is 1.
+ * #101, A: `realTokens` calibrates the original tail under the surviving
+ * usage baseline. Candidate edits can invalidate that baseline, so calibration
+ * uses original tool bodies with the candidate's usage validity. The complete
+ * request estimate is an additional lower bound.
  */
 function planWithhold(
   sm: SessionManager,
@@ -1048,6 +1032,7 @@ function planWithhold(
   target: number,
   instructionEntryId?: string,
   realTokens?: number,
+  continuation?: AgentMessage,
 ): WithholdPlan {
   const branch = sm.getBranch();
   const lastEdit = new Map<string, unknown>();
@@ -1056,56 +1041,90 @@ function planWithhold(
       lastEdit.set(entry.targetId, entry.replacement);
     }
   }
-  const hidden = new Set(hiddenIds);
-  let entries = sm.buildSessionProjection().entries;
-  if (instructionEntryId) {
-    const at = entries.findIndex(
-      (e) => e.sourceEntry.id === instructionEntryId,
-    );
-    if (at >= 0) entries = entries.slice(0, at + 1);
-  }
-  // The messages the estimate counts, and each entry's first position in them
-  // (#101, walk fix): an entry outside this list is not in the context.
-  const messages: AgentMessage[] = [];
-  const positions = new Map<string, number>();
-  for (const e of entries) {
-    if (hidden.has(e.sourceEntry.id)) continue;
-    for (const m of e.messages) {
-      if (m.role === "system") continue;
-      if (!positions.has(e.sourceEntry.id)) {
-        positions.set(e.sourceEntry.id, messages.length);
-      }
-      messages.push(m);
+  const previewEntries = sm.getEntries();
+  let previewLeaf = sm.getLeafId();
+  const previewEdit = (
+    targetId: string,
+    replacement: { content: ContextEditableContent } | null,
+  ) => {
+    const id = randomUUID();
+    previewEntries.push({
+      type: "context_edit",
+      id,
+      parentId: previewLeaf,
+      timestamp: new Date().toISOString(),
+      targetId,
+      replacement,
+    });
+    previewLeaf = id;
+  };
+  const branchIds = new Set(branch.map((entry) => entry.id));
+  for (const id of hiddenIds) if (branchIds.has(id)) previewEdit(id, null);
+  const project = () => {
+    let entries = projectHandoffs(
+      buildSessionProjection(previewEntries, previewLeaf),
+      previewEntries,
+    ).entries;
+    if (instructionEntryId) {
+      const at = entries.findIndex(
+        (entry) => entry.sourceEntry.id === instructionEntryId,
+      );
+      if (at >= 0) entries = entries.slice(0, at + 1);
     }
-  }
-  const anchor = newestUsageIndex(messages);
-  const split = splitContextEstimate(messages);
-  let baseline = split.baseline;
-  let tail = split.tail;
-  if (tail <= 0 && realTokens !== undefined && realTokens > baseline) {
-    baseline = realTokens;
-  }
-  const ratio =
-    realTokens === undefined || tail <= 0
-      ? 1
-      : Math.max(1, (realTokens - baseline) / tail);
-  const estimate = () => baseline + ratio * tail;
+    return entries;
+  };
+  let entries = project();
+  const eligible = new Set(
+    entries
+      .filter((entry) => entry.messages.length > 0)
+      .map((entry) => entry.sourceEntry.id),
+  );
+  const originalBodies = new Map(
+    entries.flatMap((entry) =>
+      entry.sourceEntry.type === "message" &&
+      entry.sourceEntry.message.role === "toolResult"
+        ? [[entry.sourceEntry.id, entry.messages] as const]
+        : [],
+    ),
+  );
+  const estimate = () => {
+    const messages = entries.flatMap((entry) => entry.messages);
+    const effective = requestAccounting(sm, messages).messages;
+    const { baseline, tail } = splitContextEstimate(effective);
+    const originalTail = splitContextEstimate(
+      requestAccounting(
+        sm,
+        entries.flatMap(
+          (entry) => originalBodies.get(entry.sourceEntry.id) ?? entry.messages,
+        ),
+      ).messages,
+    ).tail;
+    const ratio =
+      realTokens === undefined || originalTail <= 0
+        ? 1
+        : Math.max(1, (realTokens - baseline) / originalTail);
+    return Math.max(
+      baseline +
+        ratio * tail +
+        (continuation ? estimateTokens(continuation) : 0),
+      requestAccounting(
+        sm,
+        continuation ? [...messages, continuation] : messages,
+      ).tokens,
+      originalTail <= 0 ? (realTokens ?? 0) : 0,
+    );
+  };
+  const beforeTokens = estimate();
   const drafts: SessionBoundaryDraft[] = [];
   const start = branch.findIndex((e) => e.id === fromEntryId);
-  // Newest first, across turns: the failed attempt's own batch is not always
-  // enough (#101, walk fix). A compaction or branch summary is a context
-  // boundary: nothing above it is in the projected context.
+  // Projection membership, not a summary marker, determines the retained range.
   for (let i = start - 1; i >= 0 && estimate() > target; i--) {
     const entry = branch[i];
-    if (entry.type === "compaction" || entry.type === "branch_summary") {
-      break;
-    }
     if (entry.type !== "message" || entry.message.role !== "toolResult") {
       continue;
     }
-    const at = positions.get(entry.id);
     if (
-      at === undefined ||
+      !eligible.has(entry.id) ||
       lastEdit.has(entry.id) ||
       entry.message.toolName === TOOL_NAME
     ) {
@@ -1116,23 +1135,24 @@ function planWithhold(
     const content = [{ type: "text" as const, text }];
     const saving = original - estimateTokens({ ...entry.message, content });
     if (saving <= 0) continue;
-    // A result before the newest usage is already in its real count, so its
-    // saving comes off the baseline, as the unscaled estimate (it under-credits
-    // a dense result, which only withholds more). It must not go on the tail:
-    // the ratio would scale a negative tail into a false fit. A result after
-    // the usage is in the tail, which the ratio scales as before.
-    if (at < anchor) {
-      baseline -= saving;
-    } else {
-      tail -= saving;
-    }
+    previewEdit(entry.id, { content });
+    entries = project();
     drafts.push({
       type: "context_edit",
       targetId: entry.id,
       replacement: { content },
     });
   }
-  return { drafts, withheld: drafts.length, fits: estimate() <= target };
+  const fits = estimate() <= target;
+  return {
+    drafts: fits ? drafts : [],
+    withheld: fits ? drafts.length : 0,
+    proposedWithheld: drafts.length,
+    beforeTokens,
+    afterTokens: estimate(),
+    target,
+    fits,
+  };
 }
 
 /** `context_edit` drafts hiding `ids` (a failed attempt, #90 O3). */
@@ -1698,7 +1718,7 @@ type LateEntry =
   | {
       kind: "custom";
       customType: string;
-      content: unknown;
+      content: Extract<SessionEntry, { type: "custom_message" }>["content"];
       display: boolean;
       details: unknown;
     };
@@ -1824,6 +1844,26 @@ export default function (pi: ExtensionAPI) {
     string,
     Map<string, { canClamp: boolean; cap?: number; retried?: boolean }>
   >();
+  const requestBudgetFailures = new Map<
+    string,
+    { inputEstimate: number; contextWindow: number; receiptId: string }
+  >();
+  const requestBudgetFailureDraft = (failure: {
+    inputEstimate: number;
+    contextWindow: number;
+    receiptId: string;
+  }) =>
+    rewindMessageDraft(
+      `[${TOOL_NAME}] Request stopped before generation: estimated input ${failure.inputEstimate} tokens leaves fewer than ${RECOVERY_MIN_OUTPUT_TOKENS} output tokens plus ${RECOVERY_HEADROOM_TOKENS} headroom in the ${failure.contextWindow}-token operating window. No tool results were withheld. Reduce context with /tree or /compact, or select a larger operating window.`,
+      {
+        status: "failed",
+        reason: "insufficient request headroom",
+        inputEstimate: failure.inputEstimate,
+        contextWindow: failure.contextWindow,
+        appliedWithheld: 0,
+        receiptId: failure.receiptId,
+      },
+    );
 
   pi.on("before_provider_request", (event, ctx) => {
     let sm: SessionManager;
@@ -1837,6 +1877,8 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     if (!model) return;
+    // Some adapters ignore cancellation until after opening their stream.
+    if (requestBudgetFailures.has(sessionId)) return {};
     const prior = outputBudgets
       .get(sessionId)
       ?.get(`${model.provider}/${model.id}`);
@@ -1970,6 +2012,7 @@ export default function (pi: ExtensionAPI) {
   function compactionFailed(
     sessionId: string,
     reason: string,
+    plan?: WithholdPlan,
   ): SessionBoundaryDraft[] {
     const record = forcedRewinds.get(sessionId) ?? { attempts: 0 };
     record.ended = true;
@@ -1978,6 +2021,15 @@ export default function (pi: ExtensionAPI) {
       rewindMessageDraft(buildRewindCompactionFailedText(reason), {
         status: "failed",
         reason,
+        ...(plan
+          ? {
+              proposedWithheld: plan.proposedWithheld,
+              appliedWithheld: 0,
+              estimatedBefore: plan.beforeTokens,
+              estimatedAfterProposed: plan.afterTokens,
+              target: plan.target,
+            }
+          : {}),
       }),
     ];
   }
@@ -2072,14 +2124,18 @@ export default function (pi: ExtensionAPI) {
         ),
       );
     }
-    const effTarget = budget?.canClamp
-      ? Math.min(
-          at.target,
-          at.contextWindow -
-            RECOVERY_MIN_OUTPUT_TOKENS -
-            RECOVERY_HEADROOM_TOKENS,
-        )
-      : effectiveOverflowTarget(sm, failedEntryId, at.target, at.contextWindow);
+    const effTarget = Math.min(
+      at.target,
+      at.contextWindow - RECOVERY_MIN_OUTPUT_TOKENS - RECOVERY_HEADROOM_TOKENS,
+      budget?.canClamp
+        ? at.target
+        : effectiveOverflowTarget(
+            sm,
+            failedEntryId,
+            at.target,
+            at.contextWindow,
+          ),
+    );
     // S6: one recovery per overflow.
     if (record) {
       const ending = pending
@@ -2130,7 +2186,7 @@ export default function (pi: ExtensionAPI) {
               COMPACTION_FAILED_STILL_OVER,
               failedIds,
             ),
-            ...compactionFailed(sessionId, COMPACTION_FAILED_STILL_OVER),
+            ...compactionFailed(sessionId, COMPACTION_FAILED_STILL_OVER, plan),
           ],
           continue: false,
         };
@@ -2158,6 +2214,17 @@ export default function (pi: ExtensionAPI) {
         continue: false,
       };
     }
+    const forcedNotice: AgentMessage = {
+      role: "custom",
+      customType: REWIND_CUSTOM_TYPE,
+      content: buildForcedRewindText(
+        at.contextWindow,
+        sm.getBranch().length,
+        anchors.text,
+      ),
+      display: true,
+      timestamp: 0,
+    };
     const plan = planWithhold(
       sm,
       failedEntryId,
@@ -2165,12 +2232,13 @@ export default function (pi: ExtensionAPI) {
       effTarget,
       undefined,
       realTokens,
+      forcedNotice,
     );
     if (!plan.fits) {
       return {
         drafts: [
           ...hideDrafts(failedIds),
-          ...compactionFailed(sessionId, COMPACTION_FAILED_STILL_OVER),
+          ...compactionFailed(sessionId, COMPACTION_FAILED_STILL_OVER, plan),
         ],
         continue: false,
       };
@@ -2526,9 +2594,9 @@ export default function (pi: ExtensionAPI) {
     // the abandoned branch's last real entry, written before the branch so
     // the restart check never reads this rewind as died mid-flight.
     const branchLabel = BRANCH_LABEL_PREFIX + pending.newLabel;
-    const branchLabelWritten = summaryEntryId
-      ? writeLabel(sm, summaryEntryId, branchLabel)
-      : false;
+    let branchLabelWritten = false;
+    let foldEstimateBefore = 0;
+    let foldEstimateAfter = 0;
     let entries: SessionEntry[];
     let readFiles: string[];
     let modifiedFiles: string[];
@@ -2583,17 +2651,92 @@ export default function (pi: ExtensionAPI) {
           return entry ? [entry] : [];
         }),
       });
+      const materialized = materializeHandoff(
+        handoff,
+        children.flatMap((child) =>
+          child.type === "branch_summary"
+            ? [{ id: child.id, summary: child.summary }]
+            : [],
+        ),
+      );
+      const details = { readFiles, modifiedFiles, treeNavigator: handoff };
+      let previewId = "tree-navigator-fold-preview";
+      while (all.has(previewId)) previewId += "-";
+      const preview: SessionEntry = {
+        type: "branch_summary",
+        id: previewId,
+        parentId: pending.target,
+        timestamp: new Date().toISOString(),
+        fromId: oldLeafId ?? pending.rewindEntryId,
+        summary: materialized,
+        details,
+        fromHook: true,
+      };
+      const prospectiveEntries = [...all.values(), preview];
+      const prospective = projectHandoffs(
+        buildSessionProjection(prospectiveEntries, previewId),
+        prospectiveEntries,
+      ).messages;
+      const lateMessages: AgentMessage[] = lateEntries.map((late) =>
+        late.kind === "user"
+          ? late.message
+          : {
+              role: "custom",
+              customType: late.customType,
+              content: late.content,
+              display: late.display,
+              details: late.details,
+              timestamp: Date.now(),
+            },
+      );
+      prospective.push(...lateMessages);
+      const currentEntries = sm.buildSessionProjection().entries;
+      const rewindAt = currentEntries.findIndex(
+        (entry) => entry.sourceEntry.id === pending.rewindEntryId,
+      );
+      if (rewindAt < 0)
+        return fail("the rewind call is no longer in the projected context");
+      foldEstimateBefore = estimateContentTokens([
+        ...currentEntries.slice(0, rewindAt).flatMap((entry) => entry.messages),
+        ...lateMessages,
+      ]);
+      const continuation = {
+        role: "custom" as const,
+        customType: REWIND_CUSTOM_TYPE,
+        content:
+          buildRewindDoneText(pending, estimateContextTokens(prospective)) +
+          (lateEntries.length
+            ? `\n\n${buildLateEntriesNote(lateEntries.length)}`
+            : "") +
+          `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`,
+        display: true,
+        timestamp: Date.now(),
+      };
+      prospective.push(continuation);
+      foldEstimateAfter = estimateContentTokens(prospective);
+      if (foldEstimateAfter >= foldEstimateBefore) {
+        return fail(
+          `the materialized handoff does not reduce projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`,
+        );
+      }
+      if (
+        pending.contextWindow > 0 &&
+        requestAccounting(sm, prospective).tokens +
+          RECOVERY_MIN_OUTPUT_TOKENS +
+          RECOVERY_HEADROOM_TOKENS >
+          pending.contextWindow
+      ) {
+        return fail(
+          "the materialized handoff leaves insufficient request headroom; original history was kept",
+        );
+      }
+      if (summaryEntryId)
+        branchLabelWritten = writeLabel(sm, summaryEntryId, branchLabel);
+      leafBeforeBranch = sm.getLeafId();
       summaryId = sm.branchWithSummary(
         pending.target,
-        materializeHandoff(
-          handoff,
-          children.flatMap((child) =>
-            child.type === "branch_summary"
-              ? [{ id: child.id, summary: child.summary }]
-              : [],
-          ),
-        ),
-        { readFiles, modifiedFiles, treeNavigator: handoff },
+        materialized,
+        details,
         true,
       );
     } catch (err) {
@@ -2677,6 +2820,8 @@ export default function (pi: ExtensionAPI) {
           contextAfter: afterTokens,
           contextWindow: pending.contextWindow,
           summaryAttempts: pending.attempts + 1,
+          foldEstimateBefore,
+          foldEstimateAfter,
           agentMessagesRefreshed: refreshed,
           historyRewriteNotified,
           readFiles,
@@ -2810,6 +2955,26 @@ export default function (pi: ExtensionAPI) {
           ),
         ]
       : [];
+    const budgetFailure = requestBudgetFailures.get(sessionId);
+    if (budgetFailure) {
+      return deliverRaw(
+        [
+          ...hideDrafts(turnIds),
+          ...(pending
+            ? endAtBoundary(
+                sm,
+                sessionId,
+                pending,
+                "failed",
+                "insufficient request headroom",
+                turnIds,
+              )
+            : []),
+          requestBudgetFailureDraft(budgetFailure),
+        ],
+        false,
+      );
+    }
     // Rewind-driven compaction (#101, D2): a `length` / silent overflow is
     // handled here, so the model never retries the oversized call; an
     // explicit error ends the loop and is handled at `agent_before_settle`.
@@ -3237,6 +3402,32 @@ export default function (pi: ExtensionAPI) {
     const record = forcedRewinds.get(sessionId);
     forcedRewinds.delete(sessionId);
     outputBudgets.delete(sessionId);
+    const budgetFailure = requestBudgetFailures.get(sessionId);
+    if (budgetFailure) {
+      const delivered = sm
+        .getBranch()
+        .some(
+          (entry) =>
+            entry.type === "custom_message" &&
+            entry.customType === REWIND_CUSTOM_TYPE &&
+            typeof entry.details === "object" &&
+            entry.details !== null &&
+            "receiptId" in entry.details &&
+            entry.details.receiptId === budgetFailure.receiptId,
+        );
+      if (!delivered) {
+        const draft = requestBudgetFailureDraft(budgetFailure);
+        if (draft.type === "custom_message")
+          pi.sendMessage({
+            customType: draft.customType,
+            content: draft.content,
+            display: draft.display,
+            details: draft.details,
+          });
+      }
+      requestBudgetFailures.delete(sessionId);
+      return;
+    }
     if (!record || record.ended) return;
     const reason = aborted
       ? COMPACTION_FAILED_ABORTED
@@ -3268,6 +3459,7 @@ export default function (pi: ExtensionAPI) {
       const sessionId = ctx.sessionManager.getSessionId();
       forcedRewinds.delete(sessionId);
       outputBudgets.delete(sessionId);
+      requestBudgetFailures.delete(sessionId);
       autoNavigateStateBySession.delete(sessionId);
     } catch {
       // Fail-open: session_start clears it too.
@@ -3489,6 +3681,7 @@ export default function (pi: ExtensionAPI) {
     pendingRewinds.delete(sessionId);
     forcedRewinds.delete(sessionId);
     outputBudgets.delete(sessionId);
+    requestBudgetFailures.delete(sessionId);
     // O8 (#90): a rewind that died mid-flight (restart, crash) left its
     // instruction in context with nothing waiting for it — end it.
     resolveOrphanRewinds(sm);
@@ -3643,6 +3836,25 @@ export default function (pi: ExtensionAPI) {
     return { messages: buildContextMessages(sm, instructionEntryId) };
   });
 
+  pi.on("context_with_system", (event, ctx) => {
+    const sm = ctx.sessionManager as SessionManager;
+    const sessionId = sm.getSessionId();
+    const at = rewindCompactionTarget(sm, sessionId, ctx.model);
+    if (!at || !ctx.signal || ctx.signal.aborted) return;
+    const inputEstimate = requestAccounting(sm, event.messages).tokens;
+    if (
+      inputEstimate + RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS <=
+      at.contextWindow
+    )
+      return;
+    requestBudgetFailures.set(sessionId, {
+      inputEstimate,
+      contextWindow: at.contextWindow,
+      receiptId: randomUUID(),
+    });
+    ctx.abort();
+  });
+
   // Anchor mandate (#31): a before_agent_start append lands at the END of
   // the system prompt — stronger than the mid-prompt Guidelines block, and
   // re-applied on every prompt instead of living in the conversation. Skip
@@ -3659,6 +3871,7 @@ export default function (pi: ExtensionAPI) {
     try {
       const sessionId = ctx.sessionManager.getSessionId();
       outputBudgets.delete(sessionId);
+      requestBudgetFailures.delete(sessionId);
       toolActiveBySession.set(sessionId, toolActive);
       // A new prompt is not a retry (pi retries via `agent.continue()`,
       // which skips this event): a rewind still waiting is aborted (#90, O6).

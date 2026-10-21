@@ -32,6 +32,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
+import { streamSimple as streamGoogle } from "@earendil-works/pi-ai/api/google-generative-ai";
 import { streamSimple } from "@earendil-works/pi-ai/api/openai-completions";
 import { normalizeContext } from "@earendil-works/pi-ai/utils/transcript";
 import {
@@ -354,10 +355,16 @@ function appendTurn(
   userText: string,
   assistantText: string,
   totalTokens = 100,
+  recordWork = false,
 ): { userId: string; assistantId: string } {
   const userId = sm.appendMessage({
     role: "user",
-    content: [{ type: "text", text: userText }],
+    content: [
+      { type: "text", text: userText },
+      ...(recordWork
+        ? [{ type: "text", text: "Recorded work and evidence.\n".repeat(1200) }]
+        : []),
+    ],
   } as never);
   const assistantId = sm.appendMessage({
     role: "assistant",
@@ -519,7 +526,7 @@ function setupRewindable(
   const t1 = appendTurn(sm, "u1", "a1", tokenCounts[0]);
   pi.pi.setLabel(t1.assistantId, `anchor:${rewindToName}`);
   for (let i = 0; i < turnsAfter; i++) {
-    appendTurn(sm, `u${i + 2}`, `a${i + 2}`, tokenCounts[i + 1] ?? 100);
+    appendTurn(sm, `u${i + 2}`, `a${i + 2}`, tokenCounts[i + 1] ?? 100, true);
   }
   if (opts.capture) {
     const fake = makeFakeSession(sm);
@@ -1135,9 +1142,11 @@ describe("context event handler", () => {
     // The session's own objects are untouched (the clone is per request).
     assert.deepEqual(
       sm
-        .buildSessionContext()
-        .messages.flatMap((m) =>
-          m.role === "assistant" ? [m.usage.totalTokens] : [],
+        .getEntries()
+        .flatMap((entry) =>
+          entry.type === "message" && entry.message.role === "assistant"
+            ? [entry.message.usage.totalTokens]
+            : [],
         ),
       [10, 90_000, 95_000],
     );
@@ -2873,6 +2882,8 @@ describe("rewind phase 2: completion", () => {
       contextAfter: d.contextAfter,
       contextWindow: 1_000_000,
       summaryAttempts: 1,
+      foldEstimateBefore: d.foldEstimateBefore,
+      foldEstimateAfter: d.foldEstimateAfter,
       agentMessagesRefreshed: true,
       historyRewriteNotified: false,
       readFiles: [],
@@ -2887,6 +2898,11 @@ describe("rewind phase 2: completion", () => {
       (d.contextBefore as number) > (d.contextAfter as number),
       "the rewound chain must be smaller",
     );
+    assert.ok(
+      Number(d.foldEstimateAfter) > SUMMARY_TEXT.length / 4,
+      "the fold check includes continuation overhead",
+    );
+    assert.ok(Number(d.foldEstimateAfter) < Number(d.foldEstimateBefore));
   });
 
   it("continuation prose: [rewind] header + pending-work guidance", async () => {
@@ -2951,7 +2967,7 @@ describe("rewind phase 2: completion", () => {
     for (const id of ["r1", "r2", "e1", "w1"]) {
       appendToolResult(f.sm, id, "read", "ok");
     }
-    appendTurn(f.sm, "u3", "a3", 24_000);
+    appendTurn(f.sm, "u3", "a3", 24_000, true);
     await requestRewind(f);
     await summaryTurn(f);
     const { details } = rewindMessages(f.pi)[0].message;
@@ -3088,8 +3104,8 @@ describe("rewind phase 2: completion", () => {
     const f = setup();
     const tA = appendTurn(f.sm, "u1", "a1", 6_000);
     f.pi.pi.setLabel(tA.assistantId, "anchor:a");
-    appendTurn(f.sm, "u2", "a2", 12_000);
-    appendTurn(f.sm, "u3", "a3", 18_000);
+    appendTurn(f.sm, "u2", "a2", 12_000, true);
+    appendTurn(f.sm, "u3", "a3", 18_000, true);
     __testHooks.captureSession(
       makeFakeSession(f.sm) as unknown as AgentSession,
     );
@@ -3100,8 +3116,8 @@ describe("rewind phase 2: completion", () => {
     assert.equal(first.details.status, "done");
     const sumB = first.details.summaryId as string;
 
-    appendTurn(f.sm, "u4", "a4", 24_000);
-    appendTurn(f.sm, "u5", "a5", 30_000);
+    appendTurn(f.sm, "u4", "a4", 24_000, true);
+    appendTurn(f.sm, "u5", "a5", 30_000, true);
     const { result: r2 } = await requestRewind(
       f,
       {
@@ -3128,11 +3144,109 @@ describe("rewind phase 2: completion", () => {
     assert.equal(f.sm.getEntry(f.sm.getLeafId() as string)?.parentId, sumC);
   });
 
+  it("refuses a growing materialized summary without writing a branch or completion label", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi);
+    await requestRewind(f);
+    const summary = await summaryTurn(
+      f,
+      `${SUMMARY_TEXT}\n${"detail ".repeat(20_000)}`,
+      "stop",
+      { commit: true },
+    );
+    assert.equal(
+      f.sm.getEntries().filter((entry) => entry.type === "branch_summary")
+        .length,
+      0,
+    );
+    assert.equal(f.sm.getLabel(summary.entryId), undefined);
+    assert.ok(
+      !f.sm
+        .getBranch()
+        .some((entry) => f.sm.getLabel(entry.id) === "anchor:end"),
+    );
+    assert.match(
+      String(outcomeEntries(f.sm).at(-1)?.reason),
+      /does not reduce projected context/,
+    );
+    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
+  });
+
+  it("compares fold content on the same heuristic despite low recorded usage", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi, { tokenCounts: [6000, 8000, 10000, 11000] });
+    await requestRewind(f);
+    await summaryTurn(
+      f,
+      `${SUMMARY_TEXT}\n${"evidence ".repeat(4500)}`,
+      "stop",
+      { commit: true },
+    );
+    const done = rewindMessages(f.pi).at(-1)?.message;
+    assert.equal(done?.details.status, "done");
+    assert.ok(
+      Number(done?.details.foldEstimateAfter) <
+        Number(done?.details.foldEstimateBefore),
+    );
+  });
+
+  it("checks the currently edited view rather than the old pre-withholding measurement", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi);
+    await requestRewind(f);
+    for (const entry of f.sm.getBranch()) {
+      if (entry.type === "message" && entry.message.role === "user")
+        f.sm.appendContextEdit(entry.id, { content: "short" });
+    }
+    await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
+    assert.equal(
+      f.sm.getEntries().filter((entry) => entry.type === "branch_summary")
+        .length,
+      0,
+    );
+    assert.match(
+      String(outcomeEntries(f.sm).at(-1)?.reason),
+      /does not reduce projected context/,
+    );
+  });
+
+  it("includes full child reports in the net-fold check", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi);
+    const leaf = f.sm.getLeafId();
+    assert.ok(leaf);
+    f.sm.branchWithSummary(
+      leaf,
+      `CHILD ${"evidence ".repeat(12_000)}`,
+      {},
+      true,
+    );
+    await requestRewind(f);
+    const beforeCount = f.sm
+      .getEntries()
+      .filter((entry) => entry.type === "branch_summary").length;
+    await summaryTurn(
+      f,
+      `${SUMMARY_TEXT}\n${"report ".repeat(16_000)}`,
+      "stop",
+      { commit: true },
+    );
+    assert.equal(
+      f.sm.getEntries().filter((entry) => entry.type === "branch_summary")
+        .length,
+      beforeCount,
+    );
+    assert.match(
+      String(outcomeEntries(f.sm).at(-1)?.reason),
+      /does not reduce projected context/,
+    );
+  });
+
   it("folds an earlier child handoff into a parent once and projects honest work context", async () => {
     const f = await rewindFixture({ commit: true });
     const childId = f.done.message.details.summaryId as string;
-    appendTurn(f.sm, "parent-work", "parent-delivery", 24000);
-    appendTurn(f.sm, "parent-verification", "parent-result", 30000);
+    appendTurn(f.sm, "parent-work", "parent-delivery", 24000, true);
+    appendTurn(f.sm, "parent-verification", "parent-result", 30000, true);
     await requestRewind(
       f,
       { ...REWIND_ARGS, rewindTo: "start", newLabel: "parent" },
@@ -3203,7 +3317,7 @@ describe("rewind phase 2: completion", () => {
       },
     );
     f.pi.pi.setLabel(childId, "anchor:child");
-    appendTurn(f.sm, "parent-work", "parent-delivery", 24000);
+    appendTurn(f.sm, "parent-work", "parent-delivery", 24000, true);
     __testHooks.captureSession(
       makeFakeSession(f.sm) as unknown as AgentSession,
     );
@@ -8174,6 +8288,11 @@ Active anchors (root → leaf, % of 100k):
   it("silent stop overflow: the reply stays visible, results withheld until the estimate fits", async () => {
     const f = await forcedSetup();
     try {
+      f.sm.appendMessage({
+        role: "user",
+        content: "protected".repeat(7_000),
+        timestamp: 0,
+      } as never);
       const message = {
         ...assistantMessage([{ type: "text", text: "done" }], "stop", 0),
         usage: { ...usageOf(105_000), input: 105_000 },
@@ -8223,6 +8342,11 @@ Active anchors (root → leaf, % of 100k):
   it("the live shape: the newest result, then the older turn's results, newest first (#101)", async () => {
     const { f, r3, nav } = await crossTurnSetup(99_300);
     try {
+      f.sm.appendMessage({
+        role: "user",
+        content: "protected".repeat(7_000),
+        timestamp: 0,
+      } as never);
       const err = errorOverflow(f.sm);
       const { settle } = await runErrorEnd(f, err.message);
       assert.deepEqual(
@@ -8255,6 +8379,41 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  it("reprojects proposed withholding when an edit invalidates the usage baseline", async () => {
+    const f = await forcedSetup({ issuerTokens: 5_000 });
+    try {
+      f.sm.appendMessage({
+        role: "user",
+        content: [{ type: "text", text: "protected".repeat(30_000) }],
+        timestamp: 0,
+      } as never);
+      appendToolCallAssistant(f.sm, [], 90_000);
+      const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(settle.continue, true, JSON.stringify(settle));
+      assert.deepEqual(withheldTargets(settle.entries), [f.r2, f.r1]);
+      const aborter = new AbortController();
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? [])
+        await handler(
+          {
+            type: "context_with_system",
+            messages: fireContext(f.pi, f.ctx),
+          } as never,
+          {
+            ...f.ctx,
+            signal: aborter.signal,
+            abort: () => aborter.abort(),
+          } as never,
+        );
+      assert.equal(
+        aborter.signal.aborted,
+        false,
+        "the actual recovery projection fits",
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("a real count above the estimate scales the newest tail only; older results leave the baseline (#101, A)", async () => {
     const f = await forcedSetup({ issuerTokens: 60_000 });
     try {
@@ -8264,7 +8423,12 @@ Active anchors (root → leaf, % of 100k):
         99_300,
       );
       const r3 = appendToolResult(f.sm, "t3", "read", "x".repeat(4_000));
-      // Real 101k vs baseline 99.3k over a ~1k tail: ratio ~1.7 on the tail.
+      f.sm.appendMessage({
+        role: "user",
+        content: "protected".repeat(7_000),
+        timestamp: 0,
+      } as never);
+      // Replacing r2 invalidates 99.3k; protected input still needs room under the surviving baseline.
       const message = {
         ...assistantMessage([], "length", 0),
         usage: { ...usageOf(101_000), input: 101_000 },
@@ -8317,6 +8481,60 @@ Active anchors (root → leaf, % of 100k):
         forcedDrafts(settle)[0].details.reason,
         COMPACTION_FAILED_STILL_OVER,
       );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("withholds retained results before a branch summary", async () => {
+    const f = await forcedSetup();
+    try {
+      f.sm.branchWithSummary(f.r2, "Completed child work", {}, true);
+      f.sm.appendMessage({
+        role: "user",
+        content: "protected".repeat(7_000),
+        timestamp: 0,
+      } as never);
+      appendToolCallAssistant(
+        f.sm,
+        [{ id: "later", name: "read", arguments: { path: "later" } }],
+        99_300,
+      );
+      appendToolResult(f.sm, "later", "read", "ok");
+      const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(settle.continue, true);
+      assert.deepEqual(withheldTargets(settle.entries), [f.r2, f.r1]);
+      const wire = fireContext(f.pi, f.ctx);
+      assert.ok(wire.some((message) => message.role === "branchSummary"));
+      for (const id of ["r1", "r2"]) {
+        assert.match(
+          JSON.stringify(wire.find((m) => m.toolCallId === id)),
+          /Output withheld/,
+        );
+      }
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("withholds pre-compaction results only when the canonical projection retains them", async () => {
+    const f = await forcedSetup();
+    try {
+      f.sm.appendCompaction("Checkpoint", f.issuerId, 84_000);
+      f.sm.appendMessage({
+        role: "user",
+        content: "protected".repeat(29_000),
+        timestamp: 0,
+      } as never);
+      appendToolCallAssistant(
+        f.sm,
+        [{ id: "later", name: "read", arguments: { path: "later" } }],
+        99_300,
+      );
+      appendToolResult(f.sm, "later", "read", "ok");
+      const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(settle.continue, true);
+      assert.deepEqual(withheldTargets(settle.entries), [f.r2, f.r1]);
     } finally {
       cleanupConfigFixture(f.fixture);
     }
@@ -8376,9 +8594,8 @@ Active anchors (root → leaf, % of 100k):
     });
 
     it("a real count below the estimate is clamped to ratio 1", async () => {
-      // Real 83k: the raw ratio is 0.5. Unclamped, the estimate would fit with
-      // no withholding at all; clamped, it stays at 95k and one result goes.
-      const f = await forcedSetup({ issuerTokens: 71_000 });
+      // Real 83k is below the heuristic; clamping retains the complete-request floor.
+      const f = await forcedSetup({ issuerTokens: 69_000 });
       try {
         const message = {
           ...assistantMessage([], "length", 0),
@@ -8402,7 +8619,7 @@ Active anchors (root → leaf, % of 100k):
     });
 
     it("no usage on the overflowed reply keeps the estimate (ratio 1)", async () => {
-      const f = await forcedSetup({ issuerTokens: 71_000 });
+      const f = await forcedSetup({ issuerTokens: 69_000 });
       try {
         const message = assistantMessage([], "length", 0);
         f.sm.appendMessage(message as never);
@@ -8525,6 +8742,239 @@ Active anchors (root → leaf, % of 100k):
     }
     return current;
   }
+
+  it("aborts an infeasible complete request before sending a one-token continuation", async () => {
+    const f = await forcedSetup();
+    try {
+      const aborter = new AbortController();
+      const ctx = {
+        ...f.ctx,
+        signal: aborter.signal,
+        abort: () => aborter.abort(),
+      };
+      const messages = [
+        { role: "system", content: "s".repeat(350_000), timestamp: 0 },
+        ...fireContext(f.pi, f.ctx),
+      ];
+      const handlers = f.pi.onCalls.get("context_with_system") ?? [];
+      assert.ok(handlers.length > 0);
+      for (const handler of handlers) {
+        await handler(
+          { type: "context_with_system", messages } as never,
+          ctx as never,
+        );
+      }
+      assert.equal(aborter.signal.aborted, true);
+      const aborted = assistantMessage([], "aborted", 0);
+      f.sm.appendMessage(aborted as never);
+      const result = await fireTurnEndAll(f.pi, f.ctx, aborted, {
+        commit: true,
+      });
+      assert.equal(result.continue, false);
+      const failed = forcedDrafts(result).at(-1);
+      assert.equal(failed?.details.reason, "insufficient request headroom");
+      assert.ok(Number(failed?.details.inputEstimate) > WINDOW);
+      assert.match(failed?.content ?? "", /No tool results were withheld/);
+      assert.deepEqual(withheldTargets(result.entries), []);
+      await fireAgentSettled(f.pi, f.ctx, true);
+      assert.equal(
+        f.pi.sendMessageCalls.length,
+        0,
+        "the committed receipt is not duplicated",
+      );
+      let requests = 0;
+      const response = await streamSimple(
+        {
+          api: "openai-completions",
+          provider: "offline",
+          id: "budget-fixture",
+          name: "Budget fixture",
+          baseUrl: "https://offline.invalid/v1",
+          reasoning: false,
+          input: ["text"],
+          contextWindow: WINDOW,
+          maxTokens: 64_000,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        },
+        normalizeContext({
+          messages: [{ role: "user", content: "test", timestamp: 1 }],
+        }),
+        {
+          apiKey: "offline-test-only",
+          signal: aborter.signal,
+          maxRetries: 0,
+          fetch: async () => {
+            requests++;
+            throw new Error("transport must not run");
+          },
+        },
+      ).result();
+      assert.equal(response.stopReason, "aborted");
+      assert.equal(requests, 0);
+      const originalFetch = globalThis.fetch;
+      try {
+        globalThis.fetch = async () => {
+          requests++;
+          throw new Error("transport must not run");
+        };
+        await streamGoogle(
+          {
+            api: "google-generative-ai",
+            provider: "google",
+            id: "budget-fixture",
+            name: "Budget fixture",
+            baseUrl: "https://offline.invalid",
+            reasoning: false,
+            input: ["text"],
+            contextWindow: WINDOW,
+            maxTokens: 64_000,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          },
+          normalizeContext({
+            messages: [{ role: "user", content: "test", timestamp: 1 }],
+          }),
+          {
+            apiKey: "offline-test-only",
+            signal: aborter.signal,
+            maxRetries: 0,
+            onPayload: (payload) => providerPayload(f, payload),
+          },
+        ).result();
+        assert.equal(requests, 0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("delivers a failure receipt if a later handler invalidates the boundary", async () => {
+    const f = await forcedSetup();
+    try {
+      const aborter = new AbortController();
+      const ctx = {
+        ...f.ctx,
+        signal: aborter.signal,
+        abort: () => aborter.abort(),
+      };
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? [])
+        await handler(
+          {
+            type: "context_with_system",
+            messages: [
+              { role: "system", content: "s".repeat(350_000), timestamp: 0 },
+            ],
+          } as never,
+          ctx as never,
+        );
+      assert.equal(aborter.signal.aborted, true);
+      f.pi.onCalls.get("turn_end")?.push((event) => ({
+        entries: [
+          ...(event as { entries: BoundaryDraft[] }).entries,
+          { type: "context_edit", targetId: "off-branch", replacement: null },
+        ],
+        continue: false,
+      }));
+      const aborted = assistantMessage([], "aborted", 0);
+      f.sm.appendMessage(aborted as never);
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, aborted);
+      assert.deepEqual(boundary.entries, [], "Pi rejects the whole boundary");
+      await fireAgentSettled(f.pi, f.ctx, true);
+      assert.equal(f.pi.sendMessageCalls.length, 1);
+      const receipt = f.pi.sendMessageCalls[0][0] as { content: string };
+      assert.match(receipt.content, /Request stopped before generation/);
+      await fireAgentSettled(f.pi, f.ctx, true);
+      assert.equal(f.pi.sendMessageCalls.length, 1);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("accounts for the final forced prompt rather than the earlier persisted system view", async () => {
+    for (const oversized of [true, false]) {
+      const f = await forcedSetup();
+      try {
+        const fake = {
+          ...makeFakeSession(f.sm),
+          _runSystemPromptOptions: {
+            forceSystemPrompt: oversized
+              ? "s".repeat(350_000)
+              : "short final prompt",
+          },
+        };
+        __testHooks.captureSession(fake as unknown as AgentSession);
+        const aborter = new AbortController();
+        const ctx = {
+          ...f.ctx,
+          signal: aborter.signal,
+          abort: () => aborter.abort(),
+        };
+        const messages = [
+          {
+            role: "system",
+            content: oversized ? "old short prompt" : "s".repeat(350_000),
+            timestamp: 0,
+          },
+          ...fireContext(f.pi, f.ctx),
+        ];
+        for (const handler of f.pi.onCalls.get("context_with_system") ?? [])
+          await handler(
+            { type: "context_with_system", messages } as never,
+            ctx as never,
+          );
+        assert.equal(aborter.signal.aborted, oversized);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    }
+  });
+
+  it("refuses withholding when the final forced prompt cannot fit", async () => {
+    const f = await forcedSetup();
+    try {
+      __testHooks.captureSession({
+        ...makeFakeSession(f.sm),
+        _runSystemPromptOptions: { forceSystemPrompt: "s".repeat(350_000) },
+      } as unknown as AgentSession);
+      const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(settle.continue, false);
+      assert.deepEqual(withheldTargets(settle.entries), []);
+      assert.equal(
+        forcedDrafts(settle)[0].details.reason,
+        COMPACTION_FAILED_STILL_OVER,
+      );
+      assert.ok(
+        Number(forcedDrafts(settle)[0].details.estimatedAfterProposed) > WINDOW,
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("keeps a feasible complete request and system declarations intact", async () => {
+    const f = await forcedSetup();
+    try {
+      const aborter = new AbortController();
+      const ctx = {
+        ...f.ctx,
+        signal: aborter.signal,
+        abort: () => aborter.abort(),
+      };
+      const messages = [{ role: "system", content: "rules", timestamp: 0 }];
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? []) {
+        const result = await handler(
+          { type: "context_with_system", messages } as never,
+          ctx as never,
+        );
+        assert.equal(result, undefined);
+      }
+      assert.equal(aborter.signal.aborted, false);
+      assert.equal(messages[0].content, "rules");
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
 
   it("retries the reported output-reservation failure without hiding history or requiring anchors", async () => {
     const f = await forcedSetup({ anchor: false, issuerTokens: 15_000 });
@@ -9858,6 +10308,35 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  it("reports proposed removals without applying a partial infeasible plan", async () => {
+    const f = await forcedSetup({ issuerTokens: 200_000 });
+    try {
+      const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+      const details = forcedDrafts(settle).at(-1)?.details;
+      assert.equal(settle.continue, false);
+      assert.deepEqual(withheldTargets(settle.entries), []);
+      assert.equal(details?.appliedWithheld, 0);
+      assert.equal(details?.proposedWithheld, 2);
+      assert.ok(
+        Number(details?.estimatedAfterProposed) > Number(details?.target),
+      );
+      assert.match(
+        forcedDrafts(settle).at(-1)?.content ?? "",
+        /no tool-result replacements were applied/,
+      );
+      for (const id of [f.r1, f.r2]) {
+        const entry = f.sm.getEntry(id);
+        assert.ok(
+          entry?.type === "message" && entry.message.role === "toolResult",
+        );
+        assert.equal(entry.message.content[0].type, "text");
+        assert.equal((entry.message.content[0] as { text: string }).text, BIG);
+      }
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("stops before a forced request when withholding cannot make the input fit", async () => {
     const f = await forcedSetup({ issuerTokens: 200_000 });
     try {
@@ -9885,7 +10364,7 @@ Active anchors (root → leaf, % of 100k):
       f.sm.appendContextEdit(f.r2, null);
       const message = {
         ...assistantMessage([{ type: "text", text: "## Goal" }], "length", 0),
-        usage: { ...usageOf(200_000), output: 100 },
+        usage: { ...usageOf(200_000), input: 200_000, output: 100 },
       };
       const id = f.sm.appendMessage(message as never);
       const turn = await fireTurnEndAll(f.pi, f.ctx, message);
@@ -9914,6 +10393,11 @@ Active anchors (root → leaf, % of 100k):
   it("D11: still over the limit after withholding — #93 failed ending plus D8", async () => {
     const f = await forcedSetup();
     try {
+      f.sm.appendMessage({
+        role: "user",
+        content: "protected".repeat(50_000),
+        timestamp: 0,
+      } as never);
       await requestRewind(f, REWIND_ARGS, "tc-rewind", 200_000);
       const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
       assert.equal(settle.continue, false);

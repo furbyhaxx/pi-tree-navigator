@@ -8,7 +8,8 @@ branch creation, agent-context refresh and history-rewrite notifications.
 
 - `helpers.ts`: label conventions, validation and formatting.
 - `config.ts`: layered global/trusted-project configuration.
-- `context-tokens.ts`, `rewind-hint.ts`: context estimates and rewind hints.
+- `context-tokens.ts`, `rewind-hint.ts`: baseline-safe context estimates, effective
+  system-state accounting, rewind hints and recovery diagnostics.
 - `output-budget.ts`: conservative wire-level output caps for overflow recovery;
   request metadata is scoped to the session/model/run, never persisted.
 - `summary-prompt.ts`: summary instructions, stored-summary preamble and file lists.
@@ -28,8 +29,10 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `handoff.ts`: report metadata, full/synthesized materialization, unique recorded
   statistics and honest model-facing work context.
 - `handoff-renderer.ts`: guarded native summary-card and tree-row patches.
-- `handoff-projection.ts`: shared native projection patch; historical assistant
-  usage stays in accounting but cannot act as a post-conversion context baseline.
+- `handoff-projection.ts`: shared native projection patch; stale assistant usage
+  is invalidated for budgeting without changing historical accounting. Context
+  edits (including edits to the baseline itself), compactions and runtime-state
+  changes cannot reuse measurements of a superseded prefix.
 - `history-outline.ts`: manifest-gated chronological containment in `/tree`, with
   a raw native graph escape and navigation through real entry IDs.
 - `descendant-sessions.ts`: bounded family discovery and immutable-body copy plans.
@@ -49,6 +52,13 @@ for the clone workflow and supported inputs.
   work. Neither namespace may silently overwrite an existing label.
 - Only the active ancestry supplies model context; raw history remains available.
   Compaction and context edits affect projection, not source message payloads.
+  Recovery eligibility follows the canonical projection, not summary markers.
+- Infeasible recovery plans apply no partial tool-result replacements. Diagnostics
+  distinguish proposed changes from applied ones. The final complete-request
+  estimate must leave usable output and headroom when navigator recovery owns it.
+- Live folds preview materialized child reports, late input and continuation
+  overhead before branching. Non-reducing or over-budget estimates fail while
+  keeping the original history and preservation policy.
 - A retrospective operation never edits the source file or opens it through a
   writable session manager. It publishes only a new, independently named session.
 - Conversion must preserve original payloads and accounting, valid tree references,

@@ -212,7 +212,25 @@ Independent of the hint, the tool ships two static `promptGuidelines` bullets, p
 
 `rewindHintReserveTokens` is one switch for two things: the hint (an early warning, above) and **rewind-driven compaction**, which takes over when the context still overflows. Wherever the hint is on for the active model (and `navigate_tree` is active), a real overflow forces a rewind instead of ending the run. It needs pi's auto-compaction off; see [Compaction guidance](#compaction-guidance).
 
-It acts only on a real overflow, detected with pi's own checks (`isContextOverflow` / `isRecoverableLength` from `@earendil-works/pi-ai`): the provider's context-length error, a silent overflow (input over the window), or a reply cut short because the context left no room for output. Only a reply from the active model counts, as in pi. There is no prediction and no capping of tool output.
+Recovery reacts to a real overflow, detected with pi's own checks (`isContextOverflow` / `isRecoverableLength` from `@earendil-works/pi-ai`): the provider's context-length error, a silent overflow (input over the window), or a reply cut short because the context left no room for output. Only a reply from the active model counts, as in pi.
+
+With rewind-driven compaction enabled, a final request check also estimates the
+complete model-facing transcript, including the restored system prompt and tool
+declarations. Its conservative estimate uses Pi's content heuristic adjusted for
+the SDK's denser text estimate, with recorded usage as an additional lower bound.
+The captured final forced prompt replaces persisted system state for this check.
+If the estimate leaves fewer than 1,024 output tokens
+plus 4,096 headroom in the operating window, the operation is aborted before
+transport instead of sending a one-token continuation. The request hook also
+removes the aborted payload so built-in adapters cannot send the original history
+if they ignore an already-aborted signal. Custom providers must honor cancellation
+and payload hooks. A persisted failure receipt
+reports the estimate and window; no tool results are withheld by this check.
+Settlement verifies that the receipt actually committed and appends it if another
+extension invalidated the boundary, without duplicating an existing receipt.
+Use `/tree`, `/compact`, or a larger operating window to recover. This is a local
+estimate, not proof of provider tokenization. Native auto-compaction remains
+responsible when it is enabled.
 
 Before forcing a rewind, an explicit provider error that reports both input and
 reserved output is checked for an output-reservation failure. If the input fits,
@@ -236,7 +254,7 @@ capped before recovery or a pending summary.
 For an actual input overflow, in the same run:
 
 1. The failed reply is hidden from the model (a provider error, or a cut-off reply and its failed tool calls; a silent overflow's complete reply stays).
-2. The newest tool results of the batch that caused it are replaced, one by one, until the estimate fits `contextWindow − compaction.reserveTokens` (pi's reserve for the active model, `compaction.modelOverrides` included). When the failed reply carries usage (a cut-off reply or a silent overflow), the estimate's tail is scaled by the provider's real count: ratio = (real input + cache read + cache write − newest usage) ÷ (estimated tail), never below 1. Each one reads: `[navigate_tree] Output withheld: adding it overflowed the context window (~19k tokens). The call ran; only its output was dropped. Rewind first, then re-run it if you still need the output.` User messages and other extensions' messages are never withheld. Results smaller than their replacement notice are kept. If withholding cannot meet the recovery target, recovery stops without applying partial withholding or issuing another oversized request.
+2. Eligible completed tool results are considered newest-first across the actual retained projection, including ancestors before branch summaries and ranges retained by compaction. They are replaced, one by one, until the estimate fits `contextWindow − compaction.reserveTokens` (pi's reserve for the active model, `compaction.modelOverrides` included). When the failed reply carries usage (a cut-off reply or a silent overflow), the estimate's tail is scaled by the provider's real count: ratio = (real input + cache read + cache write − newest usage) ÷ (estimated tail), never below 1. Each one reads: `[navigate_tree] Output withheld: adding it overflowed the context window (~19k tokens). The call ran; only its output was dropped. Rewind first, then re-run it if you still need the output.` User messages and other extensions' messages are never withheld. The plan includes effective system state and room for the forced-rewind notice. Every proposed replacement is reprojected through the same usage invalidation as the next request; calibration is recomputed when an edit invalidates its baseline, and the complete-request estimate is an additional floor. An infeasible plan applies no tool-result replacements; its failure details distinguish proposed from applied removals. Results smaller than their replacement notice are kept. If withholding cannot meet the recovery target, recovery stops without applying partial withholding or issuing another oversized request.
 3. The model gets the forced-rewind message:
 
 ```text
@@ -254,7 +272,7 @@ When it cannot recover, the run ends with one error message, and the gate lifts:
 [navigate_tree] Context overflow recovery failed: <reason>. The session is at the context limit; rewind manually with /tree, /compact, or start a new session.
 ```
 
-Reasons: `the context overflowed again during the forced rewind` (one forced rewind per overflow, as pi gives up after one compact-and-retry), `no rewind after 3 attempts` (also when the rewind's summary fails 3 times), `no anchor to rewind to` (an overflow before any anchor exists; the automatic `start` is not written on an overflowed run), `the context is still over the limit after withholding tool results` (an overflow while a voluntary rewind waited for its summary, when withholding cannot make room), `the forced rewind was aborted` (Esc), and `the run ended before the rewind`. Another rewind failure during a forced rewind ends it with that rewind's reason.
+Reasons: `the context overflowed again during the forced rewind` (one forced rewind per overflow, as pi gives up after one compact-and-retry), `no rewind after 3 attempts` (also when the rewind's summary fails 3 times), `no anchor to rewind to` (an overflow before any anchor exists; the automatic `start` is not written on an overflowed run), `the protected context cannot fit the recovery budget; no tool-result replacements were applied` (the proposed replacements cannot make room for a forced rewind or a pending summary), `the forced rewind was aborted` (Esc), and `the run ended before the rewind`. Another rewind failure during a forced rewind ends it with that rewind's reason.
 
 An overflow while a voluntary rewind waits for its summary keeps the model's rewind: the summary attempt is hidden, tool results before the `rewind` call are withheld, and the summary request is sent again.
 
@@ -351,6 +369,17 @@ Earlier releases summarized with a separate request: first pi's cold `generateBr
 2. **The instruction message.** The rewind turn's `turn_end` returns a `navigate-tree-summary-request` custom message as a boundary entry with `continue: true`: `[navigate_tree]`, a newline, then the eval-approved r5d instruction with `{first}` (the 1-based number of the first collapsed message in the projection the model sees) and `Additional focus: <summaryFocus>`. pi commits it right after the rewind's tool result and before queued steers. The model receives it as a user message rather than as a tool result, so it no longer reads like an instruction injected through a tool. In the TUI it renders as one line, `[rewind to '<rewindTo>' · collapse as '<newLabel>'] · summarizing · context 30.4% → ~12.0% of 1.0M` (the `~` figure is the estimate at the anchor before the summary is added), and expands to the full text.
 3. **The summary turn.** The model's next reply is the summary: an append to the live conversation, so it is served from the prompt cache like any other turn. While the rewind is pending, the request is frozen at the instruction message: the `context` handler drops everything after it, so steers and other extensions' messages that arrive meanwhile are not sent, and every retry sends the same messages. Every tool call is blocked (TUI-only reason: `navigate_tree: blocked: the model tried to call a tool instead of summarizing.`).
 4. **`turn_end`.** A text-only turn with the r5d `## Goal` heading completes the rewind: any preamble before `## Goal` is dropped, the summary turn is labeled `branch:<newLabel>`, the stored `branch_summary` gets an honest work-handoff title, structured display/accounting metadata, the configured child reports and `<read-files>`/`<modified-files>` lists (tool calls of hidden attempts excluded), `branchWithSummary` forks from the anchor, the label is written, `agent.state.messages` is refreshed and `session_tree` is emitted. The continuation message (`customType: "navigate-tree-rewind"`) is delivered in the same run, so the rewound context reaches a real turn — and the footer's token count updates — without a user prompt.
+
+Before writing the new branch, the extension previews the fully materialized
+handoff, including full child reports, late input and continuation overhead.
+A handoff that does not reduce the estimated context, or leaves insufficient
+request headroom, is refused without a new summary branch or completion label.
+The existing history and `full` preservation policy remain unchanged; tighten the
+report or select another anchor rather than silently dropping child detail.
+Successful continuations record `foldEstimateBefore` and `foldEstimateAfter`.
+Both fold estimates use the same content-only heuristic on the current edited
+views, so stale historical usage cannot manufacture savings. They are not
+independently tokenized provider requests.
 
 A summary attempt fails when it calls a tool, has no `## Goal` summary (including an empty or thinking-only reply), or is cut off (`stopReason: "length"`); a cut-off reply that also calls a tool counts as cut off. A failed attempt is hidden from model context (`context_edit` with `null` on the assistant and all its tool results, together) and the same request is sent again with nothing appended. After `MAX_SUMMARY_ATTEMPTS` (3 in total) the rewind fails: the instruction and the attempts are hidden, the rewind's tool result is replaced with the failure text for the last attempt's cause, and it is sent as a tool error (`isError: true`):
 

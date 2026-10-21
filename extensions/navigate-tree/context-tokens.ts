@@ -1,75 +1,13 @@
-/**
- * context-tokens — local `estimateContextTokens` parity helper.
- *
- * ## Why this exists
- *
- * `@earendil-works/pi-agent-core` exported `estimateContextTokens` through
- * 0.99.2 but dropped it from the root export in **1.0.0** (its runtime keys
- * are now `Agent`, `agentLoop`, `agentLoopContinue`, `runAgentLoop`,
- * `runAgentLoopContinue`, `runToolCall`, `setDefaultStreamFn`, and
- * `streamProxy`). `@earendil-works/pi-coding-agent` never re-exported it at
- * the root in any version (0.87.1 / 0.99.2 / 1.0.0); its implementation
- * lives at `dist/core/compaction/compaction.js`, but it is not reachable
- * through the package `exports` map (on 0.87.1+: root, `./rpc-entry`, and
- * source-only subpaths only), so it is not importable. Importing
- * the old name as a runtime value therefore left it `undefined` on pi
- * 1.0.0, and every `navigate_tree` action threw
- * `(0, _piAgentCore.estimateContextTokens) is not a function`.
- *
- * This module reproduces the removed helper's semantics on top of two
- * `@earendil-works/pi-coding-agent` root exports that are public across the
- * whole peer range (≥0.87.0, the peer floor):
- *   • `calculateContextTokens(usage)` — provider usage → context tokens.
- *   • `estimateTokens(message)` — per-message chars/4 heuristic.
- *
- * Semantics (identical to the removed helper): walk newest→oldest for the
- * first assistant message with a *valid* usage — `stopReason` neither
- * `"aborted"` nor `"error"` and `calculateContextTokens(usage) > 0` — and
- * return that baseline plus `estimateTokens` for every message after it.
- * With no valid usage anywhere, sum `estimateTokens` over every message.
- *
- * ## Known divergences (no cross-version numeric parity claim)
- *
- * - **System messages.** pi 1.0.0's `estimateTokens` adds a `system` case
- *   (counts `content`, `sections`, and `toolsAdded`) where 0.84.2 returned
- *   `0`. `buildSessionContext(...).messages` carries `system` entries on
- *   1.0.0, so an estimate is self-consistent per host — but a chain
- *   containing system entries does not produce the same number on both
- *   versions. No cross-version parity is claimed. Nor is parity with pi's
- *   `estimateProjectedContextTokens` on the no-usage path: pi folds the
- *   system entries into the current system state (`getCurrentSystemMessage`)
- *   while this helper sums every entry, so replaced or removed sections and
- *   tool changes count here but not in pi.
- * - **`JSON.stringify` vs `safeJsonStringify`.** The removed pi-agent-core
- *   helper wrapped toolCall `arguments` serialization in a
- *   `safeJsonStringify` guard (falling back to `"[unserializable]"`); the
- *   public `estimateTokens` uses plain `JSON.stringify` (0.84.2 and 1.0.0
- *   alike — v1 restricts toolCall arguments to JSON-compatible values).
- *   The guard is deliberately not reproduced.
- * - **Stale usage baseline after `context_edit` / compaction.** Both this
- *   helper and pi's `estimateProjectedContextTokens` (behind
- *   `ctx.getContextUsage()`) estimate the projected messages, but pi drops
- *   the last assistant usage as a baseline when it sits at or before the
- *   latest `context_edit` or `compaction` entry; this helper keeps it. On
- *   such a branch an anchor percentage (this helper) can exceed what pi
- *   reports for the same point (after compaction pi reports `tokens: null`
- *   until the next assistant usage). Moving live-branch numbers onto pi's
- *   estimate is tracked in #64.
- */
-
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { getCurrentSystemMessage } from "@earendil-works/pi-ai";
 import {
   calculateContextTokens,
+  convertToLlm,
   estimateTokens,
 } from "@earendil-works/pi-coding-agent";
 
 type Usage = Parameters<typeof calculateContextTokens>[0];
 
-/**
- * Valid assistant usage for baseline purposes: `stopReason` not
- * `"aborted"`/`"error"` and a nonzero context-token count. Mirrors the
- * removed pi-agent-core helper's `getAssistantUsage` predicate exactly.
- */
 function validAssistantUsage(message: AgentMessage): Usage | undefined {
   if (message.role !== "assistant") return undefined;
   const assistant = message as {
@@ -87,21 +25,18 @@ function validAssistantUsage(message: AgentMessage): Usage | undefined {
   return undefined;
 }
 
-/**
- * `estimateContextTokens` split at its baseline (#101, A): `baseline` is the
- * newest valid assistant usage (0 with none) and `tail` the `estimateTokens`
- * sum of the messages after it (all messages with none). The total is
- * `baseline + tail`; the withholding planner scales `tail` alone, because
- * the provider's real count can only disagree with the estimate there.
- */
+/** Split a baseline-safe projection into recorded usage and its estimated tail. */
 export function splitContextEstimate(messages: AgentMessage[]): {
   baseline: number;
   tail: number;
 } {
   const anchor = newestUsageIndex(messages);
   const usage = anchor >= 0 ? validAssistantUsage(messages[anchor]) : undefined;
-  let tail = 0;
+  const currentSystem =
+    anchor < 0 ? getCurrentSystemMessage(messages) : undefined;
+  let tail = currentSystem ? estimateTokens(currentSystem) : 0;
   for (let j = anchor + 1; j < messages.length; j++) {
+    if (anchor < 0 && messages[j].role === "system") continue;
     tail += estimateTokens(messages[j]);
   }
   return {
@@ -110,11 +45,7 @@ export function splitContextEstimate(messages: AgentMessage[]): {
   };
 }
 
-/**
- * Index of the newest message carrying a valid assistant usage (the baseline
- * of `splitContextEstimate`), or -1 with none. Messages at or before it are
- * already counted by its real usage.
- */
+/** Find the newest valid usage in messages whose stale baselines have been invalidated. */
 export function newestUsageIndex(messages: AgentMessage[]): number {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (validAssistantUsage(messages[i])) return i;
@@ -122,15 +53,40 @@ export function newestUsageIndex(messages: AgentMessage[]): number {
   return -1;
 }
 
-/**
- * Total estimated context tokens for `messages`.
- *
- * Uses the newest valid assistant usage as the baseline plus
- * `estimateTokens` for every later message (the newest usage covers
- * everything before it); with no valid usage, sums `estimateTokens` over
- * all messages. See the file JSDoc for the version boundary and the
- * known system-message / `safeJsonStringify` divergences.
- */
+/** Compare projected content on one heuristic without historical usage baselines. */
+export function estimateContentTokens(messages: AgentMessage[]): number {
+  const system = getCurrentSystemMessage(messages);
+  return (
+    (system ? estimateTokens(system) : 0) +
+    messages.reduce(
+      (sum, message) =>
+        sum + (message.role === "system" ? 0 : estimateTokens(message)),
+      0,
+    )
+  );
+}
+
+/** Estimate request headroom conservatively against the SDK's denser text heuristic. */
+export function estimateRequestTokens(messages: AgentMessage[]): number {
+  const converted = convertToLlm(messages);
+  const anchor = newestUsageIndex(converted);
+  const usage =
+    anchor >= 0 ? validAssistantUsage(converted[anchor]) : undefined;
+  const tail = converted
+    .slice(anchor + 1)
+    .reduce((sum, message) => sum + estimateTokens(message), 0);
+  const content = converted.reduce(
+    (sum, message) => sum + estimateTokens(message),
+    0,
+  );
+  // Host estimates use four chars/token; the SDK's text heuristic uses 3.5.
+  return Math.max(
+    Math.ceil((content * 8) / 7),
+    (usage ? calculateContextTokens(usage) : 0) + Math.ceil((tail * 8) / 7),
+  );
+}
+
+/** Estimate projected context with Pi's heuristic and the effective system state. */
 export function estimateContextTokens(messages: AgentMessage[]): number {
   const { baseline, tail } = splitContextEstimate(messages);
   return baseline + tail;

@@ -178,6 +178,22 @@ describe("estimateContextTokens", () => {
     );
   });
 
+  it("counts the effective system state once after section replacement", () => {
+    const head = {
+      role: "system" as const,
+      content: "",
+      sections: { context: "x".repeat(4000) },
+      timestamp: 0,
+    };
+    const update = {
+      role: "system" as const,
+      content: "",
+      sections: { context: "tiny" },
+      timestamp: 1,
+    };
+    assert.equal(estimateContextTokens([head, user(4), update]), 2);
+  });
+
   it("image blocks are accounted as chars in the trailing estimate", () => {
     // 400 text chars + 4800 image chars = 5200 → 1300 tokens.
     assert.equal(estimateContextTokens([userWithImage(400)]), 1300);

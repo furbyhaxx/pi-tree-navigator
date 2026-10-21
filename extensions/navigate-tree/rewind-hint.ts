@@ -130,7 +130,7 @@ export const COMPACTION_FAILED_NO_REWIND = `no rewind after 3 attempts`;
 export const COMPACTION_FAILED_NO_ANCHOR = "no anchor to rewind to";
 export const COMPACTION_FAILED_ABORTED = "the forced rewind was aborted";
 export const COMPACTION_FAILED_STILL_OVER =
-  "the context is still over the limit after withholding tool results";
+  "the protected context cannot fit the recovery budget; no tool-result replacements were applied";
 export const COMPACTION_FAILED_RUN_ENDED = "the run ended before the rewind";
 
 /** Reason of a tool call blocked during a forced rewind (TUI-only, §9.6). */
