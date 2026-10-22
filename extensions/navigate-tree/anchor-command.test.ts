@@ -101,6 +101,16 @@ function setup(options: Options = {}) {
     listed: 0,
   };
   const deps: AnchorCommandDeps = {
+    settings: {
+      locations: () => ({
+        agentDir: "/__anchor_test_missing__",
+        projectPath: "/__anchor_test_missing__/project.json",
+        projectTrusted: false,
+      }),
+      readFile: async () => {
+        throw Object.assign(new Error("not found"), { code: "ENOENT" });
+      },
+    },
     suggestLabel: (_ctx, anchor) => `${anchor.name}-done`,
     minSavingsTokens: 4000,
     minFocusLength: 20,
@@ -282,10 +292,10 @@ describe("/anchor dispatch", () => {
       ["state", /\/anchor current is not available yet/],
       ["fold", /guided fold requires an interactive terminal/],
       ["rewind", /guided fold requires an interactive terminal/],
-      ["settings", /\/anchor settings is not available yet/],
-      ["setting", /\/anchor settings is not available yet/],
-      ["config", /\/anchor settings is not available yet/],
-      ["set", /\/anchor settings is not available yet/],
+      ["settings", /Anchor settings/],
+      ["setting", /Anchor settings/],
+      ["config", /Anchor settings/],
+      ["set", /Anchor settings/],
       ["clone", /^Usage: \/anchor clone \[/],
       ["restructure", /^Usage: \/anchor clone \[/],
       ["clones", /^Usage: \/anchor clone \[/],
@@ -404,6 +414,7 @@ describe("/anchor screens", () => {
         press(ESC),
         press(DOWN, DOWN, ENTER),
         press(ESC),
+        press(ESC),
       ],
     });
     await test.run("");
@@ -411,10 +422,11 @@ describe("/anchor screens", () => {
       test.notifications.map(
         ({ message }) => message.match(/[a-z-]+ slice/)?.[0],
       ),
-      ["continuity-ledger slice", "settings slice"],
+      ["continuity-ledger slice"],
     );
     assert.ok(test.rendered[2][0].includes("Anchor/Fold"));
-    assert.equal(test.rendered.length, 5);
+    assert.ok(test.rendered[4][0].includes("Anchor/Settings"));
+    assert.equal(test.rendered.length, 6);
   });
 
   it("opens the tree from the hub and returns on Escape", async () => {

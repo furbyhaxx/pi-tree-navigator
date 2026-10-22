@@ -20,6 +20,12 @@ import {
   CLONE_USAGE,
   runCloneSubcommand,
 } from "./retrospective-command.ts";
+import {
+  createSettingsScreenDeps,
+  describeSettings,
+  openSettingsScreen,
+  type SettingsScreenDeps,
+} from "./settings-screen.ts";
 import { openTreeScreen, treeItems, treeSummary } from "./tree-screen.ts";
 
 /** One anchor on the active branch, as listed by `/anchor list`. */
@@ -37,6 +43,7 @@ export interface AnchorRow {
 
 /** Session access the command needs; supplied by the extension entry point. */
 export interface AnchorCommandDeps extends FoldScreenDeps {
+  settings?: SettingsScreenDeps;
   contextBadge?(ctx: ExtensionCommandContext): string | undefined;
   /** The active branch's continuity ledger; `/anchor current` needs it. */
   readLedger?(ctx: ExtensionCommandContext): Ledger | undefined;
@@ -88,8 +95,6 @@ const ANCHOR_USAGE = `Usage: /anchor [tree|list|current|fold|clone|settings]. Ru
 const NOT_AVAILABLE = {
   current:
     "/anchor current is not available yet: the briefing & continuity ledger belongs to the continuity-ledger slice.",
-  settings:
-    "/anchor settings is not available yet: the staged settings screen belongs to the settings slice. Edit tree-navigator.json meanwhile.",
 } as const;
 
 const HUB: readonly {
@@ -425,7 +430,10 @@ async function openView(
     case "fold":
       return openFoldScreen(ctx, deps);
     case "settings":
-      return notAvailable(ctx, view);
+      return openSettingsScreen(
+        ctx,
+        deps.settings ?? createSettingsScreenDeps(),
+      );
   }
 }
 
@@ -453,6 +461,7 @@ async function openHub(
       if (view === "tree")
         return { ...row, value: treeSummary(treeItems(ctx.sessionManager)) };
       if (view === "fold") return { ...row, value: "anchor · label · focus" };
+      if (view === "settings") return { ...row, value: "global · project" };
       if (view === "clone") return row;
       return { ...row, value: "not available yet", tone: "muted" };
     });
@@ -535,14 +544,23 @@ export function registerAnchorCommand(
           "The guided fold requires an interactive terminal. Use navigate_tree action=rewind with rewindTo, newLabel and summaryFocus.",
           "info",
         );
+      } else if (subcommand === "settings") {
+        if (!ctx.hasUI || rest === "show")
+          ctx.ui.notify(
+            await describeSettings(
+              ctx,
+              deps.settings ?? createSettingsScreenDeps(),
+            ),
+            "info",
+          );
+        else await openView(subcommand, ctx, pi, deps);
       } else if (ctx.hasUI) {
         await openView(subcommand, ctx, pi, deps);
       } else {
         const ledger =
           subcommand === "current" ? deps.readLedger?.(ctx) : undefined;
         if (ledger) ctx.ui.notify(briefingText(ledger), "info");
-        else if (subcommand === "current" || subcommand === "settings")
-          notAvailable(ctx, subcommand);
+        else if (subcommand === "current") notAvailable(ctx, subcommand);
       }
     },
   });

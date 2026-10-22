@@ -1018,6 +1018,24 @@ async function offerReload(ctx: ExtensionCommandContext): Promise<boolean> {
 
 // --- The loop ------------------------------------------------------------------
 
+/** Human-readable effective settings for non-interactive commands. */
+export async function describeSettings(
+  ctx: ExtensionCommandContext,
+  deps: SettingsScreenDeps,
+): Promise<string> {
+  const snap = await readSnapshot(ctx, deps);
+  const lines = SETTINGS.map((def) => {
+    const { value, source } = resolveDef(def, snap.current);
+    return `${def.key}: ${show(def, value)} (${source})`;
+  });
+  return [
+    "Anchor settings",
+    ...lines,
+    `Global: ${snap.paths.global}`,
+    `Project: ${snap.paths.project}${snap.trusted ? "" : " (untrusted, ignored)"}`,
+  ].join("\n");
+}
+
 /** Edit tree-navigator.json settings in staged changes until the user leaves. */
 export async function openSettingsScreen(
   ctx: ExtensionCommandContext,
