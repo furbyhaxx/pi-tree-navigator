@@ -11172,6 +11172,17 @@ describe("continuity capture", () => {
     }
   }
 
+  it("captures nothing while navigate_tree is not in the active tool set", async () => {
+    const f = setup();
+    await fireBeforeAgentStart(f.pi, f.ctx, ["read", "bash"]);
+    await turn(f, RULE);
+    assert.equal(opsEntries(f.sm).length, 0);
+
+    await fireBeforeAgentStart(f.pi, f.ctx, ["read", "navigate_tree"]);
+    await turn(f, "Always use tabs from now on, going forward.");
+    assert.equal(opsEntries(f.sm).length, 1);
+  });
+
   it("records the user's rule verbatim after the turn, and nothing more on a turn without new input", async () => {
     const f = setup();
     const { userId, assistantId } = appendTurn(f.sm, RULE, "ok");

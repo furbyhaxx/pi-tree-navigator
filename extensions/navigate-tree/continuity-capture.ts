@@ -364,8 +364,9 @@ function verdictFrom(
  * Classify with a registry classifier model, one call per message. Resolves to
  * `undefined` (after `opts.onWarning`) when `model` is malformed or unknown;
  * never throws. A low-confidence or malformed answer is ephemeral. After the
- * first provider error the instance stops calling the model, returns ephemeral
- * and reports the failure once through `IntentVerdict.warning`; create a new
+ * first provider error the instance stops calling the model, answers with the
+ * heuristic classifier so no explicit rule is lost during an outage, and
+ * reports the failure once through `IntentVerdict.warning`; create a new
  * instance to retry.
  */
 export async function createModelClassifier(
@@ -386,7 +387,8 @@ export async function createModelClassifier(
   }
   let failed = false;
   return async (input, signal) => {
-    if (failed || signal?.aborted) return ephemeral();
+    if (signal?.aborted) return ephemeral();
+    if (failed) return heuristicClassifier(input, signal);
     const items = pickItems(input.activeItems);
     let result: ClassifierResult | undefined;
     let reason: string | undefined;
@@ -406,11 +408,13 @@ export async function createModelClassifier(
     if (!result || reason !== undefined) {
       const first = !failed;
       failed = true;
-      return ephemeral(
-        first
-          ? `navigate_tree: continuity classifier ${model} failed (${reason}); user instructions were not classified this pass.`
-          : undefined,
-      );
+      const fallback = await heuristicClassifier(input, signal);
+      return first
+        ? {
+            ...fallback,
+            warning: `navigate_tree: continuity classifier ${model} failed (${reason}); user instructions are captured by heuristics instead.`,
+          }
+        : fallback;
     }
     return verdictFrom(result, items, minConfidence);
   };

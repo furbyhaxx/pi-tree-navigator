@@ -1307,30 +1307,33 @@ describe("createModelClassifier", () => {
     assert.equal((await classifier(input())).kind, "rule");
   });
 
-  it("a provider error is ephemeral with one warning, and the instance stops calling the model", async () => {
+  it("a provider error falls back to the heuristic verdict with one warning, and the instance stops calling the model", async () => {
     const { classifier, calls } = await make(() => ({
       stopReason: "error",
       errorMessage: "rate limited",
     }));
     const first = await classifier(input());
-    assert.equal(first.kind, "ephemeral");
+    assert.equal(first.kind, "rule");
+    assert.equal(first.by, "heuristic");
     assert.match(
       first.warning ?? "",
       /typesafe\/jev-latest failed \(rate limited\)/,
     );
     const second = await classifier(input());
-    assert.deepEqual(second, { kind: "ephemeral", by: "classifier" });
+    assert.deepEqual(second, { kind: "rule", by: "heuristic" });
     assert.equal(calls.length, 1);
+    const chat = await classifier(input({ text: "Looks good, thanks." }));
+    assert.equal(chat.kind, "ephemeral");
   });
 
   it("a thrown error is handled like a provider error", async () => {
     const { classifier } = await make(() => new Error("socket closed"));
     const out = await classifier(input());
-    assert.equal(out.kind, "ephemeral");
+    assert.equal(out.kind, "rule");
     assert.match(out.warning ?? "", /socket closed/);
   });
 
-  it("surfaces the warning once in a capture result", async () => {
+  it("surfaces the warning once in a capture result and still captures explicit rules", async () => {
     const { classifier } = await make(() => ({
       stopReason: "error",
       errorMessage: "boom",
@@ -1338,7 +1341,7 @@ describe("createModelClassifier", () => {
     const branch = [
       user("u1", "From now on use spaces, not tabs."),
       user("u2", "Also never touch the generated files."),
-      user("u3", "And always rebase before opening a pull request."),
+      user("u3", "Thanks, that looks fine."),
     ];
     const result = await captureIntent(
       branch,
@@ -1346,7 +1349,16 @@ describe("createModelClassifier", () => {
       createLedger(),
       classifier,
     );
-    assert.deepEqual(result.ops, []);
+    assert.deepEqual(
+      result.ops.map(({ op, ctx }) => [
+        op.op === "add" && op.quote,
+        ctx.entryId,
+      ]),
+      [
+        ["From now on use spaces, not tabs.", "u1"],
+        ["Also never touch the generated files.", "u2"],
+      ],
+    );
     assert.equal(result.classified, 3);
     assert.equal(result.warnings.length, 1);
     assert.match(result.warnings[0] ?? "", /boom/);

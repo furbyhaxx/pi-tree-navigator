@@ -130,6 +130,7 @@ import { registerHandoffRenderer } from "./handoff-renderer.ts";
 import {
   type AnchorTableRow,
   BRANCH_LABEL_PREFIX,
+  buildFoldRequestText,
   extractTextContent,
   formatAnchorTable,
   formatContextDelta,
@@ -1960,7 +1961,7 @@ export default function (pi: ExtensionAPI) {
         anchorName,
       );
       pi.sendUserMessage(
-        `Please fold the work since the '${anchorName}' anchor: call ${TOOL_NAME}(action='rewind', rewindTo='${anchorName}', newLabel='${label}'), with a summaryFocus of at least ${MIN_SUMMARY_FOCUS_LENGTH} characters covering my latest instruction, what is done since that anchor and what remains.`,
+        buildFoldRequestText(anchorName, label, MIN_SUMMARY_FOCUS_LENGTH),
         ctx.isIdle() ? undefined : { deliverAs: "followUp" },
       );
     },
@@ -3125,6 +3126,7 @@ export default function (pi: ExtensionAPI) {
     message: { stopReason?: string },
   ): Promise<void> {
     if (!continuityConfig.capture) return;
+    if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
     if (message.stopReason === "error" || message.stopReason === "aborted") {
       return;
     }

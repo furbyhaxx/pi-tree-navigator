@@ -9,8 +9,10 @@
 
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { FOLD_REQUEST_RE } from "./continuity-capture.ts";
 import {
   BRANCH_LABEL_PREFIX,
+  buildFoldRequestText,
   extractTextContent,
   formatAnchorTable,
   formatContextDelta,
@@ -334,6 +336,18 @@ describe("formatAnchorTable (#101 D19)", () => {
     assert.equal(
       capped.split("\n")[2],
       `   2.0%  ${"s".padEnd(MAX_NAME_LENGTH)}  (after: “b”)`,
+    );
+  });
+});
+
+describe("buildFoldRequestText", () => {
+  it("stays recognizable to continuity capture, and user text does not", () => {
+    const text = buildFoldRequestText("impl-start", "impl-done", 20);
+    assert.match(text, FOLD_REQUEST_RE);
+    assert.match(text, /rewindTo='impl-start', newLabel='impl-done'/);
+    assert.doesNotMatch(
+      "Please fold the laundry before you leave.",
+      FOLD_REQUEST_RE,
     );
   });
 });

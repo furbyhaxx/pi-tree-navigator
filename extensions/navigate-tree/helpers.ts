@@ -24,6 +24,18 @@
 // desync the `[navigate_tree hint]` copy from the tool the model calls.
 export const TOOL_NAME = "navigate_tree";
 
+/**
+ * The user message `/anchor` injects to ask the agent for a fold. Continuity
+ * capture skips it by pattern (`FOLD_REQUEST_RE`), so the wording is shared.
+ */
+export function buildFoldRequestText(
+  anchorName: string,
+  newLabel: string,
+  minFocusLength: number,
+): string {
+  return `Please fold the work since the '${anchorName}' anchor: call ${TOOL_NAME}(action='rewind', rewindTo='${anchorName}', newLabel='${newLabel}'), with a summaryFocus of at least ${minFocusLength} characters covering my latest instruction, what is done since that anchor and what remains.`;
+}
+
 // Reserved label prefix shared by anchor/rewind labels. Lives here (not
 // index.ts) so the tool description, the tool handlers, and the rewind-hint
 // copy builders can't desync on a rename.
