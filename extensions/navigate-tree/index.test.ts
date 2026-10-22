@@ -51,6 +51,13 @@ import {
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
 import { splitContextEstimate } from "./context-tokens.ts";
+import { renderBriefing } from "./continuity-briefing.ts";
+import { LEDGER_DETAILS_KEY, parseLedger } from "./continuity-ledger.ts";
+import {
+  appendOpsEntry,
+  readBranchLedger,
+  type StoredOp,
+} from "./continuity-store.ts";
 import { MAX_NAME_LENGTH, TOOL_NAME } from "./helpers.ts";
 import navigateTree, {
   __testHooks,
@@ -534,6 +541,34 @@ function setupRewindable(
     return { fake, anchorId: t1.assistantId };
   }
   return { anchorId: t1.assistantId };
+}
+
+/**
+ * `setupRewindable` with a folded span of assistant turns only: no user
+ * message between the anchor and the leaf (autonomous work).
+ */
+function setupAutonomousSpan(
+  sm: SessionManager,
+  pi: FakePi,
+  tokenCounts = [12_000, 18_000, 24_000],
+): { anchorId: string } {
+  const first = appendTurn(sm, "u1", "a1", 6_000);
+  pi.pi.setLabel(first.assistantId, "anchor:start");
+  for (const totalTokens of tokenCounts) {
+    sm.appendMessage({
+      role: "assistant",
+      content: [
+        { type: "text", text: "Recorded work and evidence.\n".repeat(1200) },
+      ],
+      api: "anthropic",
+      provider: "claude",
+      model: "claude-sonnet-4-5",
+      stopReason: "endTurn",
+      timestamp: Date.now(),
+      usage: usageOf(totalTokens),
+    } as never);
+  }
+  return { anchorId: first.assistantId };
 }
 
 // -----------------------------------------------------------------------------
@@ -2504,7 +2539,7 @@ describe("dispatch: rewind phase 1 (summary request)", () => {
 
   it("the rewind turn's turn_end returns the instruction custom message + continue (#90 S1/S3)", async () => {
     const f = setup();
-    setupRewindable(f.sm, f.pi);
+    setupAutonomousSpan(f.sm, f.pi);
     const { result } = await requestRewind(f);
     const boundary = f.pi.boundaryResults.at(-1);
     assert.ok(boundary);
@@ -2616,7 +2651,7 @@ describe("dispatch: rewind phase 1 (summary request)", () => {
 
   it("interpolates the focus verbatim into the instruction (no truncation, no {first} left over)", async () => {
     const f = setup();
-    setupRewindable(f.sm, f.pi);
+    setupAutonomousSpan(f.sm, f.pi);
     const focus = `user said: ship it. ${"detail ".repeat(400)}`.trim();
     const { result } = await requestRewind(f, {
       ...REWIND_ARGS,
@@ -10634,5 +10669,406 @@ Active anchors (root → leaf, % of 100k):
     } finally {
       cleanupConfigFixture(f.fixture);
     }
+  });
+});
+
+// =============================================================================
+// Session continuity ledger on the live fold
+// =============================================================================
+
+describe("rewind: continuity ledger", () => {
+  const userMessage = (text: string) =>
+    ({ role: "user", content: [{ type: "text", text }] }) as never;
+
+  /**
+   * u1 (rule R1 on the kept chain) → a1 [anchor:start] → span with a steering
+   * item (T2, scoped to `start`) and another rule (R3) that exist only on the
+   * branch about to be abandoned.
+   */
+  async function ledgerFixture(
+    opts: { summary?: string; request?: boolean } = {},
+  ) {
+    const f = setup();
+    const u1 = f.sm.appendMessage(userMessage("u1 never edit the lockfile"));
+    appendOpsEntry(f.pi.pi, [
+      {
+        op: {
+          op: "add",
+          kind: "rule",
+          text: "Never edit the lockfile",
+          quote: "never edit the lockfile",
+        },
+        ctx: { origin: "user", entryId: u1 },
+      },
+    ]);
+    const a1 = f.sm.appendMessage(
+      assistantMessage([{ type: "text", text: "a1" }], "stop", 6_000) as never,
+    );
+    f.pi.pi.setLabel(a1, "anchor:start");
+    const t2 = appendTurn(
+      f.sm,
+      "u2 look at the parser first",
+      "a2",
+      12_000,
+      true,
+    );
+    appendOpsEntry(f.pi.pi, [
+      {
+        op: {
+          op: "add",
+          kind: "steering",
+          text: "Look at the parser first",
+          scopeAnchor: "start",
+        },
+        ctx: { origin: "user", entryId: t2.userId },
+      },
+    ]);
+    const t3 = appendTurn(f.sm, "u3 always run the linter", "a3", 24_000, true);
+    appendOpsEntry(f.pi.pi, [
+      {
+        op: { op: "add", kind: "rule", text: "Always run the linter" },
+        ctx: { origin: "user", entryId: t3.userId },
+      },
+    ]);
+    const leafBeforeFold = f.sm.getLeafId() as string;
+    const before = readBranchLedger(f.sm.getBranch());
+    await requestRewind(f);
+    const summary =
+      opts.summary === undefined
+        ? undefined
+        : await summaryTurn(f, opts.summary);
+    return { ...f, u1, a1, t2, t3, leafBeforeFold, before, summary };
+  }
+
+  const foldedEntry = (sm: SessionManager, pi: FakePi) => {
+    const done = rewindMessages(pi).at(-1);
+    assert.ok(done, "a continuation was delivered");
+    const entry = sm.getEntry(done.message.details.summaryId as string);
+    assert.ok(entry && entry.type === "branch_summary");
+    return { done: done.message, entry };
+  };
+
+  const deltaBlock = (body: unknown) =>
+    `\n\n<continuity-delta>\n${JSON.stringify(body)}\n</continuity-delta>`;
+
+  it("sends the ledger and the span's user messages with the summary request", async () => {
+    const f = await ledgerFixture();
+    const { content } = summaryRequestDraftOf(f.pi);
+    assert.ok(
+      content.startsWith(buildSummaryRequestText(3, REWIND_ARGS.summaryFocus)),
+    );
+    const section = content.slice(
+      buildSummaryRequestText(3, REWIND_ARGS.summaryFocus).length,
+    );
+    assert.match(section, /^\n\nContinuity ledger rev 3\./);
+    assert.match(section, /R1 Never edit the lockfile/);
+    assert.match(section, /R3 Always run the linter/);
+    assert.match(
+      section,
+      /Steering scoped to start \(archived by this fold\):\nT2 /,
+    );
+    assert.ok(
+      section.includes(`- ${f.t2.userId}: u2 look at the parser first`),
+    );
+    assert.ok(section.includes(`- ${f.t3.userId}: u3 always run the linter`));
+    assert.ok(!section.includes(f.u1), "u1 is before the anchor");
+  });
+
+  it("stores the reconciled snapshot and the briefing; the rule stays active, the steering is archived", async () => {
+    const f = await ledgerFixture({ summary: SUMMARY_TEXT });
+    const { done, entry } = foldedEntry(f.sm, f.pi);
+    const snapshot = parseLedger(
+      (entry.details as Record<string, unknown>)[LEDGER_DETAILS_KEY],
+    );
+    const status = (id: string) =>
+      snapshot.items.find((item) => item.id === id)?.status;
+    assert.equal(status("R1"), "active");
+    assert.equal(status("R3"), "active");
+    assert.equal(status("T2"), "archived");
+    // Carried by the snapshot, not by the abandoned span's ops entries.
+    assert.equal(
+      f.sm.getBranch().some((e) => e.id === f.t3.userId),
+      false,
+    );
+    assert.deepEqual(readBranchLedger(f.sm.getBranch()), {
+      ledger: snapshot,
+      warnings: [],
+    });
+    const briefing = renderBriefing(snapshot, { maxTokens: 2500 }).text;
+    assert.equal(
+      entry.summary,
+      `# Work handoff: end\n\n${SUMMARY_TEXT}\n\n## Continuity ledger\n\n${briefing}`,
+    );
+    assert.ok(entry.summary.includes("R1 Never edit the lockfile"));
+    assert.ok(!entry.summary.includes("Look at the parser first"));
+    assert.deepEqual(done.details.continuity, {
+      rev: snapshot.rev,
+      applied: 1,
+      rejected: [],
+      evicted: [],
+    });
+    assert.equal(
+      done.content,
+      `${buildRewindDoneText(
+        {
+          rewindTo: "start",
+          newLabel: "end",
+          beforeTokens: done.details.contextBefore as number,
+          contextWindow: 1_000_000,
+        },
+        done.details.contextAfter as number,
+      )}\n\n${__testHooks.REFLECTION_BOOTSTRAP_WARNING_REWIND}`,
+      "nothing to report: the continuation copy is unchanged",
+    );
+    assert.equal(
+      f.sm.buildSessionContext().messages.some((m) => {
+        const text = JSON.stringify(m);
+        return text.includes("Never edit the lockfile");
+      }),
+      true,
+      "the briefing reaches the model through the handoff",
+    );
+  });
+
+  it("rejects a delta that archives a user rule per item, applies the valid ones and says so", async () => {
+    const f = await ledgerFixture({
+      summary:
+        SUMMARY_TEXT +
+        deltaBlock({
+          expiredSteering: ["R1"],
+          ratified: [{ kind: "decision", text: "Use sqlite" }],
+        }),
+    });
+    const { done, entry } = foldedEntry(f.sm, f.pi);
+    const snapshot = parseLedger(
+      (entry.details as Record<string, unknown>)[LEDGER_DETAILS_KEY],
+    );
+    assert.equal(snapshot.items.find((i) => i.id === "R1")?.status, "active");
+    assert.equal(
+      snapshot.items.find((i) => i.text === "Use sqlite")?.status,
+      "active",
+    );
+    assert.ok(!entry.summary.includes("continuity-delta"));
+    assert.ok(entry.summary.includes("Use sqlite"), "in the briefing");
+    const report = done.details.continuity as {
+      applied: number;
+      rejected: Array<{ id?: string; reason: string }>;
+    };
+    assert.equal(report.applied, 2);
+    assert.equal(report.rejected.length, 1);
+    assert.equal(report.rejected[0].id, "R1");
+    const lines = done.content.split("\n\n");
+    const notice = lines.find((line) => line.startsWith("Continuity: "));
+    assert.ok(notice, "the model is told its attempt was refused");
+    assert.match(
+      notice,
+      /^Continuity: 1 delta op rejected \(R1 .*protected.*\)\.$/,
+    );
+  });
+
+  it("accepts a supersession that cites a newer user message of the active branch and refuses a bogus citation", async () => {
+    const f = await ledgerFixture();
+    const delta = (citedEntryId: string) =>
+      SUMMARY_TEXT +
+      deltaBlock({
+        superseded: [
+          {
+            ids: ["R1"],
+            with: { kind: "rule", text: "Edit the lockfile only via pnpm" },
+            citedEntryId,
+          },
+        ],
+      });
+    await summaryTurn(f, delta(f.a1));
+    const refused = foldedEntry(f.sm, f.pi);
+    assert.equal(
+      (refused.done.details.continuity as { rejected: unknown[] }).rejected
+        .length,
+      1,
+    );
+    const g = await ledgerFixture();
+    await summaryTurn(g, delta(g.t3.userId));
+    const accepted = foldedEntry(g.sm, g.pi);
+    assert.deepEqual(
+      (accepted.done.details.continuity as { rejected: unknown[] }).rejected,
+      [],
+    );
+    const { ledger } = readBranchLedger(g.sm.getBranch());
+    assert.equal(ledger.items.find((i) => i.id === "R1")?.status, "superseded");
+    assert.equal(
+      ledger.items.find((i) => i.text === "Edit the lockfile only via pnpm")
+        ?.source.origin,
+      "user",
+      "the replacement keeps the user's authority",
+    );
+  });
+
+  it("a malformed delta never fails the fold: reported, nothing applied, block stripped", async () => {
+    const f = await ledgerFixture({
+      summary: `${SUMMARY_TEXT}\n\n<continuity-delta>\n{ nope\n</continuity-delta>`,
+    });
+    const { done, entry } = foldedEntry(f.sm, f.pi);
+    assert.equal(done.details.status, "done");
+    assert.ok(!entry.summary.includes("continuity-delta"));
+    const report = done.details.continuity as {
+      applied: number;
+      deltaError?: string;
+    };
+    assert.equal(report.applied, 1, "only the deterministic steering archive");
+    assert.match(report.deltaError ?? "", /not valid JSON/);
+    assert.match(done.content, /\n\nContinuity: delta ignored \(/);
+    assert.equal(
+      readBranchLedger(f.sm.getBranch()).ledger.items.find((i) => i.id === "R1")
+        ?.status,
+      "active",
+    );
+  });
+
+  it("keeps a stray delta tag in the stored prose and reports nothing", async () => {
+    const stray = `${SUMMARY_TEXT}\n\nThe tag <continuity-delta> is mentioned here.`;
+    const f = await ledgerFixture({ summary: stray });
+    const { done, entry } = foldedEntry(f.sm, f.pi);
+    assert.ok(
+      entry.summary.includes("The tag <continuity-delta> is mentioned here."),
+    );
+    assert.equal(
+      (done.details.continuity as { deltaError?: string }).deltaError,
+      undefined,
+    );
+    assert.ok(!done.content.includes("Continuity:"));
+  });
+
+  it("the pre-fold leaf still reads the pre-fold ledger", async () => {
+    const f = await ledgerFixture({ summary: SUMMARY_TEXT });
+    const after = readBranchLedger(f.sm.getBranch());
+    assert.equal(
+      after.ledger.items.find((i) => i.id === "T2")?.status,
+      "archived",
+    );
+    f.sm.branch(f.leafBeforeFold);
+    const recovered = readBranchLedger(f.sm.getBranch());
+    assert.deepEqual(recovered, f.before);
+    assert.equal(
+      recovered.ledger.items.find((i) => i.id === "T2")?.status,
+      "active",
+    );
+  });
+
+  it("an empty ledger and a span without user messages change nothing", async () => {
+    const f = setup();
+    setupAutonomousSpan(f.sm, f.pi);
+    await requestRewind(f);
+    assert.equal(
+      summaryRequestDraftOf(f.pi).content,
+      buildSummaryRequestText(3, REWIND_ARGS.summaryFocus),
+    );
+    await summaryTurn(
+      f,
+      `${SUMMARY_TEXT}\n\nA stray </continuity-delta> in prose.`,
+    );
+    const { done, entry } = foldedEntry(f.sm, f.pi);
+    assert.equal(
+      entry.summary,
+      `# Work handoff: end\n\n${SUMMARY_TEXT}\n\nA stray </continuity-delta> in prose.`,
+    );
+    assert.ok(!(LEDGER_DETAILS_KEY in (entry.details as object)));
+    assert.ok(!("continuity" in done.details));
+    assert.ok(!done.content.includes("Continuity"));
+  });
+
+  it("failed attempts apply nothing: three failures leave the ledger and the branch as they were", async () => {
+    const f = await ledgerFixture();
+    for (let i = 0; i < MAX_SUMMARY_ATTEMPTS; i++) {
+      await summaryTurn(
+        f,
+        `no goal heading${deltaBlock({ ratified: [{ kind: "decision", text: `Hidden ${i}` }] })}`,
+        "stop",
+        { commit: true },
+      );
+    }
+    assert.equal(outcomeEntries(f.sm).at(-1)?.status, "failed");
+    assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
+    assert.deepEqual(
+      readBranchLedger(f.sm.getBranch()).ledger,
+      f.before.ledger,
+    );
+  });
+
+  it("a refused preview writes nothing, and the briefing counts toward the size check", async () => {
+    const run = async (rules: number) => {
+      const f = setup();
+      const first = appendTurn(f.sm, "u1", "a1", 6_000);
+      f.pi.pi.setLabel(first.assistantId, "anchor:start");
+      const ops: StoredOp[] = Array.from({ length: rules }, (_, i) => ({
+        op: {
+          op: "add",
+          kind: "rule",
+          text: `Rule ${i}: ${"binding ".repeat(60)}`,
+        },
+        ctx: { origin: "user" },
+      }));
+      appendOpsEntry(f.pi.pi, ops);
+      for (const totalTokens of [20_000, 30_000]) {
+        f.sm.appendMessage(
+          assistantMessage(
+            [{ type: "text", text: "work. ".repeat(400) }],
+            "stop",
+            totalTokens,
+          ) as never,
+        );
+      }
+      await requestRewind(f);
+      const before = readBranchLedger(f.sm.getBranch());
+      await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
+      return { f, before };
+    };
+    const small = await run(0);
+    assert.ok(
+      small.f.sm.getEntries().some((e) => e.type === "branch_summary"),
+      "without a ledger the fold reduces",
+    );
+    const big = await run(12);
+    assert.ok(!big.f.sm.getEntries().some((e) => e.type === "branch_summary"));
+    assert.equal(outcomeEntries(big.f.sm).at(-1)?.status, "failed");
+    assert.match(
+      String(outcomeEntries(big.f.sm).at(-1)?.reason),
+      /does not reduce projected context/,
+    );
+    assert.deepEqual(readBranchLedger(big.f.sm.getBranch()), big.before);
+  });
+
+  it("a parent fold embeds only its own briefing, not the child's", async () => {
+    const f = await ledgerFixture({ summary: SUMMARY_TEXT });
+    const first = foldedEntry(f.sm, f.pi);
+    assert.match(first.entry.summary, /continuity ledger rev 4\]/);
+    appendTurn(f.sm, "u4 prefer small diffs", "a4", 40_000, true);
+    appendOpsEntry(f.pi.pi, [
+      {
+        op: { op: "add", kind: "rule", text: "Prefer small diffs" },
+        ctx: { origin: "user" },
+      },
+    ]);
+    appendTurn(f.sm, "u5", "a5", 60_000, true);
+    await requestRewind(
+      f,
+      { ...REWIND_ARGS, newLabel: "end2" },
+      "tc-rewind-2",
+      70_000,
+    );
+    await summaryTurn(f, "## Goal\nSecond fold.\n\n## Next Steps\n1. Go.");
+    const second = foldedEntry(f.sm, f.pi);
+    assert.equal(second.entry.summary.split("## Continuity ledger").length, 2);
+    assert.match(second.entry.summary, /Child handoffs in chronological order/);
+    assert.ok(second.entry.summary.includes(SUMMARY_TEXT));
+    assert.ok(second.entry.summary.endsWith("Prefer small diffs"));
+    const { ledger } = readBranchLedger(f.sm.getBranch());
+    assert.deepEqual(
+      ledger.items.filter((i) => i.status === "active").map((i) => i.text),
+      [
+        "Never edit the lockfile",
+        "Always run the linter",
+        "Prefer small diffs",
+      ],
+    );
   });
 });
