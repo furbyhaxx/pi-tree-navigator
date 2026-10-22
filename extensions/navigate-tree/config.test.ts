@@ -39,6 +39,11 @@ import {
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
 import type { HandoffMode } from "./handoff.ts";
+import {
+  clearRuntimeConfig,
+  readRuntimeConfig,
+  writeRuntimeConfig,
+} from "./runtime-config.ts";
 
 const AGENT_DIR = "/agent";
 const GLOBAL_PATH = `/agent/${TREE_NAVIGATOR_CONFIG_FILENAME}`;
@@ -1464,5 +1469,157 @@ describe("continuity config", () => {
         `navigate_tree: continuity in project config at ${PROJECT_PATH} must be an object — ignored.`,
       ],
     });
+  });
+});
+
+describe("runtime layer", () => {
+  const FILES = {
+    [GLOBAL_PATH]: JSON.stringify({
+      rewindHintReserveTokens: 50000,
+      anchorStartAfterTurns: 5,
+      parentHandoffMode: "synthesized",
+      modelOverrides: {
+        [DEEPSEEK]: { rewindHintReserveTokens: 40000 },
+        [HAIKU]: { rewindHintReserveTokens: 20000 },
+      },
+      continuity: { capture: true, intentClassifier: "typesafe/jev-latest" },
+      treeProposal: {
+        model: "test/model:high",
+        tools: { read: "omit", grep: "calls-only" },
+      },
+      auto_navigate: { enabled: true, tools: { read: "omit" } },
+    }),
+    [PROJECT_PATH]: JSON.stringify({
+      anchorStartAfterTurns: 3,
+      treeProposal: { tools: { bash: "calls-only" } },
+    }),
+  };
+
+  function load(runtime?: Record<string, unknown>, projectTrusted = true) {
+    return loadTreeNavigatorConfig({
+      agentDir: AGENT_DIR,
+      projectPath: PROJECT_PATH,
+      projectTrusted,
+      readFile: readerFor(FILES).readFile,
+      ...(runtime === undefined ? {} : { runtime }),
+    });
+  }
+
+  it("overrides scalars, maps and tool policy per key without losing lower keys", async () => {
+    const out = await load({
+      anchorStartAfterTurns: 8,
+      modelOverrides: { [DEEPSEEK]: { rewindHintReserveTokens: 60000 } },
+      treeProposal: { tools: { read: "full", write: "omit" } },
+      auto_navigate: { tools: { bash: "calls-only" }, check_every_turns: 2 },
+    });
+    assert.deepEqual(out.warnings, []);
+    assert.equal(out.config.anchorStartAfterTurns, 8);
+    assert.equal(out.config.parentHandoffMode, "synthesized");
+    assert.equal(out.config.rewindHintReserveTokens, 50000);
+    assert.equal(resolveRewindHintReserve(out.config, DEEPSEEK), 60000);
+    assert.equal(resolveRewindHintReserve(out.config, HAIKU), 20000);
+    assert.deepEqual(out.config.proposal, {
+      model: "test/model:high",
+      tools: {
+        read: "full",
+        grep: "calls-only",
+        bash: "calls-only",
+        write: "omit",
+      },
+    });
+    assert.deepEqual(out.config.autoNavigate, {
+      enabled: true,
+      tools: { read: "omit", bash: "calls-only" },
+      checkEveryTurns: 2,
+    });
+    assert.deepEqual(out.config.continuity, {
+      capture: true,
+      intentClassifier: "typesafe/jev-latest",
+    });
+  });
+
+  it("can disable capture and a classifier set by the files", async () => {
+    const out = await load({
+      continuity: { capture: false, intentClassifier: "off" },
+    });
+    assert.deepEqual(out.warnings, []);
+    assert.deepEqual(out.config.continuity, {
+      capture: false,
+      intentClassifier: null,
+    });
+  });
+
+  it("applies even when the project is untrusted", async () => {
+    const out = await load({ anchorStartAfterTurns: 8 }, false);
+    assert.equal(out.config.anchorStartAfterTurns, 8);
+    assert.deepEqual(out.config.proposal?.tools, {
+      read: "omit",
+      grep: "calls-only",
+    });
+  });
+
+  it("an empty runtime root resolves like no runtime layer", async () => {
+    assert.deepEqual(await load({}), await load());
+  });
+
+  it("clearing restores file resolution and sessions stay isolated", async () => {
+    writeRuntimeConfig("layer-a", { continuity: { capture: false } });
+    writeRuntimeConfig("layer-b", { anchorStartAfterTurns: 9 });
+    const files = await load();
+    const a = await load(readRuntimeConfig("layer-a"));
+    const b = await load(readRuntimeConfig("layer-b"));
+    assert.equal(a.config.continuity.capture, false);
+    assert.equal(a.config.anchorStartAfterTurns, 3);
+    assert.equal(b.config.continuity.capture, true);
+    assert.equal(b.config.anchorStartAfterTurns, 9);
+    clearRuntimeConfig("layer-a");
+    assert.deepEqual(await load(readRuntimeConfig("layer-a")), files);
+    assert.equal(
+      (await load(readRuntimeConfig("layer-b"))).config.anchorStartAfterTurns,
+      9,
+    );
+    clearRuntimeConfig("layer-b");
+  });
+
+  it("invalid runtime values fail closed with runtime-scoped warnings", async () => {
+    const out = await load({
+      treeProposal: { tools: { read: "omti" } },
+      auto_navigate: { check_every_turns: 0 },
+      continuity: { capture: "yes" },
+      rewindHintReserveTokens: 5,
+    });
+    assert.equal(out.config.proposal, undefined);
+    assert.match(out.config.proposalError ?? "", /read/);
+    assert.deepEqual(out.config.autoNavigate, { enabled: false });
+    assert.equal(out.config.continuity.capture, true);
+    assert.equal(out.config.rewindHintReserveTokens, null);
+    assert.equal(out.warnings.length, 4);
+    for (const warning of out.warnings) {
+      assert.match(warning, /in runtime config /);
+    }
+  });
+
+  it("a valid runtime proposal cannot clear an invalid file proposal", async () => {
+    const out = await loadTreeNavigatorConfig({
+      agentDir: AGENT_DIR,
+      projectPath: PROJECT_PATH,
+      projectTrusted: false,
+      readFile: readerFor({
+        [GLOBAL_PATH]: JSON.stringify({
+          treeProposal: { tools: { read: "omti" } },
+        }),
+      }).readFile,
+      runtime: { treeProposal: { tools: { read: "full" } } },
+    });
+    assert.equal(out.config.proposal, undefined);
+    assert.match(out.config.proposalError ?? "", /read/);
+  });
+
+  it("a non-object runtime root is ignored with a warning", async () => {
+    const out = await load("nope" as unknown as Record<string, unknown>);
+    assert.deepEqual(out.config, (await load()).config);
+    assert.deepEqual(out.warnings, [
+      "navigate_tree: runtime config must be a JSON object — that layer was ignored.",
+    ]);
   });
 });

@@ -729,83 +729,88 @@ async function loadLayer(
       `navigate_tree: invalid JSON in ${layer} config at ${path} — that layer was ignored.`,
     );
   }
+  return parseLayerRoot(`${layer} config at ${path}`, root);
+}
+
+/** Parse one layer's root and describe every field-level problem; `where` names the layer in warnings. */
+function parseLayerRoot(where: string, root: unknown): LayerLoadResult {
   const parsed = parseTreeNavigatorConfig(root);
   if (parsed.kind === "unusable") {
     return {
       layer: absentLayer(),
       warnings: [
-        `navigate_tree: ${layer} config at ${path} must be a JSON object — that layer was ignored.`,
+        `navigate_tree: ${where} must be a JSON object — that layer was ignored.`,
       ],
     };
   }
   const warnings: string[] = [];
   if ("rewindHintAtPercent" in (root as Record<string, unknown>)) {
     warnings.push(
-      `navigate_tree: rewindHintAtPercent in ${layer} config at ${path} was removed in 0.3.0 and is ignored — use rewindHintReserveTokens (tokens left in the window when the hint fires, e.g. 50000).`,
+      `navigate_tree: rewindHintAtPercent in ${where} was removed in 0.3.0 and is ignored — use rewindHintReserveTokens (tokens left in the window when the hint fires, e.g. 50000).`,
     );
   }
   const hintExpectation = `expected integer ${REWIND_HINT_MIN_RESERVE}-${REWIND_HINT_MAX_RESERVE} or a disable sentinel (null, false, "off", "disabled")`;
   if (parsed.layer.hint.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid rewindHintReserveTokens in ${layer} config at ${path} — ${hintExpectation}; rewind hint disabled for this session.`,
+      `navigate_tree: invalid rewindHintReserveTokens in ${where} — ${hintExpectation}; rewind hint disabled for this session.`,
     );
   }
   if (parsed.layer.modelOverridesProblems.notObject) {
     warnings.push(
-      `navigate_tree: modelOverrides in ${layer} config at ${path} must be an object keyed by "provider/modelId" — ignored.`,
+      `navigate_tree: modelOverrides in ${where} must be an object keyed by "provider/modelId" — ignored.`,
     );
   }
   for (const key of parsed.layer.modelOverridesProblems.nonObjectEntries) {
     warnings.push(
-      `navigate_tree: modelOverrides[${JSON.stringify(key)}] in ${layer} config at ${path} must be an object — ignored.`,
+      `navigate_tree: modelOverrides[${JSON.stringify(key)}] in ${where} must be an object — ignored.`,
     );
   }
   for (const [key, field] of parsed.layer.modelHints) {
     if (field.kind !== "invalid") continue;
     warnings.push(
-      `navigate_tree: invalid modelOverrides[${JSON.stringify(key)}].rewindHintReserveTokens in ${layer} config at ${path} — ${hintExpectation}; rewind hint disabled for that model.`,
+      `navigate_tree: invalid modelOverrides[${JSON.stringify(key)}].rewindHintReserveTokens in ${where} — ${hintExpectation}; rewind hint disabled for that model.`,
     );
   }
   if (parsed.layer.startAnchor.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid anchorStartAfterTurns in ${layer} config at ${path} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`,
+      `navigate_tree: invalid anchorStartAfterTurns in ${where} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`,
     );
   }
   if (parsed.layer.parentHandoffMode.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid parentHandoffMode in ${layer} config at ${path} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
+      `navigate_tree: invalid parentHandoffMode in ${where} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
     );
   }
   const continuity = parsed.layer.continuity;
   if (continuity?.notObject) {
     warnings.push(
-      `navigate_tree: continuity in ${layer} config at ${path} must be an object — ignored.`,
+      `navigate_tree: continuity in ${where} must be an object — ignored.`,
     );
   }
   if (continuity?.capture.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid continuity.capture in ${layer} config at ${path} — expected true or false; falling back to the other layer's valid value, else the default ${CONTINUITY_CAPTURE_DEFAULT}.`,
+      `navigate_tree: invalid continuity.capture in ${where} — expected true or false; falling back to the other layer's valid value, else the default ${CONTINUITY_CAPTURE_DEFAULT}.`,
     );
   }
   if (continuity?.intentClassifier.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid continuity.intentClassifier in ${layer} config at ${path} — expected "provider/id" of a classifier model or a disable sentinel (null, false, "off", "disabled"); falling back to the other layer's valid value, else off (heuristics only).`,
+      `navigate_tree: invalid continuity.intentClassifier in ${where} — expected "provider/id" of a classifier model or a disable sentinel (null, false, "off", "disabled"); falling back to the other layer's valid value, else off (heuristics only).`,
     );
   }
   if (parsed.layer.proposal?.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid treeProposal in ${layer} config at ${path} — ${parsed.layer.proposal.error}; model proposals are blocked until this is corrected.`,
+      `navigate_tree: invalid treeProposal in ${where} — ${parsed.layer.proposal.error}; model proposals are blocked until this is corrected.`,
     );
   }
   if (parsed.layer.autoNavigate?.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid auto_navigate in ${layer} config at ${path} — ${parsed.layer.autoNavigate.error}; auto_navigate is disabled for this session.`,
+      `navigate_tree: invalid auto_navigate in ${where} — ${parsed.layer.autoNavigate.error}; auto_navigate is disabled for this session.`,
     );
   }
   for (const [key, field] of parsed.layer.modelAutoNavigate ?? []) {
     if (field.kind !== "invalid") continue;
     warnings.push(
-      `navigate_tree: invalid modelOverrides[${JSON.stringify(key)}].auto_navigate in ${layer} config at ${path} — ${field.error}; auto_navigate is disabled for that model pattern.`,
+      `navigate_tree: invalid modelOverrides[${JSON.stringify(key)}].auto_navigate in ${where} — ${field.error}; auto_navigate is disabled for that model pattern.`,
     );
   }
   return { layer: parsed.layer, warnings };
@@ -817,13 +822,20 @@ async function loadLayer(
  * `projectPath` is passed in rather than derived from `cwd` so this module
  * needs no `CONFIG_DIR_NAME` import (the no-pi-imports constraint; the
  * caller computes `join(cwd, CONFIG_DIR_NAME, TREE_NAVIGATOR_CONFIG_FILENAME)`).
- * Warnings are ordered global-then-project; each invalid field contributes
- * its own scoped warning.
+ * Warnings are ordered global-then-project-then-runtime; each invalid field
+ * contributes its own scoped warning.
+ *
+ * `runtime` is an in-memory session layer (same shape as a config file) that
+ * is parsed with the same parsers and merged after the effective
+ * global/project result, so it wins per key without dropping lower keys. It
+ * applies regardless of project trust; invalid fields fail closed exactly as
+ * in a file layer.
  */
 export async function loadTreeNavigatorConfig(opts: {
   agentDir: string;
   projectPath: string;
   projectTrusted: boolean;
+  runtime?: Record<string, unknown>;
   readFile?: (path: string) => Promise<string>;
 }): Promise<{
   config: {
@@ -865,7 +877,12 @@ export async function loadTreeNavigatorConfig(opts: {
     projectLayer = projectResult.layer;
   }
 
-  const effective = mergeTreeNavigatorConfig(globalResult.layer, projectLayer);
+  let effective = mergeTreeNavigatorConfig(globalResult.layer, projectLayer);
+  if (opts.runtime !== undefined) {
+    const runtimeResult = parseLayerRoot("runtime config", opts.runtime);
+    warnings.push(...runtimeResult.warnings);
+    effective = mergeTreeNavigatorConfig(effective, runtimeResult.layer);
+  }
   return {
     config: {
       rewindHintReserveTokens: hintReserve(effective.hint),
