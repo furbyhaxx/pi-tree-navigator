@@ -87,12 +87,12 @@ make model calls or establish that the report's claims are true.
 ### Inside Pi
 
 ```text
-/tree-clone inspect /absolute/path/to/session.jsonl
-/tree-clone propose /absolute/path/to/session.jsonl
-/tree-clone propose /absolute/path/to/session.jsonl --llm
-/tree-clone propose /absolute/path/to/session.jsonl --model openai/gpt-6-luna:high
-/tree-clone preview /absolute/path/to/plan.json
-/tree-clone create /absolute/path/to/plan.json
+/anchor clone inspect /absolute/path/to/session.jsonl
+/anchor clone propose /absolute/path/to/session.jsonl
+/anchor clone propose /absolute/path/to/session.jsonl --llm
+/anchor clone propose /absolute/path/to/session.jsonl --model openai/gpt-6-luna:high
+/anchor clone preview /absolute/path/to/plan.json
+/anchor clone create /absolute/path/to/plan.json
 ```
 
 `inspect` without a path inspects the current persisted session. Inspection and

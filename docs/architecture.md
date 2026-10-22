@@ -16,8 +16,13 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `retrospective-plan.ts`: strict graph snapshots, branch-local tool accounting,
   inspection and nested-plan parsing.
 - `retrospective.ts`: range validation, clone construction, state checks and publication.
-- `retrospective-command.ts`: `/tree-clone` inspection, proposal dispatch, preview
+- `anchor-command.ts`, `frame.ts`: the unified `/anchor` command and the shared
+  editor-replacing `FrameList` panel (breadcrumb rule, fuzzy search, frozen height).
+- `retrospective-command.ts`: `/anchor clone` inspection, proposal dispatch, preview
   and confirmation.
+- `continuity-ledger.ts`, `continuity-briefing.ts`: pure session continuity ledger
+  (goals, rules, decisions, steering, file pointers) with user-authority invariants,
+  fold reconciliation and model-facing briefing. Not yet wired into the live fold.
 - `proposal-options.ts`: exact model/thinking selectors and tool disclosure rules.
 - `proposal-source.ts`: deterministic outlines and filtered full-text source records.
 - `proposal-engine.ts`: optional bounded model analysis and explicit heuristic fallback.

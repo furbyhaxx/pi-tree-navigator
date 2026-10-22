@@ -35,11 +35,15 @@ This fork adds retrospective cloning: turn completed work in a linear or branche
 session into nested summary branches without modifying the original. The clone gets a
 new ID and a ` (restructured)` name suffix, and both sessions remain resumable.
 
-Use `/tree-clone inspect <session.jsonl>`, then `/tree-clone propose <session.jsonl>`
+Run `/anchor` for the unified menu (`tree`, `list`, `current`, `fold`, `clone`, `settings`;
+`tree`, `current`, `fold` and `settings` are placeholders until their slices land). `/tree-clone` no longer
+exists; use `/anchor clone`.
+
+Use `/anchor clone inspect <session.jsonl>`, then `/anchor clone propose <session.jsonl>`
 to derive a local heuristic tree. Add `--llm` to refine it with the current model,
 or `--model openai/gpt-6-luna:high` to select another provider/model and thinking
-level. Review and save the proposed plan, then `/tree-clone preview <plan.json>`
-and `/tree-clone create <plan.json>`. Creation requires confirmation and never
+level. Review and save the proposed plan, then `/anchor clone preview <plan.json>`
+and `/anchor clone create <plan.json>`. Creation requires confirmation and never
 switches sessions automatically.
 Descendant sessions are copied with unchanged histories by default; a plan's
 `recurse` option restructures them only with reviewed descendant plans.

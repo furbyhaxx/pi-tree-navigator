@@ -340,7 +340,7 @@ const SCREENS = [
           label: "◆ Rule R1 (User Instruction)",
           labelHint: "[binding · turn 8]",
           value: "Use unified FrameList layout for all slash commands",
-          detail: "Match pi-bolt-subagents /agents & /settings; replace CLI-like /tree-clone flags",
+          detail: "Match pi-bolt-subagents /agents & /settings; replace CLI-like flag-style clone command",
           description: "Classified as durable user guidance (jev p=0.96). Protected from fold compression.",
         },
         {
@@ -494,7 +494,7 @@ function renderCliAndTranscriptShowcase(width) {
     `${theme.success("●")} ${theme.bold("navigate_tree")} rewind ${theme.dim("→")} ${theme.accent("\"context-gathered\"")} as ${theme.accent("\"analysis-complete\"")} ${theme.dim("·")} ${theme.muted("30.8% → 22.7% (−30.1k tok)")}`,
     `  ${theme.dim("⎿")}  ${theme.bold("▣ Work handoff: analysis complete")} ${theme.dim("·")} ${theme.muted("18 messages · 7 tool calls · in 84.4k / out 1.9k · $0.0412")}`,
     `     ${theme.muted("Goal:")}     Analyze pi-tree-navigator tools, slash commands, and UX/UI.`,
-    `     ${theme.muted("Outcome:")}  Full surface inventory completed; identified /tree-clone CLI UX friction.`,
+    `     ${theme.muted("Outcome:")}  Full surface inventory completed; identified flag-style clone command UX friction.`,
     `     ${theme.muted("Ledger:")}   ${theme.success("✔")} 1 objective · ${theme.success("✔")} 3 user rules kept · ${theme.warning("↻")} 1 steering note archived · 2 open tasks`,
     `     ${theme.dim("ctrl+o or click to expand full report, ledger diff & 7 read files")}`,
     "",

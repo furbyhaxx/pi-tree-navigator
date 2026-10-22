@@ -111,7 +111,7 @@ Live-run hygiene: back up any global extension config you must modify (`~/.pi/ag
 
 ### Retrospective clone verification
 
-For changes to `retrospective*.ts` or `/tree-clone`, run the focused clone tests
+For changes to `retrospective*.ts` or `/anchor clone`, run the focused clone tests
 and the normal offline gates. Exercise the CLI's inspect, preview, stale-token
 refusal and create paths on a disposable fixture. Reopen the result through Pi's
 `SessionManager` and verify the source bytes are unchanged, the clone has a new
@@ -127,7 +127,7 @@ all new parent links. Preview must bind family membership and source hashes.
 Recursive restructuring requires reviewed descendant plans; missing plans must
 fail rather than silently copying them.
 
-Drive `/tree-clone` in an interactive session: inspect/preview dialogs, cancel
+Drive `/anchor clone` in an interactive session: inspect/preview dialogs, cancel
 without writing, create with confirmation, and `/tree` navigation in the result.
 Exercise the rich native card in collapsed/expanded states with Ctrl+O and a
 fullscreen mouse click, at 60 and 130 columns. Verify nested single-child outline
