@@ -106,7 +106,7 @@ async function pickAnchor(
   start: { cursor?: number },
 ): Promise<AnchorRow | undefined> {
   while (true) {
-    const anchors = deps.listAnchors(ctx).reverse();
+    const anchors = [...deps.listAnchors(ctx)].reverse();
     const ready = anchors.filter((anchor) => foldable(anchor, deps)).length;
     const choice = await selectFrame(ctx, {
       breadcrumbs: ["Anchor", "Fold"],

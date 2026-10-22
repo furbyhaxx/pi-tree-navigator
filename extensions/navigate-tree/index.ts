@@ -2024,13 +2024,21 @@ export default function (pi: ExtensionAPI) {
       }
       return { ok: true };
     },
-    requestFold(ctx, anchorName) {
-      const label = suggestFoldLabel(
-        ctx.sessionManager as SessionManager,
-        anchorName,
-      );
+    suggestLabel: (ctx, anchor) =>
+      suggestFoldLabel(ctx.sessionManager as SessionManager, anchor.name),
+    minSavingsTokens: MIN_REWIND_SAVINGS_TOKENS,
+    minFocusLength: MIN_SUMMARY_FOCUS_LENGTH,
+    requestFold(ctx, anchorName, options) {
+      const label =
+        options?.label ??
+        suggestFoldLabel(ctx.sessionManager as SessionManager, anchorName);
       pi.sendUserMessage(
-        buildFoldRequestText(anchorName, label, MIN_SUMMARY_FOCUS_LENGTH),
+        buildFoldRequestText(
+          anchorName,
+          label,
+          MIN_SUMMARY_FOCUS_LENGTH,
+          options?.focus,
+        ),
         ctx.isIdle() ? undefined : { deliverAs: "followUp" },
       );
     },

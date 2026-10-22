@@ -11,6 +11,7 @@ import {
   type CurrentScreenDeps,
   openCurrentScreen,
 } from "./current-screen.ts";
+import { type FoldScreenDeps, openFoldScreen } from "./fold-screen.ts";
 import { type FrameRow, selectFrame } from "./frame.ts";
 import { isValidName, MAX_NAME_LENGTH } from "./helpers.ts";
 import {
@@ -35,13 +36,7 @@ export interface AnchorRow {
 }
 
 /** Session access the command needs; supplied by the extension entry point. */
-export interface AnchorCommandDeps {
-  listAnchors(ctx: ExtensionCommandContext): AnchorRow[];
-  setAnchor(
-    ctx: ExtensionCommandContext,
-    name: string,
-  ): { ok: true } | { ok: false; reason: string };
-  requestFold(ctx: ExtensionCommandContext, anchorName: string): void;
+export interface AnchorCommandDeps extends FoldScreenDeps {
   contextBadge?(ctx: ExtensionCommandContext): string | undefined;
   /** The active branch's continuity ledger; `/anchor current` needs it. */
   readLedger?(ctx: ExtensionCommandContext): Ledger | undefined;
@@ -93,7 +88,6 @@ const ANCHOR_USAGE = `Usage: /anchor [tree|list|current|fold|clone|settings]. Ru
 const NOT_AVAILABLE = {
   current:
     "/anchor current is not available yet: the briefing & continuity ledger belongs to the continuity-ledger slice.",
-  fold: "A guided fold screen is not available yet (guided-fold slice). Open /anchor list and press r on an anchor to ask the agent to fold to it.",
   settings:
     "/anchor settings is not available yet: the staged settings screen belongs to the settings slice. Edit tree-navigator.json meanwhile.",
 } as const;
@@ -429,6 +423,7 @@ async function openView(
       await openCurrentScreen(ctx, deps);
       return "back";
     case "fold":
+      return openFoldScreen(ctx, deps);
     case "settings":
       return notAvailable(ctx, view);
   }
@@ -457,6 +452,7 @@ async function openHub(
       }
       if (view === "tree")
         return { ...row, value: treeSummary(treeItems(ctx.sessionManager)) };
+      if (view === "fold") return { ...row, value: "anchor · label · focus" };
       if (view === "clone") return row;
       return { ...row, value: "not available yet", tone: "muted" };
     });
@@ -534,13 +530,19 @@ export function registerAnchorCommand(
           ].join("\n"),
           "info",
         );
+      } else if (subcommand === "fold" && !ctx.hasUI) {
+        ctx.ui.notify(
+          "The guided fold requires an interactive terminal. Use navigate_tree action=rewind with rewindTo, newLabel and summaryFocus.",
+          "info",
+        );
       } else if (ctx.hasUI) {
         await openView(subcommand, ctx, pi, deps);
       } else {
         const ledger =
           subcommand === "current" ? deps.readLedger?.(ctx) : undefined;
         if (ledger) ctx.ui.notify(briefingText(ledger), "info");
-        else notAvailable(ctx, subcommand);
+        else if (subcommand === "current" || subcommand === "settings")
+          notAvailable(ctx, subcommand);
       }
     },
   });

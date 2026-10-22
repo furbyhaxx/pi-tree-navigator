@@ -101,6 +101,9 @@ function setup(options: Options = {}) {
     listed: 0,
   };
   const deps: AnchorCommandDeps = {
+    suggestLabel: (_ctx, anchor) => `${anchor.name}-done`,
+    minSavingsTokens: 4000,
+    minFocusLength: 20,
     listAnchors() {
       calls.listed++;
       return options.anchors ?? ANCHORS;
@@ -277,8 +280,8 @@ describe("/anchor dispatch", () => {
       ["briefing", /\/anchor current is not available yet/],
       ["ledger", /\/anchor current is not available yet/],
       ["state", /\/anchor current is not available yet/],
-      ["fold", /guided-fold slice/],
-      ["rewind", /guided-fold slice/],
+      ["fold", /guided fold requires an interactive terminal/],
+      ["rewind", /guided fold requires an interactive terminal/],
       ["settings", /\/anchor settings is not available yet/],
       ["setting", /\/anchor settings is not available yet/],
       ["config", /\/anchor settings is not available yet/],
@@ -398,6 +401,7 @@ describe("/anchor screens", () => {
       screens: [
         press(DOWN, DOWN, ENTER),
         press(DOWN, ENTER),
+        press(ESC),
         press(DOWN, DOWN, ENTER),
         press(ESC),
       ],
@@ -407,9 +411,10 @@ describe("/anchor screens", () => {
       test.notifications.map(
         ({ message }) => message.match(/[a-z-]+ slice/)?.[0],
       ),
-      ["continuity-ledger slice", "guided-fold slice", "settings slice"],
+      ["continuity-ledger slice", "settings slice"],
     );
-    assert.equal(test.rendered.length, 4);
+    assert.ok(test.rendered[2][0].includes("Anchor/Fold"));
+    assert.equal(test.rendered.length, 5);
   });
 
   it("opens the tree from the hub and returns on Escape", async () => {
