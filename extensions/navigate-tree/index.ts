@@ -46,7 +46,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { join, normalize, resolve } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   type AssistantMessage,
@@ -98,14 +99,23 @@ import {
   estimateRequestTokens,
   splitContextEstimate,
 } from "./context-tokens.ts";
-import { renderFoldCaptureSection } from "./continuity-briefing.ts";
+import {
+  isVisible,
+  renderBriefing,
+  renderFoldCaptureSection,
+} from "./continuity-briefing.ts";
 import {
   captureIntent,
   createModelClassifier,
   heuristicClassifier,
   type IntentClassifier,
 } from "./continuity-capture.ts";
-import { LEDGER_DETAILS_KEY } from "./continuity-ledger.ts";
+import {
+  applyOps,
+  LEDGER_DETAILS_KEY,
+  type LedgerOp,
+  MAX_ITEM_TEXT_CHARS,
+} from "./continuity-ledger.ts";
 import {
   appendOpsEntry,
   type BranchLedger,
@@ -113,6 +123,7 @@ import {
   readBranchLedger,
   reconcileFoldContinuity,
   spanUserEntryRefs,
+  userEntryIndexOf,
 } from "./continuity-store.ts";
 import {
   getHandoff,
@@ -150,6 +161,7 @@ import {
   resolveProposalModel,
 } from "./proposal-model.ts";
 import type { ProposalOptions } from "./proposal-options.ts";
+import { sha256 } from "./retrospective-plan.ts";
 import {
   buildForcedRewindText,
   buildNoAnchorText,
@@ -247,6 +259,19 @@ export const MAX_SUMMARY_ATTEMPTS = 3;
 // Hint length cap for the per-row hint shown in `list` output. 50 chars
 // fits one terminal column without wrapping in typical 80-column TUIs.
 const LIST_HINT_MAX_LENGTH = 50;
+
+/** Token budget of the ledger briefing appended to `list`. */
+const LIST_BRIEFING_MAX_TOKENS = 500;
+
+/** Kinds the agent may pin; rules and the objective are the user's alone. */
+const PIN_KINDS = ["sub-goal", "decision", "fact", "file", "steering"] as const;
+type PinKind = (typeof PIN_KINDS)[number];
+const isPinKind = (kind: unknown): kind is PinKind =>
+  PIN_KINDS.includes(kind as PinKind);
+
+/** Larger files are pinned without a hash rather than read whole. */
+const PIN_HASH_MAX_BYTES = 2 * 1024 * 1024;
+
 // Hint length cap for the hint shown in the `anchor` response. The anchor
 // response is a single block of prose (not a column-aligned table) so it
 // can afford a longer hint than `list`'s per-row preview.
@@ -729,6 +754,35 @@ function collectActiveAnchors(
     });
   }
   return anchors;
+}
+
+/** Anchor names on the active branch, root → leaf, as `list` shows them. */
+function activeAnchorNames(sm: SessionManager): string[] {
+  const names: string[] = [];
+  for (const e of sm.getBranch()) {
+    const lbl = sm.getLabel(e.id);
+    if (!lbl?.startsWith(LABEL_PREFIX)) continue;
+    const name = lbl.slice(LABEL_PREFIX.length);
+    if (isValidName(name)) names.push(name);
+  }
+  return names;
+}
+
+const isFilled = (value: unknown): value is string =>
+  typeof value === "string" && value.trim().length > 0;
+
+/** sha256 of a pinned file; undefined when it is unreadable or too large. */
+async function hashPinnedFile(
+  cwd: string,
+  path: string,
+): Promise<string | undefined> {
+  try {
+    const file = resolve(cwd, path);
+    if ((await stat(file)).size > PIN_HASH_MAX_BYTES) return undefined;
+    return sha256(await readFile(file));
+  } catch {
+    return undefined;
+  }
 }
 
 /** What stops a new anchor: shared by the tool's `anchor` action and `/anchor`. */
@@ -4691,6 +4745,7 @@ export default function (pi: ExtensionAPI) {
     promptGuidelines: [
       `${TOOL_NAME}: when rewinding, prefer the oldest anchor that keeps what you'd otherwise re-read or re-derive; persist durable findings to files first.`,
       `${TOOL_NAME}: don't rewind while a user decision or unresolved question is pending — ask the user instead.`,
+      `${TOOL_NAME}: pin durable sub-goals, decisions, facts and file pointers you must not lose across folds; the user's own rules and goals are captured automatically and cannot be pinned or changed by you.`,
     ],
     description: `Long-session context management via the pi session tree. Anchor named milestones, then collapse work between them into a model-generated summary to free context.
 \`rewind\` does not restore prior state: it forks a sibling branch from the anchor and continues forward from a model-generated summary.
@@ -4699,10 +4754,11 @@ Operations (set \`action\`):
   • 'anchor', name='<milestone-name>': label the current point. Anchor at the start of a stage you'll summarize (e.g. 'impl-start').
   • 'rewind', rewindTo='<existing>', newLabel='<new>': collapse work between rewindTo and the current leaf into a branch_summary labeled newLabel, so rewinds can chain.
   • 'list': show all anchors on the active branch, oldest first, with cumulative context % at each.
+  • 'pin', kind='sub-goal'|'decision'|'fact'|'file'|'steering', text='<what to keep>': record a durable item that survives folds; \`list\` shows them. 'file' takes path+why instead of text; 'steering' belongs to an anchor (scopeAnchor, default newest).
 
 \`name\` (anchor) and \`newLabel\` (rewind) write into one shared anchor namespace: labels are unique on the active branch — both actions refuse a name that already exists — and everything written there is addressable as a future \`rewindTo\`. Avoid the reserved \`${LABEL_PREFIX}\` prefix.`,
     promptSnippet:
-      "Use to anchor named milestones and rewind the conversation tree to a prior point with a model-generated summary, for token-efficient long autonomous sessions.",
+      "Use to anchor named milestones and rewind the conversation tree to a prior point with a model-generated summary, for token-efficient long autonomous sessions. Also pins durable sub-goals, decisions, facts and file pointers that survive folds.",
     // The schema is intentionally a flat `Type.Object` with everything-but-
     // `action` optional, with action-conditional required-ness enforced at
     // runtime in `execute`. Discriminated unions / property-level required-
@@ -4712,7 +4768,12 @@ Operations (set \`action\`):
     // behavior the schema can't express.
     parameters: Type.Object({
       action: Type.Union(
-        [Type.Literal("anchor"), Type.Literal("rewind"), Type.Literal("list")],
+        [
+          Type.Literal("anchor"),
+          Type.Literal("rewind"),
+          Type.Literal("list"),
+          Type.Literal("pin"),
+        ],
         {
           description: "Which operation to perform.",
         },
@@ -4737,15 +4798,54 @@ Operations (set \`action\`):
           description: `Required when action='rewind'; ≥${MIN_SUMMARY_FOCUS_LENGTH} chars after trim. Encode: (1) the user's most recent instruction verbatim, (2) what's done in the collapsed segment, (3) what's left to do as a next action.`,
         }),
       ),
+      kind: Type.Optional(
+        Type.Union(
+          PIN_KINDS.map((kind) => Type.Literal(kind)),
+          {
+            description: `Required when action='pin'. Your sub-goal, a decision you made, a key fact, a file pointer, or steering that lapses when its anchor is folded.`,
+          },
+        ),
+      ),
+      text: Type.Optional(
+        Type.String({
+          description: `Required when action='pin' unless kind='file'. What to remember, max ${MAX_ITEM_TEXT_CHARS} chars.`,
+        }),
+      ),
+      path: Type.Optional(
+        Type.String({
+          description: `Required when action='pin' and kind='file'. File path.`,
+        }),
+      ),
+      lines: Type.Optional(
+        Type.String({
+          description: `Optional with kind='file': N or N-M.`,
+        }),
+      ),
+      why: Type.Optional(
+        Type.String({
+          description: `Required when action='pin' and kind='file'. Why the file matters.`,
+        }),
+      ),
+      scopeAnchor: Type.Optional(
+        Type.String({
+          description: `Anchor name for kind='steering' (default: newest anchor); optional for 'sub-goal'.`,
+        }),
+      ),
     }),
     execute: async (toolCallId, params, _signal, _onUpdate, ctx) => {
       const sm = ctx.sessionManager as SessionManager;
       const p = params as {
-        action: "anchor" | "rewind" | "list";
+        action: "anchor" | "rewind" | "list" | "pin";
         name?: string;
         rewindTo?: string;
         newLabel?: string;
         summaryFocus?: string;
+        kind?: string;
+        text?: string;
+        path?: string;
+        lines?: string;
+        why?: string;
+        scopeAnchor?: string;
       };
 
       // --- list ---
@@ -4769,8 +4869,14 @@ Operations (set \`action\`):
         const body = rows.length
           ? formatAnchorTable(rows, cw)
           : "No labels on the active branch.";
+        const { ledger } = readBranchLedger(sm.getBranch());
+        const ledgerText = ledger.items.some(isVisible)
+          ? `\n\n${renderBriefing(ledger, { maxTokens: LIST_BRIEFING_MAX_TOKENS }).text}`
+          : "";
         return {
-          content: [{ type: "text", text: `${header}\n\n${body}` }],
+          content: [
+            { type: "text", text: `${header}\n\n${body}${ledgerText}` },
+          ],
           details: {
             count: rows.length,
             contextTokens: totalTokens,
@@ -4822,6 +4928,111 @@ Operations (set \`action\`):
             contextTokens: tokensHere,
             labelHint,
           },
+        };
+      }
+
+      // --- pin ---
+      // Agent-origin ledger item: the reducer decides duplicates, caps and
+      // limits; only the agent-allowed kinds and the params of each kind are
+      // checked here. A pin is not a rewind: no solo-call guard.
+      if (p.action === "pin") {
+        if (!continuityConfig.capture) {
+          return toolError("continuity ledger is disabled by config");
+        }
+        if (!isPinKind(p.kind)) {
+          return toolError(
+            p.kind === "rule" || p.kind === "objective"
+              ? `pin cannot record a ${p.kind}: the user's rules and objective are captured automatically.`
+              : `pin requires \`kind\`: ${PIN_KINDS.join(", ")}.`,
+          );
+        }
+        let op: LedgerOp;
+        if (p.kind === "file") {
+          if (!isFilled(p.path) || !isFilled(p.why)) {
+            return toolError("pin kind='file' requires `path` and `why`.");
+          }
+          const path = normalize(p.path.trim());
+          const sha = await hashPinnedFile(ctx.cwd, path);
+          op = {
+            op: "add",
+            kind: "file",
+            file: {
+              path,
+              ...(isFilled(p.lines) && { lines: p.lines.trim() }),
+              ...(sha !== undefined && { sha256: sha }),
+              why: p.why,
+            },
+          };
+        } else {
+          if (!isFilled(p.text)) {
+            return toolError(`pin kind='${p.kind}' requires \`text\`.`);
+          }
+          let scopeAnchor: string | undefined;
+          if (p.kind === "steering" || p.kind === "sub-goal") {
+            const anchors = activeAnchorNames(sm);
+            scopeAnchor = isFilled(p.scopeAnchor)
+              ? p.scopeAnchor.trim()
+              : p.kind === "steering"
+                ? anchors.at(-1)
+                : undefined;
+            if (scopeAnchor === undefined && p.kind === "steering") {
+              return toolError(
+                "steering belongs to an anchor and the active branch has none — anchor first.",
+              );
+            }
+            if (scopeAnchor !== undefined && !anchors.includes(scopeAnchor)) {
+              return toolError(
+                `No label '${scopeAnchor}' on the active branch. Use action='list' to see available labels.`,
+              );
+            }
+          }
+          op = {
+            op: "add",
+            kind: p.kind,
+            text: p.text,
+            ...(scopeAnchor !== undefined && { scopeAnchor }),
+          };
+        }
+        const branch = sm.getBranch();
+        const result = applyOps(readBranchLedger(branch).ledger, [op], {
+          origin: "agent",
+          userEntryIndex: userEntryIndexOf(branch),
+        });
+        const outcome = result.applied[0];
+        if (!outcome) {
+          const reason = result.rejected[0]?.reason;
+          return toolError(`pin rejected: ${reason?.message ?? "no change"}`, {
+            ...(reason && { code: reason.code }),
+          });
+        }
+        const { id } = outcome.item;
+        const details = {
+          id,
+          kind: p.kind,
+          effect: outcome.effect,
+          rev: result.ledger.rev,
+        };
+        if (outcome.effect === "duplicate") {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `[pin] ${id} already records this ${p.kind}; nothing added.`,
+              },
+            ],
+            details,
+          };
+        }
+        appendOpsEntry(pi, [{ op, ctx: { origin: "agent" } }]);
+        const cut =
+          p.kind !== "file" && outcome.item.text !== p.text?.trim()
+            ? ` (text cut to ${MAX_ITEM_TEXT_CHARS} chars)`
+            : "";
+        return {
+          content: [
+            { type: "text", text: `[pin] ${id} ${p.kind} recorded${cut}` },
+          ],
+          details,
         };
       }
 
