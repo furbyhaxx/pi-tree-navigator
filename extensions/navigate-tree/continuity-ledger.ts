@@ -213,6 +213,8 @@ export interface ReduceResult {
   readonly ledger: Ledger;
   readonly applied: readonly AppliedOp[];
   readonly rejected: readonly RejectedOp[];
+  /** Dead items dropped to stay under the item cap, oldest first. */
+  readonly evicted: readonly string[];
 }
 
 export interface DeltaSupersession {
@@ -282,6 +284,7 @@ interface Work {
   changed: boolean;
   applied: AppliedOp[];
   rejected: RejectedOp[];
+  evicted: string[];
 }
 
 // Deterministic operations (fold-time archiving, hash checks) carry no extra authority.
@@ -294,6 +297,7 @@ const begin = (ledger: Ledger): Work => ({
   changed: false,
   applied: [],
   rejected: [],
+  evicted: [],
 });
 
 function finish(base: Ledger, work: Work): ReduceResult {
@@ -305,7 +309,12 @@ function finish(base: Ledger, work: Work): ReduceResult {
         items: work.items,
       }
     : base;
-  return { ledger, applied: work.applied, rejected: work.rejected };
+  return {
+    ledger,
+    applied: work.applied,
+    rejected: work.rejected,
+    evicted: work.evicted,
+  };
 }
 
 function find(work: Work, id: string): LedgerItem {
@@ -448,6 +457,41 @@ function normalizeNewItem(input: NewItem): Normalized {
   };
 }
 
+const DEAD_STATUSES: ReadonlySet<ItemStatus> = new Set([
+  "archived",
+  "completed",
+  "superseded",
+]);
+
+/**
+ * Drop the oldest dead item, with the items it superseded (the lineage check
+ * needs both ends), and unlink it from its heir. Active and stale items stay.
+ */
+function evictOldestDead(work: Work): boolean {
+  const oldest = work.items.find((item) => DEAD_STATUSES.has(item.status));
+  if (!oldest) return false;
+  const drop = new Set<string>();
+  const collect = (item: LedgerItem): void => {
+    if (drop.has(item.id)) return;
+    drop.add(item.id);
+    for (const id of item.supersedes ?? []) {
+      const older = work.items.find((candidate) => candidate.id === id);
+      if (older) collect(older);
+    }
+  };
+  collect(oldest);
+  work.items = work.items
+    .filter((item) => !drop.has(item.id))
+    .map((item) => {
+      const kept = item.supersedes?.filter((id) => !drop.has(id));
+      if (!kept || kept.length === item.supersedes?.length) return item;
+      const { supersedes: _dropped, ...rest } = item;
+      return kept.length > 0 ? { ...rest, supersedes: kept } : rest;
+    });
+  work.evicted.push(...drop);
+  return true;
+}
+
 function create(
   work: Work,
   fields: Normalized,
@@ -455,11 +499,13 @@ function create(
   supersedes: readonly LedgerItem[],
   source?: ItemSource,
 ): LedgerItem {
-  if (work.items.length >= MAX_LEDGER_ITEMS) {
-    throw new ContinuityError(
-      "ledger_full",
-      `ledger holds ${MAX_LEDGER_ITEMS} items; cannot add another`,
-    );
+  while (work.items.length >= MAX_LEDGER_ITEMS) {
+    if (!evictOldestDead(work)) {
+      throw new ContinuityError(
+        "ledger_full",
+        `ledger holds ${MAX_LEDGER_ITEMS} active items; archive or complete one before adding another`,
+      );
+    }
   }
   const pinned = ctx.origin === "pin" || supersedes.some((old) => old.pinned);
   const item: LedgerItem = {

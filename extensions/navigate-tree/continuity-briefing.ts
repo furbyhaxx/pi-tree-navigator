@@ -9,6 +9,7 @@
 import {
   type ContinuityDelta,
   ContinuityError,
+  capText,
   type ItemKind,
   isUserOrigin,
   type Ledger,
@@ -149,6 +150,15 @@ export function renderBriefing(
   };
 }
 
+/** A user message the model may cite when it reports a supersession. */
+export interface UserEntryRef {
+  readonly id: string;
+  readonly preview: string;
+}
+
+const MAX_USER_ENTRY_REFS = 40;
+const USER_REF_PREVIEW_CHARS = 160;
+
 const DELTA_SCHEMA = `${DELTA_OPEN}
 {
   "completed": ["S2"],
@@ -169,6 +179,7 @@ ${DELTA_CLOSE}`;
 export function renderFoldCaptureSection(
   ledger: Ledger,
   anchorName: string,
+  userEntries: readonly UserEntryRef[] = [],
 ): string {
   const active = ledger.items.filter((item) => item.status === "active");
   const section = (title: string, items: readonly LedgerItem[]): string[] =>
@@ -197,6 +208,18 @@ export function renderFoldCaptureSection(
         (item) => item.kind === "steering" && item.scopeAnchor === anchorName,
       ),
     ),
+    ...(userEntries.length > 0
+      ? [
+          "",
+          "User messages in the folded span (cite an id as citedEntryId when one of them changed an earlier rule or decision):",
+          ...userEntries
+            .slice(-MAX_USER_ENTRY_REFS)
+            .map(
+              (ref) =>
+                `- ${ref.id}: ${capText(ref.preview, USER_REF_PREVIEW_CHARS)}`,
+            ),
+        ]
+      : []),
     "",
     `After the summary, append at most one continuity-delta block: JSON between the tags shown below, empty keys omitted.`,
     "- completed: ids of goals finished in the folded span.",
@@ -244,6 +267,46 @@ export function parseContinuityDelta(
     );
   }
   return parseDelta(json);
+}
+
+export interface ExtractedDelta {
+  /** The model's reply with a complete delta block removed. */
+  readonly text: string;
+  readonly delta?: ContinuityDelta;
+  /** Set when a complete block was present but unusable; nothing was applied. */
+  readonly error?: ContinuityError;
+}
+
+/**
+ * Non-throwing variant for the fold path: a stray tag in prose is ignored, a
+ * single complete block is parsed and stripped from the text, and anything
+ * unusable is reported in `error` so a fold never fails because of it.
+ */
+export function extractContinuityDelta(text: string): ExtractedDelta {
+  const start = text.indexOf(DELTA_OPEN);
+  const end =
+    start < 0 ? -1 : text.indexOf(DELTA_CLOSE, start + DELTA_OPEN.length);
+  if (start < 0 || end < 0) return { text };
+  const stripped =
+    `${text.slice(0, start)}${text.slice(end + DELTA_CLOSE.length)}`
+      .replace(/\n{3,}/g, "\n\n")
+      .trimEnd();
+  if (count(text, DELTA_OPEN) !== 1 || count(text, DELTA_CLOSE) !== 1) {
+    return {
+      text,
+      error: new ContinuityError(
+        "invalid_delta",
+        `expected exactly one ${DELTA_OPEN}...${DELTA_CLOSE} block`,
+      ),
+    };
+  }
+  try {
+    const delta = parseContinuityDelta(text);
+    return delta ? { text: stripped, delta } : { text };
+  } catch (error) {
+    if (!(error instanceof ContinuityError)) throw error;
+    return { text: stripped, error };
+  }
 }
 
 export interface LedgerUiSummary {

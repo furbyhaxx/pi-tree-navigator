@@ -635,3 +635,86 @@ describe("parseLedger and serialization", () => {
     });
   }
 });
+
+describe("retention at the item cap", () => {
+  const fill = (count: number): Ledger =>
+    build(
+      createLedger(),
+      Array.from({ length: count }, (_, n) => ({
+        op: "add" as const,
+        kind: "fact" as const,
+        text: `fact number ${n}`,
+      })),
+      AGENT,
+    );
+
+  it("evicts the oldest dead item instead of refusing, and the ledger stays parseable", () => {
+    const full = build(
+      fill(MAX_LEDGER_ITEMS),
+      [{ op: "archive", id: "F3" }],
+      AGENT,
+    );
+    const next = applyOps(
+      full,
+      [{ op: "add", kind: "fact", text: "one more" }],
+      AGENT,
+    );
+    assert.deepEqual(next.rejected, []);
+    assert.deepEqual(next.evicted, ["F3"]);
+    assert.equal(next.ledger.items.length, MAX_LEDGER_ITEMS);
+    assert.deepEqual(parseLedger(serializeLedger(next.ledger)), next.ledger);
+  });
+
+  it("evicts a superseded item and unlinks its active heir so the lineage stays valid", () => {
+    const withDecision = build(
+      createLedger(),
+      [{ op: "add", kind: "decision", text: "use sqlite" }],
+      USER,
+    );
+    const first = withDecision.items[0];
+    const filled = build(
+      withDecision,
+      Array.from({ length: MAX_LEDGER_ITEMS - 2 }, (_, n) => ({
+        op: "add" as const,
+        kind: "fact" as const,
+        text: `fact number ${n}`,
+      })),
+      AGENT,
+    );
+    const superseded = build(
+      filled,
+      [
+        {
+          op: "supersede",
+          ids: [first.id],
+          with: { kind: "decision", text: "use postgres" },
+          citedEntryId: "e2",
+        },
+      ],
+      { origin: "user", entryId: "e2" },
+    );
+    assert.equal(superseded.items.length, MAX_LEDGER_ITEMS);
+    const next = applyOps(
+      superseded,
+      [{ op: "add", kind: "fact", text: "overflow" }],
+      AGENT,
+    );
+    assert.deepEqual(next.rejected, []);
+    assert.deepEqual(next.evicted, [first.id]);
+    const heir = next.ledger.items.find((i) => i.text === "use postgres");
+    assert.ok(heir);
+    assert.equal(heir.supersedes, undefined);
+    assert.deepEqual(parseLedger(serializeLedger(next.ledger)), next.ledger);
+  });
+
+  it("still refuses when every item is active", () => {
+    const result = applyOps(
+      fill(MAX_LEDGER_ITEMS),
+      [{ op: "add", kind: "fact", text: "no room" }],
+      AGENT,
+    );
+    assert.equal(result.rejected.length, 1);
+    assert.ok(rejectedWith("ledger_full")(result.rejected[0].reason));
+    assert.deepEqual(result.evicted, []);
+  });
+});

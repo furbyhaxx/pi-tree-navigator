@@ -8,6 +8,7 @@ import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   CONTINUITY_DELTA_TAG,
+  extractContinuityDelta,
   parseContinuityDelta,
   renderBriefing,
   renderFoldCaptureSection,
@@ -297,5 +298,50 @@ describe("summarizeLedgerForUi", () => {
     const summary = summarizeLedgerForUi(done);
     assert.equal(summary.line, "1 goal · 4 rules · 2 tasks · rev 2");
     assert.equal(summarizeLedgerForUi(createLedger()).line, "empty · rev 0");
+  });
+});
+
+describe("extractContinuityDelta", () => {
+  const block = `<${CONTINUITY_DELTA_TAG}>{"completed":["S1"]}</${CONTINUITY_DELTA_TAG}>`;
+
+  it("strips a complete block and returns the parsed delta", () => {
+    const out = extractContinuityDelta(`## Goal\nDone.\n\n${block}\n`);
+    assert.deepEqual(out.delta?.completed, ["S1"]);
+    assert.equal(out.text, "## Goal\nDone.");
+    assert.equal(out.error, undefined);
+  });
+
+  it("ignores a stray unclosed tag in prose instead of throwing", () => {
+    const text = `Mentioned <${CONTINUITY_DELTA_TAG}> in prose only.`;
+    assert.deepEqual(extractContinuityDelta(text), { text });
+  });
+
+  it("reports malformed JSON, strips the block and applies nothing", () => {
+    const out = extractContinuityDelta(
+      `Summary\n<${CONTINUITY_DELTA_TAG}>{nope</${CONTINUITY_DELTA_TAG}>`,
+    );
+    assert.equal(out.delta, undefined);
+    assert.ok(out.error instanceof ContinuityError);
+    assert.equal(out.text, "Summary");
+  });
+
+  it("keeps the text intact and reports an error when the block count is ambiguous", () => {
+    const text = `${block}\n${block}`;
+    const out = extractContinuityDelta(text);
+    assert.equal(out.text, text);
+    assert.ok(out.error instanceof ContinuityError);
+  });
+});
+
+describe("renderFoldCaptureSection user entry refs", () => {
+  it("lists citable user entry ids, newest last, capped", () => {
+    const refs = Array.from({ length: 60 }, (_, n) => ({
+      id: `u${n}`,
+      preview: `message ${n}`,
+    }));
+    const text = renderFoldCaptureSection(createLedger(), "impl", refs);
+    assert.match(text, /citedEntryId when one of them changed/);
+    assert.match(text, /- u59: message 59/);
+    assert.doesNotMatch(text, /- u0: /);
   });
 });
