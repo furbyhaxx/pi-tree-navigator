@@ -446,6 +446,80 @@ const SCREENS = [
   },
 ];
 
+// The real row builders (TypeScript, pi-tui); absent without node_modules or Node >= 22.18.
+const liveRows = await import("../extensions/navigate-tree/tool-renderer.ts").catch(() => undefined);
+
+const piRoles = {
+  toolTitle: theme.accent,
+  accent: theme.accent,
+  toolOutput: theme.text,
+  error: theme.error,
+  dim: theme.dim,
+  muted: theme.muted,
+};
+const piTheme = { fg: (role, text) => (piRoles[role] ?? theme.text)(text), bold: theme.bold };
+
+function renderLiveRows(width) {
+  const rule = theme.borderAccent("─".repeat(width));
+  const out = [rule, theme.bold("8. Live tool & ledger rows (real renderers)"), rule, ""];
+  if (!liveRows) return [...out, theme.muted("  tool-renderer.ts could not be imported; skipped"), ""].join("\n");
+  const { renderToolCall, renderToolResult, renderContinuityOps } = liveRows;
+  const shell = (component) => component.render(Math.max(1, width - 2)).map((line) => ` ${line}`);
+  const text = (body) => ({ content: [{ type: "text", text: body }] });
+  const tool = (args, result, isError = false, expanded = false) =>
+    out.push(
+      ...shell(renderToolCall(args, piTheme, expanded)),
+      ...shell(renderToolResult(result, { expanded, isPartial: false }, piTheme, isError)),
+      "",
+    );
+  const ledger = (ops, expanded = false) =>
+    out.push("", ...renderContinuityOps({ data: { ops } }, { expanded }, piTheme).render(width));
+  const user = { origin: "user" };
+  const rule1 = { op: { op: "add", kind: "rule", text: "From now on always answer in German", quote: "From now on always answer in German" }, ctx: user };
+  const decision = { op: { op: "add", kind: "decision", text: "Use Postgres for the ledger store", quote: "ok, postgres it is" }, ctx: user };
+
+  const list = {
+    ...text("[list] · 3 labels · ctx 12.0% of 1.0M\n\n  4.1%  context-gathered\n  9.5%  impl-start\n 12.0%  tests-green"),
+    details: { count: 3, contextTokens: 120000, contextWindow: 1_000_000, reflectionOk: true },
+  };
+  tool({ action: "anchor", name: "context-gathered" }, {
+    ...text("[anchor 'context-gathered'] set at 4.1% of 1.0M (after: “Analyze our pi-tree-navigator…”)"),
+    details: { label: "context-gathered", entryId: "e1", contextTokens: 41000 },
+  });
+  tool({ action: "list" }, list);
+  tool({ action: "pin", kind: "decision", text: "Ledger rows render dim, one line collapsed, so the transcript stays readable on a phone." }, {
+    ...text("[pin] D4 decision recorded"),
+    details: { id: "D4", kind: "decision", effect: "added", rev: 3 },
+  });
+  tool({ action: "pin", kind: "file", path: "extensions/navigate-tree/tool-renderer.ts", lines: "40-90", why: "row builders" }, {
+    ...text("[pin] P1 file recorded"),
+    details: { id: "P1", kind: "file", effect: "added", rev: 4 },
+  });
+  tool({ action: "rewind", rewindTo: "context-gathered", newLabel: "analysis-complete", summaryFocus: "x" }, {
+    ...text("Rewind accepted."),
+    details: { status: "summary-requested", rewindTo: "context-gathered", newLabel: "analysis-complete" },
+  });
+  tool({ action: "rewind", rewindTo: "nope", newLabel: "done" }, {
+    ...text("No label 'nope' on the active branch. Use action='list' to see available labels."),
+    details: { refusal: true },
+  }, true);
+  out.push(theme.muted("  expanded (ctrl+o):"), "");
+  tool({ action: "list" }, list, false, true);
+  out.push(theme.muted("  ledger entries (host adds the blank above):"));
+  ledger([rule1, decision]);
+  ledger([{ op: { op: "add", kind: "fact", text: "The sidecar needs Node 22.18 or newer" }, ctx: { origin: "agent" } }]);
+  ledger(Array.from({ length: 10 }, (_, i) => ({ op: { op: "add", kind: "fact", text: `captured fact number ${i + 1}` }, ctx: user })));
+  out.push("", theme.muted("  expanded:"));
+  ledger([
+    rule1,
+    decision,
+    { op: { op: "supersede", ids: ["D1"], with: { kind: "decision", text: "Use SQLite", quote: "actually, sqlite" } }, ctx: user },
+    { op: { op: "archive", id: "T1" }, ctx: { origin: "agent" } },
+  ], true);
+  out.push("");
+  return out.join("\n");
+}
+
 function renderCliAndTranscriptShowcase(width) {
   const rule = theme.borderAccent("─".repeat(width));
   return [
@@ -498,6 +572,7 @@ function renderCliAndTranscriptShowcase(width) {
     `     ${theme.muted("Ledger:")}   ${theme.success("✔")} 1 objective · ${theme.success("✔")} 3 user rules kept · ${theme.warning("↻")} 1 steering note archived · 2 open tasks`,
     `     ${theme.dim("ctrl+o or click to expand full report, ledger diff & 7 read files")}`,
     "",
+    renderLiveRows(width),
   ].join("\n");
 }
 
