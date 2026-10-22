@@ -304,6 +304,44 @@ There is no limit after a landing: if the rewind freed too little and the contex
 
 The thinking level is not changed for the forced turns, so they stay cached.
 
+## Continuity ledger (endless sessions)
+
+A fold keeps the work summary but used to lose the user's own binding words: goals, rules,
+decisions and steering. The continuity ledger keeps them verbatim across any number of folds.
+
+```text
+user message ──capture──▶ ops entry ──replay──▶ ledger ──fold──▶ snapshot in branch_summary
+                                                   │                      │
+                                                   └── briefing embedded in the handoff ◀─┘
+```
+
+- **Capture** runs at `turn_end` and reads only new user messages and `ask_user` answers.
+  Explicit wording ("from now on", "going forward", "decision:", "let's go with", bare
+  "always"/"never" in short messages) becomes a protected item; everything else stays
+  ordinary conversation. Long messages only yield sentences with explicit rule or decision
+  wording, at most three, never an objective. `/anchor` fold requests are ignored.
+- **Persistence is branch-local.** The ledger is the replay of `navigate-tree-continuity-ops`
+  entries since the last fold; each fold stores a snapshot in `branch_summary.details.continuity`.
+  Rewinding to an earlier branch restores that branch's ledger.
+- **Fold.** The in-band summary request lists the binding items and the user messages the
+  model may cite. The model may append one `<continuity-delta>` block (completed goals, newly
+  ratified facts, supersessions, expired steering). The extension validates it, applies it as an
+  agent proposal and embeds the resulting briefing (about 2,500 tokens at most) in the stored
+  handoff. No extra model call. A malformed delta applies nothing and is reported in the
+  fold result.
+- **Authority.** User-origin rules, decisions and the objective cannot be deleted, archived,
+  rewritten or completed by the agent or a classifier. A supersession must cite a newer user
+  message. Rejected ops are listed in the fold result, never applied.
+
+| key (`tree-navigator.json`) | default | effect |
+|---|---|---|
+| `continuity.capture` | `true` | Turn capture and the agent's ledger writes on or off. |
+| `continuity.intentClassifier` | `null` | `provider/id` of a registry classifier model that judges each new user message; `null`, `false`, `"off"` or `"disabled"` keep the heuristics. A classifier error or a 15 s timeout falls back to the heuristics for the rest of the session. |
+
+Capture only runs while `navigate_tree` is in the active tool set. The heuristics miss
+instructions phrased without a marker ("drop X and only keep Y"); a classifier model or the
+agent's own `pin` action covers those.
+
 ## Automatic start anchor
 
 Independent of the hint, the extension writes a silent `anchor:start` label at the X-th turn of the agent run (or at the run's end if it finishes earlier), so every session leg has a guaranteed low-floor fallback rewind target (typically ~4% of the window) with no user action. `start` shows up in `list` output like any other anchor; nothing else model-visible changes in v1.
