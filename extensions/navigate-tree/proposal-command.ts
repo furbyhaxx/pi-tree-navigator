@@ -8,6 +8,13 @@ import {
   type ExtensionCommandContext,
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
+import { showView } from "./clone-screen.ts";
+import {
+  entryIndex,
+  formatPlanOutline,
+  type OutlineInfo,
+  outlineBadge,
+} from "./clone-views.ts";
 import {
   loadTreeNavigatorConfig,
   TREE_NAVIGATOR_CONFIG_FILENAME,
@@ -173,18 +180,26 @@ export function validateTreeProposal(
   }
 }
 
-/** Validate a proposal against its immutable source before saving a new private plan. */
-export async function saveTreeProposal(
+function checkPlanAgainstSource(
   snapshot: SessionSnapshot,
   plan: RetrospectivePlan,
-  output?: string,
-): Promise<string> {
+): RetrospectivePlan {
   if (plan.source !== snapshot.path || plan.sourceSha256 !== snapshot.sha256)
     throw new Error(
       "A proposal must retain the inspected source path and hash",
     );
   const parsed = parseRetrospectivePlan(plan);
   validateRetrospectivePlan(snapshot, parsed);
+  return parsed;
+}
+
+/** Validate a proposal against its immutable source before saving a new private plan. */
+export async function saveTreeProposal(
+  snapshot: SessionSnapshot,
+  plan: RetrospectivePlan,
+  output?: string,
+): Promise<string> {
+  const parsed = checkPlanAgainstSource(snapshot, plan);
   if (sha256(await readFile(snapshot.path)) !== snapshot.sha256)
     throw new Error(
       "Source changed while deriving the tree; inspect and propose again. No plan was saved.",
@@ -216,6 +231,56 @@ export function formatProposalOutline(plan: RetrospectivePlan): string {
   }
   visit(plan.groups, 0);
   return lines.join("\n");
+}
+
+/** The outline screen: `s` (or Enter) saves, `e` edits the raw JSON plan, Escape cancels. Edits are validated before the outline shows them. */
+async function reviewProposal(
+  ctx: ExtensionCommandContext,
+  snapshot: SessionSnapshot,
+  proposal: TreeProposal,
+): Promise<RetrospectivePlan | undefined> {
+  let plan = proposal.plan;
+  const index = entryIndex(snapshot.entries);
+  const info: OutlineInfo = {
+    sessionName: snapshot.name,
+    entries: snapshot.entries.length,
+    method: proposal.method,
+    calls: proposal.calls,
+    cost: proposal.usage.reduce((sum, usage) => sum + usage.cost.total, 0),
+    warnings: proposal.warnings,
+  };
+  while (true) {
+    const key = await showView(ctx, {
+      breadcrumbs: ["Anchor", "Clone", "Propose"],
+      rightBadge: outlineBadge(plan, info),
+      enterAction: "save",
+      cancelAction: "cancel",
+      shortcuts: [
+        { key: "e", action: "edit plan" },
+        { key: "s", action: "save" },
+      ],
+      lines: (width) =>
+        formatPlanOutline(plan, info, width, { entryIndex: index }),
+    });
+    if (key === undefined) return undefined;
+    if (key !== "e") return plan;
+    const edited = await ctx.ui.editor(
+      "Review and save tree plan (original session stays untouched)",
+      JSON.stringify(plan, null, 2),
+    );
+    if (edited === undefined) continue;
+    try {
+      plan = checkPlanAgainstSource(
+        snapshot,
+        parseRetrospectivePlan(JSON.parse(edited)),
+      );
+    } catch (error) {
+      ctx.ui.notify(
+        `The edited plan was not applied: ${error instanceof Error ? error.message : String(error)}`,
+        "warning",
+      );
+    }
+  }
 }
 
 async function modelProposal(
@@ -335,19 +400,12 @@ export async function handleTreeProposal(
   const proposal = validateTreeProposal(snapshot, generated);
   let plan = proposal.plan;
   if (ctx.hasUI) {
-    await ctx.ui.editor(
-      "Proposed session tree (read-only)",
-      `${formatProposalOutline(plan)}\n\n${proposal.warnings.join("\n")}\n\nMethod: ${proposal.method}; model requests: ${proposal.calls}; recorded proposal cost: $${proposal.usage.reduce((sum, usage) => sum + usage.cost.total, 0).toFixed(4)}`,
-    );
-    const edited = await ctx.ui.editor(
-      "Review and save tree plan (original session stays untouched)",
-      JSON.stringify(plan, null, 2),
-    );
-    if (edited === undefined) {
+    const reviewed = await reviewProposal(ctx, snapshot, proposal);
+    if (!reviewed) {
       ctx.ui.notify("Tree proposal cancelled; no plan was saved.", "info");
       return;
     }
-    plan = parseRetrospectivePlan(JSON.parse(edited));
+    plan = reviewed;
   }
   const path = await saveTreeProposal(
     snapshot,

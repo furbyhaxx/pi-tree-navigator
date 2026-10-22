@@ -14,6 +14,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   handleTreeProposal,
   parseProposalArguments,
@@ -57,6 +58,87 @@ async function fixture() {
     .join("\n")}\n`;
   await writeFile(source, data);
   return { dir, source, data, snapshot: await readSessionSnapshot(source) };
+}
+
+const ESC = "\x1b";
+
+/** A UI whose `custom` screens are driven by scripted keys; `editors` answer the raw JSON editor. */
+function reviewUi(
+  f: { dir: string; source: string },
+  screens: string[][],
+  options: {
+    columns?: number;
+    editors?: ((text: string) => string | undefined)[];
+  } = {},
+) {
+  const columns = options.columns ?? 80;
+  const state = {
+    modelCalls: 0,
+    frames: [] as string[][],
+    editors: [] as string[],
+    notifications: [] as { message: string; type?: string }[],
+  };
+  const theme = {
+    fg: (_color: string, text: string) => text,
+    bold: (text: string) => text,
+    italic: (text: string) => text,
+  };
+  const scripts = [...screens];
+  const answers = [...(options.editors ?? [])];
+  const ctx = {
+    cwd: f.dir,
+    hasUI: true,
+    isIdle: () => true,
+    isProjectTrusted: () => false,
+    sessionManager: { getSessionFile: () => f.source },
+    ui: {
+      notify(message: string, type?: string) {
+        state.notifications.push({ message, type });
+      },
+      async editor(_title: string, text: string) {
+        state.editors.push(text);
+        return answers.shift()?.(text);
+      },
+      custom(
+        factory: (...args: unknown[]) => {
+          handleInput(data: string): void;
+          render(width: number): string[];
+        },
+      ) {
+        const keys = scripts.shift();
+        assert.ok(keys, "unexpected extra screen");
+        return new Promise((resolve, reject) => {
+          let closed = false;
+          const tui = { terminal: { rows: 40, columns }, requestRender() {} };
+          const screen = factory(tui, theme, undefined, (value: unknown) => {
+            closed = true;
+            resolve(value);
+          });
+          state.frames.push(screen.render(columns));
+          for (const key of keys) {
+            if (closed) break;
+            screen.handleInput(key);
+          }
+          if (!closed) reject(new Error("screen left open by its script"));
+        });
+      },
+    },
+    modelRegistry: {
+      streamSimple() {
+        state.modelCalls++;
+        throw new Error("must not call");
+      },
+    },
+  } as unknown as ExtensionCommandContext;
+  return {
+    ctx,
+    get modelCalls() {
+      return state.modelCalls;
+    },
+    frames: state.frames,
+    editors: state.editors,
+    notifications: state.notifications,
+  };
 }
 
 describe("tree proposal command", () => {
@@ -165,29 +247,85 @@ describe("tree proposal command", () => {
 
   it("a cancelled review writes nothing and never requests a model for heuristic proposals", async () => {
     const f = await fixture();
-    let modelCalls = 0;
-    const ctx = {
-      cwd: f.dir,
-      hasUI: true,
-      isIdle: () => true,
-      isProjectTrusted: () => false,
-      sessionManager: { getSessionFile: () => f.source },
-      ui: {
-        notify() {},
-        async editor() {
-          return undefined;
-        },
-      },
-      modelRegistry: {
-        streamSimple() {
-          modelCalls++;
-          throw new Error("must not call");
-        },
-      },
-    } as unknown as ExtensionCommandContext;
-    await handleTreeProposal("", ctx, {} as ExtensionAPI);
-    assert.equal(modelCalls, 0);
+    const ui = reviewUi(f, [[ESC]]);
+    await handleTreeProposal("", ui.ctx, {} as ExtensionAPI);
+    assert.equal(ui.modelCalls, 0);
     assert.deepEqual(await readdir(f.dir), ["source.jsonl"]);
     assert.equal(await readFile(f.source, "utf8"), f.data);
+    assert.match(ui.notifications.at(-1)?.message ?? "", /no plan was saved/);
+  });
+
+  it("shows the proposal as a readable outline and saves it with s", async () => {
+    const f = await fixture();
+    const ui = reviewUi(f, [["s"]]);
+    await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
+    const text = ui.frames[0].join("\n");
+    assert.doesNotMatch(text, /[{}]|sourceSha256/);
+    assert.match(text, /Anchor\/Clone\/Propose/);
+    assert.match(text, /Method\s+heuristic/);
+    assert.match(text, /e edit plan/);
+    assert.match(text, /s save/);
+    assert.match(text, /esc cancel/);
+    assert.equal(ui.editors.length, 0);
+    const saved = JSON.parse(await readFile(join(f.dir, "saved.json"), "utf8"));
+    assert.deepEqual(
+      saved,
+      JSON.parse(
+        JSON.stringify(parseRetrospectivePlan(buildHeuristicPlan(f.snapshot))),
+      ),
+    );
+    assert.match(ui.notifications.at(-1)?.message ?? "", /Saved heuristic/);
+  });
+
+  it("fits the outline in 60 columns", async () => {
+    const f = await fixture();
+    const ui = reviewUi(f, [[ESC]], { columns: 60 });
+    await handleTreeProposal("", ui.ctx, {} as ExtensionAPI);
+    assert.ok(ui.frames[0].every((line) => visibleWidth(line) <= 60));
+    assert.ok(ui.frames[0].join("\n").includes("[open]"));
+  });
+
+  it("e opens the raw JSON plan; an invalid edit is refused and the outline stays", async () => {
+    const f = await fixture();
+    const ui = reviewUi(f, [["e"], ["s"]], { editors: [() => "{ not json"] });
+    await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
+    assert.equal(ui.editors.length, 1);
+    assert.match(ui.editors[0], /"sourceSha256"/);
+    assert.equal(ui.frames.length, 2);
+    assert.match(ui.notifications[0].message, /edited plan was not applied/);
+    assert.equal(ui.notifications[0].type, "warning");
+    const saved = JSON.parse(await readFile(join(f.dir, "saved.json"), "utf8"));
+    assert.equal(
+      saved.nameSuffix,
+      parseRetrospectivePlan(buildHeuristicPlan(f.snapshot)).nameSuffix,
+    );
+  });
+
+  it("a valid edit is validated against the source, shown again and then saved", async () => {
+    const f = await fixture();
+    const ui = reviewUi(f, [["e"], ["e"], ["s"]], {
+      editors: [
+        (text) =>
+          JSON.stringify({ ...JSON.parse(text), sourceSha256: "0".repeat(64) }),
+        (text) =>
+          JSON.stringify({ ...JSON.parse(text), nameSuffix: " (reviewed)" }),
+      ],
+    });
+    await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
+    assert.match(
+      ui.notifications[0].message,
+      /retain the inspected source path and hash/,
+    );
+    const saved = JSON.parse(await readFile(join(f.dir, "saved.json"), "utf8"));
+    assert.equal(saved.nameSuffix, " (reviewed)");
+    assert.equal(saved.sourceSha256, f.snapshot.sha256);
+  });
+
+  it("cancelling the editor returns to the outline, and Escape there writes nothing", async () => {
+    const f = await fixture();
+    const ui = reviewUi(f, [["e"], [ESC]], { editors: [() => undefined] });
+    await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
+    assert.equal(ui.editors.length, 1);
+    assert.deepEqual(await readdir(f.dir), ["source.jsonl"]);
   });
 });

@@ -3,12 +3,28 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
+import { showView } from "./clone-screen.ts";
+import {
+  entryIndex,
+  formatCreateConfirmation,
+  formatInspect,
+  formatPreview,
+  inspectBadge,
+  planTitles,
+  previewBadge,
+  type ViewContext,
+} from "./clone-views.ts";
 import { handleTreeProposal } from "./proposal-command.ts";
 import {
   cloneRetrospectiveSession,
   previewRetrospectiveSession,
+  type RetrospectivePreview,
 } from "./retrospective.ts";
-import { inspectRetrospectiveSession } from "./retrospective-plan.ts";
+import {
+  inspectRetrospectiveSession,
+  readRetrospectivePlan,
+  readSessionSnapshot,
+} from "./retrospective-plan.ts";
 
 export const CLONE_USAGE =
   "Usage: /anchor clone [inspect <session.jsonl>|propose [session.jsonl] [--llm] [--model provider/model:thinking] [--output plan.json] [--omit-tool name] [--calls-only-tool name] [--full-tool name]|preview <plan.json>|create <plan.json>]";
@@ -87,6 +103,45 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Entry counts and group titles for a preview; best effort, the preview reads fine without them. */
+async function previewContext(
+  planPath: string,
+  preview: RetrospectivePreview,
+): Promise<ViewContext> {
+  try {
+    const [plan, snapshot] = await Promise.all([
+      readRetrospectivePlan(planPath),
+      readSessionSnapshot(preview.source),
+    ]);
+    return {
+      entryIndex: entryIndex(snapshot.entries),
+      titles: planTitles(plan),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** The preview screen; Enter continues, Escape leaves, `j` shows the raw JSON. */
+function showPreview(
+  ctx: ExtensionCommandContext,
+  preview: RetrospectivePreview,
+  context: ViewContext,
+  actions: { enter: string; cancel: string },
+): Promise<string | undefined> {
+  return showView(
+    ctx,
+    {
+      breadcrumbs: ["Anchor", "Clone", "Preview"],
+      rightBadge: previewBadge(preview),
+      enterAction: actions.enter,
+      cancelAction: actions.cancel,
+      lines: (width) => formatPreview(preview, width, context),
+    },
+    { title: "Retrospective clone preview (read-only)", value: preview },
+  );
+}
+
 function notifyCreateNotIdle(ctx: ExtensionCommandContext): void {
   ctx.ui.notify(
     "Cannot create a retrospective clone while Pi is busy. Retry when the session is idle; no session changes were made.",
@@ -138,9 +193,19 @@ export async function runCloneSubcommand(
     if (operation === "inspect") {
       const inspected = await inspectRetrospectiveSession(path);
       if (ctx.hasUI) {
-        await ctx.ui.editor(
-          "Retrospective session inspection (read-only)",
-          JSON.stringify(inspected, null, 2),
+        await showView(
+          ctx,
+          {
+            breadcrumbs: ["Anchor", "Clone", "Inspect"],
+            rightBadge: inspectBadge(inspected),
+            enterAction: "close",
+            cancelAction: "back",
+            lines: (width) => formatInspect(inspected, width),
+          },
+          {
+            title: "Retrospective session inspection (read-only)",
+            value: inspected,
+          },
         );
         ctx.ui.notify(
           `Inspected "${inspected.name}": ${inspected.entries} entries and ${inspected.turns.length} user turns.`,
@@ -162,10 +227,10 @@ export async function runCloneSubcommand(
     const summary = `Preview for "${preview.name}": ${preview.groups.length} groups, ${preview.addedEntries} added entries and ${preview.descendants.length} descendant sessions${warningNote}.`;
     if (operation === "preview") {
       if (ctx.hasUI) {
-        await ctx.ui.editor(
-          "Retrospective clone preview (read-only)",
-          JSON.stringify(preview, null, 2),
-        );
+        await showPreview(ctx, preview, await previewContext(path, preview), {
+          enter: "close",
+          cancel: "back",
+        });
         ctx.ui.notify(summary, "info");
       } else {
         ctx.ui.notify(
@@ -176,14 +241,18 @@ export async function runCloneSubcommand(
       return;
     }
 
-    await ctx.ui.editor(
-      "Retrospective clone preview (read-only)",
-      JSON.stringify(preview, null, 2),
+    const reviewed = await showPreview(
+      ctx,
+      preview,
+      await previewContext(path, preview),
+      { enter: "continue", cancel: "cancel" },
     );
-    const confirmed = await ctx.ui.confirm(
-      `Create clone "${preview.name}"?`,
-      `Create a new session from ${preview.source}? The original session will remain untouched.`,
-    );
+    const confirmed =
+      reviewed !== undefined &&
+      (await ctx.ui.confirm(
+        `Create clone "${preview.name}"?`,
+        formatCreateConfirmation(preview),
+      ));
     if (!confirmed) {
       ctx.ui.notify("Clone cancelled; no files were written.", "info");
       return;
