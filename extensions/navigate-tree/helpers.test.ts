@@ -350,4 +350,20 @@ describe("buildFoldRequestText", () => {
       FOLD_REQUEST_RE,
     );
   });
+
+  it("appends the focus after the unchanged request, escaping quotes and backslashes", () => {
+    const plain = buildFoldRequestText("impl-start", "impl-done", 20);
+    const focus = 'Ship the "parser" fix in C:\\src; tests remain';
+    const text = buildFoldRequestText("impl-start", "impl-done", 20, focus);
+    assert.ok(text.startsWith(plain));
+    assert.match(text, FOLD_REQUEST_RE);
+    assert.equal(
+      text.slice(plain.length),
+      ' Use this summaryFocus: "Ship the \\"parser\\" fix in C:\\\\src; tests remain"',
+    );
+    assert.equal(
+      buildFoldRequestText("a", "b", 20, undefined),
+      buildFoldRequestText("a", "b", 20),
+    );
+  });
 });

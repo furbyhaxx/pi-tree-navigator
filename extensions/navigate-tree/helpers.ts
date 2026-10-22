@@ -26,14 +26,19 @@ export const TOOL_NAME = "navigate_tree";
 
 /**
  * The user message `/anchor` injects to ask the agent for a fold. Continuity
- * capture skips it by pattern (`FOLD_REQUEST_RE`), so the wording is shared.
+ * capture skips it by pattern (`FOLD_REQUEST_RE`), so the wording is shared and
+ * the optional `focus` only ever extends the text after the matched prefix.
  */
 export function buildFoldRequestText(
   anchorName: string,
   newLabel: string,
   minFocusLength: number,
+  focus?: string,
 ): string {
-  return `Please fold the work since the '${anchorName}' anchor: call ${TOOL_NAME}(action='rewind', rewindTo='${anchorName}', newLabel='${newLabel}'), with a summaryFocus of at least ${minFocusLength} characters covering my latest instruction, what is done since that anchor and what remains.`;
+  const request = `Please fold the work since the '${anchorName}' anchor: call ${TOOL_NAME}(action='rewind', rewindTo='${anchorName}', newLabel='${newLabel}'), with a summaryFocus of at least ${minFocusLength} characters covering my latest instruction, what is done since that anchor and what remains.`;
+  if (focus === undefined) return request;
+  const escaped = focus.replace(/[\\"]/g, "\\$&");
+  return `${request} Use this summaryFocus: "${escaped}"`;
 }
 
 // Reserved label prefix shared by anchor/rewind labels. Lives here (not
