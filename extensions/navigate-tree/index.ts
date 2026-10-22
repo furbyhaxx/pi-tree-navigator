@@ -187,6 +187,7 @@ import {
   buildSummaryRequestText,
   computeFileLists,
   formatFileOperations,
+  hasOpenWork,
   stripContinuityBriefing,
 } from "./summary-prompt.ts";
 import {
@@ -1952,9 +1953,16 @@ export function buildRewindDoneText(
 ): string {
   return (
     `[rewind to '${pending.rewindTo}' · collapsed as '${pending.newLabel}'] · ${formatContextDelta(pending.beforeTokens, afterTokens, pending.contextWindow)}\n\n` +
-    `A branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are pending — execute them next without re-confirming with the user, continuing the latest branch_summary's work. User messages retained above predate this rewind — do not re-answer them.`
+    `A branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\n` +
+    `A branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.`
   );
 }
+
+/** Sent once when the first turn after a fold ends text-only with work still open. */
+export const CONTINUE_NUDGE_TEXT =
+  "[navigate_tree] You ended the turn immediately after a rewind. Its branch_summary is a milestone summary, not a stop condition: if the user's standing instruction or the authorized plan still has open work, continue with it now, in this turn. End the turn only when the authorized scope is done and verified, or a real blocker needs the user — and say which.";
+
+const CONTINUE_NUDGE_STATUS = "continue-nudge";
 
 export function buildLateEntriesNote(count: number): string {
   return count === 1
@@ -3025,6 +3033,7 @@ export default function (pi: ExtensionAPI) {
     }
     pendingRewinds.delete(sessionId);
     // A forced rewind landed: the gate lifts (#101, D7).
+    const forcedFold = forcedActive(sessionId);
     forcedRewinds.delete(sessionId);
     // The summary landed unlabeled if both writes fail; `list` simply won't
     // show it.
@@ -3092,6 +3101,7 @@ export default function (pi: ExtensionAPI) {
           readFiles,
           modifiedFiles,
           reappendedLateMessages: reappended,
+          ...(forcedFold && { forced: true }),
           ...(continuity.report && { continuity: continuity.report }),
         },
       ),
@@ -3285,6 +3295,93 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
+  // Folds (by summary entry id) whose first post-fold turn was already
+  // nudged: at most one nudge per fold, even if pi dropped its draft.
+  const nudgedFolds = new Set<string>();
+
+  // The first assistant turn after a delivered fold continuation ended
+  // text-only while the fold's summary still lists open work: one steer, so
+  // the milestone summary is not read as a stop condition. No user turn may
+  // sit between the continuation and the turn, and a fold that carried late
+  // user input answers that input, so neither is nudged. A fold forced by a
+  // context overflow is not nudged either.
+  function continueNudgeDraft(
+    sm: SessionManager,
+    sessionId: string,
+    message: { content?: unknown; stopReason?: string },
+    event: { messageEntryId?: unknown; continue?: boolean },
+    signal: AbortSignal | undefined,
+  ): RewindMessageDraft | undefined {
+    if (event.continue || signal?.aborted) return;
+    if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
+    if (
+      message.stopReason === "error" ||
+      message.stopReason === "aborted" ||
+      message.stopReason === "length" ||
+      rewindTurns.has(message) ||
+      overflowedTurns.has(message)
+    ) {
+      return;
+    }
+    if (
+      Array.isArray(message.content) &&
+      message.content.some((b) => b?.type === "toolCall")
+    ) {
+      return;
+    }
+    try {
+      const branch = sm.getBranch();
+      const at =
+        typeof event.messageEntryId === "string" && event.messageEntryId
+          ? branch.findIndex((e) => e.id === event.messageEntryId)
+          : branch.length - 1;
+      for (let i = at - 1; i >= 0; i--) {
+        const entry = branch[i];
+        if (
+          entry.type === "message" ||
+          entry.type === "branch_summary" ||
+          entry.type === "compaction"
+        ) {
+          return;
+        }
+        if (
+          entry.type !== "custom_message" ||
+          entry.customType !== REWIND_CUSTOM_TYPE
+        ) {
+          continue;
+        }
+        const d = entry.details as
+          | {
+              status?: unknown;
+              summaryId?: unknown;
+              reappendedLateMessages?: unknown;
+              forced?: unknown;
+            }
+          | undefined;
+        if (
+          d?.status !== "done" ||
+          typeof d.summaryId !== "string" ||
+          d.forced === true ||
+          Number(d.reappendedLateMessages) > 0 ||
+          nudgedFolds.has(d.summaryId)
+        ) {
+          return;
+        }
+        const fold = sm.getEntry(d.summaryId);
+        if (fold?.type !== "branch_summary" || !hasOpenWork(fold.summary))
+          return;
+        nudgedFolds.add(d.summaryId);
+        return rewindMessageDraft(CONTINUE_NUDGE_TEXT, {
+          status: CONTINUE_NUDGE_STATUS,
+          summaryId: d.summaryId,
+        });
+      }
+    } catch {
+      // Fail-open: no nudge.
+    }
+    return undefined;
+  }
+
   // Rewind turn and summary attempts (#80, #90). Registered before the hint
   // / start-anchor handler so a completed rewind is already on the branch
   // when that handler reads the context usage.
@@ -3395,7 +3492,23 @@ export default function (pi: ExtensionAPI) {
         if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
           await captureContinuity(sm, sessionId, ctx, message);
         }
-        return await maybeRunAutoNavigate(sm, sessionId, message, event, ctx);
+        const auto = await maybeRunAutoNavigate(
+          sm,
+          sessionId,
+          message,
+          event,
+          ctx,
+        );
+        if (auto) return auto;
+        let signal: AbortSignal | undefined;
+        try {
+          signal = ctx.signal;
+        } catch {
+          // Stale ctx: no nudge.
+          return;
+        }
+        const nudge = continueNudgeDraft(sm, sessionId, message, event, signal);
+        return nudge ? deliverRaw([nudge], true) : undefined;
       }
       rewindTurns.add(message);
       let aborted = message.stopReason === "aborted";
@@ -3933,12 +4046,25 @@ export default function (pi: ExtensionAPI) {
   );
   pi.registerEntryRenderer(CONTINUITY_OPS_CUSTOM_TYPE, renderContinuityOps);
   // The final error of rewind-driven compaction (#101, D8): one
-  // error-styled row, full text, nothing to expand. Every other rewind
-  // message (the continuation, the forced-rewind message) keeps pi's
-  // default rendering.
+  // error-styled row, full text, nothing to expand. The continue nudge is
+  // one line, expandable. Every other rewind message (the continuation, the
+  // forced-rewind message) keeps pi's default rendering.
   pi.registerMessageRenderer(REWIND_CUSTOM_TYPE, (message, options, theme) => {
     const status = (message.details as { status?: unknown } | undefined)
       ?.status;
+    if (status === CONTINUE_NUDGE_STATUS) {
+      const lines = [
+        "[navigate_tree] turn ended right after a rewind \u00b7 nudged once to continue",
+      ];
+      if (options.expanded) {
+        lines.push("", ...extractTextContent(message.content).split("\n"));
+      }
+      return new StyledLines(
+        lines,
+        (line) => theme.fg("customMessageText", line),
+        options.outputPad ?? 1,
+      );
+    }
     if (status !== "failed") return undefined;
     return new StyledLines(
       extractTextContent(message.content).split("\n"),
@@ -4806,7 +4932,7 @@ Operations (set \`action\`):
       ),
       summaryFocus: Type.Optional(
         Type.String({
-          description: `Required when action='rewind'; ≥${MIN_SUMMARY_FOCUS_LENGTH} chars after trim. Encode: (1) the user's most recent instruction verbatim, (2) what's done in the collapsed segment, (3) what's left to do as a next action.`,
+          description: `Required when action='rewind'; ≥${MIN_SUMMARY_FOCUS_LENGTH} chars after trim. Encode: (1) the user's most recent instruction verbatim, (2) what's done in the collapsed segment, (3) what's left to do as a next action; if the user authorized continuing, name the next work item, not a report or wrap-up.`,
         }),
       ),
       kind: Type.Optional(

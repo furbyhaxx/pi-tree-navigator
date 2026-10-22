@@ -51,6 +51,18 @@ Use this EXACT format, preserving all headings and their order:
 Keep each section concise. Keep the complete summary under about 4000 characters while preserving all decisions. Preserve exact file paths, function names, and error messages.`;
 
 /**
+ * Appended after r5d (and the parent block), never inside it: a fold drops the
+ * user's standing authorization unless the summary carries it. The section
+ * sits before any continuity-delta block, which stays last.
+ */
+const STANDING_AUTHORIZATION_INSTRUCTION = `End the summary with one more section, after '## Next Steps' and before any continuity-delta block:
+
+## Standing authorization
+[The user's current authorization and scope, quoted verbatim from anywhere in the conversation above, background included (for example "work autonomously until done"), or "(none)". Say whether that scope is complete.]
+
+In '## Next Steps', name the next concrete work item of the authorized scope. Do not list a report, hand-off or wrap-up while authorized work remains: a completed milestone is not the end of the task.`;
+
+/**
  * Compose the summary instruction: r5d with `{first}` substituted, plus the
  * focus. Mirrors upstream's `customInstructions` append shape
  * (`${PROMPT}\n\nAdditional focus: ...`).
@@ -71,6 +83,7 @@ export function buildSummaryInstruction(
     );
     prompt += `\n\nThis is a work handoff, not an alternative conversation. There are ${parent.childCount} child handoffs in scope. ${parent.mode === "full" ? "Child reports will be attached verbatim once each; write the parent's own scope, final outcome, superseding decisions and remaining work without recopying child reports." : "Synthesize the child reports into this parent's handoff. Keep their relevant decisions, rejected or superseded approaches, deliverables, verification evidence and limits, commits, deferred/open work, and key facts needed for subsequent work. Omit child detail only when it is no longer relevant to the parent."} Include explicit Delivered, Verification, Rejected or Superseded, Commits, and Open or Deferred sections when supported by the evidence. Distinguish historical next steps from still-open work.`;
   }
+  prompt += `\n\n${STANDING_AUTHORIZATION_INSTRUCTION}`;
   const instruction = `${prompt}\n\nAdditional focus: ${focus}`;
   return continuitySection === undefined
     ? instruction
@@ -172,4 +185,42 @@ export function stripContinuityBriefing(text: string): string {
     `\n\n${CONTINUITY_HEADING}\n\n${CONTINUITY_MARKER}`,
   );
   return at < 0 ? text : text.slice(0, at);
+}
+
+// A parent's embedded child handoffs carry their own, historical, sections.
+const CHILD_HANDOFFS_MARK = "\n\n---\n\n## Child handoffs";
+const NO_ITEM = /^\(?(?:none|n\/a|nothing|empty)\b[^a-z]*$/i;
+
+function sectionItems(text: string, heading: string): string[] {
+  const lines = text.split("\n");
+  const level = /^#+/.exec(heading)?.[0].length ?? 2;
+  const at = lines.findIndex(
+    (line) => line.trimEnd().toLowerCase() === heading.toLowerCase(),
+  );
+  if (at < 0) return [];
+  const items: string[] = [];
+  for (const line of lines.slice(at + 1)) {
+    const next = /^(#+)\s/.exec(line);
+    if (
+      (next && next[1].length <= level) ||
+      /^<(?:read|modified)-files>/.test(line)
+    )
+      break;
+    items.push(
+      line.replace(/^\s*(?:[-*]|\d+[.)])?\s*(?:\[[ xX]\])?\s*/, "").trim(),
+    );
+  }
+  return items.filter((item) => item !== "" && !NO_ITEM.test(item));
+}
+
+/**
+ * True when a stored summary records unfinished work: a non-placeholder
+ * item under `### In Progress` or `## Next Steps`.
+ */
+export function hasOpenWork(summary: string): boolean {
+  const own = summary.split(CHILD_HANDOFFS_MARK)[0];
+  return (
+    sectionItems(own, "### In Progress").length > 0 ||
+    sectionItems(own, "## Next Steps").length > 0
+  );
 }
