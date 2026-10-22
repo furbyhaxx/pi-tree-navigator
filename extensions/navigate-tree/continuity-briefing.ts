@@ -44,7 +44,7 @@ const SECTIONS: readonly { kind: ItemKind; title: string }[] = [
 const DROP_ORDER = ["fact", "file", "steering"] as const;
 type Droppable = (typeof DROP_ORDER)[number];
 
-const isVisible = (item: LedgerItem): boolean =>
+export const isVisible = (item: LedgerItem): boolean =>
   item.status === "active" || (item.kind === "file" && item.status === "stale");
 
 function renderItem(item: LedgerItem): string {
@@ -189,7 +189,11 @@ export function renderFoldCaptureSection(
   const inSpan = (item: LedgerItem): boolean =>
     item.scopeAnchor === undefined || item.scopeAnchor === anchorName;
   return [
-    `Continuity ledger rev ${ledger.rev}. These items stay in force across this fold and are carried outside your prose summary; do not restate them.`,
+    ...(active.length > 0
+      ? [
+          `Continuity ledger rev ${ledger.rev}. These items stay in force across this fold and are carried outside your prose summary; do not restate them.`,
+        ]
+      : []),
     ...section(
       "Binding rules",
       active.filter((item) => item.kind === "rule"),

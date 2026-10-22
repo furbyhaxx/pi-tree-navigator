@@ -344,4 +344,13 @@ describe("renderFoldCaptureSection user entry refs", () => {
     assert.match(text, /- u59: message 59/);
     assert.doesNotMatch(text, /- u0: /);
   });
+
+  it("omits the in-force header while the ledger has no active items", () => {
+    const text = renderFoldCaptureSection(createLedger(), "impl", [
+      { id: "u1", preview: "hello" },
+    ]);
+    assert.doesNotMatch(text, /stay in force across this fold/);
+    assert.match(text, /- u1: hello/);
+    assert.match(text, /continuity-delta/);
+  });
 });

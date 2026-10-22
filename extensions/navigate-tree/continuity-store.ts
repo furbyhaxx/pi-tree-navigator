@@ -17,6 +17,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   extractContinuityDelta,
+  isVisible,
   renderBriefing,
   type UserEntryRef,
 } from "./continuity-briefing.ts";
@@ -285,9 +286,6 @@ function noticeOf(
     : undefined;
 }
 
-const isInForce = (item: Ledger["items"][number]): boolean =>
-  item.status === "active" || (item.kind === "file" && item.status === "stale");
-
 /**
  * Fold-time reconciliation, with no model call: strip the model's optional
  * `<continuity-delta>` from its summary, apply it as an agent proposal (user
@@ -337,7 +335,7 @@ export function reconcileFoldContinuity(
   return {
     summaryText: extracted.text,
     ledger,
-    ...(ledger.items.some(isInForce) && {
+    ...(ledger.items.some(isVisible) && {
       briefing: renderBriefing(ledger, { maxTokens: FOLD_BRIEFING_MAX_TOKENS })
         .text,
     }),
