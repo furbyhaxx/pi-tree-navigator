@@ -126,6 +126,7 @@ import {
   spanUserEntryRefs,
   userEntryIndexOf,
 } from "./continuity-store.ts";
+import { createUserOpsWriter } from "./current-screen.ts";
 import {
   getHandoff,
   type HandoffMode,
@@ -2032,6 +2033,9 @@ export default function (pi: ExtensionAPI) {
       );
       return `ctx ${formatPct1(tokens, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}`;
     },
+    readLedger: (ctx) =>
+      readBranchLedger(ctx.sessionManager.getBranch()).ledger,
+    applyUserOps: createUserOpsWriter(pi, () => continuityConfig.capture),
   });
   patchAgentSessionPrototype();
 

@@ -13,6 +13,7 @@ import {
   type AnchorRow,
   registerAnchorCommand,
 } from "./anchor-command.ts";
+import { applyOps, createLedger, type Ledger } from "./continuity-ledger.ts";
 import { CLONE_USAGE } from "./retrospective-command.ts";
 
 const directories: string[] = [];
@@ -87,6 +88,7 @@ interface Options {
   sessionFile?: string;
   anchors?: AnchorRow[];
   openTree?: boolean;
+  ledger?: Ledger;
   setAnchorResult?: { ok: true } | { ok: false; reason: string };
 }
 
@@ -112,6 +114,12 @@ function setup(options: Options = {}) {
     },
     contextBadge: () => "ctx 38.4% of 372k",
     ...(options.openTree ? { openTree: () => void calls.trees++ } : {}),
+    ...(options.ledger
+      ? {
+          readLedger: () => options.ledger,
+          applyUserOps: () => ({ applied: [], rejected: [] }),
+        }
+      : {}),
   };
   const pi = {
     registerCommand(name: string, commandOptions: Registered) {
@@ -344,6 +352,16 @@ describe("/anchor dispatch", () => {
   });
 });
 
+const ledgerWithRules = (): Ledger =>
+  applyOps(
+    createLedger(),
+    [
+      { op: "add", kind: "rule", text: "Always answer in German" },
+      { op: "add", kind: "rule", text: "Never edit the lockfile" },
+    ],
+    { origin: "user" },
+  ).ledger;
+
 describe("/anchor screens", () => {
   for (const width of [60, 130]) {
     it(`opens the hub at ${width} columns, shows every stub and closes on escape`, async () => {
@@ -475,6 +493,51 @@ describe("/anchor screens", () => {
     await test.run("list");
     assert.deepEqual(test.notifications, [
       { message: "No session entries yet.", type: "warning" },
+    ]);
+  });
+
+  it("shows the live ledger line in the hub and opens the current screen from it", async () => {
+    const test = setup({
+      ledger: ledgerWithRules(),
+      screens: [press(DOWN, DOWN, ENTER), press(ESC), press(ESC)],
+    });
+    await test.run("");
+    const row = test.rendered[0].find((line) =>
+      line.includes("Current briefing & cont"),
+    );
+    assert.ok(row?.includes("2 rules · rev 1"), row);
+    assert.ok(!row?.includes("not available yet"));
+    assert.ok(test.rendered[1][0].startsWith("─ Anchor/Current "));
+    assert.ok(test.rendered[1][0].includes("rev 1 · 2 rules"));
+    assert.ok(
+      test.rendered[1].join("\n").includes("R1 Always answer in German"),
+    );
+    assert.equal(test.rendered.length, 3);
+    assert.equal(test.notifications.length, 0);
+  });
+
+  it("opens /anchor current and its aliases straight into the screen", async () => {
+    for (const token of ["current", "briefing", "ledger", "state"]) {
+      const test = setup({ ledger: ledgerWithRules(), screens: [press(ESC)] });
+      await test.run(token);
+      assert.equal(test.rendered.length, 1, token);
+      assert.ok(test.rendered[0][0].includes("Current"), token);
+    }
+  });
+
+  it("prints the briefing for /anchor current without a UI, or says the ledger is empty", async () => {
+    const filled = setup({ hasUI: false, ledger: ledgerWithRules() });
+    await filled.run("current");
+    assert.equal(filled.notifications[0].type, "info");
+    assert.match(
+      filled.notifications[0].message,
+      /^\[navigate_tree continuity ledger rev 1\]\n\nBinding rules:\nR1 Always answer in German/,
+    );
+
+    const empty = setup({ hasUI: false, ledger: createLedger() });
+    await empty.run("ledger");
+    assert.deepEqual(empty.notifications, [
+      { message: "No continuity items yet.", type: "info" },
     ]);
   });
 

@@ -3,6 +3,14 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import { type AutocompleteItem, fuzzyFilter } from "@earendil-works/pi-tui";
+import { summarizeLedgerForUi } from "./continuity-briefing.ts";
+import type { Ledger } from "./continuity-ledger.ts";
+import {
+  type ApplyUserOps,
+  briefingText,
+  type CurrentScreenDeps,
+  openCurrentScreen,
+} from "./current-screen.ts";
 import { type FrameRow, selectFrame } from "./frame.ts";
 import { isValidName, MAX_NAME_LENGTH } from "./helpers.ts";
 import {
@@ -35,6 +43,16 @@ export interface AnchorCommandDeps {
   requestFold(ctx: ExtensionCommandContext, anchorName: string): void;
   contextBadge?(ctx: ExtensionCommandContext): string | undefined;
   openTree?(ctx: ExtensionCommandContext): void;
+  /** The active branch's continuity ledger; `/anchor current` needs it. */
+  readLedger?(ctx: ExtensionCommandContext): Ledger | undefined;
+  /** The single write path for user edits of the ledger; the screen is read-only without it. */
+  applyUserOps?: ApplyUserOps;
+}
+
+function hasLedger(
+  deps: AnchorCommandDeps,
+): deps is AnchorCommandDeps & CurrentScreenDeps {
+  return deps.readLedger !== undefined && deps.applyUserOps !== undefined;
 }
 
 type SubcommandName =
@@ -106,7 +124,7 @@ const HUB: readonly {
     row: {
       label: "Current briefing & continuity ledger",
       description:
-        "Inspect the durable goals, rules and decisions that survive every fold.",
+        "Browse, edit and retract the goals, rules and decisions that survive every fold.",
     },
   },
   {
@@ -410,6 +428,9 @@ async function openView(
       deps.openTree(ctx);
       return "done";
     case "current":
+      if (!hasLedger(deps)) return notAvailable(ctx, view);
+      await openCurrentScreen(ctx, deps);
+      return "back";
     case "fold":
     case "settings":
       return notAvailable(ctx, view);
@@ -433,6 +454,10 @@ async function openHub(
             ? `latest: ${anchors.at(-1)?.name}`
             : "none yet",
         };
+      if (view === "current" && hasLedger(deps)) {
+        const ledger = deps.readLedger(ctx);
+        if (ledger) return { ...row, value: summarizeLedgerForUi(ledger).line };
+      }
       if (view === "clone" || (view === "tree" && deps.openTree)) return row;
       return { ...row, value: "not available yet", tone: "muted" };
     });
@@ -501,7 +526,10 @@ export function registerAnchorCommand(
       } else if (ctx.hasUI) {
         await openView(subcommand, ctx, pi, deps);
       } else {
-        notAvailable(ctx, subcommand);
+        const ledger =
+          subcommand === "current" ? deps.readLedger?.(ctx) : undefined;
+        if (ledger) ctx.ui.notify(briefingText(ledger), "info");
+        else notAvailable(ctx, subcommand);
       }
     },
   });
