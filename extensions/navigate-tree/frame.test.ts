@@ -1,6 +1,11 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  CURSOR_MARKER,
+  stripTerminalSequences,
+  type TuiMouseEvent,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import {
   FrameList,
   type FrameListOptions,
@@ -206,6 +211,135 @@ describe("renderFrame", () => {
 });
 
 describe("FrameList", () => {
+  const mouse = (
+    width: number,
+    height: number,
+    overrides: Partial<TuiMouseEvent> = {},
+  ): TuiMouseEvent => ({
+    type: "click",
+    button: "left",
+    x: width - 1,
+    y: 3,
+    screenX: 150,
+    screenY: 50,
+    width,
+    height,
+    shift: false,
+    alt: false,
+    ctrl: false,
+    ...overrides,
+  });
+
+  for (const width of [60, 130]) {
+    it(`maps filtered, scrolled clicks and selected detail rows at ${width} columns`, () => {
+      const rows = Array.from({ length: 80 }, (_, index) => ({
+        label: `${index % 2 === 0 ? "keep" : "skip"} ${index}`,
+        detail: `detail ${index}`,
+      }));
+      const { frame, events } = list(rows);
+      const height = frame.render(width).length;
+      frame.handleInput("keep");
+      for (let n = 0; n < 20; n++) frame.handleInput("\x1b[B");
+      const scrolled = plain(frame.render(width));
+      assert.match(scrolled[0], /↑ \d+ more/);
+      const first = Number(/keep (\d+)/.exec(scrolled[3])?.[1]);
+      assert.ok(first > 0);
+      const click = (y: number) => {
+        for (const type of ["press", "release", "click"] as const) {
+          const result = frame.handleMouse(mouse(width, height, { type, y }));
+          if (type === "press") assert.equal(result?.handled, true);
+          const lines = frame.render(width);
+          assert.equal(lines.length, height);
+          assert.ok(lines.every((line) => visibleWidth(line) <= width));
+        }
+      };
+      click(3);
+      assert.equal(frame.cursor, first);
+      const expanded = plain(frame.render(width));
+      assert.match(expanded[4], new RegExp(`detail ${first}$`));
+      assert.match(expanded[5], new RegExp(`keep ${first + 2}$`));
+      click(5);
+      assert.equal(frame.cursor, first + 2);
+      assert.deepEqual(events, []);
+      assert.equal(frame.search, "keep");
+      assert.match(plain(frame.render(width)).at(-2) ?? "", /esc clear/);
+      assert.match(plain(frame.render(width))[5], /↳ detail/);
+      click(5);
+      assert.deepEqual(events, [`select:keep ${first + 2}:${first + 2}`]);
+      frame.handleInput("\x1b");
+      assert.equal(frame.search, "");
+      assert.equal(events.length, 1);
+    });
+  }
+
+  it("focuses search on click and moves selection one row per wheel event", () => {
+    const { frame } = list([
+      { label: "keep first" },
+      { label: "skip" },
+      { label: "keep second" },
+      { label: "keep third" },
+    ]);
+    frame.focused = true;
+    const height = frame.render(60).length;
+    const event = (overrides: Partial<TuiMouseEvent>) =>
+      mouse(60, height, overrides);
+    const result = frame.handleMouse(event({ y: 1 }));
+    assert.equal(result?.focus, true);
+    assert.equal(result?.handled, true);
+    assert.ok(frame.render(60)[1].includes(CURSOR_MARKER));
+    assert.match(plain(frame.render(60)).at(-2) ?? "", /esc clear/);
+    frame.handleInput("keep");
+    assert.equal(frame.search, "keep");
+    frame.render(60);
+    const wheel = (wheelDelta: number) =>
+      frame.handleMouse(event({ type: "wheel", button: "none", wheelDelta }));
+    assert.equal(wheel(3)?.handled, true);
+    assert.equal(frame.cursor, 2);
+    wheel(3);
+    assert.equal(frame.cursor, 3);
+    wheel(3);
+    assert.equal(frame.cursor, 3);
+    wheel(-3);
+    assert.equal(frame.cursor, 2);
+    wheel(0);
+    assert.equal(frame.cursor, 2);
+    assert.equal(frame.search, "keep");
+    frame.handleInput("\x1b[A");
+    assert.equal(frame.cursor, 0);
+  });
+
+  it("ignores hover, non-left clicks, padding, chrome and out-of-bounds cells", () => {
+    const { frame, events } = list(makeRows(8));
+    const height = frame.render(60).length;
+    for (const overrides of [
+      { type: "move", y: 5 },
+      { type: "press", y: 5 },
+      { type: "release", y: 5 },
+      { type: "drag", y: 5 },
+      { button: "right", y: 3 },
+      { y: 0 },
+      { y: height - 2 },
+      { y: height - 1 },
+      { y: height },
+      { y: -1 },
+      { x: -1 },
+      { x: 60 },
+    ] satisfies Partial<TuiMouseEvent>[]) {
+      frame.handleMouse(mouse(60, height, overrides));
+      assert.equal(frame.cursor, 0);
+      assert.deepEqual(events, []);
+    }
+    frame.handleInput("row 1");
+    frame.render(60);
+    frame.handleMouse(mouse(60, height, { y: 5 }));
+    assert.deepEqual(events, []);
+    frame.handleInput("zzz");
+    frame.render(60);
+    frame.handleMouse(mouse(60, height));
+    assert.equal(frame.cursor, -1);
+    assert.deepEqual(events, []);
+  });
+
   it("never changes height while filtering or moving the cursor", () => {
     const { frame } = list(makeRows(20));
     const heights = new Set<number>();

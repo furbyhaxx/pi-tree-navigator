@@ -22,6 +22,8 @@ import {
   matchesKey,
   sliceByColumn,
   stripTerminalSequences,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
@@ -347,8 +349,10 @@ function hintLine(
   return `${join(shown)}${HINT_SEPARATOR}${theme.fg("dim", "…")}`;
 }
 
-/** Render exactly the measured height, with every line bounded by visible columns. */
-export function renderFrame(options: FrameOptions): string[] {
+function frameContent(options: FrameOptions): {
+  lines: string[];
+  mouseRows: Map<number, number>;
+} {
   const layout =
     options.layout &&
     options.layout.width === options.width &&
@@ -363,7 +367,13 @@ export function renderFrame(options: FrameOptions): string[] {
     Math.min(Math.floor(options.scrollOffset), Math.max(0, visible.length - 1)),
   );
 
+  const header = [
+    topRule(width, start, options.breadcrumbs, options.rightBadge, theme),
+    searchLine(options),
+    "",
+  ];
   const body: string[] = [];
+  const mouseRows = new Map<number, number>();
   let end = start;
   while (end < visible.length && body.length < layout.listRows) {
     const selected = end === options.cursor;
@@ -375,7 +385,10 @@ export function renderFrame(options: FrameOptions): string[] {
       theme,
     );
     if (body.length > 0 && lines.length > layout.listRows - body.length) break;
-    body.push(...lines.slice(0, layout.listRows - body.length));
+    for (const line of lines.slice(0, layout.listRows - body.length)) {
+      mouseRows.set(header.length + body.length, visible[end]);
+      body.push(line);
+    }
     end++;
   }
   if (visible.length === 0) {
@@ -387,12 +400,7 @@ export function renderFrame(options: FrameOptions): string[] {
   }
   while (body.length < layout.listRows) body.push("");
 
-  const lines = [
-    topRule(width, start, options.breadcrumbs, options.rightBadge, theme),
-    searchLine(options),
-    "",
-    ...body,
-  ];
+  const lines = [...header, ...body];
   if (layout.descriptionRows > 0) {
     lines.push("");
     const selectedRow =
@@ -413,7 +421,15 @@ export function renderFrame(options: FrameOptions): string[] {
   }
   lines.push(hintLine(options.keybindings, width, theme));
   lines.push(bottomRule(width, Math.max(0, visible.length - end), theme));
-  return lines.map((line) => truncateToWidth(line, width, "…"));
+  return {
+    lines: lines.map((line) => truncateToWidth(line, width, "…")),
+    mouseRows,
+  };
+}
+
+/** Render exactly the measured height, with every line bounded by visible columns. */
+export function renderFrame(options: FrameOptions): string[] {
+  return frameContent(options).lines;
 }
 
 /** Structural subset of the TUI injected by `ctx.ui.custom`. */
@@ -482,6 +498,7 @@ export class FrameList implements Component, Focusable {
   private layout?: FrameLayout;
   private focus: "list" | "search" = "list";
   private hasFocus = false;
+  private mouseRows = new Map<number, number>();
 
   private readonly options: FrameListOptions;
 
@@ -522,7 +539,46 @@ export class FrameList implements Component, Focusable {
   render(width: number): string[] {
     this.width = Math.max(0, Math.floor(width));
     this.ensureVisible();
-    return renderFrame(this.renderOptions());
+    const { lines, mouseRows } = frameContent(this.renderOptions());
+    this.mouseRows = mouseRows;
+    return lines;
+  }
+
+  /** Select or activate rendered rows, focus search, or navigate with the wheel. */
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (
+      event.x < 0 ||
+      event.x >= this.width ||
+      event.y < 0 ||
+      event.y >= (this.layout?.height ?? 0)
+    )
+      return undefined;
+    if (event.type === "wheel" && event.wheelDelta && this.visible.length > 0) {
+      const previous = this.position;
+      this.move(this.position + Math.sign(event.wheelDelta));
+      return { handled: true, render: previous !== this.position };
+    }
+    if (
+      event.button !== "left" ||
+      (event.type !== "press" && event.type !== "click")
+    )
+      return undefined;
+    const index = this.mouseRows.get(event.y);
+    if (event.y !== 1 && index === undefined) return undefined;
+    // Claim the press so Pi synthesizes a click without starting text selection.
+    if (event.type === "press") return { handled: true, render: false };
+    if (event.y === 1) {
+      this.enterSearch();
+    } else if (index !== undefined) {
+      const position = this.visible.indexOf(index);
+      if (position < 0) return undefined;
+      this.focus = "list";
+      this.input.focused = false;
+      if (index === this.cursor)
+        this.options.onSelect?.(this.options.rows[index], index);
+      else this.move(position);
+    }
+    return { handled: true, focus: true, render: true };
   }
 
   handleInput(data: string): void {
@@ -547,7 +603,7 @@ export class FrameList implements Component, Focusable {
     else if (matches("tui.select.confirm", Key.enter)) {
       if (row) this.options.onSelect?.(row, this.cursor);
     } else if (matches("tui.select.cancel", Key.escape)) {
-      if (this.focus === "search") this.leaveSearch();
+      if (this.focus === "search" || this.query) this.leaveSearch();
       else this.options.onCancel?.();
     } else if (this.focus === "search") {
       this.input.handleInput(data);
@@ -656,7 +712,7 @@ export class FrameList implements Component, Focusable {
       { key: "/", action: "search", priority: "essential" },
       {
         key: "esc",
-        action: this.options.cancelAction ?? "back",
+        action: this.query ? "clear" : (this.options.cancelAction ?? "back"),
         priority: "essential",
       },
     ];
