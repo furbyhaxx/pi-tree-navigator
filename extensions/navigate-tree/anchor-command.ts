@@ -19,6 +19,7 @@ import {
   CLONE_USAGE,
   runCloneSubcommand,
 } from "./retrospective-command.ts";
+import { openTreeScreen, treeItems, treeSummary } from "./tree-screen.ts";
 
 /** One anchor on the active branch, as listed by `/anchor list`. */
 export interface AnchorRow {
@@ -42,7 +43,6 @@ export interface AnchorCommandDeps {
   ): { ok: true } | { ok: false; reason: string };
   requestFold(ctx: ExtensionCommandContext, anchorName: string): void;
   contextBadge?(ctx: ExtensionCommandContext): string | undefined;
-  openTree?(ctx: ExtensionCommandContext): void;
   /** The active branch's continuity ledger; `/anchor current` needs it. */
   readLedger?(ctx: ExtensionCommandContext): Ledger | undefined;
   /** The single write path for user edits of the ledger; the screen is read-only without it. */
@@ -91,7 +91,6 @@ const SUBCOMMANDS: readonly {
 const ANCHOR_USAGE = `Usage: /anchor [tree|list|current|fold|clone|settings]. Run /anchor alone to open the menu.\n${CLONE_USAGE}`;
 
 const NOT_AVAILABLE = {
-  tree: "/anchor tree is not available yet: the session tree & phases outline belongs to the tree-outline slice. Use /tree meanwhile.",
   current:
     "/anchor current is not available yet: the briefing & continuity ledger belongs to the continuity-ledger slice.",
   fold: "A guided fold screen is not available yet (guided-fold slice). Open /anchor list and press r on an anchor to ask the agent to fold to it.",
@@ -424,9 +423,7 @@ async function openView(
     case "clone":
       return openCloneMenu(ctx, pi);
     case "tree":
-      if (!deps.openTree) return notAvailable(ctx, view);
-      deps.openTree(ctx);
-      return "done";
+      return openTreeScreen(ctx, deps);
     case "current":
       if (!hasLedger(deps)) return notAvailable(ctx, view);
       await openCurrentScreen(ctx, deps);
@@ -458,7 +455,9 @@ async function openHub(
         const ledger = deps.readLedger(ctx);
         if (ledger) return { ...row, value: summarizeLedgerForUi(ledger).line };
       }
-      if (view === "clone" || (view === "tree" && deps.openTree)) return row;
+      if (view === "tree")
+        return { ...row, value: treeSummary(treeItems(ctx.sessionManager)) };
+      if (view === "clone") return row;
       return { ...row, value: "not available yet", tone: "muted" };
     });
     const choice = await selectFrame(ctx, {
@@ -523,6 +522,18 @@ export function registerAnchorCommand(
       } else if (subcommand === "list") {
         if (ctx.hasUI) await openAnchorList(ctx, deps);
         else ctx.ui.notify(formatAnchorLines(deps.listAnchors(ctx)), "info");
+      } else if (subcommand === "tree" && !ctx.hasUI) {
+        const items = treeItems(ctx.sessionManager, deps.listAnchors(ctx));
+        ctx.ui.notify(
+          [
+            treeSummary(items),
+            ...items.map(
+              (item) =>
+                `${"  ".repeat(item.depth)}${item.current ? "[current] " : ""}${item.text}`,
+            ),
+          ].join("\n"),
+          "info",
+        );
       } else if (ctx.hasUI) {
         await openView(subcommand, ctx, pi, deps);
       } else {

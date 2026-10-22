@@ -3,9 +3,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
+import {
+  type ExtensionAPI,
+  type ExtensionCommandContext,
+  SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
@@ -87,7 +88,6 @@ interface Options {
   cwd?: string;
   sessionFile?: string;
   anchors?: AnchorRow[];
-  openTree?: boolean;
   ledger?: Ledger;
   setAnchorResult?: { ok: true } | { ok: false; reason: string };
 }
@@ -113,7 +113,6 @@ function setup(options: Options = {}) {
       calls.folds.push(anchorName);
     },
     contextBadge: () => "ctx 38.4% of 372k",
-    ...(options.openTree ? { openTree: () => void calls.trees++ } : {}),
     ...(options.ledger
       ? {
           readLedger: () => options.ledger,
@@ -142,7 +141,10 @@ function setup(options: Options = {}) {
     cwd: options.cwd ?? tmpdir(),
     hasUI: options.hasUI ?? true,
     isIdle: () => true,
-    sessionManager: { getSessionFile: () => options.sessionFile },
+    sessionManager: Object.assign(
+      SessionManager.inMemory(options.cwd ?? tmpdir()),
+      { getSessionFile: () => options.sessionFile },
+    ),
     ui: {
       notify(message: string, type?: string) {
         notifications.push({ message, type });
@@ -268,9 +270,9 @@ describe("/anchor dispatch", () => {
       ["ls", /Active anchors/],
       ["anchors", /Active anchors/],
       ["LISTS", /Active anchors/],
-      ["tree", /\/anchor tree is not available yet/],
-      ["outline", /\/anchor tree is not available yet/],
-      ["phases", /\/anchor tree is not available yet/],
+      ["tree", /0 folds · 0 anchors/],
+      ["outline", /0 folds · 0 anchors/],
+      ["phases", /0 folds · 0 anchors/],
       ["current", /\/anchor current is not available yet/],
       ["briefing", /\/anchor current is not available yet/],
       ["ledger", /\/anchor current is not available yet/],
@@ -410,10 +412,11 @@ describe("/anchor screens", () => {
     assert.equal(test.rendered.length, 4);
   });
 
-  it("delegates the tree row to openTree when provided and ends the command", async () => {
-    const test = setup({ openTree: true, screens: [press(ENTER)] });
+  it("opens the tree from the hub and returns on Escape", async () => {
+    const test = setup({ screens: [press(ENTER), press(ESC), press(ESC)] });
     await test.run("");
-    assert.equal(test.calls.trees, 1);
+    assert.ok(test.rendered[1][0].includes("Anchor/Tree"));
+    assert.equal(test.remainingScreens(), 0);
     assert.equal(test.notifications.length, 0);
     const treeRow = test.rendered[0].find((line) =>
       line.includes("Session tree & phases"),
