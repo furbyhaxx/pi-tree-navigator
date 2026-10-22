@@ -86,13 +86,14 @@ This repo uses [`cad0p/semver-calver-release`](https://github.com/cad0p/semver-c
 
 ## What you get
 
-A single agent-callable tool, `navigate_tree`, with three actions:
+A single agent-callable tool, `navigate_tree`, with four actions:
 
 | action | params | effect |
 |---|---|---|
 | `anchor` | `name` | Label the current point in the conversation as a milestone. |
 | `rewind` | `rewindTo`, `newLabel`, `summaryFocus` | Collapse work between `rewindTo` and the current leaf into a `branch_summary` entry. The tool result only reports the rewind as accepted; the summary instruction follows as a `navigate_tree` message, the model's next reply is the summary, and the extension then branches with it (see [In-band summary](#in-band-summary-80)). A rewind must be the only tool call in its message. The summary is itself labeled with `newLabel`, so you can chain rewinds. `summaryFocus` is required (non-trivial focus required; floor enforced at runtime by `MIN_SUMMARY_FOCUS_LENGTH`). Despite the verb, `rewind` does not restore prior state — it forks a sibling branch from `rewindTo` and continues forward from a model-generated summary; the original subtree is preserved on disk but no longer on the active path. |
-| `list` | — | Show all anchors on the active branch with cumulative context %. |
+| `list` | — | Show all anchors on the active branch with cumulative context %, followed by the continuity ledger's active items when there are any. |
+| `pin` | `kind`, `text` (or `path` + `why` for files), `scopeAnchor` | Record a durable item in the [continuity ledger](#continuity-ledger-endless-sessions) that survives every fold. `kind` is `sub-goal`, `decision`, `fact`, `file` or `steering`; rules and the objective are the user's alone and cannot be pinned. A `file` pin stores a sha256 so a later change marks it stale. Steering belongs to an anchor (default: the newest) and lapses when that anchor is folded. Refused when `continuity.capture` is `false`. |
 
 `name` (written by `anchor`) and `newLabel` (written by `rewind`) both share the reserved `anchor:` label prefix; `rewindTo` resolves against that same namespace. Every label written by `anchor` and every `newLabel` written by `rewind` is referenceable by any subsequent `rewind`'s `rewindTo`, and `list` shows all of them. A completed rewind also writes `branch:<newLabel>` on the summary turn of the abandoned branch, so `/tree` can jump back to the full collapsed segment; `branch:` labels are not anchors (`rewindTo` does not resolve them, `list` does not show them).
 
