@@ -77,6 +77,7 @@ import {
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { registerAnchorCommand } from "./anchor-command.ts";
 import {
   AUTO_NAVIGATE_REWIND_CUSTOM_TYPE,
   buildAutoNavigateRewindSteerText,
@@ -131,7 +132,6 @@ import {
   resolveProposalModel,
 } from "./proposal-model.ts";
 import type { ProposalOptions } from "./proposal-options.ts";
-import { registerRetrospectiveCommand } from "./retrospective-command.ts";
 import {
   buildForcedRewindText,
   buildNoAnchorText,
@@ -688,6 +688,56 @@ function effectiveTargetTokensOnBranch(
     return Math.min(raw, charEstimate);
   }
   return raw;
+}
+
+/** The anchors on the active branch, root → leaf, with the context footprint at each. */
+function collectActiveAnchors(
+  sm: SessionManager,
+): { name: string; tokens: number; hint: string | null }[] {
+  const path = sm.getBranch();
+  const allEntries = sm.getEntries();
+  const byId = new Map<string, SessionEntry>();
+  for (const e of allEntries) byId.set(e.id, e);
+  const anchors: { name: string; tokens: number; hint: string | null }[] = [];
+  for (const e of path) {
+    const lbl = sm.getLabel(e.id);
+    if (!lbl?.startsWith(LABEL_PREFIX)) continue;
+    anchors.push({
+      name: lbl.slice(LABEL_PREFIX.length),
+      tokens: effectiveTargetTokensOnBranch(path, allEntries, e.id, byId),
+      hint: findLabelHint(sm, e.id, LIST_HINT_MAX_LENGTH),
+    });
+  }
+  return anchors;
+}
+
+/** What stops a new anchor: shared by the tool's `anchor` action and `/anchor`. */
+type AnchorTarget =
+  | { ok: true; leafId: string; fullLabel: string }
+  | { ok: false; problem: "invalid-name" | "no-leaf" | "duplicate" };
+
+function resolveAnchorTarget(sm: SessionManager, name: unknown): AnchorTarget {
+  if (!isValidName(name)) return { ok: false, problem: "invalid-name" };
+  const leafId = sm.getLeafId();
+  if (!leafId) return { ok: false, problem: "no-leaf" };
+  // Labels are unique on the active branch (issue #55, C8): an
+  // existing label is never moved or overwritten, and the caller
+  // must pick a fresh name. Manual `/tree` duplicates are the only
+  // duplicate path; move-on-collision is retired for both writers.
+  const fullLabel = LABEL_PREFIX + name;
+  if (findLabeledEntry(sm, fullLabel))
+    return { ok: false, problem: "duplicate" };
+  return { ok: true, leafId, fullLabel };
+}
+
+/** A fresh `newLabel` suggestion for folding to `anchorName`. */
+function suggestFoldLabel(sm: SessionManager, anchorName: string): string {
+  for (let n = 1; ; n++) {
+    const suffix = n === 1 ? "-folded" : `-folded-${n}`;
+    const base = anchorName.slice(0, MAX_NAME_LENGTH - suffix.length);
+    const candidate = base.replace(/-+$/, "") + suffix;
+    if (!findLabeledEntry(sm, LABEL_PREFIX + candidate)) return candidate;
+  }
 }
 
 /**
@@ -1800,7 +1850,54 @@ function toolError(
 }
 
 export default function (pi: ExtensionAPI) {
-  registerRetrospectiveCommand(pi);
+  registerAnchorCommand(pi, {
+    listAnchors(ctx) {
+      const sm = ctx.sessionManager as SessionManager;
+      const cw = ctx.model?.contextWindow ?? 0;
+      const totalTokens = estimateActiveBranchTokens(sm);
+      return collectActiveAnchors(sm).map(({ name, tokens, hint }) => ({
+        name,
+        percent: cw > 0 ? (tokens / cw) * 100 : 0,
+        tokens,
+        savableTokens: Math.max(0, totalTokens - tokens),
+        ...(hint ? { afterPreview: hint } : {}),
+        ...(LABEL_PREFIX + name === START_ANCHOR_LABEL ? { auto: true } : {}),
+      }));
+    },
+    setAnchor(ctx, name) {
+      const sm = ctx.sessionManager as SessionManager;
+      const target = resolveAnchorTarget(sm, name);
+      if (!target.ok) {
+        const reasons = {
+          "invalid-name": `Anchor names are lowercase kebab-case, at most ${MAX_NAME_LENGTH} characters (e.g. 'impl-start').`,
+          "no-leaf": "No session entries yet — nothing to anchor.",
+          duplicate: `A label '${name}' already exists on the active branch — labels are unique and immutable once written. Pick a fresh name.`,
+        };
+        return { ok: false, reason: reasons[target.problem] };
+      }
+      if (!writeLabel(sm, target.leafId, target.fullLabel)) {
+        return { ok: false, reason: "The anchor label could not be written." };
+      }
+      return { ok: true };
+    },
+    requestFold(ctx, anchorName) {
+      const label = suggestFoldLabel(
+        ctx.sessionManager as SessionManager,
+        anchorName,
+      );
+      pi.sendUserMessage(
+        `Please fold the work since the '${anchorName}' anchor: call ${TOOL_NAME}(action='rewind', rewindTo='${anchorName}', newLabel='${label}'), with a summaryFocus of at least ${MIN_SUMMARY_FOCUS_LENGTH} characters covering my latest instruction, what is done since that anchor and what remains.`,
+        ctx.isIdle() ? undefined : { deliverAs: "followUp" },
+      );
+    },
+    contextBadge(ctx) {
+      const cw = ctx.model?.contextWindow ?? 0;
+      const tokens = estimateActiveBranchTokens(
+        ctx.sessionManager as SessionManager,
+      );
+      return `ctx ${formatPct1(tokens, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}`;
+    },
+  });
   patchAgentSessionPrototype();
 
   // Pending in-band rewinds (#80), keyed by session id: set by the rewind
@@ -4409,33 +4506,17 @@ Operations (set \`action\`):
 
       // --- list ---
       if (p.action === "list") {
-        const path = sm.getBranch();
-        const allEntries = sm.getEntries();
-        const byId = new Map<string, SessionEntry>();
-        for (const e of allEntries) byId.set(e.id, e);
         const cw = ctx.model?.contextWindow ?? 0;
         const totalTokens = estimateActiveBranchTokens(sm);
         const reflectionOk = !!findOwningSession(sm);
 
-        const rows: AnchorTableRow[] = [];
-        for (const e of path) {
-          const lbl = sm.getLabel(e.id);
-          if (lbl?.startsWith(LABEL_PREFIX)) {
-            const name = lbl.slice(LABEL_PREFIX.length);
-            const tokensAt = effectiveTargetTokensOnBranch(
-              path,
-              allEntries,
-              e.id,
-              byId,
-            );
-            const hint = findLabelHint(sm, e.id, LIST_HINT_MAX_LENGTH);
-            rows.push({
-              pct: formatPct1(tokensAt, cw),
-              name,
-              ...(hint ? { after: hint } : {}),
-            });
-          }
-        }
+        const rows: AnchorTableRow[] = collectActiveAnchors(sm).map(
+          ({ name, tokens, hint }) => ({
+            pct: formatPct1(tokens, cw),
+            name,
+            ...(hint ? { after: hint } : {}),
+          }),
+        );
 
         const reflectionWarning = reflectionOk
           ? ""
@@ -4457,25 +4538,21 @@ Operations (set \`action\`):
 
       // --- anchor ---
       if (p.action === "anchor") {
-        if (!isValidName(p.name)) {
-          return toolError(
-            `anchor requires \`name\` in kebab-case, max ${MAX_NAME_LENGTH} chars (e.g. 'impl-start').`,
-          );
-        }
-        const leafId = sm.getLeafId();
-        if (!leafId) {
-          return toolError("No session entries yet — nothing to anchor.");
-        }
-        // Labels are unique on the active branch (issue #55, C8): an
-        // existing label is never moved or overwritten, and the caller
-        // must pick a fresh name. Manual `/tree` duplicates are the only
-        // duplicate path; move-on-collision is retired for both writers.
-        const fullLabel = LABEL_PREFIX + p.name;
-        if (findLabeledEntry(sm, fullLabel)) {
+        const target = resolveAnchorTarget(sm, p.name);
+        if (!target.ok) {
+          if (target.problem === "invalid-name") {
+            return toolError(
+              `anchor requires \`name\` in kebab-case, max ${MAX_NAME_LENGTH} chars (e.g. 'impl-start').`,
+            );
+          }
+          if (target.problem === "no-leaf") {
+            return toolError("No session entries yet — nothing to anchor.");
+          }
           return toolError(
             `A label '${p.name}' already exists on the active branch — labels are unique and immutable once written. Use action='list' to review the active labels, then pick a fresh name.`,
           );
         }
+        const { leafId, fullLabel } = target;
         // Atomic anchor: compute the estimate BEFORE writing the label. A
         // throw from the estimator must not leave a label on disk —
         // otherwise the agent sees an error yet a retry with the same

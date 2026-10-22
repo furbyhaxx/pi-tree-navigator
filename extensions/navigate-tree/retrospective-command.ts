@@ -10,10 +10,19 @@ import {
 } from "./retrospective.ts";
 import { inspectRetrospectiveSession } from "./retrospective-plan.ts";
 
-const USAGE =
-  "Usage: /tree-clone [inspect <session.jsonl>|propose [session.jsonl] [--llm] [--model provider/model:thinking] [--output plan.json] [--omit-tool name] [--calls-only-tool name]|preview <plan.json>|create <plan.json>]";
+export const CLONE_USAGE =
+  "Usage: /anchor clone [inspect <session.jsonl>|propose [session.jsonl] [--llm] [--model provider/model:thinking] [--output plan.json] [--omit-tool name] [--calls-only-tool name] [--full-tool name]|preview <plan.json>|create <plan.json>]";
 
-const SUBCOMMANDS = [
+export const CLONE_PROPOSE_FLAGS = [
+  "--llm",
+  "--model",
+  "--output",
+  "--omit-tool",
+  "--calls-only-tool",
+  "--full-tool",
+] as const;
+
+export const CLONE_SUBCOMMANDS = [
   { name: "inspect", path: "<session.jsonl>", summary: "inspect a session" },
   {
     name: "propose",
@@ -24,7 +33,7 @@ const SUBCOMMANDS = [
   { name: "create", path: "<plan.json>", summary: "create a confirmed clone" },
 ] as const;
 
-type Subcommand = (typeof SUBCOMMANDS)[number]["name"];
+type Subcommand = (typeof CLONE_SUBCOMMANDS)[number]["name"];
 
 function parsePathArgument(rawPath: string): string | undefined {
   const value = rawPath.trim();
@@ -39,7 +48,7 @@ function parsePathArgument(rawPath: string): string | undefined {
       (quote !== '"' && quote !== "'") ||
       value.at(-1) !== quote
     ) {
-      throw new Error(`Path quotes must match. ${USAGE}`);
+      throw new Error(`Path quotes must match. ${CLONE_USAGE}`);
     }
     return value.slice(1, -1) || undefined;
   }
@@ -59,18 +68,18 @@ async function getPath(
     const sessionFile = ctx.sessionManager.getSessionFile();
     if (sessionFile) return resolve(ctx.cwd, sessionFile);
     throw new Error(
-      `No current session file is available. Provide a session path. ${USAGE}`,
+      `No current session file is available. Provide a session path. ${CLONE_USAGE}`,
     );
   }
 
   if (!ctx.hasUI) {
-    throw new Error(`A plan path is required in headless mode. ${USAGE}`);
+    throw new Error(`A plan path is required in headless mode. ${CLONE_USAGE}`);
   }
 
   const label = subcommand === "preview" ? "preview" : "clone";
   const input = await ctx.ui.input(`Plan file to ${label}`, "<plan.json>");
   const promptedPath = input ? parsePathArgument(input) : undefined;
-  if (!promptedPath) throw new Error(`No plan path provided. ${USAGE}`);
+  if (!promptedPath) throw new Error(`No plan path provided. ${CLONE_USAGE}`);
   return resolve(ctx.cwd, promptedPath);
 }
 
@@ -85,146 +94,111 @@ function notifyCreateNotIdle(ctx: ExtensionCommandContext): void {
   );
 }
 
-/** Register read-only inspection and confirmed clone creation without switching sessions. */
-export function registerRetrospectiveCommand(pi: ExtensionAPI): void {
-  pi.registerCommand("tree-clone", {
-    description:
-      "[inspect <session.jsonl>|propose [session.jsonl] [--llm] [--model provider/model:thinking]|preview <plan.json>|create <plan.json>] — inspect, derive or clone a session tree",
-    getArgumentCompletions(argumentText) {
-      const input = argumentText.trimStart();
-      if (/\s/.test(input)) {
-        const flags = [
-          "--llm",
-          "--model",
-          "--output",
-          "--omit-tool",
-          "--calls-only-tool",
-          "--full-tool",
-        ];
-        const match = /^(propose\s[\s\S]*?)(--[\w-]*)$/.exec(input);
-        return match
-          ? flags
-              .filter((flag) => flag.startsWith(match[2]))
-              .map((flag) => ({ value: `${match[1]}${flag} `, label: flag }))
-          : null;
-      }
-      const query = input.toLowerCase();
-      const matches = SUBCOMMANDS.filter((command) =>
-        command.name.startsWith(query),
-      );
-      return matches.length
-        ? matches.map((command) => ({
-            value: `${command.name} `,
-            label: command.name,
-            description: `${command.path} — ${command.summary}`,
-          }))
-        : null;
-    },
-    async handler(args, ctx) {
-      const trimmed = args.trim();
-      if (!trimmed) {
-        ctx.ui.notify(USAGE, "info");
-        return;
-      }
+/** Run `/anchor clone <args>`: read-only inspection, proposal dispatch, preview and confirmed creation without switching sessions. */
+export async function runCloneSubcommand(
+  args: string,
+  ctx: ExtensionCommandContext,
+  pi: ExtensionAPI,
+): Promise<void> {
+  const trimmed = args.trim();
+  if (!trimmed) {
+    ctx.ui.notify(CLONE_USAGE, "info");
+    return;
+  }
 
-      const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(trimmed);
-      const subcommand = match?.[1];
-      if (!SUBCOMMANDS.some((command) => command.name === subcommand)) {
-        ctx.ui.notify(
-          `Unknown subcommand "${subcommand}". ${USAGE}`,
-          "warning",
+  const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(trimmed);
+  const subcommand = match?.[1];
+  if (!CLONE_SUBCOMMANDS.some((command) => command.name === subcommand)) {
+    ctx.ui.notify(
+      `Unknown subcommand "${subcommand}". ${CLONE_USAGE}`,
+      "warning",
+    );
+    return;
+  }
+
+  const operation = subcommand as Subcommand;
+  if (operation === "create" && !ctx.hasUI) {
+    ctx.ui.notify(
+      "Creating a retrospective clone requires a UI confirmation. Run `node scripts/restructure-session.mjs` to create clones from the CLI.",
+      "warning",
+    );
+    return;
+  }
+  if (operation === "create" && !ctx.isIdle()) {
+    notifyCreateNotIdle(ctx);
+    return;
+  }
+
+  try {
+    if (operation === "propose") {
+      await handleTreeProposal(match?.[2] ?? "", ctx, pi);
+      return;
+    }
+    const path = await getPath(operation, match?.[2], ctx);
+    if (operation === "inspect") {
+      const inspected = await inspectRetrospectiveSession(path);
+      if (ctx.hasUI) {
+        await ctx.ui.editor(
+          "Retrospective session inspection (read-only)",
+          JSON.stringify(inspected, null, 2),
         );
-        return;
-      }
-
-      const operation = subcommand as Subcommand;
-      if (operation === "create" && !ctx.hasUI) {
         ctx.ui.notify(
-          "Creating a retrospective clone requires a UI confirmation. Run `node scripts/restructure-session.mjs` to create clones from the CLI.",
-          "warning",
+          `Inspected "${inspected.name}": ${inspected.entries} entries and ${inspected.turns.length} user turns.`,
+          "info",
         );
-        return;
+      } else {
+        ctx.ui.notify(
+          `Inspected "${inspected.name}": ${inspected.entries} entries and ${inspected.turns.length} user turns. Rerun /anchor clone inspect <session.jsonl> in a UI-capable Pi session to view the full JSON.`,
+          "info",
+        );
       }
-      if (operation === "create" && !ctx.isIdle()) {
-        notifyCreateNotIdle(ctx);
-        return;
-      }
+      return;
+    }
 
-      try {
-        if (operation === "propose") {
-          await handleTreeProposal(match?.[2] ?? "", ctx, pi);
-          return;
-        }
-        const path = await getPath(operation, match?.[2], ctx);
-        if (operation === "inspect") {
-          const inspected = await inspectRetrospectiveSession(path);
-          if (ctx.hasUI) {
-            await ctx.ui.editor(
-              "Retrospective session inspection (read-only)",
-              JSON.stringify(inspected, null, 2),
-            );
-            ctx.ui.notify(
-              `Inspected "${inspected.name}": ${inspected.entries} entries and ${inspected.turns.length} user turns.`,
-              "info",
-            );
-          } else {
-            ctx.ui.notify(
-              `Inspected "${inspected.name}": ${inspected.entries} entries and ${inspected.turns.length} user turns. Rerun /tree-clone inspect <session.jsonl> in a UI-capable Pi session to view the full JSON.`,
-              "info",
-            );
-          }
-          return;
-        }
-
-        const preview = await previewRetrospectiveSession(path);
-        const warningNote = preview.warnings.length
-          ? `, ${preview.warnings.length} warning(s)`
-          : "";
-        const summary = `Preview for "${preview.name}": ${preview.groups.length} groups, ${preview.addedEntries} added entries and ${preview.descendants.length} descendant sessions${warningNote}.`;
-        if (operation === "preview") {
-          if (ctx.hasUI) {
-            await ctx.ui.editor(
-              "Retrospective clone preview (read-only)",
-              JSON.stringify(preview, null, 2),
-            );
-            ctx.ui.notify(summary, "info");
-          } else {
-            ctx.ui.notify(
-              `${summary} Rerun /tree-clone preview <plan.json> in a UI-capable Pi session to review the full preview.`,
-              "info",
-            );
-          }
-          return;
-        }
-
+    const preview = await previewRetrospectiveSession(path);
+    const warningNote = preview.warnings.length
+      ? `, ${preview.warnings.length} warning(s)`
+      : "";
+    const summary = `Preview for "${preview.name}": ${preview.groups.length} groups, ${preview.addedEntries} added entries and ${preview.descendants.length} descendant sessions${warningNote}.`;
+    if (operation === "preview") {
+      if (ctx.hasUI) {
         await ctx.ui.editor(
           "Retrospective clone preview (read-only)",
           JSON.stringify(preview, null, 2),
         );
-        const confirmed = await ctx.ui.confirm(
-          `Create clone "${preview.name}"?`,
-          `Create a new session from ${preview.source}? The original session will remain untouched.`,
-        );
-        if (!confirmed) {
-          ctx.ui.notify("Clone cancelled; no files were written.", "info");
-          return;
-        }
-        if (!ctx.isIdle()) {
-          notifyCreateNotIdle(ctx);
-          return;
-        }
-
-        const clone = await cloneRetrospectiveSession(
-          path,
-          preview.previewToken,
-        );
+        ctx.ui.notify(summary, "info");
+      } else {
         ctx.ui.notify(
-          `Created clone "${clone.name}" at ${clone.path}, with ${clone.descendants.length} descendant sessions. The original session was left untouched.${clone.warnings.length ? ` ${clone.warnings.join(" ")}` : ""}`,
-          clone.warnings.length ? "warning" : "info",
+          `${summary} Rerun /anchor clone preview <plan.json> in a UI-capable Pi session to review the full preview.`,
+          "info",
         );
-      } catch (error) {
-        ctx.ui.notify(errorText(error), "warning");
       }
-    },
-  });
+      return;
+    }
+
+    await ctx.ui.editor(
+      "Retrospective clone preview (read-only)",
+      JSON.stringify(preview, null, 2),
+    );
+    const confirmed = await ctx.ui.confirm(
+      `Create clone "${preview.name}"?`,
+      `Create a new session from ${preview.source}? The original session will remain untouched.`,
+    );
+    if (!confirmed) {
+      ctx.ui.notify("Clone cancelled; no files were written.", "info");
+      return;
+    }
+    if (!ctx.isIdle()) {
+      notifyCreateNotIdle(ctx);
+      return;
+    }
+
+    const clone = await cloneRetrospectiveSession(path, preview.previewToken);
+    ctx.ui.notify(
+      `Created clone "${clone.name}" at ${clone.path}, with ${clone.descendants.length} descendant sessions. The original session was left untouched.${clone.warnings.length ? ` ${clone.warnings.join(" ")}` : ""}`,
+      clone.warnings.length ? "warning" : "info",
+    );
+  } catch (error) {
+    ctx.ui.notify(errorText(error), "warning");
+  }
 }

@@ -355,7 +355,7 @@ export async function handleTreeProposal(
     args.output ? resolve(ctx.cwd, args.output) : undefined,
   );
   ctx.ui.notify(
-    `Saved ${proposal.method} tree proposal at ${path}. Review with /tree-clone preview "${path}", then /tree-clone create "${path}". No session was created or switched.${proposal.warnings.length ? ` ${proposal.warnings.join(" ")}` : ""}`,
+    `Saved ${proposal.method} tree proposal at ${path}. Review with /anchor clone preview "${path}", then /anchor clone create "${path}". No session was created or switched.${proposal.warnings.length ? ` ${proposal.warnings.join(" ")}` : ""}`,
     proposal.warnings.length ? "warning" : "info",
   );
 }

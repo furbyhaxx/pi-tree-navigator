@@ -8,7 +8,7 @@ import {
   type ExtensionCommandContext,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { registerRetrospectiveCommand } from "./retrospective-command.ts";
+import { CLONE_USAGE, runCloneSubcommand } from "./retrospective-command.ts";
 import { inspectRetrospectiveSession } from "./retrospective-plan.ts";
 
 const directories: string[] = [];
@@ -73,12 +73,6 @@ async function fixture() {
   return { directory, sourcePath, planPath };
 }
 
-type RegisteredCommandOptions = Parameters<ExtensionAPI["registerCommand"]>[1];
-interface CapturedCommand {
-  name: string;
-  options: RegisteredCommandOptions;
-}
-
 interface SideEffects {
   appends: number;
   messages: number;
@@ -105,11 +99,7 @@ function setup(options: TestContextOptions) {
     sessionChanges: 0,
     waits: 0,
   };
-  const commands: CapturedCommand[] = [];
   const pi = {
-    registerCommand(name: string, commandOptions: RegisteredCommandOptions) {
-      commands.push({ name, options: commandOptions });
-    },
     appendEntry() {
       sideEffects.appends++;
     },
@@ -120,9 +110,6 @@ function setup(options: TestContextOptions) {
       sideEffects.userMessages++;
     },
   } as unknown as ExtensionAPI;
-  registerRetrospectiveCommand(pi);
-  const captured = commands.find((command) => command.name === "tree-clone");
-  assert.ok(captured);
 
   const notifications: { message: string; type?: string }[] = [];
   const editors: { title: string; text: string }[] = [];
@@ -168,7 +155,7 @@ function setup(options: TestContextOptions) {
   } as unknown as ExtensionCommandContext;
 
   return {
-    command: captured.options,
+    run: (args: string) => runCloneSubcommand(args, ctx, pi),
     ctx,
     notifications,
     editors,
@@ -179,7 +166,36 @@ function setup(options: TestContextOptions) {
 }
 
 describe("retrospective clone command", () => {
-  it("registers finite subcommand completions and keeps inspect/preview read-only", async () => {
+  it("names /anchor clone and every propose flag in its usage and errors", async () => {
+    for (const flag of [
+      "--llm",
+      "--model",
+      "--output",
+      "--omit-tool",
+      "--calls-only-tool",
+      "--full-tool",
+    ]) {
+      assert.ok(CLONE_USAGE.includes(flag), flag);
+    }
+    assert.ok(CLONE_USAGE.startsWith("Usage: /anchor clone ["));
+    const command = setup({ cwd: tmpdir() });
+    await command.run("");
+    await command.run("bogus");
+    await command.run('inspect "unbalanced');
+    assert.deepEqual(
+      command.notifications.map(({ message }) =>
+        message.includes("/anchor clone"),
+      ),
+      [true, true, true],
+    );
+    assert.ok(
+      command.notifications.every(
+        ({ message }) => !message.includes("/tree-clone"),
+      ),
+    );
+  });
+
+  it("keeps inspect/preview read-only", async () => {
     const files = await fixture();
     const before = await readFile(files.sourcePath);
     const command = setup({
@@ -187,24 +203,8 @@ describe("retrospective clone command", () => {
       sessionFile: files.sourcePath,
     });
 
-    assert.match(command.command.description ?? "", /inspect <session\.jsonl>/);
-    assert.deepEqual(await command.command.getArgumentCompletions?.("pre"), [
-      {
-        value: "preview ",
-        label: "preview",
-        description: "<plan.json> — review a clone plan",
-      },
-    ]);
-    assert.equal(
-      await command.command.getArgumentCompletions?.("preview "),
-      null,
-    );
-
-    await command.command.handler("inspect", command.ctx);
-    await command.command.handler(
-      'preview "plan with spaces.json"',
-      command.ctx,
-    );
+    await command.run("inspect");
+    await command.run('preview "plan with spaces.json"');
 
     assert.equal(command.editors.length, 2);
     assert.match(command.editors[0].title, /read-only/);
@@ -236,7 +236,7 @@ describe("retrospective clone command", () => {
       inputResult: '"plan with spaces.json"',
     });
 
-    await command.command.handler("preview", command.ctx);
+    await command.run("preview");
 
     assert.equal(command.inputs.length, 1);
     assert.match(command.inputs[0].title, /preview/);
@@ -257,10 +257,7 @@ describe("retrospective clone command", () => {
       editorResult: "edited preview must be ignored",
     });
 
-    await command.command.handler(
-      'create "plan with spaces.json"',
-      command.ctx,
-    );
+    await command.run('create "plan with spaces.json"');
 
     assert.equal(command.editors.length, 1);
     assert.match(command.editors[0].text, /previewToken/);
@@ -297,10 +294,7 @@ describe("retrospective clone command", () => {
       editorResult: "edited preview must be ignored",
     });
 
-    await command.command.handler(
-      'create "plan with spaces.json"',
-      command.ctx,
-    );
+    await command.run('create "plan with spaces.json"');
 
     const entries = (await readdir(files.directory)).sort();
     assert.equal(entries.length, 3);
@@ -325,7 +319,7 @@ describe("retrospective clone command", () => {
   it("refuses headless or busy create requests without creating a session", async () => {
     const files = await fixture();
     const headless = setup({ cwd: files.directory, hasUI: false });
-    await headless.command.handler("create plan.json", headless.ctx);
+    await headless.run("create plan.json");
     assert.match(
       headless.notifications.at(-1)?.message ?? "",
       /scripts\/restructure-session\.mjs/,
@@ -336,7 +330,7 @@ describe("retrospective clone command", () => {
     ]);
 
     const busy = setup({ cwd: files.directory, idle: false });
-    await busy.command.handler('create "plan with spaces.json"', busy.ctx);
+    await busy.run('create "plan with spaces.json"');
     assert.match(busy.notifications.at(-1)?.message ?? "", /session is idle/);
     assert.equal(busy.editors.length, 0);
     assert.equal(busy.confirmations.length, 0);
