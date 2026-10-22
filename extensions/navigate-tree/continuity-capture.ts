@@ -28,6 +28,7 @@ import {
   type NewItem,
   normalizeText,
   type OpContext,
+  TRUNCATION_MARKER,
 } from "./continuity-ledger.ts";
 import { extractTextContent, isValidName, LABEL_PREFIX } from "./helpers.ts";
 
@@ -50,10 +51,19 @@ export interface IntentInput {
   activeItems: readonly { id: string; kind: string; text: string }[];
 }
 
+/** One sentence of a message that states a rule or decision on its own. */
+export interface IntentExcerpt {
+  kind: "rule" | "decision";
+  /** The sentence, verbatim as the user wrote it. */
+  text: string;
+}
+
 export interface IntentVerdict {
   kind: IntentKind;
   /** Ids of active ledger items the message replaces or reverses. */
   supersedes?: readonly string[];
+  /** Sentences captured on their own, for a message too long to judge as a whole. */
+  excerpts?: readonly IntentExcerpt[];
   by: "heuristic" | "classifier";
   /** Set once per classifier instance when its model failed; surfaced in `CaptureResult.warnings`. */
   warning?: string;
@@ -114,8 +124,15 @@ export const OBJECTIVE_MARKERS: readonly RegExp[] = [
 const NON_MARKER_PHRASES = /\bnever ?mind\b/gi;
 
 // Longer messages are pasted content or mixed requests, and the ledger would
-// keep only a truncated quote of them. Only a model classifier decides those.
+// keep only a truncated quote of them. Only a model classifier judges those as
+// a whole; the heuristic only lifts out sentences that carry a marker.
 const HEURISTIC_MAX_CHARS = MAX_QUOTE_CHARS;
+const MIN_MESSAGE_CHARS = 12;
+const MAX_EXCERPTS = 3;
+const SENTENCE_BREAK = /(?<=[.!?\u3002\uff01\uff1f])\s+/;
+const CODE_FENCE_RE = /^\s*(```|~~~)/;
+// Blockquotes and indented code are other people's words or pasted source.
+const QUOTED_LINE_RE = /^(\s*>| {4}|\t)/;
 
 const matchesAny = (markers: readonly RegExp[], text: string): boolean =>
   markers.some((marker) => marker.test(text));
@@ -135,14 +152,58 @@ function heuristicKind(rawText: string): IntentKind {
   return "ephemeral";
 }
 
+function proseSentences(text: string): string[] {
+  const sentences: string[] = [];
+  let fenced = false;
+  for (const line of text.split(/\r?\n/)) {
+    if (CODE_FENCE_RE.test(line)) {
+      fenced = !fenced;
+    } else if (!fenced && !QUOTED_LINE_RE.test(line)) {
+      sentences.push(...line.split(SENTENCE_BREAK).map((s) => s.trim()));
+    }
+  }
+  return sentences;
+}
+
+// The same marker rules as a short message, applied sentence by sentence.
+function heuristicExcerpts(text: string): IntentExcerpt[] {
+  const excerpts: IntentExcerpt[] = [];
+  const seen = new Set<string>();
+  for (const sentence of proseSentences(text)) {
+    if (
+      sentence.length < MIN_MESSAGE_CHARS ||
+      sentence.length > HEURISTIC_MAX_CHARS
+    ) {
+      continue;
+    }
+    const kind = heuristicKind(sentence);
+    if (kind !== "rule" && kind !== "decision") continue;
+    if (seen.has(normalizeText(sentence))) continue;
+    seen.add(normalizeText(sentence));
+    excerpts.push({ kind, text: sentence });
+    if (excerpts.length === MAX_EXCERPTS) break;
+  }
+  return excerpts;
+}
+
 /**
  * Marker-based classifier: no I/O, never supersedes, misses anything phrased
  * without an explicit marker ("drop X and only keep Y" is ephemeral to it).
+ * A message over the length limit is ephemeral as a whole, but up to three of
+ * its rule or decision sentences come back as `excerpts`.
  */
-export const heuristicClassifier: IntentClassifier = async (input) => ({
-  kind: heuristicKind(input.text),
-  by: "heuristic",
-});
+export const heuristicClassifier: IntentClassifier = async (input) => {
+  const kind = heuristicKind(input.text);
+  const excerpts =
+    kind === "ephemeral" && input.text.trim().length > HEURISTIC_MAX_CHARS
+      ? heuristicExcerpts(input.text.trim())
+      : [];
+  return {
+    kind,
+    by: "heuristic",
+    ...(excerpts.length > 0 && { excerpts }),
+  };
+};
 
 // ---------------------------------------------------------------------------
 // Model classifier
@@ -336,12 +397,15 @@ export async function createModelClassifier(
 // Capture
 // ---------------------------------------------------------------------------
 
-const MIN_MESSAGE_CHARS = 12;
 const CLASSIFY_CONCURRENCY = 4;
 // Slash commands that reach the model are expanded text, not user intent; the
 // `[navigate_tree` prefix is this extension's own injected user messages.
 const SLASH_COMMAND_RE = /^\/[\w:.-]+(\s|$)/;
 const OWN_MESSAGE_PREFIX = "[navigate_tree";
+
+/** The user message `/anchor` injects to request a fold: machine-generated, never intent. */
+export const FOLD_REQUEST_RE =
+  /^Please fold the work since the '[^']*' anchor: call navigate_tree\(action='rewind'/;
 const ASK_ANSWER_MAX_CHARS = 300;
 const SUPERSEDABLE_KINDS: ReadonlySet<string> = new Set([
   "objective",
@@ -394,16 +458,45 @@ function anchorAt(
   return (index) => anchors.findLast((anchor) => anchor.index < index)?.name;
 }
 
+const ASK_PREFIX = "Q: ";
+const ASK_JOINER = " → A: ";
+
 function askQuestionText(question: string, answer: string): string {
-  const prefix = "Q: ";
-  const joiner = " → A: ";
   const budget =
-    MAX_ITEM_TEXT_CHARS - prefix.length - joiner.length - answer.length;
-  return `${prefix}${capText(question, budget)}${joiner}${answer}`;
+    MAX_ITEM_TEXT_CHARS - ASK_PREFIX.length - ASK_JOINER.length - answer.length;
+  return `${ASK_PREFIX}${capText(question, budget)}${ASK_JOINER}${answer}`;
 }
 
-/** One `decision` op per answered question of a submitted `ask_user` result. */
-function askUserOps(entry: SessionEntry): CapturedOp[] {
+/** Whether `item` is a captured `ask_user` answer to the question with this full text. */
+function isAnswerTo(item: LedgerItem, question: string): boolean {
+  if (
+    item.kind !== "decision" ||
+    item.source.origin !== "ask_user" ||
+    !item.text.startsWith(ASK_PREFIX)
+  ) {
+    return false;
+  }
+  const stored = item.text.slice(ASK_PREFIX.length);
+  if (stored.startsWith(question + ASK_JOINER)) return true;
+  // A long question was cut to fit: its stored head is a prefix of the full one.
+  const cut = stored.indexOf(TRUNCATION_MARKER + ASK_JOINER);
+  return (
+    cut >= 0 &&
+    question.length > cut &&
+    question.startsWith(stored.slice(0, cut))
+  );
+}
+
+interface AskAnswer {
+  entryId: string;
+  /** Full question text, one line. */
+  question: string;
+  text: string;
+  quote: string;
+}
+
+/** One answer per answered question of a submitted `ask_user` result. */
+function askUserAnswers(entry: SessionEntry): AskAnswer[] {
   if (entry.type !== "message" || entry.message.role !== "toolResult") {
     return [];
   }
@@ -419,7 +512,7 @@ function askUserOps(entry: SessionEntry): CapturedOp[] {
   ) {
     return [];
   }
-  const ops: CapturedOp[] = [];
+  const answers: AskAnswer[] = [];
   for (const question of details.questions) {
     if (!isRecord(question) || typeof question.id !== "string") continue;
     const answer = details.answers[question.id];
@@ -435,17 +528,15 @@ function askUserOps(entry: SessionEntry): CapturedOp[] {
       ASK_ANSWER_MAX_CHARS,
     );
     const prompt = nonBlank(question.prompt) ?? nonBlank(question.label);
-    ops.push({
-      op: {
-        op: "add",
-        kind: "decision",
-        text: askQuestionText(oneLine(prompt ?? question.id), answerText),
-        quote: chosen,
-      },
-      ctx: { origin: "ask_user", entryId: entry.id },
+    const questionText = oneLine(prompt ?? question.id);
+    answers.push({
+      entryId: entry.id,
+      question: questionText,
+      text: askQuestionText(questionText, answerText),
+      quote: chosen,
     });
   }
-  return ops;
+  return answers;
 }
 
 interface Candidate {
@@ -465,7 +556,8 @@ function userCandidate(
   if (
     text.length < MIN_MESSAGE_CHARS ||
     SLASH_COMMAND_RE.test(text) ||
-    text.startsWith(OWN_MESSAGE_PREFIX)
+    text.startsWith(OWN_MESSAGE_PREFIX) ||
+    FOLD_REQUEST_RE.test(text)
   ) {
     return undefined;
   }
@@ -494,6 +586,53 @@ async function mapPool<T, R>(
 interface ScanState {
   objective: { id?: string; text: string } | undefined;
   superseded: Set<string>;
+}
+
+/**
+ * A `decision` for an answered question. A later answer to a question that
+ * already has an active answer replaces it, citing the new answer's entry; the
+ * ledger accepts that as a user-origin self citation.
+ */
+function askOp(
+  answer: AskAnswer,
+  active: ReadonlyMap<string, LedgerItem>,
+  state: ScanState,
+): CapturedOp {
+  const item: NewItem = {
+    kind: "decision",
+    text: answer.text,
+    quote: answer.quote,
+  };
+  const ctx: OpContext = { origin: "ask_user", entryId: answer.entryId };
+  const earlier = [...active.values()].filter(
+    (old) => !state.superseded.has(old.id) && isAnswerTo(old, answer.question),
+  );
+  const unchanged = earlier.some(
+    (old) => normalizeText(old.text) === normalizeText(answer.text),
+  );
+  if (earlier.length === 0 || unchanged)
+    return { op: { op: "add", ...item }, ctx };
+  for (const old of earlier) state.superseded.add(old.id);
+  return {
+    op: {
+      op: "supersede",
+      ids: earlier.map((old) => old.id),
+      with: item,
+      citedEntryId: answer.entryId,
+    },
+    ctx,
+  };
+}
+
+function excerptOps(
+  verdict: IntentVerdict,
+  entryId: string,
+  userEntryIndex: OpContext["userEntryIndex"],
+): CapturedOp[] {
+  return (verdict.excerpts ?? []).map(({ kind, text }) => ({
+    op: { op: "add", kind, text, quote: text },
+    ctx: { origin: "user", entryId, userEntryIndex },
+  }));
 }
 
 function userOp(
@@ -649,12 +788,28 @@ export async function captureIntent(
     superseded: new Set(),
   };
 
+  // Answers to one question are judged across the whole scan, including entries
+  // already captured, so only the newest one is emitted and a lost watermark
+  // cannot bring back an answer a later one replaced.
+  const answers = new Map(
+    fresh.map(({ entry }) => [entry.id, askUserAnswers(entry)] as const),
+  );
+  const newest = new Map<string, AskAnswer>();
+  for (const list of answers.values()) {
+    for (const answer of list) newest.set(answer.question, answer);
+  }
+
   const ops: CapturedOp[] = [];
   for (const { entry, index } of fresh) {
     if (captured.has(entry.id)) continue;
-    ops.push(...askUserOps(entry));
+    for (const answer of answers.get(entry.id) ?? []) {
+      if (newest.get(answer.question) === answer) {
+        ops.push(askOp(answer, active, state));
+      }
+    }
     const hit = classified.get(entry.id);
     if (!hit?.verdict) continue;
+    ops.push(...excerptOps(hit.verdict, entry.id, userEntryIndex));
     const op = userOp(
       hit.verdict,
       hit.candidate,

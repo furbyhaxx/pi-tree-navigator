@@ -22,6 +22,7 @@ import {
   type CapturedOp,
   captureIntent,
   createModelClassifier,
+  FOLD_REQUEST_RE,
   heuristicClassifier,
   INTENT_KINDS,
   type IntentClassifier,
@@ -486,6 +487,356 @@ describe("user message capture", () => {
     );
     assert.deepEqual(result.ops, []);
     assert.equal(result.watermark, undefined);
+  });
+});
+
+describe("repeated ask_user answers", () => {
+  const PROMPT = "Which default should 07_image_output use?";
+  const ask = (id: string, chosen: string, prompt = PROMPT) =>
+    toolResult(id, {
+      cancelled: false,
+      mode: "submit",
+      questions: [{ id: "image_model", label: "Image model", prompt }],
+      answers: {
+        image_model: { values: [chosen], labels: [chosen], indices: [1] },
+      },
+    });
+  const capture = (
+    branch: SessionEntry[],
+    ledger: Ledger,
+    watermark?: string,
+  ) => captureIntent(branch, watermark, ledger, heuristicClassifier);
+  const texts = (ledger: Ledger) => active(ledger).map((i) => i.text);
+
+  it("a later answer supersedes the earlier one, citing the new entry", async () => {
+    const first = await capture([ask("t1", "flash")], createLedger());
+    const once = apply(createLedger(), first.ops).ledger;
+    assert.deepEqual(texts(once), [`Q: ${PROMPT} \u2192 A: flash`]);
+
+    const branch = [ask("t1", "flash"), filler("f1"), ask("t2", "pro")];
+    const second = await capture(branch, once, "t1");
+    assert.deepEqual(
+      second.ops.map(({ op }) => op.op),
+      ["supersede"],
+    );
+    const [{ op, ctx }] = second.ops;
+    assert.ok(op.op === "supersede");
+    assert.deepEqual(op.ids, ["D1"]);
+    assert.equal(op.citedEntryId, "t2");
+    assert.deepEqual([ctx.origin, ctx.entryId], ["ask_user", "t2"]);
+
+    const twice = apply(once, second.ops);
+    assert.deepEqual(twice.rejected, []);
+    assert.deepEqual(twice.effects, ["superseded"]);
+    assert.deepEqual(texts(twice.ledger), [`Q: ${PROMPT} \u2192 A: pro`]);
+    assert.deepEqual(active(twice.ledger)[0]?.source, {
+      entryId: "t2",
+      origin: "ask_user",
+    });
+  });
+
+  it("answers repeated within one scan collapse to the newest", async () => {
+    const branch = [ask("t1", "flash"), ask("t2", "pro"), ask("t3", "ultra")];
+    const result = await capture(branch, createLedger());
+    assert.deepEqual(
+      result.ops.map(({ ctx }) => ctx.entryId),
+      ["t3"],
+    );
+    const { ledger, rejected } = apply(createLedger(), result.ops);
+    assert.deepEqual(rejected, []);
+    assert.deepEqual(texts(ledger), [`Q: ${PROMPT} \u2192 A: ultra`]);
+
+    const rescanned = await capture(branch, ledger);
+    assert.deepEqual(rescanned.ops, []);
+  });
+
+  it("a lost watermark does not bring back the replaced answer", async () => {
+    const branch = [ask("t1", "flash"), ask("t2", "pro")];
+    const settled = apply(
+      createLedger(),
+      (await capture(branch, createLedger())).ops,
+    ).ledger;
+    assert.deepEqual(texts(settled), [`Q: ${PROMPT} \u2192 A: pro`]);
+    assert.deepEqual((await capture(branch, settled)).ops, []);
+  });
+
+  it("leaves answers to other questions alone", async () => {
+    const seeded = apply(
+      createLedger(),
+      (await capture([toolResult("t1", ASK_ANSWERED)], createLedger())).ops,
+    ).ledger;
+    const result = await capture(
+      [toolResult("t1", ASK_ANSWERED), ask("t2", "pro", "Which theme?")],
+      seeded,
+      "t1",
+    );
+    assert.deepEqual(
+      result.ops.map(({ op }) => op.op),
+      ["add"],
+    );
+    const { ledger } = apply(seeded, result.ops);
+    assert.equal(active(ledger).length, 3);
+
+    const again = await capture(
+      [
+        toolResult("t1", ASK_ANSWERED),
+        ask("t2", "pro", "Which theme?"),
+        ask("t3", "flash", "Which theme?"),
+      ],
+      ledger,
+      "t2",
+    );
+    assert.deepEqual(
+      apply(ledger, again.ops).ledger.items.filter((i) => i.status === "active")
+        .length,
+      3,
+    );
+  });
+
+  it("the same answer again changes nothing", async () => {
+    const once = apply(
+      createLedger(),
+      (await capture([ask("t1", "flash")], createLedger())).ops,
+    ).ledger;
+    const result = await capture(
+      [ask("t1", "flash"), ask("t2", "flash")],
+      once,
+      "t1",
+    );
+    const again = apply(once, result.ops);
+    assert.deepEqual(again.effects, ["duplicate"]);
+    assert.deepEqual(again.ledger, once);
+  });
+
+  it("recognizes a question whose stored text was cut to fit", async () => {
+    const long = "word ".repeat(300).trim();
+    const first = await capture([ask("t1", "flash", long)], createLedger());
+    const once = apply(createLedger(), first.ops).ledger;
+    assert.ok(once.items[0]?.text.includes(TRUNCATION_MARKER));
+
+    const second = await capture(
+      [
+        ask("t1", "flash", long),
+        ask("t2", "a considerably longer answer", long),
+      ],
+      once,
+      "t1",
+    );
+    const twice = apply(once, second.ops);
+    assert.deepEqual(twice.rejected, []);
+    assert.deepEqual(twice.effects, ["superseded"]);
+    assert.equal(active(twice.ledger).length, 1);
+  });
+
+  it("a user message that replaced the answer is not superseded a second time", async () => {
+    const once = apply(
+      createLedger(),
+      (await capture([ask("t1", "flash")], createLedger())).ops,
+    ).ledger;
+    const change = "Let's go with the pro model for image output instead.";
+    const result = await captureIntent(
+      [ask("t1", "flash"), user("u2", change), ask("t3", "pro")],
+      "t1",
+      once,
+      scripted({ [change]: verdict("decision", ["D1"]) }),
+    );
+    assert.deepEqual(
+      result.ops.map(({ op }) => op.op),
+      ["supersede", "add"],
+    );
+    assert.deepEqual(apply(once, result.ops).rejected, []);
+  });
+});
+
+describe("fold request messages", () => {
+  const foldRequest = (anchor: string, newLabel: string, chars: number) =>
+    `Please fold the work since the '${anchor}' anchor: call navigate_tree(action='rewind', rewindTo='${anchor}', newLabel='${newLabel}'), with a summaryFocus of at least ${chars} characters covering my latest instruction, what is done since that anchor and what remains.`;
+
+  it("matches the /anchor template for any anchor, label and number", () => {
+    for (const [anchor, newLabel, chars] of [
+      ["impl", "impl-folded", 20],
+      ["milestone-2", "milestone-2-folded-3", 250],
+    ] as const) {
+      assert.match(foldRequest(anchor, newLabel, chars), FOLD_REQUEST_RE);
+    }
+  });
+
+  it("does not match text that merely mentions the call", () => {
+    for (const text of [
+      "Always call navigate_tree(action='rewind', rewindTo='impl') when I say so.",
+      `Thanks. ${foldRequest("impl", "impl-folded", 20)}`,
+      "Please fold the work since the 'impl' anchor, I will do it myself.",
+    ]) {
+      assert.doesNotMatch(text, FOLD_REQUEST_RE);
+    }
+  });
+
+  it("is skipped before any classifier sees it", async () => {
+    const request = foldRequest("impl", "impl-folded", 20);
+    const classifier = scripted({ [request]: verdict("steering") });
+    const result = await captureIntent(
+      [filler("f1"), label("l1", "f1", "anchor:impl"), user("u1", request)],
+      undefined,
+      createLedger(),
+      classifier,
+    );
+    assert.deepEqual(classifier.inputs, []);
+    assert.deepEqual(result.ops, []);
+    assert.equal(result.classified, 0);
+    assert.equal(result.watermark, "u1");
+
+    const heuristic = await captureIntent(
+      [user("u1", `${request} Always keep it short.`)],
+      undefined,
+      createLedger(),
+      heuristicClassifier,
+    );
+    assert.deepEqual(heuristic.ops, []);
+    assert.equal(heuristic.classified, 0);
+  });
+});
+
+describe("long message capture", () => {
+  const FILLER =
+    "The importer reads the CSV export and maps every column to the schema. ";
+  const TABS = "From now on always use tabs for indentation.";
+  const capture = (text: string, ledger = createLedger()) =>
+    captureIntent([user("u1", text)], undefined, ledger, heuristicClassifier);
+  const longMessage = (...middle: string[]) =>
+    `${FILLER.repeat(10)}${middle.join(" ")} ${FILLER.repeat(10)}`;
+
+  it("captures the one rule sentence of a 1500-character message verbatim", async () => {
+    const text = longMessage(TABS);
+    assert.ok(text.length > 1400 && text.length < 1600);
+    const result = await capture(text);
+    assert.deepEqual(
+      result.ops.map(({ op, ctx }) => [op, ctx.origin, ctx.entryId]),
+      [[{ op: "add", kind: "rule", text: TABS, quote: TABS }, "user", "u1"]],
+    );
+    assert.equal(result.classified, 1);
+
+    const { ledger, rejected } = apply(createLedger(), result.ops);
+    assert.deepEqual(rejected, []);
+    assert.deepEqual(ledger.items[0]?.source, {
+      entryId: "u1",
+      origin: "user",
+    });
+    const archived = applyOps(ledger, [{ op: "archive", id: "R1" }], {
+      origin: "agent",
+    });
+    assert.deepEqual(
+      archived.rejected.map((r) => r.reason.code),
+      ["protected_item"],
+    );
+  });
+
+  it("keeps sentence order, kinds and a cap of three items", async () => {
+    const sentences = [
+      "Let's go with option B for the config layout.",
+      "Never write to the main checkout.",
+      "We decided to keep the ledger in branch summaries.",
+      "Always run the full test suite before you commit.",
+      "I prefer small commits over big ones.",
+    ];
+    const result = await capture(longMessage(...sentences));
+    assert.deepEqual(
+      result.ops.map(({ op }) => [
+        op.op === "add" && op.kind,
+        op.op === "add" && op.quote,
+      ]),
+      [
+        ["decision", sentences[0]],
+        ["rule", sentences[1]],
+        ["decision", sentences[2]],
+      ],
+    );
+  });
+
+  it("takes each line as its own sentence and counts a repeat once", async () => {
+    const lines = ["- always rebase before you push", "- never skip the hooks"];
+    const text = `${FILLER.repeat(12)}\n${lines[0]}\n${lines[1]}\n${lines[0]}`;
+    const result = await capture(text);
+    assert.deepEqual(
+      result.ops.map(({ op }) => op.op === "add" && op.quote),
+      lines,
+    );
+  });
+
+  it("restores the original curly apostrophe in the quote", async () => {
+    const sentence = "Let\u2019s go with option B for the config layout.";
+    const result = await capture(longMessage(sentence));
+    const [{ op }] = result.ops;
+    assert.ok(
+      op.op === "add" && op.kind === "decision" && op.quote === sentence,
+    );
+  });
+
+  it("never yields an objective or a steering item", async () => {
+    const goal = "Goal: every binding instruction survives a fold.";
+    const objective = await capture(longMessage(goal));
+    assert.deepEqual(objective.ops, []);
+
+    const text = longMessage("The goal is endless sessions.");
+    const steered = await captureIntent(
+      [
+        filler("f1"),
+        label("l1", "f1", "anchor:impl"),
+        user("u1", `${text} Focus on the parser first.`),
+      ],
+      undefined,
+      createLedger(),
+      heuristicClassifier,
+    );
+    assert.deepEqual(steered.ops, []);
+  });
+
+  it("judges each sentence by the short-message rules", async () => {
+    const cases: [string, string][] = [
+      ["question", "Should we always use tabs here?"],
+      ["dismissal", "Never mind that, keep going with the plan."],
+      ["fenced code", "```\nalways use tabs in this file\n```"],
+      ["unclosed fence", "```ts\nconst always = 1;\nnever call this"],
+      ["blockquote", "> From now on always use tabs, he wrote."],
+      ["indented code", "    // always call close() in finally"],
+      ["too short", "Always."],
+      ["too long", `Always ${"keep going ".repeat(40)}.`],
+    ];
+    for (const [name, middle] of cases) {
+      const result = await capture(`${longMessage()}\n${middle}\n${FILLER}`);
+      assert.deepEqual(result.ops, [], name);
+    }
+  });
+
+  it("still captures a rule that follows a question or a code block", async () => {
+    const text = `${longMessage()}\nShould we use tabs? Always use tabs.\n\`\`\`\nnever mind\n\`\`\`\n${"Never edit the lockfile by hand."}`;
+    const result = await capture(text);
+    assert.deepEqual(
+      result.ops.map(({ op }) => op.op === "add" && op.quote),
+      ["Always use tabs.", "Never edit the lockfile by hand."],
+    );
+  });
+
+  it("leaves short messages and marker-free long ones as they were", async () => {
+    assert.deepEqual(
+      await heuristicClassifier({
+        entryId: "e",
+        text: RULE_TEXT,
+        activeItems: [],
+      }),
+      {
+        kind: "rule",
+        by: "heuristic",
+      },
+    );
+    assert.deepEqual(
+      await heuristicClassifier({
+        entryId: "e",
+        text: longMessage(),
+        activeItems: [],
+      }),
+      { kind: "ephemeral", by: "heuristic" },
+    );
+    assert.deepEqual((await capture(longMessage())).ops, []);
   });
 });
 
@@ -1046,6 +1397,23 @@ describe("createModelClassifier", () => {
       ["R40", "R38", "R36"],
     );
     assert.ok(state.activeItems.slice(0, 20).every((i) => i.kind === "rule"));
+  });
+
+  it("is never asked about a fold request", async () => {
+    const { classifier, calls } = await make(() => ({
+      answers: { kind: answer("steering") },
+    }));
+    const request =
+      "Please fold the work since the 'impl' anchor: call navigate_tree(action='rewind', rewindTo='impl', newLabel='impl-folded'), with a summaryFocus of at least 20 characters covering my latest instruction, what is done since that anchor and what remains.";
+    const result = await captureIntent(
+      [filler("f1"), label("l1", "f1", "anchor:impl"), user("u1", request)],
+      undefined,
+      createLedger(),
+      classifier,
+    );
+    assert.equal(calls.length, 0);
+    assert.deepEqual(result.ops, []);
+    assert.equal(result.classified, 0);
   });
 
   it("does not call the model once the signal is aborted", async () => {
