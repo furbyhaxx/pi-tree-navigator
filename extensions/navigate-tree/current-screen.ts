@@ -433,7 +433,11 @@ export function currentFrame(
       shortcuts: [
         { key: "x", action: "retract", enabled: can("retract") },
         { key: "e", action: "edit", enabled: can("edit") },
-        { key: "p", action: "pin", enabled: can("pin") },
+        {
+          key: "p",
+          action: (_row, index) => (items[index]?.pinned ? "unpin" : "pin"),
+          enabled: can("pin"),
+        },
         { key: "c", action: "done", enabled: can("complete") },
         { key: "a", action: "add" },
         { key: "h", action: "history" },

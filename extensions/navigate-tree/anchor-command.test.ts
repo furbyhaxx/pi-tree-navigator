@@ -126,12 +126,8 @@ function setup(options: Options = {}) {
       calls.folds.push(anchorName);
     },
     contextBadge: () => "ctx 38.4% of 372k",
-    ...(options.ledger
-      ? {
-          readLedger: () => options.ledger,
-          applyUserOps: () => ({ applied: [], rejected: [] }),
-        }
-      : {}),
+    readLedger: () => options.ledger,
+    applyUserOps: () => ({ applied: [], rejected: [] }),
   };
   const pi = {
     registerCommand(name: string, commandOptions: Registered) {
@@ -286,10 +282,10 @@ describe("/anchor dispatch", () => {
       ["tree", /0 folds · 0 anchors/],
       ["outline", /0 folds · 0 anchors/],
       ["phases", /0 folds · 0 anchors/],
-      ["current", /\/anchor current is not available yet/],
-      ["briefing", /\/anchor current is not available yet/],
-      ["ledger", /\/anchor current is not available yet/],
-      ["state", /\/anchor current is not available yet/],
+      ["current", /No continuity items yet/],
+      ["briefing", /No continuity items yet/],
+      ["ledger", /No continuity items yet/],
+      ["state", /No continuity items yet/],
       ["fold", /guided fold requires an interactive terminal/],
       ["rewind", /guided fold requires an interactive terminal/],
       ["settings", /Anchor settings/],
@@ -400,15 +396,18 @@ describe("/anchor screens", () => {
       }
       assert.ok(lines[0].includes("ctx 38.4% of 372k"));
       assert.ok(lines[0].startsWith("─ Anchor "));
-      assert.ok(text.includes("not available yet"));
+      assert.ok(!text.includes("not available yet"));
+      assert.ok(text.includes("Current briefing"));
       assert.equal(test.remainingScreens(), 0);
     });
   }
 
-  it("opens each stub from the hub, names its slice and returns to the hub", async () => {
+  it("opens current, fold and settings from the hub and returns on Escape", async () => {
     const test = setup({
+      ledger: createLedger(),
       screens: [
         press(DOWN, DOWN, ENTER),
+        press(ESC),
         press(DOWN, ENTER),
         press(ESC),
         press(DOWN, DOWN, ENTER),
@@ -417,15 +416,11 @@ describe("/anchor screens", () => {
       ],
     });
     await test.run("");
-    assert.deepEqual(
-      test.notifications.map(
-        ({ message }) => message.match(/[a-z-]+ slice/)?.[0],
-      ),
-      ["continuity-ledger slice"],
-    );
-    assert.ok(test.rendered[2][0].includes("Anchor/Fold"));
-    assert.ok(test.rendered[4][0].includes("Anchor/Settings"));
-    assert.equal(test.rendered.length, 6);
+    assert.deepEqual(test.notifications, []);
+    assert.ok(test.rendered[1][0].includes("Anchor/Current"));
+    assert.ok(test.rendered[3][0].includes("Anchor/Fold"));
+    assert.ok(test.rendered[5][0].includes("Anchor/Settings"));
+    assert.equal(test.rendered.length, 7);
   });
 
   it("opens the tree from the hub and returns on Escape", async () => {

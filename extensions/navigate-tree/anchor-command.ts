@@ -4,9 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { type AutocompleteItem, fuzzyFilter } from "@earendil-works/pi-tui";
 import { summarizeLedgerForUi } from "./continuity-briefing.ts";
-import type { Ledger } from "./continuity-ledger.ts";
 import {
-  type ApplyUserOps,
   briefingText,
   type CurrentScreenDeps,
   openCurrentScreen,
@@ -42,19 +40,9 @@ export interface AnchorRow {
 }
 
 /** Session access the command needs; supplied by the extension entry point. */
-export interface AnchorCommandDeps extends FoldScreenDeps {
+export interface AnchorCommandDeps extends FoldScreenDeps, CurrentScreenDeps {
   settings?: SettingsScreenDeps;
   contextBadge?(ctx: ExtensionCommandContext): string | undefined;
-  /** The active branch's continuity ledger; `/anchor current` needs it. */
-  readLedger?(ctx: ExtensionCommandContext): Ledger | undefined;
-  /** The single write path for user edits of the ledger; the screen is read-only without it. */
-  applyUserOps?: ApplyUserOps;
-}
-
-function hasLedger(
-  deps: AnchorCommandDeps,
-): deps is AnchorCommandDeps & CurrentScreenDeps {
-  return deps.readLedger !== undefined && deps.applyUserOps !== undefined;
 }
 
 type SubcommandName =
@@ -91,11 +79,6 @@ const SUBCOMMANDS: readonly {
 ];
 
 const ANCHOR_USAGE = `Usage: /anchor [tree|list|current|fold|clone|settings]. Run /anchor alone to open the menu.\n${CLONE_USAGE}`;
-
-const NOT_AVAILABLE = {
-  current:
-    "/anchor current is not available yet: the briefing & continuity ledger belongs to the continuity-ledger slice.",
-} as const;
 
 const HUB: readonly {
   view: SubcommandName;
@@ -402,14 +385,6 @@ async function openCloneMenu(
   }
 }
 
-function notAvailable(
-  ctx: ExtensionCommandContext,
-  view: keyof typeof NOT_AVAILABLE,
-): ScreenExit {
-  ctx.ui.notify(NOT_AVAILABLE[view], "info");
-  return "back";
-}
-
 async function openView(
   view: SubcommandName,
   ctx: ExtensionCommandContext,
@@ -424,7 +399,6 @@ async function openView(
     case "tree":
       return openTreeScreen(ctx, deps);
     case "current":
-      if (!hasLedger(deps)) return notAvailable(ctx, view);
       await openCurrentScreen(ctx, deps);
       return "back";
     case "fold":
@@ -454,16 +428,21 @@ async function openHub(
             ? `latest: ${anchors.at(-1)?.name}`
             : "none yet",
         };
-      if (view === "current" && hasLedger(deps)) {
+      if (view === "current") {
         const ledger = deps.readLedger(ctx);
-        if (ledger) return { ...row, value: summarizeLedgerForUi(ledger).line };
+        return {
+          ...row,
+          value: ledger
+            ? summarizeLedgerForUi(ledger).line
+            : "No continuity items yet.",
+        };
       }
       if (view === "tree")
         return { ...row, value: treeSummary(treeItems(ctx.sessionManager)) };
       if (view === "fold") return { ...row, value: "anchor · label · focus" };
-      if (view === "settings") return { ...row, value: "global · project" };
-      if (view === "clone") return row;
-      return { ...row, value: "not available yet", tone: "muted" };
+      if (view === "settings")
+        return { ...row, value: "global · project · runtime" };
+      return row;
     });
     const choice = await selectFrame(ctx, {
       breadcrumbs: ["Anchor"],
@@ -558,9 +537,10 @@ export function registerAnchorCommand(
         await openView(subcommand, ctx, pi, deps);
       } else {
         const ledger =
-          subcommand === "current" ? deps.readLedger?.(ctx) : undefined;
+          subcommand === "current" ? deps.readLedger(ctx) : undefined;
         if (ledger) ctx.ui.notify(briefingText(ledger), "info");
-        else if (subcommand === "current") notAvailable(ctx, subcommand);
+        else if (subcommand === "current")
+          ctx.ui.notify("No continuity items yet.", "info");
       }
     },
   });
