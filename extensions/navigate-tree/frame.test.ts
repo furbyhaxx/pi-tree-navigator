@@ -329,4 +329,76 @@ describe("FrameList", () => {
     tui.terminal.rows = 100;
     assert.ok(frame.render(80).length > small);
   });
+
+  describe("hint bar", () => {
+    const shortcuts = [
+      "alpha",
+      "bravo",
+      "charlie",
+      "delta",
+      "echo",
+      "foxtrot",
+    ].map((action, index) => ({
+      key: String.fromCharCode(97 + index) as "a",
+      action,
+      onPress: () => {},
+    }));
+    const footer = (width: number) => {
+      const { frame } = list(makeRows(4), { shortcuts });
+      const lines = frame.render(width);
+      const reference = list(makeRows(4)).frame.render(width);
+      assert.equal(lines.length, reference.length);
+      for (const line of lines) assert.ok(visibleWidth(line) <= width, line);
+      return plain(lines).at(-2) ?? "";
+    };
+
+    it("keeps esc and search whole at 60 columns and drops optional actions with an ellipsis", () => {
+      const text = footer(60);
+      assert.match(text, /\/ search/);
+      assert.match(text, /esc back/);
+      assert.match(text, /↑↓ navigate {2}enter select/);
+      assert.ok(text.endsWith("…"), text);
+      const shown = shortcuts.filter(({ action }) => text.includes(action));
+      assert.ok(shown.length > 0 && shown.length < shortcuts.length, text);
+      for (const { key, action } of shown)
+        assert.ok(text.includes(`${key} ${action}`), text);
+    });
+
+    it("shows every hint without an ellipsis when they fit", () => {
+      const text = footer(130);
+      for (const { key, action } of shortcuts)
+        assert.ok(text.includes(`${key} ${action}`), text);
+      assert.ok(!text.includes("…"));
+    });
+
+    it("keeps whole hints in display order and drops lowest priority first", () => {
+      const keybindings = [
+        { key: "a", action: "optional", priority: "optional" as const },
+        { key: "enter", action: "select", priority: "navigation" as const },
+        { key: "/", action: "search", priority: "essential" as const },
+      ];
+      const hint = (width: number) =>
+        plain(renderFrame(options(makeRows(2), width, { keybindings }))).at(-2);
+      assert.equal(hint(80), " a optional  enter select  / search");
+      assert.equal(hint(26), " enter select  / search  …");
+      assert.equal(hint(25), " / search  …");
+      assert.equal(hint(14), " / search  …");
+    });
+
+    it("resolves shortcut actions per row", () => {
+      const { frame } = list(makeRows(2), {
+        shortcuts: [
+          {
+            key: "p",
+            action: (_row, index) => (index === 0 ? "unpin" : "pin"),
+            onPress: () => {},
+          },
+        ],
+      });
+      frame.render(80);
+      assert.match(plain(frame.render(80)).at(-2) ?? "", /p unpin/);
+      frame.handleInput("\x1b[B");
+      assert.match(plain(frame.render(80)).at(-2) ?? "", /p pin/);
+    });
+  });
 });

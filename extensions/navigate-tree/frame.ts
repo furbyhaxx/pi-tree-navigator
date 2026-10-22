@@ -55,10 +55,15 @@ export interface FrameRow {
   description?: string;
 }
 
+/** Hint-bar survival order on narrow terminals: essential hints are dropped last. */
+export type FrameKeybindingPriority = "essential" | "navigation" | "optional";
+
 /** Visible key/action pair in the hint bar. */
 export interface FrameKeybinding {
   key: string;
   action: string;
+  /** Default `optional`. */
+  priority?: FrameKeybindingPriority;
 }
 
 /** Frozen geometry; measured on open and again only when the terminal resizes. */
@@ -100,6 +105,12 @@ const CHROME_ROWS = 5;
 const MIN_HEIGHT = 10;
 const MAX_DESCRIPTION_ROWS = 2;
 const DEFAULT_PLACEHOLDER = "Type to search…";
+const HINT_ORDER: readonly FrameKeybindingPriority[] = [
+  "essential",
+  "navigation",
+  "optional",
+];
+const HINT_SEPARATOR = "  ";
 
 function isControl(code: number): boolean {
   return (
@@ -302,6 +313,40 @@ function searchLine(options: FrameOptions): string {
   return ` ${theme.fg("accent", "❯")} ${content}`;
 }
 
+/** One hint-bar line that never wraps: whole hints are dropped by priority, last first, and an ellipsis marks the loss. */
+function hintLine(
+  keybindings: readonly FrameKeybinding[],
+  width: number,
+  theme: FrameTheme,
+): string {
+  const hints = keybindings.map(
+    ({ key, action }) =>
+      `${theme.bold(singleLine(key))} ${theme.fg("dim", singleLine(action))}`,
+  );
+  const widths = hints.map(visibleWidth);
+  const join = (shown: readonly number[]) =>
+    ` ${shown.map((index) => hints[index]).join(HINT_SEPARATOR)}`;
+  const all = hints.map((_, index) => index);
+  const lineWidth = (shown: readonly number[]) =>
+    1 +
+    shown.reduce((sum, index) => sum + widths[index], 0) +
+    HINT_SEPARATOR.length * Math.max(0, shown.length - 1);
+  if (lineWidth(all) <= width) return join(all);
+
+  const ellipsis = HINT_SEPARATOR.length + 1;
+  const tier = (index: number) =>
+    HINT_ORDER.indexOf(keybindings[index].priority ?? "optional");
+  const byPriority = [...all].sort((a, b) => tier(a) - tier(b) || a - b);
+  const shown: number[] = [];
+  for (const index of byPriority) {
+    if (shown.length > 0 && lineWidth([...shown, index]) + ellipsis > width)
+      break;
+    shown.push(index);
+  }
+  shown.sort((a, b) => a - b);
+  return `${join(shown)}${HINT_SEPARATOR}${theme.fg("dim", "…")}`;
+}
+
 /** Render exactly the measured height, with every line bounded by visible columns. */
 export function renderFrame(options: FrameOptions): string[] {
   const layout =
@@ -366,11 +411,7 @@ export function renderFrame(options: FrameOptions): string[] {
       lines.push(theme.fg("dim", line));
     }
   }
-  const hints = options.keybindings.map(
-    ({ key, action }) =>
-      `${theme.bold(singleLine(key))} ${theme.fg("dim", singleLine(action))}`,
-  );
-  lines.push(` ${hints.join("  ")}`);
+  lines.push(hintLine(options.keybindings, width, theme));
   lines.push(bottomRule(width, Math.max(0, visible.length - end), theme));
   return lines.map((line) => truncateToWidth(line, width, "…"));
 }
@@ -387,8 +428,8 @@ export type FrameAction = (row: FrameRow, index: number) => void;
 /** A key active while the list (not the search input) has focus. */
 export interface FrameShortcut {
   key: KeyId;
-  /** Hint-bar label. */
-  action: string;
+  /** Hint-bar label; a function is resolved for the selected row. */
+  action: string | ((row: FrameRow, index: number) => string);
   /** Hidden and ignored on rows where this returns false. */
   enabled?: (row: FrameRow, index: number) => boolean;
   onPress: FrameAction;
@@ -583,27 +624,41 @@ export class FrameList implements Component, Focusable {
     const enter = {
       key: "enter",
       action: this.options.enterAction ?? "select",
+      priority: "navigation" as const,
+    };
+    const navigate = {
+      key: "↑↓",
+      action: "navigate",
+      priority: "navigation" as const,
     };
     if (this.focus === "search") {
       return [
         { key: "type", action: "to filter" },
-        { key: "↑↓", action: "navigate" },
+        navigate,
         enter,
-        { key: "esc", action: "clear" },
+        { key: "esc", action: "clear", priority: "essential" },
       ];
     }
     const row = this.options.rows[this.cursor];
-    const shortcuts = (this.options.shortcuts ?? [])
-      .filter(
-        (shortcut) => row && (shortcut.enabled?.(row, this.cursor) ?? true),
-      )
-      .map((shortcut) => ({ key: shortcut.key, action: shortcut.action }));
+    const shortcuts = row
+      ? (this.options.shortcuts ?? [])
+          .filter((shortcut) => shortcut.enabled?.(row, this.cursor) ?? true)
+          .map(({ key, action }) => ({
+            key,
+            action:
+              typeof action === "function" ? action(row, this.cursor) : action,
+          }))
+      : [];
     return [
-      { key: "↑↓", action: "navigate" },
+      navigate,
       enter,
       ...shortcuts,
-      { key: "/", action: "search" },
-      { key: "esc", action: this.options.cancelAction ?? "back" },
+      { key: "/", action: "search", priority: "essential" },
+      {
+        key: "esc",
+        action: this.options.cancelAction ?? "back",
+        priority: "essential",
+      },
     ];
   }
 
