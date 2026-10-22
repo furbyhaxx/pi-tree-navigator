@@ -13,7 +13,11 @@
 
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { renderBriefing } from "./continuity-briefing.ts";
+import {
+  CONTINUITY_DELTA_TAG,
+  extractContinuityDelta,
+  renderBriefing,
+} from "./continuity-briefing.ts";
 import { applyOps, createLedger } from "./continuity-ledger.ts";
 import {
   appendContinuityBriefing,
@@ -23,6 +27,7 @@ import {
   buildSummaryRequestText,
   computeFileLists,
   formatFileOperations,
+  hasOpenWork,
   REWIND_SUMMARY_PROMPT,
   stripContinuityBriefing,
 } from "./summary-prompt.ts";
@@ -88,12 +93,26 @@ Keep each section concise. Keep the complete summary under about 4000 characters
 // buildSummaryInstruction
 // =============================================================================
 
+const STANDING_AUTHORIZATION = `End the summary with one more section, after '## Next Steps' and before any continuity-delta block:
+
+## Standing authorization
+[The user's current authorization and scope, quoted verbatim from anywhere in the conversation above, background included (for example "work autonomously until done"), or "(none)". Say whether that scope is complete.]
+
+In '## Next Steps', name the next concrete work item of the authorized scope. Do not list a report, hand-off or wrap-up while authorized work remains: a completed milestone is not the end of the task.`;
+
 describe("buildSummaryInstruction", () => {
-  it("appends the focus like upstream's customInstructions shape, {first} substituted", () => {
+  it("appends the standing-authorization section after r5d, then the focus like upstream's customInstructions shape, {first} substituted", () => {
     assert.equal(
       buildSummaryInstruction(42, "keep the parser API"),
-      `${REWIND_SUMMARY_PROMPT.replaceAll("{first}", "42")}\n\nAdditional focus: keep the parser API`,
+      `${REWIND_SUMMARY_PROMPT.replaceAll("{first}", "42")}\n\n${STANDING_AUTHORIZATION}\n\nAdditional focus: keep the parser API`,
     );
+  });
+
+  it("keeps the r5d body byte-identical and the authorization block outside it", () => {
+    const text = buildSummaryInstruction(9, "focus text");
+    const r5d = REWIND_SUMMARY_PROMPT.replaceAll("{first}", "9");
+    assert.ok(text.startsWith(r5d));
+    assert.ok(!r5d.includes("Standing authorization"));
   });
 
   it("substitutes every {first} occurrence (replaceAll, not replace)", () => {
@@ -118,7 +137,8 @@ describe("buildSummaryInstruction", () => {
   });
 
   it("allows relevance-focused parent synthesis to grow beyond the leaf report limit", () => {
-    const text = buildSummaryInstruction(1, "preserve later-work context", {
+    const focus = "preserve later-work context";
+    const text = buildSummaryInstruction(1, focus, {
       mode: "synthesized",
       childCount: 3,
     });
@@ -126,11 +146,23 @@ describe("buildSummaryInstruction", () => {
     assert.match(text, /Synthesize the child reports/);
     assert.match(text, /rejected or superseded approaches/);
     assert.doesNotMatch(text, /Keep the complete summary under about 4000/);
-    const full = buildSummaryInstruction(1, "parent outcome only", {
+    const full = buildSummaryInstruction(1, focus, {
       mode: "full",
       childCount: 3,
     });
     assert.match(full, /attached verbatim once each/);
+    for (const instruction of [text, full]) {
+      assert.ok(
+        instruction.indexOf("Distinguish historical next steps") <
+          instruction.indexOf("End the summary with one more section"),
+        "the authorization section is the last one, after the parent sections",
+      );
+      assert.ok(
+        instruction.endsWith(
+          `${STANDING_AUTHORIZATION}\n\nAdditional focus: ${focus}`,
+        ),
+      );
+    }
   });
 
   it("leaves a literal {first} inside the focus verbatim", () => {
@@ -290,6 +322,65 @@ describe("continuity section", () => {
     assert.equal(
       buildSummaryRequestText(4, "focus", undefined, undefined),
       buildSummaryRequestText(4, "focus"),
+    );
+  });
+});
+
+describe("standing authorization section and the continuity delta", () => {
+  const summary = `## Goal
+Ship it.
+
+## Next Steps
+1. Wire the CLI.
+
+## Standing authorization
+"work autonomously until done" — scope not complete.`;
+  const delta = `<${CONTINUITY_DELTA_TAG}>{"completed":["S1"]}</${CONTINUITY_DELTA_TAG}>`;
+
+  it("a delta block after the section is stripped and the section stays", () => {
+    const out = extractContinuityDelta(`${summary}\n\n${delta}\n`);
+    assert.deepEqual(out.delta?.completed, ["S1"]);
+    assert.equal(out.text, summary);
+    assert.ok(hasOpenWork(out.text));
+  });
+});
+
+describe("hasOpenWork", () => {
+  const withSections = (inProgress: string, next: string) =>
+    `## Goal\nx\n\n## Progress\n### Done\n- [x] a\n\n### In Progress\n${inProgress}\n\n### Blocked\n- none\n\n## Next Steps\n${next}\n\n## Standing authorization\n(none)`;
+
+  it("is true for a real item under either section", () => {
+    assert.ok(hasOpenWork(withSections("- [ ] (none)", "1. Wire the CLI.")));
+    assert.ok(hasOpenWork(withSections("- [ ] Wire the CLI.", "(none)")));
+  });
+
+  it("is false for placeholders, empty sections and a missing summary body", () => {
+    for (const none of ["(none)", "None.", "- [ ] n/a", "1. Nothing", ""]) {
+      assert.equal(hasOpenWork(withSections(none, none)), false, none);
+    }
+    assert.equal(hasOpenWork("## Goal\nx"), false);
+  });
+
+  it("stops at the next heading, the file tags and the continuity ledger", () => {
+    const text = withSections("- [ ] (none)", "(none)");
+    assert.equal(
+      hasOpenWork(`${text}\n\n<read-files>\na.ts\n</read-files>`),
+      false,
+    );
+    assert.equal(
+      hasOpenWork(`${text}\n\n## Continuity ledger\n\n- R1 an open rule`),
+      false,
+    );
+  });
+
+  it("ignores the historical sections of embedded child handoffs", () => {
+    const parent = `# Work handoff: p\n\n${withSections("- [ ] (none)", "(none)")}`;
+    const child = "## Next Steps\n1. Child work still open.";
+    assert.equal(
+      hasOpenWork(
+        `${parent}\n\n---\n\n## Child handoffs in chronological order\n\n${child}`,
+      ),
+      false,
     );
   });
 });
