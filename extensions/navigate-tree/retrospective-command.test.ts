@@ -136,7 +136,10 @@ function setup(options: TestContextOptions) {
     cwd: options.cwd,
     hasUI: options.hasUI ?? true,
     isIdle: () => options.idle ?? true,
-    sessionManager: { getSessionFile: () => options.sessionFile },
+    sessionManager: {
+      getSessionFile: () => options.sessionFile,
+      getSessionId: () => options.sessionFile ?? "test-session",
+    },
     ui: {
       notify(message: string, type?: string) {
         notifications.push({ message, type });

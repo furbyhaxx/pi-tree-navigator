@@ -182,6 +182,8 @@ import {
   REWIND_HINT_CUSTOM_TYPE,
   RewindHintTracker,
 } from "./rewind-hint.ts";
+import { clearRuntimeConfig, readRuntimeConfig } from "./runtime-config.ts";
+import { createSettingsScreenDeps } from "./settings-screen.ts";
 import {
   appendContinuityBriefing,
   buildSummaryRequestText,
@@ -1995,6 +1997,62 @@ function toolError(
 
 export default function (pi: ExtensionAPI) {
   registerAnchorCommand(pi, {
+    settings: {
+      ...createSettingsScreenDeps(),
+      async onSaved(ctx) {
+        const sm = ctx.sessionManager;
+        const sessionId = sm.getSessionId();
+        const hasUI = ctx.hasUI;
+        const ui = ctx.ui;
+        const modelKey = ctx.model
+          ? `${ctx.model.provider}/${ctx.model.id}`
+          : undefined;
+        const oldReserve = resolveRewindHintReserve(
+          {
+            rewindHintReserveTokens,
+            rewindHintModelReserveTokens: hintByModel,
+          },
+          modelKey,
+        );
+        const oldController = resolveAutoNavigateConfig(
+          {
+            autoNavigate: autoNavigateBase,
+            autoNavigateByModel,
+            proposal: proposalConfig,
+          },
+          modelKey,
+        );
+        const oldContinuity = continuityConfig;
+        const loaded = await loadTreeNavigatorConfig({
+          agentDir: getAgentDir(),
+          projectPath: join(
+            ctx.cwd,
+            CONFIG_DIR_NAME,
+            TREE_NAVIGATOR_CONFIG_FILENAME,
+          ),
+          projectTrusted: ctx.isProjectTrusted(),
+          runtime: readRuntimeConfig(sessionId),
+        });
+        if (sm.getSessionId() !== sessionId) return;
+        applyNavigatorConfig(sessionId, loaded.config);
+        if (oldReserve !== resolveRewindHintReserve(loaded.config, modelKey))
+          hintTracker = new RewindHintTracker();
+        if (
+          JSON.stringify(oldController) !==
+          JSON.stringify(resolveAutoNavigateConfig(loaded.config, modelKey))
+        )
+          autoNavigateStateBySession.delete(sessionId);
+        if (
+          oldContinuity.capture !== continuityConfig.capture ||
+          oldContinuity.intentClassifier !== continuityConfig.intentClassifier
+        ) {
+          classifierTimedOut.delete(sessionId);
+          continuityWarned.delete(sessionId);
+        }
+        if (hasUI)
+          for (const warning of loaded.warnings) ui.notify(warning, "warning");
+      },
+    },
     listAnchors(ctx) {
       const sm = ctx.sessionManager as SessionManager;
       const cw = ctx.model?.contextWindow ?? 0;
@@ -2010,6 +2068,12 @@ export default function (pi: ExtensionAPI) {
     },
     setAnchor(ctx, name) {
       const sm = ctx.sessionManager as SessionManager;
+      if (!ctx.isIdle() || livePending(sm, sm.getSessionId()))
+        return {
+          ok: false,
+          reason:
+            "Wait until the agent and any pending fold finish before setting an anchor.",
+        };
       const target = resolveAnchorTarget(sm, name);
       if (!target.ok) {
         const reasons = {
@@ -3208,6 +3272,7 @@ export default function (pi: ExtensionAPI) {
     message: { stopReason?: string },
   ): Promise<void> {
     if (!continuityConfig.capture) return;
+    const captureConfig = continuityConfig;
     if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
     if (message.stopReason === "error" || message.stopReason === "aborted") {
       return;
@@ -3237,7 +3302,12 @@ export default function (pi: ExtensionAPI) {
     const warned = continuityWarned.get(sessionId) ?? new Set<string>();
     continuityWarned.set(sessionId, warned);
     const warn = (text: string) => {
-      if (warned.has(text)) return;
+      if (
+        continuityConfig !== captureConfig ||
+        parentSignal?.aborted ||
+        warned.has(text)
+      )
+        return;
       warned.add(text);
       try {
         notify?.(text);
@@ -3278,6 +3348,7 @@ export default function (pi: ExtensionAPI) {
       clearTimeout(timer);
       parentSignal?.removeEventListener("abort", abort);
     }
+    if (continuityConfig !== captureConfig || parentSignal?.aborted) return;
     if (outcome === "timeout") {
       if (model === null) return;
       classifierTimedOut.add(sessionId);
@@ -3288,7 +3359,12 @@ export default function (pi: ExtensionAPI) {
     }
     try {
       // A moved leaf or an abort during the await: the scan is stale.
-      if (!outcome || parentSignal?.aborted || sm.getLeafId() !== leafId)
+      if (
+        !outcome ||
+        parentSignal?.aborted ||
+        sm.getLeafId() !== leafId ||
+        continuityConfig !== captureConfig
+      )
         return;
       const { result, usedModel } = outcome;
       for (const text of result.warnings) warn(text);
@@ -4188,7 +4264,21 @@ export default function (pi: ExtensionAPI) {
     }
   }
 
-  // Config (#44 hint + #55 start anchor): load once per session start. Every
+  function applyNavigatorConfig(
+    sessionId: string,
+    config: Awaited<ReturnType<typeof loadTreeNavigatorConfig>>["config"],
+  ): void {
+    rewindHintReserveTokens = config.rewindHintReserveTokens;
+    hintByModel = config.rewindHintModelReserveTokens;
+    autoNavigateBase = config.autoNavigate;
+    autoNavigateByModel = config.autoNavigateByModel ?? new Map();
+    proposalConfig = config.proposal;
+    continuityConfig = config.continuity;
+    anchorStartTurnsBySession.set(sessionId, config.anchorStartAfterTurns);
+    parentModes.set(sessionId, config.parentHandoffMode);
+  }
+
+  // Config (#44 hint + #55 start anchor): reload at session start and settings save. Every
   // ctx getter is read BEFORE the first await — `ctx.ui` / `isProjectTrusted`
   // / `cwd` / `hasUI` assert against the live session (pi-steering
   // precedent), and `loadTreeNavigatorConfig` is async. The settled set is
@@ -4232,54 +4322,29 @@ export default function (pi: ExtensionAPI) {
     };
     continuityWarned.delete(sessionId);
     classifierTimedOut.delete(sessionId);
-    let reserve: number | null = null;
-    let byModel: ReadonlyMap<string, number | null> = new Map();
-    let startTurns = START_ANCHOR_DEFAULT_TURNS;
+    clearRuntimeConfig(sessionId);
+    anchorStartTurnsBySession.set(sessionId, START_ANCHOR_DEFAULT_TURNS);
+    parentModes.set(sessionId, "full");
     let warnings: string[] = [];
-    let parentMode: HandoffMode = "full";
-    let loadedAutoBase: AutoNavigatePartial | undefined;
-    let loadedAutoByModel: ReadonlyMap<string, AutoNavigatePartial | null> =
-      new Map();
-    let loadedProposal: ProposalOptions | undefined;
     try {
       const loaded = await loadTreeNavigatorConfig({
         agentDir,
         projectPath: join(cwd, CONFIG_DIR_NAME, TREE_NAVIGATOR_CONFIG_FILENAME),
         projectTrusted,
       });
-      reserve = loaded.config.rewindHintReserveTokens;
-      byModel = loaded.config.rewindHintModelReserveTokens;
-      startTurns = loaded.config.anchorStartAfterTurns;
-      parentMode = loaded.config.parentHandoffMode;
-      loadedAutoBase = loaded.config.autoNavigate;
-      loadedAutoByModel = loaded.config.autoNavigateByModel ?? new Map();
-      loadedProposal = loaded.config.proposal;
-      continuityConfig = loaded.config.continuity;
+      applyNavigatorConfig(sessionId, loaded.config);
       warnings = loaded.warnings;
     } catch {
       // The loader is fail-closed and should never throw; this guard exists
       // so a loader bug can never break session start. Silent: every loader
       // failure already carries a user-facing warning, and a new string here
       // would only fire on an unreachable path.
-      reserve = null;
-      byModel = new Map();
-      startTurns = START_ANCHOR_DEFAULT_TURNS;
-      loadedAutoBase = undefined;
-      loadedAutoByModel = new Map();
-      loadedProposal = undefined;
       warnings = [];
     }
-    rewindHintReserveTokens = reserve;
-    hintByModel = byModel;
-    autoNavigateBase = loadedAutoBase;
-    autoNavigateByModel = loadedAutoByModel;
-    proposalConfig = loadedProposal;
-    anchorStartTurnsBySession.set(sessionId, startTurns);
-    parentModes.set(sessionId, parentMode);
     // Fresh leg: the per-session gate re-arms on the next
     // `before_agent_start`; absent = fail-open in the meantime.
     toolActiveBySession.delete(sessionId);
-    if (reserve !== null || byModel.size > 0) {
+    if (rewindHintReserveTokens !== null || hintByModel.size > 0) {
       warnings.push(...reserveOrderWarnings(model));
     }
     if (hasUI) {

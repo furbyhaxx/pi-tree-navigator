@@ -100,7 +100,10 @@ interface Setup {
   selects?: (string | undefined)[];
   saveScopes?: ("global" | "project" | "runtime" | "cancel")[];
   confirms?: boolean[];
-  confirmEffects?: ((paths: { globalPath: string; projectPath: string }) => void)[];
+  confirmEffects?: ((paths: {
+    globalPath: string;
+    projectPath: string;
+  }) => void)[];
   writeFails?: boolean;
   /** Use the screen's own atomic writer instead of the recording one. */
   realWriter?: boolean;
@@ -366,10 +369,7 @@ describe("settings screen: saving", () => {
     assert.equal(h.readProject(), project);
     assert.deepEqual(h.writes, []);
     assert.deepEqual(h.readRuntime(), { anchorStartAfterTurns: 7 });
-    assert.match(
-      line(h.rendered[2], "anchorStartAfterTurns"),
-      /7 · runtime/,
-    );
+    assert.match(line(h.rendered[2], "anchorStartAfterTurns"), /7 · runtime/);
     const { config } = await loadTreeNavigatorConfig({
       agentDir: dirname(h.globalPath),
       projectPath: h.projectPath,
@@ -420,7 +420,8 @@ describe("settings screen: saving", () => {
     assert.ok(
       h.notifications.some(
         ({ message, type }) =>
-          type === "warning" && /auto_navigate.*no longer an object/.test(message),
+          type === "warning" &&
+          /auto_navigate.*no longer an object/.test(message),
       ),
     );
   });
@@ -523,19 +524,14 @@ describe("settings screen: saving", () => {
       h.notifications.some(
         ({ message, type }) =>
           type === "warning" &&
-          message ===
-            "Still overridden: rewindHintReserveTokens (project).",
+          message === "Still overridden: rewindHintReserveTokens (project).",
       ),
     );
   });
 
   it("applies saved settings immediately without offering a reload", async () => {
     const h = harness({ global: json({}), inputs: ["3"], confirms: [true] });
-    const exit = await h.run(
-      edit(ROW.startAnchor),
-      press("s"),
-      press(ESC),
-    );
+    const exit = await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
     assert.equal(exit, "back");
     assert.equal(h.state.applies, 1);
     assert.equal(h.state.reloads, 0);
@@ -545,9 +541,7 @@ describe("settings screen: saving", () => {
         message.includes("Applied to this session."),
       ),
     );
-    assert.ok(
-      h.dialogs.confirm.every(([title]) => !title.includes("Reload")),
-    );
+    assert.ok(h.dialogs.confirm.every(([title]) => !title.includes("Reload")));
   });
 
   it("applies immediately while the agent is working without offering a reload", async () => {
@@ -613,10 +607,7 @@ describe("settings screen: saving", () => {
     assert.deepEqual(h.readRuntime(), {});
     assert.equal(h.readGlobal(), global);
     assert.equal(h.readProject(), project);
-    assert.match(
-      line(h.rendered[4], "anchorStartAfterTurns"),
-      /5 · project/,
-    );
+    assert.match(line(h.rendered[4], "anchorStartAfterTurns"), /5 · project/);
     assert.deepEqual(h.writes, []);
   });
 
@@ -672,8 +663,9 @@ describe("settings screen: saving", () => {
     });
     assert.deepEqual(
       h.notifications
-        .filter(({ message, type }) =>
-          type === "warning" && message.startsWith("Limit reached for "),
+        .filter(
+          ({ message, type }) =>
+            type === "warning" && message.startsWith("Limit reached for "),
         )
         .map(({ message }) => message),
       [
@@ -757,7 +749,10 @@ describe("settings screen: refusals", () => {
       warnings[3],
       /"foo" is not valid: Proposal model must be current or provider\/model\[:thinking\]/,
     );
-    assert.match(warnings[4], /"101" is not valid for auto_navigate\.check_every_turns\. Use 1-100 turns/);
+    assert.match(
+      warnings[4],
+      /"101" is not valid for auto_navigate\.check_every_turns\. Use 1-100 turns/,
+    );
     assert.ok(!text(h.rendered.at(-1) ?? []).includes("staged"));
     assert.ok(!existsSync(h.globalPath));
   });
@@ -879,7 +874,8 @@ describe("settings screen: refusals", () => {
       trusted: true,
     });
     const targets: string[] = [];
-    const atTarget = (key?: string): Script =>
+    const atTarget =
+      (key?: string): Script =>
       (screen) => {
         targets.push(text(screen.render(80)));
         if (key) screen.handleInput(key);
@@ -1005,8 +1001,14 @@ describe("settings screen: rows", () => {
     const description = await describeSettings(h.ctx, h.deps);
 
     assert.match(description, /rewindHintReserveTokens: 60k \(runtime\)/);
-    assert.match(description, /treeProposal\.tools\["bash"\]: calls-only \(global\)/);
-    assert.match(description, /auto_navigate\.tools\["grep"\]: omit \(runtime\)/);
+    assert.match(
+      description,
+      /treeProposal\.tools\["bash"\]: calls-only \(global\)/,
+    );
+    assert.match(
+      description,
+      /auto_navigate\.tools\["grep"\]: omit \(runtime\)/,
+    );
     assert.match(
       description,
       /model_overrides\["openai\/gpt-5"\]\.rewindHintReserveTokens: 90k \(runtime\)/,

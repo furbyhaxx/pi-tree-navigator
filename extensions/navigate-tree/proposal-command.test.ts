@@ -26,6 +26,7 @@ import {
   parseRetrospectivePlan,
   readSessionSnapshot,
 } from "./retrospective-plan.ts";
+import { clearRuntimeConfig, writeRuntimeConfig } from "./runtime-config.ts";
 
 const directories: string[] = [];
 afterEach(async () => {
@@ -90,7 +91,10 @@ function reviewUi(
     hasUI: true,
     isIdle: () => true,
     isProjectTrusted: () => false,
-    sessionManager: { getSessionFile: () => f.source },
+    sessionManager: {
+      getSessionFile: () => f.source,
+      getSessionId: () => f.source,
+    },
     ui: {
       notify(message: string, type?: string) {
         state.notifications.push({ message, type });
@@ -142,6 +146,23 @@ function reviewUi(
 }
 
 describe("tree proposal command", () => {
+  it("uses the same session runtime disclosure policy before any model request", async () => {
+    const f = await fixture();
+    const ui = reviewUi(f, []);
+    writeRuntimeConfig(f.source, {
+      treeProposal: { tools: { bash: "invalid-policy" } },
+    });
+    try {
+      await assert.rejects(
+        handleTreeProposal(`--llm ${f.source}`, ui.ctx, {} as ExtensionAPI),
+        /full|calls-only|omit/,
+      );
+      assert.equal(ui.modelCalls, 0);
+      assert.equal(ui.frames.length, 0);
+    } finally {
+      clearRuntimeConfig(f.source);
+    }
+  });
   it("parses quoted paths, model thinking and exact per-tool disclosure overrides", () => {
     assert.deepEqual(
       parseProposalArguments(

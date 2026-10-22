@@ -40,6 +40,7 @@ import {
   sha256,
   validateCompleteToolCalls,
 } from "./retrospective-plan.ts";
+import { readRuntimeConfig } from "./runtime-config.ts";
 
 /** Explicit opt-in to remote analysis; tool rules apply to this proposal only. */
 export interface ProposalArguments {
@@ -382,6 +383,7 @@ export async function handleTreeProposal(
     agentDir: getAgentDir(),
     projectPath: join(ctx.cwd, CONFIG_DIR_NAME, TREE_NAVIGATOR_CONFIG_FILENAME),
     projectTrusted: ctx.isProjectTrusted(),
+    runtime: readRuntimeConfig(ctx.sessionManager.getSessionId()),
   });
   for (const warning of loaded.warnings) ctx.ui.notify(warning, "warning");
   if (args.llm && loaded.config.proposalError)

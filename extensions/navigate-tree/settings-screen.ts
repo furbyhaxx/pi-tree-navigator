@@ -47,6 +47,8 @@ import {
 } from "./config.ts";
 import { type FrameRow, type FrameScreen, selectFrame } from "./frame.ts";
 import type { ProposalToolMode } from "./proposal-options.ts";
+import { readRuntimeConfig, writeRuntimeConfig } from "./runtime-config.ts";
+import { pickSettingsModel } from "./settings-model-picker.ts";
 
 /** Where the two config files live for the session and whether the project layer counts. */
 export interface SettingsScreenDeps {
@@ -59,6 +61,8 @@ export interface SettingsScreenDeps {
   readFile?(path: string): Promise<string>;
   /** Defaults to an atomic write (temp file + rename) that creates missing directories. */
   writeFile?(path: string, text: string): Promise<void>;
+  /** Apply the effective configuration to the live session after any scope is saved. */
+  onSaved?(ctx: ExtensionCommandContext): Promise<void>;
 }
 
 /** The deps for the live extension: pi's agent dir and the session's cwd and trust. */
@@ -79,7 +83,8 @@ export function createSettingsScreenDeps(): SettingsScreenDeps {
 /** "done" ends the whole command; "back" returns to the screen that opened this one. */
 type ScreenExit = "back" | "done";
 
-const LAYERS = ["global", "project"] as const;
+const LAYERS = ["global", "project", "runtime"] as const;
+const PRECEDENCE = ["runtime", "project", "global"] as const;
 type Layer = (typeof LAYERS)[number];
 type Source = Layer | "default";
 type Root = Record<string, unknown>;
@@ -903,6 +908,7 @@ async function resolve(
     agentDir: dirname(paths.global),
     projectPath: paths.project,
     projectTrusted: trusted,
+    runtime: texts.runtime ? JSON.parse(texts.runtime) : {},
     async readFile(path) {
       const text = path === paths.global ? texts.global : texts.project;
       if (text === undefined) {
@@ -916,6 +922,7 @@ async function resolve(
     layers: {
       global: parseLayer(texts.global),
       project: trusted ? parseLayer(texts.project) : undefined,
+      runtime: parseLayer(texts.runtime),
     },
   };
 }
@@ -925,16 +932,19 @@ async function readSnapshot(
   deps: SettingsScreenDeps,
 ): Promise<Snapshot> {
   const where = deps.locations(ctx);
+  const runtime = readRuntimeConfig(ctx.sessionManager.getSessionId());
   const read = deps.readFile ?? ((path) => fsReadFile(path, "utf8"));
   const paths: Record<Layer, string> = {
     global: join(where.agentDir, TREE_NAVIGATOR_CONFIG_FILENAME),
     project: where.projectPath,
+    runtime: "session memory (cleared on reload or session switch)",
   };
   const files: Record<Layer, FileState> = {
     global: await readFileState(read, paths.global),
     project: where.projectTrusted
       ? await readFileState(read, paths.project)
       : { kind: "missing" },
+    runtime: { kind: "ok", root: runtime, text: serialize(runtime) },
   };
   return {
     cwd: ctx.cwd,
@@ -944,6 +954,7 @@ async function readSnapshot(
     current: await resolve(paths, where.projectTrusted, {
       global: textOf(files.global),
       project: textOf(files.project),
+      runtime: textOf(files.runtime),
     }),
   };
 }
@@ -958,7 +969,7 @@ interface Resolved {
 }
 
 function resolveDef(def: SettingDef, resolution: Resolution): Resolved {
-  const layers = (["project", "global"] as const).map((layer) => ({
+  const layers = PRECEDENCE.map((layer) => ({
     layer,
     status: resolution.layers[layer]
       ? def.status(resolution.layers[layer])
@@ -1022,7 +1033,7 @@ function invalidIn(
   def: SettingDef,
   snap: Snapshot,
 ): { layer: Layer; error?: string } | undefined {
-  for (const layer of ["project", "global"] as const) {
+  for (const layer of PRECEDENCE) {
     const parsed = snap.current.layers[layer];
     const status = parsed ? def.status(parsed) : ABSENT;
     if (status.kind === "invalid") return { layer, error: status.error };
@@ -1078,7 +1089,14 @@ function settingRow(def: SettingDef, view: View): FrameRow {
   const before = resolveDef(def, snap.current);
   const after = resolveDef(def, preview);
   const beforeText = show(def, before.value);
-  const afterText = show(def, after.value);
+  const stagedValue =
+    plan && staged.has(def.key) ? rawOf(plan.next, def) : undefined;
+  const afterText = show(
+    def,
+    after.value === undefined && stagedValue?.present
+      ? stagedValue.value
+      : after.value,
+  );
   const edit = staged.get(def.key)?.edit;
   const isStaged = plan
     ? plan.changes.some((change) => change.def.key === def.key)
@@ -1094,7 +1112,7 @@ function settingRow(def: SettingDef, view: View): FrameRow {
     detail = `${invalid.layer}: ${invalid.error ?? INVALID_TEXT[def.onInvalid]}`;
   }
   if (shadowed) {
-    detail = `staged ${target} value is overridden by the ${after.source} file`;
+    detail = `staged ${target} value is overridden by the ${after.source} scope`;
   } else if (!invalid && after.inheritedFrom !== undefined) {
     detail += ` · inherits ${after.inheritedFrom}`;
   }
@@ -1155,8 +1173,10 @@ function canReset(view: View, target: Target): boolean {
   );
 }
 
-const otherLayer = (layer: Layer): Layer =>
-  layer === "global" ? "project" : "global";
+const otherLayer = (layer: Layer, trusted: boolean): Layer => {
+  const available = LAYERS.filter((item) => item !== "project" || trusted);
+  return available[(available.indexOf(layer) + 1) % available.length];
+};
 
 /** Why a layer's file cannot be read for entries, or undefined when it can. */
 function unavailable(snap: Snapshot, layer: Layer): string | undefined {
@@ -1176,7 +1196,7 @@ function problemIn(
   group: Group,
   snap: Snapshot,
 ): { layer: Layer; error: string } | undefined {
-  for (const layer of ["project", "global"] as const) {
+  for (const layer of PRECEDENCE) {
     const parsed = snap.current.layers[layer];
     const error = parsed ? group.problem(parsed) : undefined;
     if (error !== undefined) return { layer, error };
@@ -1189,7 +1209,9 @@ function mapNames(view: View, path: readonly KeyName[]): string[] {
   const roots = [
     readableRoot(view.snap, view.target),
     view.plan?.next,
-    readableRoot(view.snap, otherLayer(view.target)),
+    ...LAYERS.filter((layer) => layer !== view.target).map((layer) =>
+      readableRoot(view.snap, layer),
+    ),
   ];
   return [
     ...new Set(roots.flatMap((root) => (root ? namesAt(root, path) : []))),
@@ -1218,7 +1240,8 @@ function groupRow(group: Group, view: View): FrameRow {
   const change =
     from === to ? counted(to) : `${from || "none"} → ${counted(to)}`;
   const sources = LAYERS.filter((layer) => (after[layer]?.length ?? 0) > 0);
-  const source = sources.length === 2 ? "both" : (sources[0] ?? "default");
+  const source =
+    sources.length > 1 ? sources.join(" + ") : (sources[0] ?? "default");
   const staged = stagedUnder(view, group.path).length;
   const problem = problemIn(group, snap);
 
@@ -1275,6 +1298,26 @@ function buildScreen(
   const pending = plan ? plan.changes.length : staged.size;
   const shortcuts: Shortcut[] = [
     {
+      key: "left",
+      action: "decrease",
+      enabled: (_row, index) =>
+        items[index] !== undefined && "def" in items[index],
+    },
+    {
+      key: "right",
+      action: "increase",
+      enabled: (_row, index) =>
+        items[index] !== undefined && "def" in items[index],
+    },
+    {
+      key: "backspace",
+      action: "inherit",
+      enabled: (_row, index) => {
+        const found = at(index);
+        return found !== undefined && canReset(view, found);
+      },
+    },
+    {
       key: "u",
       action: "unstage",
       enabled: (_row, index) => {
@@ -1284,7 +1327,7 @@ function buildScreen(
     },
     {
       key: "d",
-      action: "default",
+      action: "inherit",
       enabled: (_row, index) => {
         const found = at(index);
         return found !== undefined && canReset(view, found);
@@ -1294,10 +1337,14 @@ function buildScreen(
   if (top) {
     shortcuts.unshift({
       key: "t",
-      action: `to ${otherLayer(target)}`,
-      enabled: () => snap.trusted,
+      action: `to ${otherLayer(target, snap.trusted)}`,
     });
-    shortcuts.push({ key: "s", action: "save", enabled: () => pending > 0 });
+    shortcuts.push({
+      key: "s",
+      action: "save",
+      priority: "essential",
+      enabled: () => pending > 0,
+    });
   }
   return {
     breadcrumbs: crumbs,
@@ -1356,17 +1403,57 @@ async function promptEdit(
   def: SettingDef,
   current: string,
   target: Layer,
+  direction?: -1 | 1,
 ): Promise<Edit | undefined> {
   if (def.kind === "flag") {
-    return { kind: "set", value: current !== "true" };
+    return {
+      kind: "set",
+      value: direction === undefined ? current !== "true" : direction === 1,
+    };
+  }
+  if (
+    direction !== undefined &&
+    (def.kind === "tokens" || def.kind === "count")
+  ) {
+    const step = def.kind === "tokens" ? 1000 : 1;
+    const before = current === "off" ? 0 : parseCount(current);
+    if (before === undefined) return undefined;
+    const value =
+      def.off && before + step * direction <= 0
+        ? null
+        : before + step * direction;
+    if (accepts(def, value)) return { kind: "set", value };
+    ctx.ui.notify(
+      `Limit reached for ${def.key}. Use ${def.expects}.`,
+      "warning",
+    );
+    return undefined;
   }
   if (def.kind === "choice" && def.choices) {
     const next =
-      def.choices[(def.choices.indexOf(current) + 1) % def.choices.length];
+      def.choices[
+        (def.choices.indexOf(current) + (direction ?? 1) + def.choices.length) %
+          def.choices.length
+      ];
     return { kind: "set", value: next };
   }
+  if (def.kind === "model" || def.kind === "classifier") {
+    const value = await pickSettingsModel(ctx, {
+      kind: def.kind,
+      current: current === "off" ? null : current,
+    });
+    if (value === undefined) return undefined;
+    if (!accepts(def, value)) {
+      ctx.ui.notify(
+        `Invalid model selection for ${def.key}. Use ${def.expects}.`,
+        "warning",
+      );
+      return undefined;
+    }
+    return { kind: "set", value };
+  }
   const input = await ctx.ui.input(
-    `${def.key} (${target} file)`,
+    `${def.key} (${target} scope)`,
     `now ${current} · ${def.expects}`,
   );
   const text = input?.trim();
@@ -1420,7 +1507,18 @@ async function save(
 ): Promise<"written" | "unchanged" | "kept"> {
   const prepare = async () => {
     const snap = await readSnapshot(ctx, deps);
-    const problem = targetProblem(snap, target);
+    let problem = targetProblem(snap, target);
+    const file = snap.files[target];
+    if (!problem && file.kind === "ok") {
+      for (const { def, edit } of staged.values()) {
+        const blocked =
+          edit.kind === "set" ? blockedBy(file.root, def.path) : undefined;
+        if (blocked) {
+          problem = `${blocked} is no longer an object. Nothing was saved; reopen settings before editing ${def.key}.`;
+          break;
+        }
+      }
+    }
     const plan = problem ? undefined : planFor(snap, target, staged);
     return { snap, problem, plan };
   };
@@ -1448,7 +1546,13 @@ async function save(
     return "kept";
   }
   try {
-    await (deps.writeFile ?? writeAtomically)(path, serialize(final.plan.next));
+    if (target === "runtime")
+      writeRuntimeConfig(ctx.sessionManager.getSessionId(), final.plan.next);
+    else
+      await (deps.writeFile ?? writeAtomically)(
+        path,
+        serialize(final.plan.next),
+      );
   } catch (error) {
     ctx.ui.notify(
       `Could not write ${path}: ${messageOf(error)}. The file was not changed.`,
@@ -1456,8 +1560,17 @@ async function save(
     );
     return "kept";
   }
+  try {
+    await deps.onSaved?.(ctx);
+  } catch (error) {
+    ctx.ui.notify(
+      `Settings were saved, but live refresh failed: ${messageOf(error)}. Run /reload to restore file settings; runtime values will be cleared.`,
+      "error",
+    );
+    return "written";
+  }
   ctx.ui.notify(
-    `Saved ${changes.length} ${changes.length === 1 ? "setting" : "settings"} to ${path}. The new values apply from the next session start.`,
+    `Saved ${changes.length} ${changes.length === 1 ? "setting" : "settings"} to ${path}.${deps.onSaved ? " Applied to this session." : ""}`,
     "info",
   );
   const saved = await readSnapshot(ctx, deps);
@@ -1469,34 +1582,46 @@ async function save(
   );
   if (overridden.length > 0) {
     ctx.ui.notify(
-      `Still overridden by the project file: ${overridden.map(({ def }) => def.key).join(", ")}.`,
+      `Still overridden: ${overridden.map(({ def }) => `${def.key} (${isSetting(def) ? resolveDef(def, saved.current).source : "higher scope"})`).join(", ")}.`,
       "warning",
     );
   }
   return "written";
 }
 
-/** Offer a reload so the saved values apply now; true when the session was reloaded. */
-async function offerReload(ctx: ExtensionCommandContext): Promise<boolean> {
-  if (!ctx.isIdle()) {
-    ctx.ui.notify(
-      "Run /reload when the agent is idle to apply the saved values now.",
-      "info",
-    );
-    return false;
-  }
-  const reload = await ctx.ui.confirm(
-    "Reload now to apply?",
-    "Reloads extensions, skills and prompts in this session so the saved values take effect.",
-  );
-  if (!reload) return false;
-  try {
-    await ctx.reload();
-    return true;
-  } catch (error) {
-    ctx.ui.notify(`Reload failed: ${messageOf(error)}`, "error");
-    return false;
-  }
+/** Pick a save scope without changing the staged edits. */
+async function saveScope(
+  ctx: ExtensionCommandContext,
+  target: Layer,
+  trusted: boolean,
+): Promise<Layer | undefined> {
+  const scopes = LAYERS.filter((layer) => layer !== "project" || trusted);
+  const choice = await selectFrame(ctx, {
+    breadcrumbs: ["Anchor", "Settings", "Save"],
+    cursor: scopes.indexOf(target),
+    enterAction: "choose",
+    rows: scopes.map((layer) => ({
+      label: layer,
+      description:
+        layer === "runtime"
+          ? "Apply only to this session. No file is written; reload or switching sessions clears it."
+          : `Merge into the ${layer} file and apply now. Other keys are preserved.`,
+    })),
+    shortcuts: [
+      { key: "u", action: "global" },
+      ...(trusted ? [{ key: "p" as const, action: "project" }] : []),
+      { key: "r", action: "runtime" },
+    ],
+  });
+  return !choice
+    ? undefined
+    : choice.key === "u"
+      ? "global"
+      : choice.key === "p"
+        ? "project"
+        : choice.key === "r"
+          ? "runtime"
+          : scopes[choice.index];
 }
 
 // --- The loop ------------------------------------------------------------------
@@ -1515,7 +1640,34 @@ export async function describeSettings(
     "Anchor settings",
     ...lines,
     `Global: ${snap.paths.global}`,
+    ...[PROPOSAL_TOOLS, AUTO_TOOLS].flatMap((group) =>
+      Object.keys(group.effective(snap.current.config) ?? {}).map((tool) => {
+        const def = toolDef(group, tool);
+        const { value, source } = resolveDef(def, snap.current);
+        return `${def.key}: ${show(def, value)} (${source})`;
+      }),
+    ),
+    ...[
+      ...new Set(
+        LAYERS.flatMap((layer) =>
+          namesAt(readableRoot(snap, layer) ?? {}, [MODEL_OVERRIDES]),
+        ),
+      ),
+    ].flatMap((pattern) => [
+      ...entrySettings(pattern).map((def) => {
+        const { value, source } = resolveDef(def, snap.current);
+        return `${def.key}: ${show(def, value)} (${source})`;
+      }),
+      ...Object.keys(
+        overrideTools(pattern).effective(snap.current.config) ?? {},
+      ).map((tool) => {
+        const def = toolDef(overrideTools(pattern), tool);
+        const { value, source } = resolveDef(def, snap.current);
+        return `${def.key}: ${show(def, value)} (${source})`;
+      }),
+    ]),
     `Project: ${snap.paths.project}${snap.trusted ? "" : " (untrusted, ignored)"}`,
+    `Runtime: ${snap.paths.runtime}`,
   ].join("\n");
 }
 
@@ -1561,6 +1713,7 @@ async function loadView(session: Session): Promise<View> {
       ? await resolve(snap.paths, snap.trusted, {
           global: textOf(snap.files.global),
           project: textOf(snap.files.project),
+          runtime: textOf(snap.files.runtime),
           [target]: serialize(plan.next),
         })
       : snap.current;
@@ -1598,14 +1751,16 @@ async function itemsScreen(
     const item = items[choice.index];
 
     if (choice.key === "t") {
-      session.target = otherLayer(target);
+      session.target = otherLayer(target, snap.trusted);
     } else if (choice.key === "s") {
-      const saved = await save(ctx, deps, target, staged);
+      const scope = await saveScope(ctx, target, snap.trusted);
+      if (scope === undefined) continue;
+      session.target = scope;
+      const saved = await save(ctx, deps, scope, staged);
       if (saved !== "kept") staged.clear();
-      if (saved === "written" && (await offerReload(ctx))) return "done";
     } else if (choice.key === "u") {
       unstageUnder(staged, itemTarget(item).path);
-    } else if (choice.key === "d") {
+    } else if (choice.key === "d" || choice.key === "backspace") {
       await removeEntry(session, view, itemTarget(item));
     } else if ("group" in item) {
       if (usable(ctx, snap, target)) {
@@ -1615,8 +1770,22 @@ async function itemsScreen(
         ]);
       }
     } else if (usable(ctx, snap, target)) {
-      const current = show(item.def, resolveDef(item.def, view.preview).value);
-      const edit = await promptEdit(ctx, item.def, current, target);
+      const targetValue = plan
+        ? rawOf(plan.next, item.def)
+        : { present: false };
+      const current = show(
+        item.def,
+        targetValue.present
+          ? targetValue.value
+          : resolveDef(item.def, view.preview).value,
+      );
+      const edit = await promptEdit(
+        ctx,
+        item.def,
+        current,
+        target,
+        choice.key === "left" ? -1 : choice.key === "right" ? 1 : undefined,
+      );
       if (edit) stage(ctx, snap, target, staged, item.def, edit);
     }
   }
@@ -1831,7 +2000,7 @@ function entryRow(pattern: string, view: View): FrameRow {
   const changes = stagedUnder(view, entry.path).length;
 
   let problem: { layer: Layer; error: string } | undefined;
-  for (const layer of ["project", "global"] as const) {
+  for (const layer of PRECEDENCE) {
     const parsed = snap.current.layers[layer];
     const error = parsed && entryProblem(parsed, pattern);
     if (error && !problem) problem = { layer, error };

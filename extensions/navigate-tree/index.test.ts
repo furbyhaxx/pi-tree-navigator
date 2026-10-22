@@ -41,6 +41,7 @@ import {
   CONFIG_DIR_NAME,
   type ContextUsage,
   type ExtensionAPI,
+  type ExtensionCommandContext,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -145,6 +146,7 @@ interface FakePi {
   pi: ExtensionAPI;
   setLabelCalls: Array<[string, string | undefined]>;
   registered: CapturedTool[];
+  commands: Map<string, Parameters<ExtensionAPI["registerCommand"]>[1]>;
   /** Captured `on(event, handler)` registrations, keyed by event name. */
   onCalls: Map<string, Array<(e: never, c: never) => unknown>>;
   /**
@@ -205,6 +207,7 @@ interface BoundaryResult {
 function makeFakePi(sm: SessionManager): FakePi {
   const setLabelCalls: Array<[string, string | undefined]> = [];
   const registered: CapturedTool[] = [];
+  const commands: FakePi["commands"] = new Map();
   const onCalls = new Map<string, Array<(e: never, c: never) => unknown>>();
   const sendMessageCalls: unknown[][] = [];
   const sendUserMessageCalls: unknown[][] = [];
@@ -233,7 +236,12 @@ function makeFakePi(sm: SessionManager): FakePi {
     registerTool(tool: CapturedTool) {
       registered.push(tool);
     },
-    registerCommand() {},
+    registerCommand(
+      name: string,
+      options: Parameters<ExtensionAPI["registerCommand"]>[1],
+    ) {
+      commands.set(name, options);
+    },
     setLabel(entryId: string, label: string | undefined) {
       setLabelCalls.push([entryId, label]);
       // Route the label through the SessionManager so reads via
@@ -267,6 +275,7 @@ function makeFakePi(sm: SessionManager): FakePi {
     appendEntryCalls,
     messageRenderers,
     entryRenderers,
+    commands,
   };
 }
 
@@ -6618,6 +6627,91 @@ function anchorStart(sm: SessionManager, pi: FakePi): void {
   pi.pi.setLabel(t.assistantId, "anchor:start");
 }
 
+describe("settings live application", () => {
+  it("runtime capture save immediately blocks pin without writing config, and reload restores file settings", async () => {
+    const fixture = makeConfigFixture();
+    const previous = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = fixture.agentDir;
+    try {
+      writeGlobalConfig(
+        fixture,
+        JSON.stringify({ continuity: { capture: true } }),
+      );
+      const before = readFileSync(globalConfigPath(fixture), "utf8");
+      const f = setup();
+      f.ctx.cwd = fixture.projectDir;
+      anchorStart(f.sm, f.pi);
+      await runSessionStart(f.pi, f.ctx, fixture);
+      const keys = [
+        ["t"],
+        ["\x1b[H", "\x1b[B", "\x1b[B", "\x1b[B", "\r"],
+        ["s"],
+        ["\r"],
+        ["\x1b"],
+      ];
+      const ctx = {
+        ...f.ctx,
+        hasUI: true,
+        isIdle: () => true,
+        ui: {
+          ...f.ctx.ui,
+          confirm: async () => true,
+          custom(
+            factory: (...args: unknown[]) => {
+              render(width: number): string[];
+              handleInput(key: string): void;
+            },
+          ) {
+            return new Promise((resolve) => {
+              const screen = factory(
+                { terminal: { rows: 50, columns: 130 }, requestRender() {} },
+                {
+                  fg: (_: string, text: string) => text,
+                  bold: (text: string) => text,
+                  italic: (text: string) => text,
+                },
+                undefined,
+                resolve,
+              );
+              screen.render(130);
+              const script = keys.shift();
+              assert.ok(script, "unexpected settings screen");
+              for (const key of script) screen.handleInput(key);
+            });
+          },
+        },
+      } as unknown as ExtensionCommandContext;
+      const command = f.pi.commands.get("anchor");
+      assert.ok(command);
+      await command.handler("settings", ctx);
+      assert.equal(keys.length, 0);
+      const refused = await f.tool.execute(
+        "runtime-pin",
+        { action: "pin", kind: "fact", text: "Runtime was applied" },
+        undefined,
+        undefined,
+        f.ctx,
+      );
+      assert.equal(refused.isError, true);
+      assert.match(refused.content[0].text, /disabled by config/);
+      assert.equal(readFileSync(globalConfigPath(fixture), "utf8"), before);
+      await runSessionStart(f.pi, f.ctx, fixture, "reload");
+      const allowed = await f.tool.execute(
+        "file-pin",
+        { action: "pin", kind: "fact", text: "File settings restored" },
+        undefined,
+        undefined,
+        f.ctx,
+      );
+      assert.equal(allowed.isError, undefined);
+    } finally {
+      if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previous;
+      cleanupConfigFixture(fixture);
+    }
+  });
+});
+
 describe("rewind hint: session_start config wiring (#44)", () => {
   it("loads the global threshold and fires on the first crossing", async () => {
     const fixture = makeConfigFixture();
@@ -12145,6 +12239,51 @@ describe("continuity capture", () => {
           assert.deepEqual(f.ctx.notifyCalls, []);
         },
         { hasUI: false },
+      );
+    });
+
+    it("discards an old classifier timeout after configuration reload", async () => {
+      let first = true;
+      const { registry, calls } = fakeRegistry((signal) => {
+        if (!first) return Promise.resolve(answerRule("rule"));
+        first = false;
+        return new Promise((_resolve, reject) =>
+          signal?.addEventListener("abort", () => reject(new Error("aborted"))),
+        );
+      });
+      await withConfig(
+        { intentClassifier: "typesafe/jev-latest" },
+        async (f) => {
+          (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
+          const fixture = makeConfigFixture();
+          writeGlobalConfig(
+            fixture,
+            JSON.stringify({
+              continuity: { intentClassifier: "typesafe/jev-latest" },
+            }),
+          );
+          mock.timers.enable({ apis: ["setTimeout"] });
+          try {
+            const pending = turn(f, RULE);
+            await new Promise((resolve) => setImmediate(resolve));
+            await runSessionStart(f.pi, f.ctx, fixture, "reload");
+            mock.timers.tick(15_000);
+            await pending;
+            assert.deepEqual(
+              f.ctx.notifyCalls,
+              [],
+              "stale timeout must not suppress or warn for the new configuration",
+            );
+            await turn(f, "Keep the output readable");
+            assert.ok(
+              calls.length > 1,
+              "new configuration still uses the classifier",
+            );
+          } finally {
+            mock.timers.reset();
+            cleanupConfigFixture(fixture);
+          }
+        },
       );
     });
 
