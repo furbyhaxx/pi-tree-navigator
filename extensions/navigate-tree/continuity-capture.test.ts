@@ -733,7 +733,7 @@ describe("long message capture", () => {
   it("keeps sentence order, kinds and a cap of three items", async () => {
     const sentences = [
       "Let's go with option B for the config layout.",
-      "Never write to the main checkout.",
+      "From now on never write to the main checkout.",
       "We decided to keep the ledger in branch summaries.",
       "Always run the full test suite before you commit.",
       "I prefer small commits over big ones.",
@@ -753,7 +753,10 @@ describe("long message capture", () => {
   });
 
   it("takes each line as its own sentence and counts a repeat once", async () => {
-    const lines = ["- always rebase before you push", "- never skip the hooks"];
+    const lines = [
+      "- from now on rebase before you push",
+      "- don't ever skip the hooks",
+    ];
     const text = `${FILLER.repeat(12)}\n${lines[0]}\n${lines[1]}\n${lines[0]}`;
     const result = await capture(text);
     assert.deepEqual(
@@ -807,12 +810,23 @@ describe("long message capture", () => {
     }
   });
 
+  it("ignores bare always, never and prefer inside a long message", async () => {
+    const result = await capture(
+      longMessage(
+        "The retry loop is always running.",
+        "It never succeeds against the stale host.",
+        "Most teams prefer the older client.",
+      ),
+    );
+    assert.deepEqual(result.ops, []);
+  });
+
   it("still captures a rule that follows a question or a code block", async () => {
-    const text = `${longMessage()}\nShould we use tabs? Always use tabs.\n\`\`\`\nnever mind\n\`\`\`\n${"Never edit the lockfile by hand."}`;
+    const text = `${longMessage()}\nShould we use tabs? From now on use tabs.\n\`\`\`\nnever mind\n\`\`\`\n${"Remember: never edit the lockfile by hand."}`;
     const result = await capture(text);
     assert.deepEqual(
       result.ops.map(({ op }) => op.op === "add" && op.quote),
-      ["Always use tabs.", "Never edit the lockfile by hand."],
+      ["From now on use tabs.", "Remember: never edit the lockfile by hand."],
     );
   });
 

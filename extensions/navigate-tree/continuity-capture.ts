@@ -165,7 +165,19 @@ function proseSentences(text: string): string[] {
   return sentences;
 }
 
-// The same marker rules as a short message, applied sentence by sentence.
+// Bare "always", "never" and "prefer" are everyday words in pasted logs, docs
+// and specs; inside a long message only explicit durable-rule wording counts.
+const BARE_RULE_MARKERS: readonly RegExp[] = [
+  /\balways\b/i,
+  /\bnever\b/i,
+  /\bprefer\b/i,
+];
+const EXPLICIT_RULE_MARKERS = RULE_MARKERS.filter(
+  (marker) => !BARE_RULE_MARKERS.some((bare) => bare.source === marker.source),
+);
+
+// The short-message marker rules applied sentence by sentence; a rule sentence
+// needs explicit wording.
 function heuristicExcerpts(text: string): IntentExcerpt[] {
   const excerpts: IntentExcerpt[] = [];
   const seen = new Set<string>();
@@ -178,6 +190,17 @@ function heuristicExcerpts(text: string): IntentExcerpt[] {
     }
     const kind = heuristicKind(sentence);
     if (kind !== "rule" && kind !== "decision") continue;
+    if (
+      kind === "rule" &&
+      !matchesAny(
+        EXPLICIT_RULE_MARKERS,
+        sentence
+          .replace(/[\u2018\u2019]/g, "'")
+          .replace(NON_MARKER_PHRASES, " "),
+      )
+    ) {
+      continue;
+    }
     if (seen.has(normalizeText(sentence))) continue;
     seen.add(normalizeText(sentence));
     excerpts.push({ kind, text: sentence });
