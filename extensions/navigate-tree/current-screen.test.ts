@@ -375,12 +375,13 @@ describe("current screen writes", () => {
     assert.equal(h.item("R1")?.status, "active");
   });
 
-  it("refuses writes when continuity capture is off but keeps browsing", async () => {
+  it("refuses writes when continuity capture is off, before asking anything, but keeps browsing", async () => {
     const h = harness({ confirms: [true] });
     h.state.capture = false;
     const before = h.sm.getEntries().length;
     await h.run(press("x"), press(ESC));
     assert.equal(h.sm.getEntries().length, before);
+    assert.deepEqual(h.dialogs.confirm, []);
     assert.match(h.notifications[0].message, /continuity\.capture/);
     assert.equal(h.notifications[0].type, "warning");
     assert.ok(h.rendered[0].join("\n").includes("R1 From now on"));

@@ -309,10 +309,19 @@ function runOp(
   return result.applied[0];
 }
 
-/** False, with a notice, while the agent is working. */
-function writable(ctx: ExtensionCommandContext): boolean {
-  if (ctx.isIdle()) return true;
-  ctx.ui.notify(LEDGER_BUSY_NOTICE, "warning");
+/** False, with a notice, while the ledger is read-only; checked before any dialog. */
+function writable(
+  ctx: ExtensionCommandContext,
+  deps: CurrentScreenDeps,
+): boolean {
+  if (!ctx.isIdle()) {
+    ctx.ui.notify(LEDGER_BUSY_NOTICE, "warning");
+    return false;
+  }
+  // An empty op list runs the writer's guards and persists nothing.
+  const { refused } = deps.applyUserOps(ctx, [], "user");
+  if (refused === undefined) return true;
+  ctx.ui.notify(refused, "warning");
   return false;
 }
 
@@ -321,7 +330,7 @@ async function retract(
   deps: CurrentScreenDeps,
   item: LedgerItem,
 ): Promise<void> {
-  if (!writable(ctx)) return;
+  if (!writable(ctx, deps)) return;
   const own = isUserOrigin(item.source.origin);
   const confirmed = await ctx.ui.confirm(
     `Retract ${item.id} (${item.kind})?`,
@@ -342,7 +351,7 @@ async function edit(
   deps: CurrentScreenDeps,
   item: LedgerItem,
 ): Promise<void> {
-  if (!writable(ctx)) return;
+  if (!writable(ctx, deps)) return;
   const input = await ctx.ui.editor(
     `Edit ${item.id} (${item.kind}); the original quote is kept`,
     item.text,
@@ -365,7 +374,7 @@ async function add(
   ctx: ExtensionCommandContext,
   deps: CurrentScreenDeps,
 ): Promise<string | undefined> {
-  if (!writable(ctx)) return undefined;
+  if (!writable(ctx, deps)) return undefined;
   const choice = await ctx.ui.select("Add to the ledger: which kind?", [
     ...ADD_KINDS,
   ]);
@@ -395,7 +404,7 @@ function applyOne(
   op: LedgerOp,
   message: string,
 ): void {
-  if (!writable(ctx)) return;
+  if (!writable(ctx, deps)) return;
   if (runOp(ctx, deps, op, "user")) ctx.ui.notify(message, "info");
 }
 

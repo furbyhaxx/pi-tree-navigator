@@ -36,7 +36,7 @@ session into nested summary branches without modifying the original. The clone g
 new ID and a ` (restructured)` name suffix, and both sessions remain resumable.
 
 Run `/anchor` for the unified menu (`tree`, `list`, `current`, `fold`, `clone`, `settings`;
-`tree`, `current`, `fold` and `settings` are placeholders until their slices land). `/tree-clone` no longer
+`tree`, `fold` and `settings` are placeholders until their slices land). `/tree-clone` no longer
 exists; use `/anchor clone`.
 
 Use `/anchor clone inspect <session.jsonl>`, then `/anchor clone propose <session.jsonl>`
@@ -338,6 +338,14 @@ user message ──capture──▶ ops entry ──replay──▶ ledger ─�
 |---|---|---|
 | `continuity.capture` | `true` | Turn capture and the agent's ledger writes on or off. |
 | `continuity.intentClassifier` | `null` | `provider/id` of a registry classifier model that judges each new user message; `null`, `false`, `"off"` or `"disabled"` keep the heuristics. A classifier error or a 15 s timeout falls back to the heuristics for the rest of the session. |
+
+`/anchor current` (aliases `ledger`, `briefing`) browses and edits the active branch's ledger:
+`x` retracts an item after a confirmation (it stays in the session history), `e` edits its text
+(the original quote is kept), `p` pins or unpins (a pinned item of any kind is out of the agent's
+reach), `c` completes a goal, `a` adds a rule, decision, sub-goal or fact, `h` shows superseded
+and retracted items, and Enter shows an item's source and revisions. Edits are refused while the
+agent is working or when `continuity.capture` is `false`; browsing always works. Without a UI the
+command prints the briefing.
 
 Capture only runs while `navigate_tree` is in the active tool set. The heuristics miss
 instructions phrased without a marker ("drop X and only keep Y"); a classifier model or the
