@@ -3,7 +3,13 @@
  * re-wraps to the terminal width, with `j` opening the raw JSON in the editor.
  */
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import type { Component, Focusable, KeyId } from "@earendil-works/pi-tui";
+import type {
+  Component,
+  Focusable,
+  KeyId,
+  TuiMouseEvent,
+  TuiMouseEventResult,
+} from "@earendil-works/pi-tui";
 import { FrameList, type FrameListOptions } from "./frame.ts";
 
 /** Columns the frame spends on the cursor before each row's text. */
@@ -89,6 +95,10 @@ class LinesView implements Component, Focusable {
 
   handleInput(data: string): void {
     this.list.handleInput(data);
+  }
+
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    return this.list.handleMouse(event);
   }
 }
 
