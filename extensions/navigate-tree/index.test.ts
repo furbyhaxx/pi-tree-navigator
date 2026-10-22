@@ -31,7 +31,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { streamSimple as streamGoogle } from "@earendil-works/pi-ai/api/google-generative-ai";
 import { streamSimple } from "@earendil-works/pi-ai/api/openai-completions";
 import { normalizeContext } from "@earendil-works/pi-ai/utils/transcript";
@@ -55,6 +55,7 @@ import { renderBriefing } from "./continuity-briefing.ts";
 import { LEDGER_DETAILS_KEY, parseLedger } from "./continuity-ledger.ts";
 import {
   appendOpsEntry,
+  CONTINUITY_OPS_CUSTOM_TYPE,
   readBranchLedger,
   type StoredOp,
 } from "./continuity-store.ts";
@@ -11070,5 +11071,355 @@ describe("rewind: continuity ledger", () => {
         "Prefer small diffs",
       ],
     );
+  });
+});
+
+// =============================================================================
+// Session continuity ledger: capture at turn_end
+// =============================================================================
+
+describe("continuity capture", () => {
+  const RULE = "From now on always answer in German";
+  const userMessage = (text: string) =>
+    ({ role: "user", content: [{ type: "text", text }] }) as never;
+
+  /**
+   * A user message with only `userText` (a heavy `appendTurn` would bury the
+   * words in padding) and an assistant reply of `tokens` usage and bulk text.
+   */
+  function workTurn(sm: SessionManager, userText: string, tokens: number) {
+    const userId = sm.appendMessage(userMessage(userText));
+    const message = assistantMessage(
+      [{ type: "text", text: "Recorded work and evidence.\n".repeat(1200) }],
+      "stop",
+      tokens,
+    );
+    return { userId, message, assistantId: sm.appendMessage(message as never) };
+  }
+
+  /** A complete user/assistant turn, then the turn's `turn_end` boundary. */
+  async function turn(
+    f: { sm: SessionManager; pi: FakePi; ctx: FakeCtx },
+    userText: string,
+    tokens = 100,
+  ) {
+    const { assistantId } = appendTurn(f.sm, userText, "ok", tokens);
+    const message = (f.sm.getEntry(assistantId) as { message: unknown })
+      .message;
+    return fireTurnEndAll(f.pi, f.ctx, message);
+  }
+
+  const opsEntries = (sm: SessionManager) =>
+    sm
+      .getBranch()
+      .filter(
+        (e) =>
+          e.type === "custom" && e.customType === CONTINUITY_OPS_CUSTOM_TYPE,
+      );
+
+  const rulesOf = (sm: SessionManager) =>
+    readBranchLedger(sm.getBranch()).ledger.items.filter(
+      (item) => item.kind === "rule" && item.status === "active",
+    );
+
+  const answerRule = (kind: string) => ({
+    answers: {
+      kind: { type: "choice", choice: kind, probabilities: {}, confidence: 1 },
+    },
+  });
+
+  function fakeRegistry(
+    classify: (signal?: AbortSignal) => Promise<unknown>,
+    known = ["typesafe/jev-latest"],
+  ) {
+    const calls: string[] = [];
+    const registry = {
+      getModelOfType: (_type: string, provider: string, id: string) =>
+        known.includes(`${provider}/${id}`) ? { provider, id } : undefined,
+      classify: async (
+        _model: unknown,
+        context: { state: { message: string } },
+        options?: { signal?: AbortSignal },
+      ) => {
+        calls.push(context.state.message);
+        return {
+          api: "test",
+          provider: "typesafe",
+          model: "jev-latest",
+          stopReason: "stop",
+          timestamp: 0,
+          ...((await classify(options?.signal)) as object),
+        };
+      },
+    };
+    return { registry, calls };
+  }
+
+  async function withConfig(
+    continuity: Record<string, unknown>,
+    run: (f: ReturnType<typeof setup>) => Promise<void>,
+    ctxOpts: { hasUI?: boolean } = {},
+  ) {
+    const fixture = makeConfigFixture();
+    try {
+      writeGlobalConfig(fixture, JSON.stringify({ continuity }));
+      const f = setup();
+      if (ctxOpts.hasUI !== undefined) f.ctx.hasUI = ctxOpts.hasUI;
+      await runSessionStart(f.pi, f.ctx, fixture);
+      await run(f);
+    } finally {
+      cleanupConfigFixture(fixture);
+    }
+  }
+
+  it("records the user's rule verbatim after the turn, and nothing more on a turn without new input", async () => {
+    const f = setup();
+    const { userId, assistantId } = appendTurn(f.sm, RULE, "ok");
+    const message = (f.sm.getEntry(assistantId) as { message: unknown })
+      .message;
+    await fireTurnEndAll(f.pi, f.ctx, message);
+
+    const branch = f.sm.getBranch();
+    assert.deepEqual(
+      branch.slice(-3).map((e) => e.id),
+      [userId, assistantId, opsEntries(f.sm)[0].id],
+      "the entry follows the completed turn",
+    );
+    assert.equal(opsEntries(f.sm).length, 1);
+    const [rule, ...rest] = rulesOf(f.sm);
+    assert.equal(rest.length, 0);
+    assert.equal(rule.source.origin, "user");
+    assert.equal(rule.source.entryId, userId);
+    assert.equal(rule.quote, RULE);
+    assert.equal(rule.text, RULE);
+
+    await fireTurnEndAll(f.pi, f.ctx, message);
+    appendTurn(f.sm, "ok thanks", "sure");
+    const next = f.sm.getBranch().at(-1) as { message: unknown };
+    await fireTurnEndAll(f.pi, f.ctx, next.message);
+    assert.equal(opsEntries(f.sm).length, 1);
+    assert.equal(f.pi.appendEntryCalls.length, 1);
+  });
+
+  it("writes nothing and never calls the classifier when capture is off", async () => {
+    const { registry, calls } = fakeRegistry(async () => answerRule("rule"));
+    await withConfig(
+      { capture: false, intentClassifier: "typesafe/jev-latest" },
+      async (f) => {
+        (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
+        await turn(f, RULE);
+        await turn(f, "Never touch the generated files");
+        assert.equal(opsEntries(f.sm).length, 0);
+        assert.equal(f.pi.appendEntryCalls.length, 0);
+        assert.deepEqual(calls, []);
+      },
+    );
+  });
+
+  it("does not capture while a rewind is pending", async () => {
+    const f = setup();
+    const first = appendTurn(f.sm, "u1 setting the stage", "a1", 6_000);
+    f.pi.pi.setLabel(first.assistantId, "anchor:start");
+    workTurn(f.sm, "u2 look at the parser", 24_000);
+    await requestRewind(f);
+    assert.equal(f.pi.appendEntryCalls.length, 0, "nothing to record yet");
+    f.sm.appendMessage(userMessage(RULE));
+    await summaryTurn(f, "no goal heading", "stop", { commit: true });
+    assert.equal(opsEntries(f.sm).length, 0);
+  });
+
+  it("leaves a tool batch without all its results alone, then records after the last result", async () => {
+    const f = setup();
+    f.sm.appendMessage(userMessage(RULE));
+    const call = appendToolCallAssistant(f.sm, [
+      { id: "tc-a", name: "bash", arguments: { command: "true" } },
+      { id: "tc-b", name: "bash", arguments: { command: "true" } },
+    ]);
+    const resultA = appendToolResult(f.sm, "tc-a", "bash", "done");
+    await fireTurnEndAll(f.pi, f.ctx, call.message);
+    assert.equal(opsEntries(f.sm).length, 0, "a result is still outstanding");
+    assert.equal(f.sm.getLeafId(), resultA);
+
+    const resultB = appendToolResult(f.sm, "tc-b", "bash", "done");
+    await fireTurnEndAll(f.pi, f.ctx, call.message);
+    const [entry] = opsEntries(f.sm);
+    assert.deepEqual(
+      f.sm
+        .getBranch()
+        .slice(-3)
+        .map((e) => e.id),
+      [resultA, resultB, entry.id],
+    );
+  });
+
+  it("skips an aborted turn and picks the input up on the next one", async () => {
+    const f = setup();
+    f.sm.appendMessage(userMessage(RULE));
+    const aborted = assistantMessage([], "aborted", 0);
+    f.sm.appendMessage(aborted as never);
+    await fireTurnEndAll(f.pi, f.ctx, aborted);
+    assert.equal(opsEntries(f.sm).length, 0);
+    await turn(f, "carry on with the parser please");
+    assert.equal(rulesOf(f.sm).length, 1);
+  });
+
+  describe("fold", () => {
+    async function foldFixture(opts: { capturedBefore: boolean }) {
+      const f = setup();
+      const first = appendTurn(f.sm, "u1 setting the stage", "a1", 6_000);
+      f.pi.pi.setLabel(first.assistantId, "anchor:start");
+      if (opts.capturedBefore) {
+        const rule = workTurn(f.sm, RULE, 12_000);
+        await fireTurnEndAll(f.pi, f.ctx, rule.message);
+        assert.equal(opsEntries(f.sm).length, 1);
+      } else {
+        workTurn(f.sm, RULE, 12_000);
+      }
+      const t3 = workTurn(f.sm, "u3 look at the parser", 24_000);
+      await requestRewind(f);
+      await summaryTurn(f, SUMMARY_TEXT);
+      const done = rewindMessages(f.pi).at(-1);
+      assert.ok(done, "a continuation was delivered");
+      const entry = f.sm.getEntry(done.message.details.summaryId as string);
+      assert.ok(entry && entry.type === "branch_summary");
+      return { ...f, entry, t3 };
+    }
+
+    for (const capturedBefore of [true, false]) {
+      it(`carries the rule into the snapshot and the briefing (captured ${capturedBefore ? "at its turn" : "only at the rewind turn"})`, async () => {
+        const f = await foldFixture({ capturedBefore });
+        const snapshot = parseLedger(
+          (f.entry.details as Record<string, unknown>)[LEDGER_DETAILS_KEY],
+        );
+        const rules = snapshot.items.filter((i) => i.kind === "rule");
+        assert.equal(rules.length, 1);
+        assert.equal(rules[0].status, "active");
+        assert.equal(rules[0].source.origin, "user");
+        assert.equal(rules[0].quote, RULE);
+        const briefing = renderBriefing(snapshot, { maxTokens: 2500 }).text;
+        assert.ok(
+          f.entry.summary.endsWith(`## Continuity ledger\n\n${briefing}`),
+        );
+        assert.ok(briefing.includes(RULE));
+        assert.equal(
+          f.sm.getBranch().some((e) => e.id === f.t3.userId),
+          false,
+          "the span left the branch",
+        );
+      });
+    }
+
+    it("puts the span's rule into the summary request when no turn recorded it yet", async () => {
+      const f = setup();
+      const first = appendTurn(f.sm, "u1 setting the stage", "a1", 6_000);
+      f.pi.pi.setLabel(first.assistantId, "anchor:start");
+      workTurn(f.sm, RULE, 12_000);
+      workTurn(f.sm, "u3 look at the parser", 24_000);
+      assert.equal(opsEntries(f.sm).length, 0);
+      await requestRewind(f);
+      assert.equal(opsEntries(f.sm).length, 1);
+      const { content } = summaryRequestDraftOf(f.pi);
+      assert.ok(content.includes(`R1 ${RULE}`));
+    });
+  });
+
+  describe("classifier", () => {
+    it("asks the configured model and records what it calls a rule", async () => {
+      const { registry, calls } = fakeRegistry(async () => answerRule("rule"));
+      await withConfig(
+        { intentClassifier: "typesafe/jev-latest" },
+        async (f) => {
+          (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
+          const quiet = "Please keep the answers short from here";
+          await turn(f, quiet);
+          assert.deepEqual(calls, [quiet]);
+          assert.equal(rulesOf(f.sm)[0]?.quote, quiet);
+        },
+      );
+    });
+
+    it("records a model-classified ephemeral message as seen, so it is not asked again", async () => {
+      const { registry, calls } = fakeRegistry(async () =>
+        answerRule("ephemeral"),
+      );
+      await withConfig(
+        { intentClassifier: "typesafe/jev-latest" },
+        async (f) => {
+          (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
+          await turn(f, "What does the parser do with tabs?");
+          await turn(f, "And what about the lexer, then?");
+          assert.equal(calls.length, 2, "each message is asked once");
+          assert.equal(opsEntries(f.sm).length, 2);
+          assert.deepEqual(rulesOf(f.sm), []);
+        },
+      );
+    });
+
+    it("warns once about an unknown classifier model and falls back to heuristics", async () => {
+      const { registry, calls } = fakeRegistry(
+        async () => answerRule("rule"),
+        [],
+      );
+      await withConfig(
+        { intentClassifier: "typesafe/jev-latest" },
+        async (f) => {
+          (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
+          await turn(f, RULE);
+          await turn(f, "Never touch the generated files");
+          assert.deepEqual(calls, []);
+          assert.equal(rulesOf(f.sm).length, 2, "heuristics still capture");
+          assert.equal(f.ctx.notifyCalls.length, 1);
+          assert.equal(f.ctx.notifyCalls[0][1], "warning");
+          assert.match(f.ctx.notifyCalls[0][0], /typesafe\/jev-latest/);
+        },
+      );
+    });
+
+    it("stays silent headless", async () => {
+      const { registry } = fakeRegistry(async () => answerRule("rule"), []);
+      await withConfig(
+        { intentClassifier: "typesafe/jev-latest" },
+        async (f) => {
+          (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
+          await turn(f, RULE);
+          assert.equal(rulesOf(f.sm).length, 1);
+          assert.deepEqual(f.ctx.notifyCalls, []);
+        },
+        { hasUI: false },
+      );
+    });
+
+    it("does not let a classifier that never answers stall the turn", async () => {
+      const { registry, calls } = fakeRegistry(
+        (signal) =>
+          new Promise((_resolve, reject) =>
+            signal?.addEventListener("abort", () =>
+              reject(new Error("aborted")),
+            ),
+          ),
+      );
+      await withConfig(
+        { intentClassifier: "typesafe/jev-latest" },
+        async (f) => {
+          (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
+          mock.timers.enable({ apis: ["setTimeout"] });
+          try {
+            const pending = turn(f, RULE);
+            await new Promise((resolve) => setImmediate(resolve));
+            mock.timers.tick(15_000);
+            await pending;
+          } finally {
+            mock.timers.reset();
+          }
+          assert.equal(calls.length, 1);
+          assert.equal(rulesOf(f.sm).length, 1, "the heuristic pass caught it");
+          assert.equal(f.ctx.notifyCalls.length, 1);
+          assert.match(f.ctx.notifyCalls[0][0], /did not answer within 15 s/);
+          await turn(f, "Never touch the generated files");
+          assert.equal(calls.length, 1, "the model is not asked again");
+          assert.equal(rulesOf(f.sm).length, 2);
+        },
+      );
+    });
   });
 });
