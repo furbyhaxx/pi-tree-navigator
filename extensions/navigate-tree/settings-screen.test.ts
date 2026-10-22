@@ -27,14 +27,23 @@ import {
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { loadTreeNavigatorConfig } from "./config.ts";
 import {
+  clearRuntimeConfig,
+  readRuntimeConfig,
+  writeRuntimeConfig,
+} from "./runtime-config.ts";
+import {
   createSettingsScreenDeps,
+  describeSettings,
   openSettingsScreen,
   type SettingsScreenDeps,
 } from "./settings-screen.ts";
 
 const ENTER = "\r";
 const ESC = "\x1b";
+const BACKSPACE = "\x7f";
 const DOWN = "\x1b[B";
+const LEFT = "\x1b[D";
+const RIGHT = "\x1b[C";
 const HOME = "\x1b[H";
 const FILENAME = "tree-navigator.json";
 
@@ -74,18 +83,24 @@ const edit = (row: number): Script => at(row, ENTER);
 
 const roots: string[] = [];
 after(() => {
-  for (const root of roots) rmSync(root, { recursive: true, force: true });
+  for (const root of roots) {
+    clearRuntimeConfig(root);
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 interface Setup {
   global?: string;
   project?: string;
+  runtime?: Record<string, unknown>;
   trusted?: boolean;
   columns?: number;
   idle?: boolean;
   inputs?: (string | undefined)[];
   selects?: (string | undefined)[];
+  saveScopes?: ("global" | "project" | "runtime" | "cancel")[];
   confirms?: boolean[];
+  confirmEffects?: ((paths: { globalPath: string; projectPath: string }) => void)[];
   writeFails?: boolean;
   /** Use the screen's own atomic writer instead of the recording one. */
   realWriter?: boolean;
@@ -107,7 +122,9 @@ function harness(setup: Setup = {}) {
     writeFileSync(path, text);
   }
 
-  const state = { idle: setup.idle ?? true, reloads: 0 };
+  const sessionId = root;
+  if (setup.runtime) writeRuntimeConfig(sessionId, setup.runtime);
+  const state = { idle: setup.idle ?? true, reloads: 0, applies: 0 };
   const writes: string[] = [];
   const notifications: { message: string; type?: string }[] = [];
   const dialogs = {
@@ -118,8 +135,12 @@ function harness(setup: Setup = {}) {
   const inputs = [...(setup.inputs ?? [])];
   const selects = [...(setup.selects ?? [])];
   const confirms = [...(setup.confirms ?? [])];
+  const confirmEffects = [...(setup.confirmEffects ?? [])];
+  const saveScopes = [...(setup.saveScopes ?? [])];
   const rendered: string[][] = [];
+  const saveScopeFrames: string[][] = [];
   const scripts: Script[] = [];
+  let cancelPicker = false;
   const theme = {
     fg: (_color: string, text: string) => text,
     bold: (text: string) => text,
@@ -130,6 +151,13 @@ function harness(setup: Setup = {}) {
     hasUI: true,
     cwd,
     isIdle: () => state.idle,
+    sessionManager: { getSessionId: () => sessionId },
+    modelRegistry: {
+      getAvailable: () => [],
+      async getAvailableOfType() {
+        return [];
+      },
+    },
     async reload() {
       state.reloads++;
     },
@@ -138,11 +166,19 @@ function harness(setup: Setup = {}) {
         void notifications.push({ message, type }),
       async confirm(title: string, message: string) {
         dialogs.confirm.push([title, message]);
+        confirmEffects.shift()?.({ globalPath, projectPath });
         return confirms.shift() ?? false;
       },
       async input(title: string, placeholder?: string) {
         dialogs.input.push([title, placeholder]);
-        return inputs.shift();
+        const value = inputs.shift();
+        if (
+          (title === "Custom model" || title === "Custom classifier") &&
+          value === undefined
+        ) {
+          cancelPicker = true;
+        }
+        return value;
       },
       async select(title: string, options: string[]) {
         dialogs.select.push([title, options]);
@@ -154,12 +190,38 @@ function harness(setup: Setup = {}) {
           render(width: number): string[];
         },
       ) {
-        const script = scripts.shift();
-        assert.ok(script, "unexpected extra screen");
         return new Promise((resolve) => {
           const tui = { terminal: { rows: 80, columns }, requestRender() {} };
           const screen = factory(tui, theme, undefined, resolve);
           const lines = screen.render(columns);
+          const header = lines[0] ?? "";
+          if (header.includes("Anchor/Settings/Save")) {
+            saveScopeFrames.push(lines);
+            const scope = saveScopes.shift();
+            if (scope === "cancel") screen.handleInput(ESC);
+            else if (scope) {
+              screen.handleInput(
+                scope === "global" ? "u" : scope === "project" ? "p" : "r",
+              );
+            } else screen.handleInput(ENTER);
+            return;
+          }
+          if (
+            header.includes("Anchor/Settings/Classifier") ||
+            header.includes("Anchor/Settings/Model")
+          ) {
+            if (cancelPicker) {
+              cancelPicker = false;
+              screen.handleInput(ESC);
+            } else {
+              screen.handleInput(HOME);
+              screen.handleInput(DOWN);
+              screen.handleInput(ENTER);
+            }
+            return;
+          }
+          const script = scripts.shift();
+          assert.ok(script, "unexpected extra screen");
           rendered.push(lines);
           script(screen, lines);
         });
@@ -172,6 +234,9 @@ function harness(setup: Setup = {}) {
       projectPath,
       projectTrusted: setup.trusted ?? false,
     }),
+    async onSaved() {
+      state.applies++;
+    },
     ...(!setup.realWriter && {
       async writeFile(path: string, text: string) {
         writes.push(path);
@@ -186,14 +251,17 @@ function harness(setup: Setup = {}) {
     ctx,
     deps,
     state,
+    sessionId,
     writes,
     notifications,
     dialogs,
     rendered,
+    saveScopeFrames,
     globalPath,
     projectPath,
     readGlobal: () => read(globalPath),
     readProject: () => read(projectPath),
+    readRuntime: () => readRuntimeConfig(sessionId),
     run: (...screens: Script[]) => {
       scripts.push(...screens);
       return openSettingsScreen(ctx, deps);
@@ -255,12 +323,13 @@ describe("settings screen: saving", () => {
       h.notifications.some(
         ({ message: m, type }) =>
           type === "info" &&
-          /next session start/.test(m) &&
+          /Applied to this session\./.test(m) &&
           m.includes(h.globalPath),
       ),
     );
-    assert.equal(h.dialogs.confirm[1][0], "Reload now to apply?");
+    assert.equal(h.dialogs.confirm.length, 1);
     assert.equal(h.state.reloads, 0);
+    assert.equal(h.state.applies, 1);
   });
 
   it("creates a missing project file and directory, and leaves the global file alone", async () => {
@@ -277,6 +346,82 @@ describe("settings screen: saving", () => {
     assert.match(
       text(h.rendered[3]),
       /rewindHintReserveTokens\s+100k · project/,
+    );
+  });
+
+  it("saves a runtime override without writing files and takes precedence over project values", async () => {
+    const global = json({ anchorStartAfterTurns: 3 });
+    const project = json({ anchorStartAfterTurns: 4 });
+    const h = harness({
+      global,
+      project,
+      trusted: true,
+      inputs: ["7"],
+      saveScopes: ["runtime"],
+      confirms: [true],
+    });
+    await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
+
+    assert.equal(h.readGlobal(), global);
+    assert.equal(h.readProject(), project);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.readRuntime(), { anchorStartAfterTurns: 7 });
+    assert.match(
+      line(h.rendered[2], "anchorStartAfterTurns"),
+      /7 · runtime/,
+    );
+    const { config } = await loadTreeNavigatorConfig({
+      agentDir: dirname(h.globalPath),
+      projectPath: h.projectPath,
+      projectTrusted: true,
+      runtime: h.readRuntime(),
+    });
+    assert.equal(config.anchorStartAfterTurns, 7);
+    assert.equal(h.state.applies, 1);
+  });
+
+  it("leaves staged changes untouched when the save-scope chooser is cancelled", async () => {
+    const original = json({ rewindHintReserveTokens: 50000 });
+    const h = harness({
+      global: original,
+      inputs: ["80k"],
+      saveScopes: ["cancel"],
+      confirms: [true],
+    });
+    await h.run(edit(ROW.hint), press("s"), press(ESC));
+
+    assert.equal(h.readGlobal(), original);
+    assert.deepEqual(h.writes, []);
+    assert.equal(h.state.applies, 0);
+    assert.equal(h.saveScopeFrames.length, 1);
+    assert.deepEqual(
+      h.dialogs.confirm.map(([title]) => title),
+      ["Discard staged changes?"],
+    );
+  });
+
+  it("keeps the file unchanged when a parent container changes during confirmation", async () => {
+    const original = json({
+      auto_navigate: { enabled: true, check_every_turns: 6 },
+      keep: 1,
+    });
+    const replaced = json({ auto_navigate: "external replacement", keep: 1 });
+    const h = harness({
+      global: original,
+      inputs: ["8"],
+      confirms: [true, true],
+      confirmEffects: [({ globalPath }) => writeFileSync(globalPath, replaced)],
+    });
+    await h.run(edit(ROW.checkEvery), press("s"), press(ESC));
+
+    assert.equal(h.readGlobal(), replaced);
+    assert.deepEqual(h.writes, []);
+    assert.equal(h.state.applies, 0);
+    assert.ok(
+      h.notifications.some(
+        ({ message, type }) =>
+          type === "warning" && /auto_navigate.*no longer an object/.test(message),
+      ),
     );
   });
 
@@ -308,6 +453,23 @@ describe("settings screen: saving", () => {
     });
   });
 
+  it("toggles a global flag from its target value when a project value shadows it", async () => {
+    const h = harness({
+      global: json({ continuity: { capture: true } }),
+      project: json({ continuity: { capture: false } }),
+      trusted: true,
+      confirms: [true],
+    });
+    await h.run(at(ROW.capture, ENTER), press("s"), press(ESC));
+
+    assert.deepEqual(JSON.parse(h.readGlobal()), {
+      continuity: { capture: false },
+    });
+    assert.deepEqual(JSON.parse(h.readProject()), {
+      continuity: { capture: false },
+    });
+  });
+
   it("toggles a flag and cycles a choice without opening an input", async () => {
     const h = harness({ global: json({}), confirms: [true, false] });
     await h.run(
@@ -335,7 +497,7 @@ describe("settings screen: saving", () => {
     });
     await h.run(
       at(ROW.startAnchor, "d"),
-      at(ROW.capture, "d"),
+      at(ROW.capture, BACKSPACE),
       press("s"),
       press(ESC),
     );
@@ -362,23 +524,33 @@ describe("settings screen: saving", () => {
         ({ message, type }) =>
           type === "warning" &&
           message ===
-            "Still overridden by the project file: rewindHintReserveTokens.",
+            "Still overridden: rewindHintReserveTokens (project).",
       ),
     );
   });
 
-  it("offers a reload after saving and ends the command when accepted", async () => {
-    const h = harness({
-      global: json({}),
-      inputs: ["3"],
-      confirms: [true, true],
-    });
-    const exit = await h.run(edit(ROW.startAnchor), press("s"));
-    assert.equal(exit, "done");
-    assert.equal(h.state.reloads, 1);
+  it("applies saved settings immediately without offering a reload", async () => {
+    const h = harness({ global: json({}), inputs: ["3"], confirms: [true] });
+    const exit = await h.run(
+      edit(ROW.startAnchor),
+      press("s"),
+      press(ESC),
+    );
+    assert.equal(exit, "back");
+    assert.equal(h.state.applies, 1);
+    assert.equal(h.state.reloads, 0);
+    assert.equal(h.dialogs.confirm.length, 1);
+    assert.ok(
+      h.notifications.some(({ message }) =>
+        message.includes("Applied to this session."),
+      ),
+    );
+    assert.ok(
+      h.dialogs.confirm.every(([title]) => !title.includes("Reload")),
+    );
   });
 
-  it("does not offer a reload while the agent is working", async () => {
+  it("applies immediately while the agent is working without offering a reload", async () => {
     const h = harness({
       global: json({}),
       inputs: ["3"],
@@ -387,9 +559,65 @@ describe("settings screen: saving", () => {
     });
     await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
     assert.equal(h.dialogs.confirm.length, 1);
+    assert.equal(h.state.reloads, 0);
+    assert.equal(h.state.applies, 1);
     assert.ok(
-      h.notifications.some(({ message }) => message.includes("/reload")),
+      h.notifications.some(({ message }) =>
+        message.includes("Applied to this session."),
+      ),
     );
+  });
+
+  it("warns when a runtime value shadows a lower-scope save", async () => {
+    const h = harness({
+      global: json({}),
+      runtime: { rewindHintReserveTokens: 90000 },
+      inputs: ["80k"],
+      confirms: [true],
+    });
+    await h.run(edit(ROW.hint), press("s"), press(ESC));
+
+    assert.equal(h.readGlobal(), json({ rewindHintReserveTokens: 80000 }));
+    assert.deepEqual(h.readRuntime(), { rewindHintReserveTokens: 90000 });
+    assert.match(
+      line(h.rendered[2], "rewindHintReserveTokens"),
+      /90k · runtime/,
+    );
+    assert.ok(
+      h.notifications.some(
+        ({ message, type }) =>
+          type === "warning" &&
+          message === "Still overridden: rewindHintReserveTokens (runtime).",
+      ),
+    );
+  });
+
+  it("resets a runtime value to reveal the trusted project value", async () => {
+    const global = json({ anchorStartAfterTurns: 3 });
+    const project = json({ anchorStartAfterTurns: 5 });
+    const h = harness({
+      global,
+      project,
+      runtime: { anchorStartAfterTurns: 8 },
+      trusted: true,
+      confirms: [true],
+    });
+    await h.run(
+      press("t"),
+      press("t"),
+      at(ROW.startAnchor, "d"),
+      press("s"),
+      press(ESC),
+    );
+
+    assert.deepEqual(h.readRuntime(), {});
+    assert.equal(h.readGlobal(), global);
+    assert.equal(h.readProject(), project);
+    assert.match(
+      line(h.rendered[4], "anchorStartAfterTurns"),
+      /5 · project/,
+    );
+    assert.deepEqual(h.writes, []);
   });
 
   it("keeps the staged edits and the file when the write fails", async () => {
@@ -412,6 +640,71 @@ describe("settings screen: saving", () => {
     );
     assert.match(text(h.rendered[2]), /1 staged/);
     assert.equal(h.dialogs.confirm.at(-1)?.[0], "Discard staged changes?");
+  });
+
+  it("steps numeric settings in both directions without crossing their bounds", async () => {
+    const h = harness({
+      global: json({
+        rewindHintReserveTokens: 1000,
+        anchorStartAfterTurns: 50,
+        auto_navigate: { check_every_turns: 1 },
+      }),
+      confirms: [true],
+    });
+    await h.run(
+      at(ROW.hint, RIGHT),
+      at(ROW.hint, LEFT),
+      at(ROW.hint, LEFT),
+      at(ROW.startAnchor, RIGHT),
+      at(ROW.startAnchor, LEFT),
+      at(ROW.checkEvery, LEFT),
+      at(ROW.checkEvery, RIGHT),
+      press("s"),
+      press(ESC),
+    );
+
+    assert.match(line(h.rendered[1], "rewindHintReserveTokens"), /1k → 2k/);
+    assert.match(line(h.rendered[3], "rewindHintReserveTokens"), /1k → off/);
+    assert.deepEqual(JSON.parse(h.readGlobal()), {
+      rewindHintReserveTokens: null,
+      anchorStartAfterTurns: 49,
+      auto_navigate: { check_every_turns: 2 },
+    });
+    assert.deepEqual(
+      h.notifications
+        .filter(({ message, type }) =>
+          type === "warning" && message.startsWith("Limit reached for "),
+        )
+        .map(({ message }) => message),
+      [
+        "Limit reached for anchorStartAfterTurns. Use 1-50 turns.",
+        "Limit reached for auto_navigate.check_every_turns. Use 1-100 turns.",
+      ],
+    );
+  });
+
+  it("uses left and right to set flags and cycle choices", async () => {
+    const h = harness({
+      global: json({
+        parentHandoffMode: "full",
+        continuity: { capture: true },
+        auto_navigate: { enabled: false },
+      }),
+      confirms: [true],
+    });
+    await h.run(
+      at(ROW.parentMode, RIGHT),
+      at(ROW.capture, LEFT),
+      at(ROW.autoEnabled, RIGHT),
+      press("s"),
+      press(ESC),
+    );
+
+    assert.deepEqual(JSON.parse(h.readGlobal()), {
+      parentHandoffMode: "synthesized",
+      continuity: { capture: false },
+      auto_navigate: { enabled: true },
+    });
   });
 
   it("writes atomically through a symlink and leaves no temp file behind", async () => {
@@ -438,8 +731,10 @@ describe("settings screen: saving", () => {
 });
 
 describe("settings screen: refusals", () => {
-  it("refuses a value outside the range and names the valid range", async () => {
-    const h = harness({ inputs: ["5m", "0", "abc", "foo", "101"] });
+  it("refuses invalid ranges and custom model selectors", async () => {
+    const h = harness({
+      inputs: ["5m", "0", "abc", undefined, "foo", undefined, "101"],
+    });
     await h.run(
       edit(ROW.hint),
       edit(ROW.startAnchor),
@@ -457,17 +752,29 @@ describe("settings screen: refusals", () => {
       /"5m" is not valid for rewindHintReserveTokens\. Use 1,000-1,000,000 tokens/,
     );
     assert.match(warnings[1], /"0".*anchorStartAfterTurns\. Use 1-50 turns/);
-    assert.match(
-      warnings[2],
-      /continuity\.intentClassifier\. Use provider\/id of a model, or off/,
-    );
+    assert.match(warnings[2], /"abc" is not valid: expected provider\/id/);
     assert.match(
       warnings[3],
-      /controller_model\. Use current or provider\/id\[:thinking\]/,
+      /"foo" is not valid: Proposal model must be current or provider\/model\[:thinking\]/,
     );
-    assert.match(warnings[4], /check_every_turns\. Use 1-100 turns/);
+    assert.match(warnings[4], /"101" is not valid for auto_navigate\.check_every_turns\. Use 1-100 turns/);
     assert.ok(!text(h.rendered.at(-1) ?? []).includes("staged"));
     assert.ok(!existsSync(h.globalPath));
+  });
+
+  it("shows a valid staged model when a sibling proposal field is invalid", async () => {
+    const h = harness({
+      global: json({ treeProposal: { model: "current", tools: "invalid" } }),
+      inputs: ["offline/model:high"],
+      confirms: [true],
+    });
+    await h.run(edit(ROW.proposalModel), press(ESC));
+
+    assert.match(
+      line(h.rendered[1], "treeProposal.model"),
+      /invalid → offline\/model:high/,
+    );
+    assert.match(text(h.rendered[1]), /1 staged/);
   });
 
   it("shows the current value and the valid range in the input prompt", async () => {
@@ -478,7 +785,7 @@ describe("settings screen: refusals", () => {
     await h.run(edit(ROW.hint), press(ESC));
     assert.deepEqual(h.dialogs.input, [
       [
-        "rewindHintReserveTokens (global file)",
+        "rewindHintReserveTokens (global scope)",
         "now 50k · 1,000-1,000,000 tokens (e.g. 50k), or off",
       ],
     ]);
@@ -528,6 +835,7 @@ describe("settings screen: refusals", () => {
       project: json({ anchorStartAfterTurns: 3 }),
       trusted: true,
       inputs: ["70k"],
+      saveScopes: ["global"],
       confirms: [true],
     });
     await h.run(
@@ -563,12 +871,31 @@ describe("settings screen: refusals", () => {
     assert.deepEqual(h.dialogs.input, []);
   });
 
+  it("cycles global, project and runtime targets", async () => {
+    const h = harness({
+      global: json({}),
+      project: json({}),
+      runtime: { anchorStartAfterTurns: 3 },
+      trusted: true,
+    });
+    const targets: string[] = [];
+    const atTarget = (key?: string): Script =>
+      (screen) => {
+        targets.push(text(screen.render(80)));
+        if (key) screen.handleInput(key);
+      };
+    await h.run(atTarget("t"), atTarget("t"), atTarget("t"), atTarget(ESC));
+    assert.match(targets[0], /target: global/);
+    assert.match(targets[1], /target: project/);
+    assert.match(targets[2], /target: runtime/);
+    assert.match(targets[3], /target: global/);
+  });
+
   it("does not read or edit the project file when the project is not trusted", async () => {
     const project = json({ rewindHintReserveTokens: 1000 });
     const h = harness({ global: json({}), project, trusted: false });
     let afterT: string[] = [];
-    await h.run((screen) => {
-      screen.handleInput("t");
+    await h.run(press("t"), (screen) => {
       afterT = screen.render(80);
       screen.handleInput(ESC);
     });
@@ -578,7 +905,7 @@ describe("settings screen: refusals", () => {
     assert.match(first, /rewindHintReserveTokens\s+off · default/);
     assert.match(first, /global unset · project untrusted/);
     assert.ok(!first.includes("to project"));
-    assert.match(text(afterT), /target: global/);
+    assert.match(text(afterT), /target: runtime/);
   });
 });
 
@@ -662,6 +989,29 @@ describe("settings screen: rows", () => {
     assert.match(frames[0][0], /Anchor\/Settings/);
     assert.match(frames[0][0], /target: global/);
     assert.match(frames[0][1], /file: /);
+  });
+
+  it("describes effective nested map and runtime settings", async () => {
+    const h = harness({
+      global: json({ treeProposal: { tools: { bash: "calls-only" } } }),
+      runtime: {
+        rewindHintReserveTokens: 60000,
+        auto_navigate: { tools: { grep: "omit" } },
+        model_overrides: {
+          "openai/gpt-5": { rewind_hint_reserve_tokens: 90000 },
+        },
+      },
+    });
+    const description = await describeSettings(h.ctx, h.deps);
+
+    assert.match(description, /rewindHintReserveTokens: 60k \(runtime\)/);
+    assert.match(description, /treeProposal\.tools\["bash"\]: calls-only \(global\)/);
+    assert.match(description, /auto_navigate\.tools\["grep"\]: omit \(runtime\)/);
+    assert.match(
+      description,
+      /model_overrides\["openai\/gpt-5"\]\.rewindHintReserveTokens: 90k \(runtime\)/,
+    );
+    assert.match(description, /Runtime: session memory/);
   });
 
   it("builds the live deps from pi's agent dir and the session's cwd and trust", () => {
@@ -766,6 +1116,7 @@ describe("settings screen: keyed maps", () => {
         tree_proposal: { tools: { bash: "omit" } },
         auto_navigate: { tools: { read: "calls-only" } },
       }),
+      columns: 120,
       selects: ["full", "omit"],
       inputs: ["grep"],
       confirms: [true, false],
@@ -775,7 +1126,7 @@ describe("settings screen: keyed maps", () => {
       edit(ROW.autoTools),
       (screen) => {
         screen.handleInput(DOWN);
-        detail = screen.render(80);
+        detail = screen.render(120);
         screen.handleInput(ENTER);
       },
       at(0, "d"),
@@ -791,7 +1142,7 @@ describe("settings screen: keyed maps", () => {
     assert.match(line(listed, "bash"), /bash\s+omit · global \(inherited\)$/);
     assert.match(
       line(detail, "↳"),
-      /global unset · project untrusted · inherits treeProposal\.tools\["bash"\]/,
+      /global unset · project untrusted · runtime unset · inherits treeProposal\.tools\["bash"\]/,
     );
     assert.match(line(changed, "bash"), /bash\s+omit → full/);
     assert.match(line(removed, "read"), /read\s+calls-only → full/);
