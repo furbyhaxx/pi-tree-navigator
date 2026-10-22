@@ -25,6 +25,7 @@ import {
   type ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { loadTreeNavigatorConfig } from "./config.ts";
 import {
   createSettingsScreenDeps,
   openSettingsScreen,
@@ -45,13 +46,15 @@ const ROW = {
   capture: 3,
   classifier: 4,
   proposalModel: 5,
-  autoEnabled: 6,
-  autoMode: 7,
-  controller: 8,
-  checkEvery: 9,
-  minTokens: 10,
-  rewindAt: 11,
-  overrides: 12,
+  proposalTools: 6,
+  autoEnabled: 7,
+  autoMode: 8,
+  controller: 9,
+  checkEvery: 10,
+  minTokens: 11,
+  rewindAt: 12,
+  autoTools: 13,
+  overrides: 14,
 } as const;
 
 type Script = (
@@ -81,6 +84,7 @@ interface Setup {
   columns?: number;
   idle?: boolean;
   inputs?: (string | undefined)[];
+  selects?: (string | undefined)[];
   confirms?: boolean[];
   writeFails?: boolean;
   /** Use the screen's own atomic writer instead of the recording one. */
@@ -109,8 +113,10 @@ function harness(setup: Setup = {}) {
   const dialogs = {
     confirm: [] as [string, string][],
     input: [] as [string, string | undefined][],
+    select: [] as [string, string[]][],
   };
   const inputs = [...(setup.inputs ?? [])];
+  const selects = [...(setup.selects ?? [])];
   const confirms = [...(setup.confirms ?? [])];
   const rendered: string[][] = [];
   const scripts: Script[] = [];
@@ -137,6 +143,10 @@ function harness(setup: Setup = {}) {
       async input(title: string, placeholder?: string) {
         dialogs.input.push([title, placeholder]);
         return inputs.shift();
+      },
+      async select(title: string, options: string[]) {
+        dialogs.select.push([title, options]);
+        return selects.shift();
       },
       custom(
         factory: (...args: unknown[]) => {
@@ -666,5 +676,325 @@ describe("settings screen: rows", () => {
       join("/work/app", CONFIG_DIR_NAME, FILENAME),
     );
     assert.equal(where.projectTrusted, true);
+  });
+});
+
+describe("settings screen: keyed maps", () => {
+  const MAPS = {
+    rewind_hint_reserve_tokens: 50000,
+    tree_proposal: { model: "current", tools: { bash: "calls-only" } },
+    model_overrides: {
+      "openai/gpt-6": {
+        rewind_hint_reserve_tokens: 70000,
+        vendor_note: { keep: ["x"] },
+      },
+      "*gemini*": {
+        rewind_hint_reserve_tokens: 120000,
+        auto_navigate: { enabled: true },
+      },
+    },
+  };
+  // One tool policy edit, then one model pattern edit, ending on the top screen.
+  const editBoth: Script[] = [
+    edit(ROW.proposalTools),
+    edit(0),
+    press(ESC),
+    edit(ROW.overrides),
+    edit(1),
+    edit(0),
+    press(ESC),
+    press(ESC),
+  ];
+
+  it("leaves the original bytes alone when staged map edits are cancelled", async () => {
+    const original = json(MAPS);
+    const h = harness({
+      global: original,
+      selects: ["omit"],
+      inputs: ["150k"],
+      confirms: [true],
+    });
+    assert.equal(await h.run(...editBoth, press(ESC)), "back");
+    assert.equal(h.readGlobal(), original);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.dialogs.confirm, [
+      ["Discard staged changes?", "2 staged changes have not been saved."],
+    ]);
+    const top = h.rendered.at(-1) ?? [];
+    assert.match(line(top, "treeProposal.tools"), /1 tool · global · 1 staged/);
+    assert.match(line(top, "model_overrides"), /2 entries · global · 1 staged/);
+    assert.match(text(top), /2 staged · target: global/);
+  });
+
+  it("saves both edits, keeping another model's unknown data and snake_case, and the loader resolves them", async () => {
+    const h = harness({
+      global: json(MAPS),
+      selects: ["omit"],
+      inputs: ["150k"],
+      confirms: [true, false],
+    });
+    await h.run(...editBoth, press("s"), press(ESC));
+
+    const expected = structuredClone(MAPS);
+    expected.tree_proposal.tools.bash = "omit";
+    expected.model_overrides["*gemini*"].rewind_hint_reserve_tokens = 150000;
+    assert.equal(h.readGlobal(), json(expected));
+
+    const [, message] = h.dialogs.confirm[0];
+    assert.match(message, /treeProposal\.tools\["bash"\]: calls-only → omit/);
+    assert.match(
+      message,
+      /model_overrides\["\*gemini\*"\]\.rewindHintReserveTokens: 120k → 150k/,
+    );
+
+    const { config } = await loadTreeNavigatorConfig({
+      agentDir: dirname(h.globalPath),
+      projectPath: h.projectPath,
+      projectTrusted: false,
+    });
+    assert.equal(config.proposal?.tools.bash, "omit");
+    assert.equal(config.rewindHintModelReserveTokens.get("*gemini*"), 150000);
+    assert.equal(
+      config.rewindHintModelReserveTokens.get("openai/gpt-6"),
+      70000,
+    );
+  });
+
+  it("shows inherited tool modes apart from the target file and stages add, change, remove and unstage", async () => {
+    const h = harness({
+      global: json({
+        tree_proposal: { tools: { bash: "omit" } },
+        auto_navigate: { tools: { read: "calls-only" } },
+      }),
+      selects: ["full", "omit"],
+      inputs: ["grep"],
+      confirms: [true, false],
+    });
+    let detail: string[] = [];
+    await h.run(
+      edit(ROW.autoTools),
+      (screen) => {
+        screen.handleInput(DOWN);
+        detail = screen.render(80);
+        screen.handleInput(ENTER);
+      },
+      at(0, "d"),
+      at(0, "u"),
+      press("a"),
+      at(0, "d"),
+      press(ESC),
+      press("s"),
+      press(ESC),
+    );
+    const [, listed, changed, removed, restored, , staged, top] = h.rendered;
+    assert.match(line(listed, "read"), /read\s+calls-only · global$/);
+    assert.match(line(listed, "bash"), /bash\s+omit · global \(inherited\)$/);
+    assert.match(
+      line(detail, "↳"),
+      /global unset · project untrusted · inherits treeProposal\.tools\["bash"\]/,
+    );
+    assert.match(line(changed, "bash"), /bash\s+omit → full/);
+    assert.match(line(removed, "read"), /read\s+calls-only → full/);
+    assert.match(line(restored, "read"), /read\s+calls-only · global$/);
+    assert.match(line(staged, "grep"), /grep\s+full → omit/);
+    assert.match(
+      line(top, "auto_navigate.tools"),
+      /1 → 2 tools · global · 3 staged/,
+    );
+    assert.deepEqual(h.dialogs.select[0], [
+      'auto_navigate.tools["bash"] (global file)',
+      ["full", "calls-only", "omit"],
+    ]);
+    assert.deepEqual(JSON.parse(h.readGlobal()), {
+      tree_proposal: { tools: { bash: "omit" } },
+      auto_navigate: { tools: { bash: "full", grep: "omit" } },
+    });
+  });
+
+  it("confirms removing a non-empty model entry and stages an explicit delete", async () => {
+    const h = harness({
+      global: json(MAPS),
+      confirms: [false, true, true, false],
+    });
+    await h.run(
+      edit(ROW.overrides),
+      at(0, "d"),
+      at(0, "d"),
+      edit(0),
+      press(ESC),
+      press("s"),
+      press(ESC),
+    );
+    assert.ok(
+      h.notifications.some(({ message }) =>
+        message.includes(
+          'model_overrides["openai/gpt-6"] is staged for removal',
+        ),
+      ),
+    );
+    const [title, message] = h.dialogs.confirm[0];
+    assert.equal(title, 'Remove model_overrides["openai/gpt-6"]?');
+    assert.match(message, /70000/);
+    assert.ok(!text(h.rendered[2]).includes("removed"));
+    assert.match(line(h.rendered[3], "openai/gpt-6"), /removed · staged/);
+    const expected = structuredClone(MAPS) as Partial<typeof MAPS>;
+    Reflect.deleteProperty(expected.model_overrides ?? {}, "openai/gpt-6");
+    assert.equal(h.readGlobal(), json(expected));
+  });
+
+  it("edits nested model settings through the root rules and keeps the camelCase spelling", async () => {
+    const h = harness({
+      global: json({
+        keep: 1,
+        modelOverrides: { "a/b": { autoNavigate: { check_every_turns: 4 } } },
+      }),
+      inputs: ["5m", "8"],
+      confirms: [true, false],
+    });
+    await h.run(
+      edit(ROW.overrides),
+      edit(0),
+      edit(0),
+      edit(2),
+      edit(4),
+      press(ESC),
+      press(ESC),
+      press("s"),
+      press(ESC),
+    );
+    const entry = h.rendered[2];
+    assert.match(line(entry, "check_every_turns"), /4 · global$/);
+    assert.match(
+      line(entry, "auto_navigate.mode"),
+      /anchor-and-rewind · default$/,
+    );
+    const warning = h.notifications.find(({ type }) => type === "warning");
+    assert.match(
+      warning?.message ?? "",
+      /"5m" is not valid for .*rewindHintReserveTokens\. Use 1,000-1,000,000 tokens/,
+    );
+    assert.equal(
+      h.readGlobal(),
+      json({
+        keep: 1,
+        modelOverrides: {
+          "a/b": {
+            autoNavigate: { check_every_turns: 8, mode: "anchor-only" },
+          },
+        },
+      }),
+    );
+  });
+
+  it("adds a model pattern with a reserve and a tool policy, and the loader applies them", async () => {
+    const h = harness({
+      global: json({}),
+      inputs: ["bad name", "openrouter/*", "90k", "bash"],
+      selects: ["omit"],
+      confirms: [true, false],
+    });
+    await h.run(
+      edit(ROW.overrides),
+      press("a"),
+      press("a"),
+      edit(0),
+      edit(7),
+      press("a"),
+      press(ESC),
+      press(ESC),
+      press(ESC),
+      press("s"),
+      press(ESC),
+    );
+    assert.match(
+      h.notifications.find(({ type }) => type === "warning")?.message ?? "",
+      /"bad name" is not a model pattern/,
+    );
+    assert.deepEqual(JSON.parse(h.readGlobal()), {
+      modelOverrides: {
+        "openrouter/*": {
+          rewindHintReserveTokens: 90000,
+          auto_navigate: { tools: { bash: "omit" } },
+        },
+      },
+    });
+    const { config } = await loadTreeNavigatorConfig({
+      agentDir: dirname(h.globalPath),
+      projectPath: h.projectPath,
+      projectTrusted: false,
+    });
+    assert.equal(
+      config.rewindHintModelReserveTokens.get("openrouter/*"),
+      90000,
+    );
+    assert.equal(
+      config.autoNavigateByModel?.get("openrouter/*")?.tools?.bash,
+      "omit",
+    );
+  });
+
+  it("resets and unstages a whole map from the top screen", async () => {
+    const h = harness({
+      global: json({ tree_proposal: { tools: { bash: "omit" } } }),
+      confirms: [true],
+    });
+    await h.run(
+      at(ROW.proposalTools, "d"),
+      at(ROW.proposalTools, "u"),
+      press(ESC),
+    );
+    assert.match(
+      line(h.rendered[1], "treeProposal.tools"),
+      /1 → none · default · 1 staged/,
+    );
+    assert.match(line(h.rendered[2], "treeProposal.tools"), /1 tool · global$/);
+    assert.equal(h.dialogs.confirm.length, 1);
+  });
+
+  it("shows a map that is not an object as invalid and refuses to replace it silently", async () => {
+    const original = json({ tree_proposal: { tools: "oops" } });
+    const h = harness({
+      global: original,
+      inputs: ["bash"],
+      selects: ["omit"],
+      confirms: [true, true],
+    });
+    let top: string[] = [];
+    await h.run(
+      (screen) => {
+        press(HOME, ...down(ROW.proposalTools))(screen, []);
+        top = screen.render(80);
+        screen.handleInput(ENTER);
+      },
+      press("a"),
+      press(ESC),
+      press("d"),
+      press(ESC),
+    );
+    assert.match(
+      line(top, "↳"),
+      /global: treeProposal\.tools must map exact tool names/,
+    );
+    assert.match(
+      h.notifications.find(({ type }) => type === "warning")?.message ?? "",
+      /tree_proposal\.tools in the global file is not an object/,
+    );
+    assert.match(line(h.rendered[4], "treeProposal.tools"), /1 staged/);
+    assert.equal(h.readGlobal(), original);
+  });
+
+  it("lists an invalid tool mode as invalid and replaces it only when the user picks a mode", async () => {
+    const h = harness({
+      global: json({ tree_proposal: { tools: { bash: "banana" } } }),
+      selects: ["omit"],
+      confirms: [true],
+    });
+    await h.run(edit(ROW.proposalTools), edit(0), press(ESC), press(ESC));
+    assert.match(line(h.rendered[1], "bash"), /bash\s+invalid/);
+    assert.match(
+      line(h.rendered[1], "↳"),
+      /Invalid treeProposal\.tools\["bash"\]/,
+    );
+    assert.match(line(h.rendered[2], "bash"), /bash\s+invalid → omit/);
   });
 });

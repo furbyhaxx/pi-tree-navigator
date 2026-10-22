@@ -7,6 +7,10 @@
  * with the real parsers (`parseTreeNavigatorConfig`), so the screen cannot
  * accept a value that the next session start would reject. A file that does
  * not parse as a JSON object is never written.
+ *
+ * The keyed maps (`treeProposal.tools`, `auto_navigate.tools` and
+ * `model_overrides`, with their nested tool policies) open as submenus. Each
+ * entry stages the same way a scalar does, addressed by its own path.
  */
 import {
   readFile as fsReadFile,
@@ -42,6 +46,7 @@ import {
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
 import { type FrameRow, type FrameScreen, selectFrame } from "./frame.ts";
+import type { ProposalToolMode } from "./proposal-options.ts";
 
 /** Where the two config files live for the session and whether the project layer counts. */
 export interface SettingsScreenDeps {
@@ -108,13 +113,28 @@ type Status =
 const ABSENT: Status = { kind: "absent" };
 const SET: Status = { kind: "set" };
 
-type Kind = "tokens" | "count" | "flag" | "choice" | "model" | "classifier";
+type Kind =
+  | "tokens"
+  | "count"
+  | "flag"
+  | "choice"
+  | "model"
+  | "classifier"
+  | "map";
 
-interface SettingDef {
-  /** Label and identity: the key as the README spells it. */
+/** What a staged edit addresses: a setting, or a whole map or entry. */
+interface Target {
+  /** Identity in the staged map: the key as the README spells it, unique per path. */
   key: string;
   path: readonly KeyName[];
   kind: Kind;
+  /** Part of a keyed map: edits refuse to replace a non-object on the way down. */
+  structured?: boolean;
+}
+
+interface SettingDef extends Target {
+  /** Row label when it differs from the identity. */
+  label?: string;
   choices?: readonly string[];
   /** Accepts the disable sentinels; written as `null`. */
   off?: boolean;
@@ -126,6 +146,8 @@ interface SettingDef {
    * falls through to the other layer (most fields), or blocks the whole group.
    */
   onInvalid: "claims" | "falls-through" | "blocks";
+  /** The setting whose value applies while no layer sets this one. */
+  fallback?: SettingDef;
   status(layer: ParsedLayer): Status;
   read(config: Loaded): unknown;
 }
@@ -314,9 +336,284 @@ const SETTINGS: readonly SettingDef[] = [
   },
 ];
 
-const MODEL_OVERRIDES_KEY = "model_overrides";
-const MODEL_OVERRIDES_DESCRIPTION =
-  "Per-model overrides of the reserve and auto_navigate. Edit them in the JSON file; Enter shows where.";
+// --- Keyed maps: tool policies and model overrides ------------------------------
+
+/** A key that is data (a tool name, a model pattern), spelled one way only. */
+const exact = (key: string): KeyName => ({ camel: key, snake: key });
+const TOOLS = name("tools");
+const MODEL_OVERRIDES = name("modelOverrides", "model_overrides");
+const TOOL_MODES: readonly ProposalToolMode[] = ["full", "calls-only", "omit"];
+const TOOL_HELP =
+  "full: calls and results sent. calls-only: results withheld. omit: both withheld. Unlisted: full.";
+
+/** The README's spelling of one override entry, e.g. `model_overrides["gpt-*"]`. */
+const quoted = (pattern: string): string =>
+  `${MODEL_OVERRIDES.snake}[${JSON.stringify(pattern)}]`;
+
+const AUTO_FIELD: Record<string, keyof AutoNavigatePartial> = {
+  enabled: "enabled",
+  mode: "mode",
+  controller_model: "controllerModel",
+  check_every_turns: "checkEveryTurns",
+  min_tokens_since_anchor: "minTokensSinceAnchor",
+  rewind_at_tokens: "rewindAtTokens",
+};
+const BASE_RESERVE = SETTINGS.filter(
+  (def) => def.key === "rewindHintReserveTokens",
+)[0];
+const BASE_AUTO = SETTINGS.filter((def) => def.path[0] === AUTO_NAVIGATE);
+
+type ToolsPolicy = Readonly<Record<string, ProposalToolMode>>;
+type Policy =
+  | { kind: "ok"; tools: ToolsPolicy }
+  | { kind: "invalid"; error: string };
+
+/** A keyed map the screen opens as a submenu. */
+interface Group {
+  /** Identity, as for a setting. */
+  key: string;
+  /** Row label and breadcrumb when it differs from the identity. */
+  label?: string;
+  path: readonly KeyName[];
+  unit: readonly [singular: string, plural: string];
+  description: string;
+  /** The group whose policy applies to a tool this one does not list. */
+  fallback?: ToolsGroup;
+  /** Why a layer's copy of this map is unusable, when it is. */
+  problem(layer: ParsedLayer): string | undefined;
+  open(session: Session, crumbs: readonly string[]): Promise<void>;
+}
+
+interface ToolsGroup extends Group {
+  policy(layer: ParsedLayer): Policy | undefined;
+  /** What the loaded config applies; undefined while a layer blocks it. */
+  effective(config: Loaded): ToolsPolicy | undefined;
+}
+
+type Item = { def: SettingDef } | { group: Group };
+
+const mapTarget = (group: Group): Target => ({
+  key: group.key,
+  path: group.path,
+  kind: "map",
+  structured: true,
+});
+
+const policyOf = (
+  block:
+    | { kind: "ok"; value: { tools?: ToolsPolicy } }
+    | { kind: "invalid"; error: string }
+    | undefined,
+): Policy | undefined =>
+  block === undefined
+    ? undefined
+    : block.kind === "ok"
+      ? { kind: "ok", tools: block.value.tools ?? {} }
+      : block;
+
+function toolsGroup(
+  spec: Pick<
+    ToolsGroup,
+    | "key"
+    | "label"
+    | "path"
+    | "description"
+    | "fallback"
+    | "policy"
+    | "effective"
+  >,
+): ToolsGroup {
+  const group: ToolsGroup = {
+    ...spec,
+    unit: ["tool", "tools"],
+    problem: (layer) => {
+      const policy = spec.policy(layer);
+      return policy?.kind === "invalid" ? policy.error : undefined;
+    },
+    open: (session, crumbs) => editTools(session, group, crumbs),
+  };
+  return group;
+}
+
+const PROPOSAL_TOOLS = toolsGroup({
+  key: "treeProposal.tools",
+  path: [TREE_PROPOSAL, TOOLS],
+  description:
+    "Tools a tree-proposal model may see, by exact name. Enter opens the list.",
+  policy: (layer) => policyOf(layer.proposal),
+  effective: (config) =>
+    config.proposalError === undefined
+      ? (config.proposal?.tools ?? {})
+      : undefined,
+});
+
+const AUTO_TOOLS = toolsGroup({
+  key: "auto_navigate.tools",
+  path: [AUTO_NAVIGATE, TOOLS],
+  fallback: PROPOSAL_TOOLS,
+  description:
+    "Tools the controller may see; unlisted ones follow treeProposal.tools. Enter opens the list.",
+  policy: (layer) => policyOf(layer.autoNavigate),
+  effective: (config) => autoRead(config).tools,
+});
+
+const overrideTools = (pattern: string): ToolsGroup =>
+  toolsGroup({
+    key: `${quoted(pattern)}.auto_navigate.tools`,
+    label: "auto_navigate.tools",
+    path: [MODEL_OVERRIDES, exact(pattern), AUTO_NAVIGATE, TOOLS],
+    fallback: AUTO_TOOLS,
+    description:
+      "Tools the controller may see for these models; unlisted ones follow auto_navigate.tools.",
+    policy: (layer) => policyOf(layer.modelAutoNavigate?.get(pattern)),
+    effective: (config) => {
+      const own = config.autoNavigateByModel?.get(pattern);
+      const base = AUTO_TOOLS.effective(config);
+      return own === null || base === undefined
+        ? undefined
+        : { ...base, ...own?.tools };
+    },
+  });
+
+/** One tool's mode in a policy map. */
+function toolDef(group: ToolsGroup, tool: string): SettingDef {
+  return {
+    key: `${group.key}[${JSON.stringify(tool)}]`,
+    label: tool,
+    path: [...group.path, exact(tool)],
+    kind: "choice",
+    choices: TOOL_MODES,
+    structured: true,
+    onInvalid: "blocks",
+    expects: "full, calls-only or omit",
+    description: TOOL_HELP,
+    fallback: group.fallback && toolDef(group.fallback, tool),
+    status: (layer) => {
+      const policy = group.policy(layer);
+      if (!policy) return ABSENT;
+      if (policy.kind === "invalid") {
+        return { kind: "invalid", error: policy.error };
+      }
+      return Object.hasOwn(policy.tools, tool) ? SET : ABSENT;
+    },
+    read: (config) => {
+      const effective = group.effective(config);
+      if (effective === undefined) return undefined;
+      return Object.hasOwn(effective, tool) ? effective[tool] : "full";
+    },
+  };
+}
+
+const entryTarget = (pattern: string): Target => ({
+  key: quoted(pattern),
+  path: [MODEL_OVERRIDES, exact(pattern)],
+  kind: "map",
+  structured: true,
+});
+
+function entryProblem(layer: ParsedLayer, pattern: string): string | undefined {
+  if (layer.modelOverridesProblems.nonObjectEntries.includes(pattern)) {
+    return "is not an object";
+  }
+  if (layer.modelHints.get(pattern)?.kind === "invalid") {
+    return "invalid rewind_hint_reserve_tokens";
+  }
+  const auto = layer.modelAutoNavigate?.get(pattern);
+  return auto?.kind === "invalid" ? auto.error : undefined;
+}
+
+const OVERRIDES: Group = {
+  key: "model_overrides",
+  path: [MODEL_OVERRIDES],
+  unit: ["entry", "entries"],
+  description:
+    "Per-model reserve and auto_navigate, keyed by provider/model or a wildcard. Enter opens the list.",
+  problem: (layer) => {
+    const { notObject, nonObjectEntries } = layer.modelOverridesProblems;
+    if (notObject) return "model_overrides must be an object keyed by model";
+    if (nonObjectEntries.length > 0) {
+      return `${quoted(nonObjectEntries[0])} must be an object`;
+    }
+    for (const [pattern] of layer.modelHints) {
+      const problem = entryProblem(layer, pattern);
+      if (problem) return `${quoted(pattern)}: ${problem}`;
+    }
+    for (const [pattern] of layer.modelAutoNavigate ?? []) {
+      const problem = entryProblem(layer, pattern);
+      if (problem) return problem;
+    }
+    return undefined;
+  },
+  open: (session, crumbs) => editOverrides(session, crumbs),
+};
+
+/** A model's reserve inside one override entry. */
+const overrideReserve = (pattern: string): SettingDef => ({
+  ...BASE_RESERVE,
+  key: `${quoted(pattern)}.${BASE_RESERVE.key}`,
+  label: BASE_RESERVE.key,
+  path: [MODEL_OVERRIDES, exact(pattern), ...BASE_RESERVE.path],
+  structured: true,
+  fallback: BASE_RESERVE,
+  status: (layer) => {
+    const field = layer.modelHints.get(pattern);
+    return field ? fieldStatus(field) : ABSENT;
+  },
+  read: (config) =>
+    config.rewindHintModelReserveTokens.has(pattern)
+      ? config.rewindHintModelReserveTokens.get(pattern)
+      : BASE_RESERVE.read(config),
+});
+
+/** One `auto_navigate` property inside an override entry, reusing the root setting's rules. */
+function overrideAuto(base: SettingDef, pattern: string): SettingDef {
+  const part = base.path[1];
+  const field = AUTO_FIELD[part.snake];
+  return {
+    ...base,
+    key: `${quoted(pattern)}.${base.key}`,
+    label: base.key,
+    path: [MODEL_OVERRIDES, exact(pattern), AUTO_NAVIGATE, part],
+    structured: true,
+    fallback: base,
+    status: (layer) => {
+      const entry = layer.modelAutoNavigate?.get(pattern);
+      if (!entry) return ABSENT;
+      if (entry.kind === "invalid") {
+        return { kind: "invalid", error: entry.error };
+      }
+      return entry.value[field] === undefined ? ABSENT : SET;
+    },
+    read: (config) => {
+      const own = config.autoNavigateByModel?.get(pattern);
+      return own === null ? undefined : (own?.[field] ?? base.read(config));
+    },
+  };
+}
+
+const entrySettings = (pattern: string): readonly SettingDef[] => [
+  overrideReserve(pattern),
+  ...BASE_AUTO.map((base) => overrideAuto(base, pattern)),
+];
+
+const entryItems = (pattern: string): readonly Item[] => [
+  ...entrySettings(pattern).map((def): Item => ({ def })),
+  { group: overrideTools(pattern) },
+];
+
+const GROUP_AFTER = new Map<string, Group>([
+  ["treeProposal.model", PROPOSAL_TOOLS],
+  ["auto_navigate.rewind_at_tokens", AUTO_TOOLS],
+]);
+
+/** Everything the top screen lists, in order. */
+const ITEMS: readonly Item[] = [
+  ...SETTINGS.flatMap((def): Item[] => {
+    const group = GROUP_AFTER.get(def.key);
+    return group ? [{ def }, { group }] : [{ def }];
+  }),
+  { group: OVERRIDES },
+];
 
 const isRoot = (value: unknown): value is Root =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -369,16 +666,16 @@ interface Raw {
   value?: unknown;
 }
 
-function rawOf(root: Root, def: SettingDef): Raw {
+function rawOf(root: Root, { path }: { path: readonly KeyName[] }): Raw {
   let node = root;
-  for (const [index, part] of def.path.entries()) {
+  for (const [index, part] of path.entries()) {
     const found = findName(node, part);
     if (found === undefined) return { present: false };
     const value = node[found];
-    if (index === def.path.length - 1) return { present: true, value };
+    if (index === path.length - 1) return { present: true, value };
     if (
       typeof value === "boolean" &&
-      part.shorthand === def.path[index + 1].snake
+      part.shorthand === path[index + 1].snake
     ) {
       return { present: true, value };
     }
@@ -386,6 +683,16 @@ function rawOf(root: Root, def: SettingDef): Raw {
     node = value;
   }
   return { present: false };
+}
+
+/** Own-property write: keys here are user data, so `__proto__` must not reach the prototype. */
+function define(node: Root, key: string, value: unknown): void {
+  Object.defineProperty(node, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
 }
 
 function setAt(
@@ -398,7 +705,7 @@ function setAt(
   for (const [index, part] of path.entries()) {
     const key = findName(node, part) ?? freshName(part, style);
     if (index === path.length - 1) {
-      node[key] = value;
+      define(node, key, value);
       return;
     }
     let child = node[key];
@@ -406,7 +713,7 @@ function setAt(
       child = { [part.shorthand]: child };
     }
     const next = isRoot(child) ? child : {};
-    node[key] = next;
+    define(node, key, next);
     node = next;
   }
 }
@@ -439,9 +746,51 @@ function removeAt(root: Root, path: readonly KeyName[]): void {
   }
 }
 
+/** True when `path` is `ancestor` or lies below it. */
+const isUnder = (
+  path: readonly KeyName[],
+  ancestor: readonly KeyName[],
+): boolean =>
+  ancestor.length <= path.length &&
+  ancestor.every((part, index) => part.snake === path[index].snake);
+
+/** The first container above the leaf that exists but is not an object, which an edit would replace. */
+function blockedBy(root: Root, path: readonly KeyName[]): string | undefined {
+  let node = root;
+  for (const [index, part] of path.slice(0, -1).entries()) {
+    const found = findName(node, part);
+    if (found === undefined) return undefined;
+    const value = node[found];
+    if (isRoot(value)) {
+      node = value;
+      continue;
+    }
+    if (typeof value === "boolean" && part.shorthand !== undefined) {
+      return undefined;
+    }
+    return path
+      .slice(0, index + 1)
+      .map((step) => step.snake)
+      .join(".");
+  }
+  return undefined;
+}
+
+/** The keys of the object at `path`; none when it is absent or not an object. */
+function namesAt(root: Root, path: readonly KeyName[]): string[] {
+  const raw = rawOf(root, { path });
+  return raw.present && isRoot(raw.value) ? Object.keys(raw.value) : [];
+}
+
 type Edit = { kind: "set"; value: unknown } | { kind: "reset" };
 
-function applyEdit(root: Root, def: SettingDef, edit: Edit): Root {
+/** A staged edit with what it addresses; the key in the staged map is `def.key`. */
+interface Pending {
+  def: Target;
+  edit: Edit;
+}
+
+function applyEdit(root: Root, def: Target, edit: Edit): Root {
   const next = structuredClone(root);
   if (edit.kind === "reset") removeAt(next, def.path);
   else setAt(next, def.path, edit.value, styleOf(root));
@@ -453,7 +802,7 @@ const sameRaw = (a: Raw, b: Raw): boolean =>
   JSON.stringify(a.value) === JSON.stringify(b.value);
 
 interface Change {
-  def: SettingDef;
+  def: Target;
   edit: Edit;
   before: Raw;
   after: Raw;
@@ -464,13 +813,11 @@ interface Plan {
   changes: Change[];
 }
 
-/** The edits that actually change this file, applied in display order. */
-function planChanges(root: Root, staged: ReadonlyMap<string, Edit>): Plan {
+/** The edits that actually change this file, applied in the order they were staged. */
+function planChanges(root: Root, staged: ReadonlyMap<string, Pending>): Plan {
   let next = root;
   const changes: Change[] = [];
-  for (const def of SETTINGS) {
-    const edit = staged.get(def.key);
-    if (!edit) continue;
+  for (const { def, edit } of staged.values()) {
     const candidate = applyEdit(next, def, edit);
     const before = rawOf(next, def);
     const after = rawOf(candidate, def);
@@ -606,6 +953,8 @@ async function readSnapshot(
 interface Resolved {
   value: unknown;
   source: Source;
+  /** Set when no layer sets the setting itself: the setting its value comes from. */
+  inheritedFrom?: string;
 }
 
 function resolveDef(def: SettingDef, resolution: Resolution): Resolved {
@@ -628,7 +977,16 @@ function resolveDef(def: SettingDef, resolution: Resolution): Resolved {
     );
     if (claimed) source = claimed.layer;
   }
-  return { value: def.read(resolution.config), source };
+  const value = def.read(resolution.config);
+  if (source === "default" && def.fallback) {
+    const inherited = resolveDef(def.fallback, resolution);
+    return {
+      value,
+      source: inherited.source,
+      inheritedFrom: inherited.inheritedFrom ?? def.fallback.key,
+    };
+  }
+  return { value, source };
 }
 
 const INVALID_TEXT: Record<SettingDef["onInvalid"], string> = {
@@ -637,9 +995,13 @@ const INVALID_TEXT: Record<SettingDef["onInvalid"], string> = {
   blocks: "invalid value",
 };
 
-function show(def: SettingDef, value: unknown): string {
+const brief = (text: string, max = 60): string =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text;
+
+function show(def: Pick<Target, "kind">, value: unknown): string {
   if (value === undefined) return "invalid";
   if (value === null) return "off";
+  if (typeof value === "object") return brief(JSON.stringify(value));
   if (typeof value === "number" && def.kind === "tokens") return tokens(value);
   return String(value);
 }
@@ -696,42 +1058,17 @@ function targetProblem(snap: Snapshot, target: Layer): string | undefined {
 function planFor(
   snap: Snapshot,
   target: Layer,
-  staged: ReadonlyMap<string, Edit>,
+  staged: ReadonlyMap<string, Pending>,
 ): Plan | undefined {
   const file = snap.files[target];
   if (file.kind === "broken") return undefined;
   return planChanges(file.kind === "ok" ? file.root : {}, staged);
 }
 
-function overrideKeys(file: FileState): string[] {
-  if (file.kind !== "ok") return [];
-  const overrides = Object.hasOwn(file.root, "model_overrides")
-    ? file.root.model_overrides
-    : file.root.modelOverrides;
-  return isRoot(overrides) ? Object.keys(overrides) : [];
-}
-
-function overridesRow(snap: Snapshot): FrameRow {
-  const total = new Set(
-    LAYERS.flatMap((layer) => overrideKeys(snap.files[layer])),
-  ).size;
-  const project = snap.trusted
-    ? overrideKeys(snap.files.project).length
-    : "untrusted";
-  return {
-    label: MODEL_OVERRIDES_KEY,
-    value:
-      total === 0 ? "none" : `${total} ${total === 1 ? "entry" : "entries"}`,
-    tone: "muted",
-    detail: `global ${overrideKeys(snap.files.global).length} · project ${project} (read-only here)`,
-    description: MODEL_OVERRIDES_DESCRIPTION,
-  };
-}
-
 interface View {
   snap: Snapshot;
   target: Layer;
-  staged: ReadonlyMap<string, Edit>;
+  staged: Map<string, Pending>;
   plan: Plan | undefined;
   preview: Resolution;
 }
@@ -742,9 +1079,9 @@ function settingRow(def: SettingDef, view: View): FrameRow {
   const after = resolveDef(def, preview);
   const beforeText = show(def, before.value);
   const afterText = show(def, after.value);
-  const edit = staged.get(def.key);
+  const edit = staged.get(def.key)?.edit;
   const isStaged = plan
-    ? plan.changes.some((change) => change.def === def)
+    ? plan.changes.some((change) => change.def.key === def.key)
     : edit !== undefined;
   const changed = beforeText !== afterText;
   const shadowed = isStaged && edit?.kind === "set" && after.source !== target;
@@ -758,13 +1095,17 @@ function settingRow(def: SettingDef, view: View): FrameRow {
   }
   if (shadowed) {
     detail = `staged ${target} value is overridden by the ${after.source} file`;
+  } else if (!invalid && after.inheritedFrom !== undefined) {
+    detail += ` · inherits ${after.inheritedFrom}`;
   }
+  const inherited =
+    after.inheritedFrom !== undefined && after.source !== "default";
 
   return {
-    label: def.key,
+    label: def.label ?? def.key,
     value: changed
       ? `${beforeText} → ${afterText}`
-      : `${afterText} · ${after.source}`,
+      : `${afterText} · ${after.source}${inherited ? " (inherited)" : ""}`,
     tone:
       invalid || after.value === undefined
         ? "warning"
@@ -787,47 +1128,185 @@ function badgeOf(view: View): string {
   return pending > 0 ? `${pending} staged · ${where}` : where;
 }
 
-function buildScreen(view: View, cursor: number): FrameScreen {
-  const { snap, target, staged, plan } = view;
-  const other: Layer = target === "global" ? "project" : "global";
-  const isStaged = (index: number): boolean => {
-    const def = SETTINGS[index];
-    if (!def) return false;
-    return plan
-      ? plan.changes.some((change) => change.def === def)
-      : staged.has(def.key);
-  };
-  const file = snap.files[target];
-  const pending = plan ? plan.changes.length : staged.size;
+/** Staged edits that touch `path` or anything below it. */
+function stagedUnder(view: View, path: readonly KeyName[]): Target[] {
+  const defs = view.plan
+    ? view.plan.changes.map((change) => change.def)
+    : [...view.staged.values()].map((pending) => pending.def);
+  return defs.filter((def) => isUnder(def.path, path));
+}
+
+function unstageUnder(
+  staged: Map<string, Pending>,
+  path: readonly KeyName[],
+): void {
+  for (const [key, { def }] of staged) {
+    if (isUnder(def.path, path)) staged.delete(key);
+  }
+}
+
+/** True when the target file has a value to remove and its removal is not staged yet. */
+function canReset(view: View, target: Target): boolean {
+  const file = view.snap.files[view.target];
+  return (
+    file.kind === "ok" &&
+    rawOf(file.root, target).present &&
+    view.staged.get(target.key)?.edit.kind !== "reset"
+  );
+}
+
+const otherLayer = (layer: Layer): Layer =>
+  layer === "global" ? "project" : "global";
+
+/** Why a layer's file cannot be read for entries, or undefined when it can. */
+function unavailable(snap: Snapshot, layer: Layer): string | undefined {
+  if (layer === "project" && !snap.trusted) return "untrusted";
+  return snap.files[layer].kind === "broken" ? "file invalid" : undefined;
+}
+
+/** A layer's root as the loader sees it: empty when the file is missing, none when unusable. */
+function readableRoot(snap: Snapshot, layer: Layer): Root | undefined {
+  if (unavailable(snap, layer)) return undefined;
+  const file = snap.files[layer];
+  return file.kind === "ok" ? file.root : {};
+}
+
+/** The first layer whose copy of this map the parsers rejected. */
+function problemIn(
+  group: Group,
+  snap: Snapshot,
+): { layer: Layer; error: string } | undefined {
+  for (const layer of ["project", "global"] as const) {
+    const parsed = snap.current.layers[layer];
+    const error = parsed ? group.problem(parsed) : undefined;
+    if (error !== undefined) return { layer, error };
+  }
+  return undefined;
+}
+
+/** Entry names in file order, so a staged removal or addition never moves the other rows. */
+function mapNames(view: View, path: readonly KeyName[]): string[] {
+  const roots = [
+    readableRoot(view.snap, view.target),
+    view.plan?.next,
+    readableRoot(view.snap, otherLayer(view.target)),
+  ];
+  return [
+    ...new Set(roots.flatMap((root) => (root ? namesAt(root, path) : []))),
+  ];
+}
+
+function groupRow(group: Group, view: View): FrameRow {
+  const { snap, target, plan } = view;
+  const namesByLayer = (planned: boolean) =>
+    Object.fromEntries(
+      LAYERS.map((layer) => {
+        const root =
+          planned && layer === target && plan
+            ? plan.next
+            : readableRoot(snap, layer);
+        return [layer, root && namesAt(root, group.path)];
+      }),
+    ) as Record<Layer, string[] | undefined>;
+  const before = namesByLayer(false);
+  const after = namesByLayer(true);
+  const total = (byLayer: Record<Layer, string[] | undefined>) =>
+    new Set(LAYERS.flatMap((layer) => byLayer[layer] ?? [])).size;
+  const [from, to] = [total(before), total(after)];
+  const counted = (n: number) =>
+    n === 0 ? "none" : `${n} ${group.unit[n === 1 ? 0 : 1]}`;
+  const change =
+    from === to ? counted(to) : `${from || "none"} → ${counted(to)}`;
+  const sources = LAYERS.filter((layer) => (after[layer]?.length ?? 0) > 0);
+  const source = sources.length === 2 ? "both" : (sources[0] ?? "default");
+  const staged = stagedUnder(view, group.path).length;
+  const problem = problemIn(group, snap);
+
+  let detail = LAYERS.map(
+    (layer) => `${layer} ${unavailable(snap, layer) ?? after[layer]?.length}`,
+  ).join(" · ");
+  if (group.fallback) {
+    const own = new Set(LAYERS.flatMap((layer) => after[layer] ?? []));
+    const inherited = Object.keys(
+      group.fallback.effective(view.preview.config) ?? {},
+    ).filter((tool) => !own.has(tool)).length;
+    if (inherited > 0) {
+      detail += ` · inherits ${inherited} from ${group.fallback.key}`;
+    }
+  }
+  if (staged > 0) detail = `${staged} staged · ${detail}`;
+  if (problem) detail = `${problem.layer}: ${problem.error}`;
+
   return {
-    breadcrumbs: ["Anchor", "Settings"],
+    label: group.label ?? group.key,
+    value: `${change} · ${source}${staged > 0 ? ` · ${staged} staged` : ""}`,
+    tone: problem
+      ? "warning"
+      : staged > 0
+        ? "accent"
+        : to === 0
+          ? "muted"
+          : "text",
+    detail,
+    description: group.description,
+  };
+}
+
+const itemRow = (item: Item, view: View): FrameRow =>
+  "def" in item ? settingRow(item.def, view) : groupRow(item.group, view);
+
+const itemTarget = (item: Item): Target =>
+  "def" in item ? item.def : mapTarget(item.group);
+
+type Shortcut = NonNullable<FrameScreen["shortcuts"]>[number];
+
+function buildScreen(
+  view: View,
+  items: readonly Item[],
+  crumbs: readonly string[],
+  cursor: number,
+  top: boolean,
+): FrameScreen {
+  const { snap, target, plan, staged } = view;
+  const at = (index: number): Target | undefined => {
+    const item = items[index];
+    return item && itemTarget(item);
+  };
+  const pending = plan ? plan.changes.length : staged.size;
+  const shortcuts: Shortcut[] = [
+    {
+      key: "u",
+      action: "unstage",
+      enabled: (_row, index) => {
+        const found = at(index);
+        return found !== undefined && stagedUnder(view, found.path).length > 0;
+      },
+    },
+    {
+      key: "d",
+      action: "default",
+      enabled: (_row, index) => {
+        const found = at(index);
+        return found !== undefined && canReset(view, found);
+      },
+    },
+  ];
+  if (top) {
+    shortcuts.unshift({
+      key: "t",
+      action: `to ${otherLayer(target)}`,
+      enabled: () => snap.trusted,
+    });
+    shortcuts.push({ key: "s", action: "save", enabled: () => pending > 0 });
+  }
+  return {
+    breadcrumbs: crumbs,
     rightBadge: badgeOf(view),
     placeholder: `Filter settings · file: ${shortPath(snap.paths[target], snap.cwd)}`,
     enterAction: "edit",
-    rows: [...SETTINGS.map((def) => settingRow(def, view)), overridesRow(snap)],
+    rows: items.map((item) => itemRow(item, view)),
     cursor,
-    shortcuts: [
-      { key: "t", action: `to ${other}`, enabled: () => snap.trusted },
-      {
-        key: "u",
-        action: "unstage",
-        enabled: (_row, index) => isStaged(index),
-      },
-      {
-        key: "d",
-        action: "default",
-        enabled: (_row, index) => {
-          const def = SETTINGS[index];
-          return (
-            def !== undefined &&
-            file.kind === "ok" &&
-            rawOf(file.root, def).present &&
-            staged.get(def.key)?.kind !== "reset"
-          );
-        },
-      },
-      { key: "s", action: "save", enabled: () => pending > 0 },
-    ],
+    shortcuts,
   };
 }
 
@@ -918,7 +1397,9 @@ async function writeAtomically(path: string, text: string): Promise<void> {
   }
 }
 
-const rawText = (def: SettingDef, raw: Raw): string =>
+const isSetting = (def: Target): def is SettingDef => "read" in def;
+
+const rawText = (def: Target, raw: Raw): string =>
   raw.present ? show(def, raw.value) : "unset";
 
 function changeLines(changes: readonly Change[]): string {
@@ -935,7 +1416,7 @@ async function save(
   ctx: ExtensionCommandContext,
   deps: SettingsScreenDeps,
   target: Layer,
-  staged: ReadonlyMap<string, Edit>,
+  staged: ReadonlyMap<string, Pending>,
 ): Promise<"written" | "unchanged" | "kept"> {
   const prepare = async () => {
     const snap = await readSnapshot(ctx, deps);
@@ -982,7 +1463,9 @@ async function save(
   const saved = await readSnapshot(ctx, deps);
   const overridden = changes.filter(
     ({ def, edit }) =>
-      edit.kind === "set" && resolveDef(def, saved.current).source !== target,
+      edit.kind === "set" &&
+      isSetting(def) &&
+      resolveDef(def, saved.current).source !== target,
   );
   if (overridden.length > 0) {
     ctx.ui.notify(
@@ -1036,39 +1519,74 @@ export async function describeSettings(
   ].join("\n");
 }
 
+/** What the screens share while one `/anchor settings` command runs. */
+interface Session {
+  ctx: ExtensionCommandContext;
+  deps: SettingsScreenDeps;
+  staged: Map<string, Pending>;
+  warned: Set<Layer>;
+  target: Layer;
+}
+
 /** Edit tree-navigator.json settings in staged changes until the user leaves. */
 export async function openSettingsScreen(
   ctx: ExtensionCommandContext,
   deps: SettingsScreenDeps,
 ): Promise<ScreenExit> {
-  const staged = new Map<string, Edit>();
-  const warned = new Set<Layer>();
-  let target: Layer = "global";
+  const session: Session = {
+    ctx,
+    deps,
+    staged: new Map(),
+    warned: new Set(),
+    target: "global",
+  };
+  return itemsScreen(session, ["Anchor", "Settings"], ITEMS, true);
+}
+
+/** Reads the files again, so every screen shows what is on disk plus the staged edits. */
+async function loadView(session: Session): Promise<View> {
+  const { ctx, deps, staged } = session;
+  const snap = await readSnapshot(ctx, deps);
+  for (const layer of LAYERS) {
+    if (snap.files[layer].kind === "broken" && !session.warned.has(layer)) {
+      session.warned.add(layer);
+      ctx.ui.notify(brokenNotice(snap, layer), "warning");
+    }
+  }
+  if (session.target === "project" && !snap.trusted) session.target = "global";
+  const target = session.target;
+  const plan = planFor(snap, target, staged);
+  const preview =
+    plan && plan.changes.length > 0
+      ? await resolve(snap.paths, snap.trusted, {
+          global: textOf(snap.files.global),
+          project: textOf(snap.files.project),
+          [target]: serialize(plan.next),
+        })
+      : snap.current;
+  return { snap, target, staged, plan, preview };
+}
+
+/** A list of settings and keyed maps. Only the top one switches layers and saves. */
+async function itemsScreen(
+  session: Session,
+  crumbs: readonly string[],
+  items: readonly Item[],
+  top: boolean,
+): Promise<ScreenExit> {
+  const { ctx, deps, staged } = session;
   let cursor = 0;
   while (true) {
-    const snap = await readSnapshot(ctx, deps);
-    for (const layer of LAYERS) {
-      if (snap.files[layer].kind === "broken" && !warned.has(layer)) {
-        warned.add(layer);
-        ctx.ui.notify(brokenNotice(snap, layer), "warning");
-      }
-    }
-    if (target === "project" && !snap.trusted) target = "global";
-    const plan = planFor(snap, target, staged);
-    const preview =
-      plan && plan.changes.length > 0
-        ? await resolve(snap.paths, snap.trusted, {
-            global: textOf(snap.files.global),
-            project: textOf(snap.files.project),
-            [target]: serialize(plan.next),
-          })
-        : snap.current;
-    const view: View = { snap, target, staged, plan, preview };
+    const view = await loadView(session);
+    const { snap, plan, target } = view;
     const pending = plan ? plan.changes.length : staged.size;
 
-    const choice = await selectFrame(ctx, buildScreen(view, cursor));
+    const choice = await selectFrame(
+      ctx,
+      buildScreen(view, items, crumbs, cursor, top),
+    );
     if (!choice) {
-      if (pending === 0) return "back";
+      if (!top || pending === 0) return "back";
       const discard = await ctx.ui.confirm(
         "Discard staged changes?",
         `${pending} staged ${pending === 1 ? "change has" : "changes have"} not been saved.`,
@@ -1077,34 +1595,65 @@ export async function openSettingsScreen(
       continue;
     }
     cursor = choice.index;
-    const def = SETTINGS[choice.index];
+    const item = items[choice.index];
 
     if (choice.key === "t") {
-      target = target === "global" ? "project" : "global";
+      session.target = otherLayer(target);
     } else if (choice.key === "s") {
       const saved = await save(ctx, deps, target, staged);
       if (saved !== "kept") staged.clear();
       if (saved === "written" && (await offerReload(ctx))) return "done";
-    } else if (!def) {
-      ctx.ui.notify(
-        `model_overrides is edited by hand. Global: ${snap.paths.global}; project: ${snap.paths.project}. Keys are provider/model ids or patterns; see the README, Per-model reserve.`,
-        "info",
-      );
     } else if (choice.key === "u") {
-      staged.delete(def.key);
+      unstageUnder(staged, itemTarget(item).path);
     } else if (choice.key === "d") {
-      stage(ctx, snap, target, staged, def, { kind: "reset" });
-    } else {
-      const problem = targetProblem(snap, target);
-      if (problem !== undefined) {
-        ctx.ui.notify(problem, "warning");
-        continue;
+      await removeEntry(session, view, itemTarget(item));
+    } else if ("group" in item) {
+      if (usable(ctx, snap, target)) {
+        await item.group.open(session, [
+          ...crumbs,
+          item.group.label ?? item.group.key,
+        ]);
       }
-      const current = show(def, resolveDef(def, preview).value);
-      const edit = await promptEdit(ctx, def, current, target);
-      if (edit) stage(ctx, snap, target, staged, def, edit);
+    } else if (usable(ctx, snap, target)) {
+      const current = show(item.def, resolveDef(item.def, view.preview).value);
+      const edit = await promptEdit(ctx, item.def, current, target);
+      if (edit) stage(ctx, snap, target, staged, item.def, edit);
     }
   }
+}
+
+/** True when edits to the target layer may proceed; otherwise says why not. */
+function usable(
+  ctx: ExtensionCommandContext,
+  snap: Snapshot,
+  target: Layer,
+): boolean {
+  const problem = targetProblem(snap, target);
+  if (problem !== undefined) ctx.ui.notify(problem, "warning");
+  return problem === undefined;
+}
+
+/** Stage the removal of a setting, entry or whole map; a non-empty map or entry needs a yes first. */
+async function removeEntry(
+  session: Session,
+  view: View,
+  target: Target,
+): Promise<void> {
+  const { ctx } = session;
+  if (target.kind === "map") {
+    const raw = view.plan ? rawOf(view.plan.next, target) : { present: false };
+    const empty =
+      !raw.present ||
+      (isRoot(raw.value) && Object.keys(raw.value).length === 0);
+    if (!empty) {
+      const confirmed = await ctx.ui.confirm(
+        `Remove ${target.key}?`,
+        `${brief(JSON.stringify(raw.value), 300)}\n\nThis stages the removal from the ${view.target} file. Nothing is written until you save.`,
+      );
+      if (!confirmed) return;
+    }
+  }
+  stage(ctx, view.snap, view.target, view.staged, target, { kind: "reset" });
 }
 
 /** Stage an edit, or say why nothing is staged. */
@@ -1112,8 +1661,8 @@ function stage(
   ctx: ExtensionCommandContext,
   snap: Snapshot,
   target: Layer,
-  staged: Map<string, Edit>,
-  def: SettingDef,
+  staged: Map<string, Pending>,
+  def: Target,
   edit: Edit,
 ): void {
   const problem = targetProblem(snap, target);
@@ -1121,18 +1670,285 @@ function stage(
     ctx.ui.notify(problem, "warning");
     return;
   }
-  const file = snap.files[target];
-  const plan = planChanges(
-    file.kind === "ok" ? file.root : {},
-    new Map([[def.key, edit]]),
+  const removal = [...staged.values()].find(
+    (pending) =>
+      pending.edit.kind === "reset" &&
+      pending.def.key !== def.key &&
+      isUnder(def.path, pending.def.path),
   );
+  if (removal) {
+    ctx.ui.notify(
+      `${removal.def.key} is staged for removal. Unstage it (u) before editing inside it.`,
+      "warning",
+    );
+    return;
+  }
+  const file = snap.files[target];
+  const root = file.kind === "ok" ? file.root : {};
+  const blocked =
+    def.structured && edit.kind === "set"
+      ? blockedBy(root, def.path)
+      : undefined;
+  if (blocked !== undefined) {
+    ctx.ui.notify(
+      `${blocked} in the ${target} file is not an object, so ${def.key} cannot be edited there. Remove ${blocked} (d) first.`,
+      "warning",
+    );
+    return;
+  }
+  const plan = planChanges(root, new Map([[def.key, { def, edit }]]));
+  if (edit.kind === "reset") unstageUnder(staged, def.path);
   if (plan.changes.length === 0) {
     staged.delete(def.key);
     ctx.ui.notify(
-      `No change: the ${target} file already has this value for ${def.key}.`,
+      edit.kind === "reset"
+        ? `No change: ${def.key} is not set in the ${target} file.`
+        : `No change: the ${target} file already has this value for ${def.key}.`,
       "info",
     );
     return;
   }
-  staged.set(def.key, edit);
+  staged.set(def.key, { def, edit });
+}
+
+// --- Keyed-map submenus -----------------------------------------------------------
+
+/** Tool names the group lists in either file, or inherits from the policy behind it. */
+const toolNames = (view: View, group: ToolsGroup): string[] => [
+  ...new Set([
+    ...mapNames(view, group.path),
+    ...Object.keys(group.effective(view.preview.config) ?? {}),
+  ]),
+];
+
+async function chooseMode(
+  session: Session,
+  view: View,
+  def: SettingDef,
+): Promise<void> {
+  const { ctx } = session;
+  if (!usable(ctx, view.snap, view.target)) return;
+  const mode = await ctx.ui.select(`${def.key} (${view.target} file)`, [
+    ...TOOL_MODES,
+  ]);
+  if (!mode) return;
+  if (!accepts(def, mode)) {
+    ctx.ui.notify(
+      `"${mode}" is not valid for ${def.key}. Use ${def.expects}.`,
+      "warning",
+    );
+    return;
+  }
+  stage(ctx, view.snap, view.target, view.staged, def, {
+    kind: "set",
+    value: mode,
+  });
+}
+
+/** Exact tool names mapped to full, calls-only or omit, for one policy map. */
+async function editTools(
+  session: Session,
+  group: ToolsGroup,
+  crumbs: readonly string[],
+): Promise<void> {
+  const { ctx } = session;
+  let cursor = 0;
+  while (true) {
+    const view = await loadView(session);
+    const defs = toolNames(view, group).map((tool) => toolDef(group, tool));
+    const choice = await selectFrame(ctx, {
+      breadcrumbs: crumbs,
+      rightBadge: badgeOf(view),
+      placeholder: `Filter tools · file: ${shortPath(view.snap.paths[view.target], view.snap.cwd)}`,
+      enterAction: "set",
+      cursor,
+      rows: [
+        ...defs.map((def) => settingRow(def, view)),
+        {
+          label: "+ add tool",
+          description: "Add a tool by exact name, then pick its mode.",
+        },
+      ],
+      shortcuts: [
+        { key: "a", action: "add" },
+        {
+          key: "u",
+          action: "unstage",
+          enabled: (_row, index) =>
+            index < defs.length &&
+            stagedUnder(view, defs[index].path).length > 0,
+        },
+        {
+          key: "d",
+          action: "remove",
+          enabled: (_row, index) =>
+            index < defs.length && canReset(view, defs[index]),
+        },
+      ],
+    });
+    if (!choice) return;
+    cursor = choice.index;
+    const def = defs[choice.index];
+
+    if (choice.key === "u") {
+      unstageUnder(view.staged, def.path);
+    } else if (choice.key === "d") {
+      stage(ctx, view.snap, view.target, view.staged, def, { kind: "reset" });
+    } else if (def && choice.key !== "a") {
+      await chooseMode(session, view, def);
+    } else if (usable(ctx, view.snap, view.target)) {
+      const input = await ctx.ui.input(
+        `${group.label ?? group.key} (${view.target} file)`,
+        "exact tool name, e.g. bash",
+      );
+      const tool = input?.trim();
+      if (tool) await chooseMode(session, view, toolDef(group, tool));
+    }
+  }
+}
+
+/** One short line of what an override entry sets in this file. */
+function entrySummary(pattern: string, root: Root): string {
+  const parts = entrySettings(pattern).flatMap((def) => {
+    const raw = rawOf(root, def);
+    if (!raw.present) return [];
+    const last = def.path[def.path.length - 1].snake;
+    const name = last === BASE_RESERVE.path[0].snake ? "reserve" : last;
+    return [`${name} ${show(def, raw.value)}`];
+  });
+  const tools = namesAt(root, overrideTools(pattern).path).length;
+  if (tools > 0) parts.push(`tools ${tools}`);
+  return parts.join(", ") || "empty";
+}
+
+function entryRow(pattern: string, view: View): FrameRow {
+  const { snap, target, plan, staged } = view;
+  const entry = entryTarget(pattern);
+  const planned = plan ? rawOf(plan.next, entry) : { present: false };
+  const file = snap.files[target];
+  const existed = file.kind === "ok" && rawOf(file.root, entry).present;
+  const removed = staged.get(entry.key)?.edit.kind === "reset";
+  const changes = stagedUnder(view, entry.path).length;
+
+  let problem: { layer: Layer; error: string } | undefined;
+  for (const layer of ["project", "global"] as const) {
+    const parsed = snap.current.layers[layer];
+    const error = parsed && entryProblem(parsed, pattern);
+    if (error && !problem) problem = { layer, error };
+  }
+
+  let value: string;
+  if (removed) value = "removed · staged";
+  else if (!planned.present) value = `not in ${target} file`;
+  else if (!isRoot(planned.value)) value = "not an object";
+  else value = entrySummary(pattern, plan ? plan.next : {});
+  if (changes > 0 && !removed) value += existed ? " · edited" : " · new";
+
+  const layers = LAYERS.map((layer) => {
+    const root = readableRoot(snap, layer);
+    const raw = root ? rawOf(root, entry) : { present: false };
+    const text =
+      unavailable(snap, layer) ??
+      (!raw.present
+        ? "none"
+        : isRoot(raw.value)
+          ? `${Object.keys(raw.value).length} set`
+          : "not an object");
+    return `${layer} ${text}`;
+  }).join(" · ");
+
+  return {
+    label: pattern,
+    value,
+    tone: problem ? "warning" : changes > 0 ? "accent" : "text",
+    detail: problem ? `${problem.layer}: ${problem.error}` : layers,
+    description:
+      "Enter edits this model's reserve and auto_navigate settings; d removes the entry from the target file.",
+  };
+}
+
+/** Model patterns (provider/model, wildcards or bare ids) with their per-model settings. */
+async function editOverrides(
+  session: Session,
+  crumbs: readonly string[],
+): Promise<void> {
+  const { ctx } = session;
+  let cursor = 0;
+  while (true) {
+    const view = await loadView(session);
+    const patterns = mapNames(view, OVERRIDES.path);
+    const choice = await selectFrame(ctx, {
+      breadcrumbs: crumbs,
+      rightBadge: badgeOf(view),
+      placeholder: `Filter models · file: ${shortPath(view.snap.paths[view.target], view.snap.cwd)}`,
+      enterAction: "edit",
+      cursor,
+      rows: [
+        ...patterns.map((pattern) => entryRow(pattern, view)),
+        {
+          label: "+ add model",
+          description:
+            "Add a provider/model, a wildcard such as openrouter/* or *gemini*, or a bare model id.",
+        },
+      ],
+      shortcuts: [
+        { key: "a", action: "add" },
+        {
+          key: "u",
+          action: "unstage",
+          enabled: (_row, index) =>
+            index < patterns.length &&
+            stagedUnder(view, entryTarget(patterns[index]).path).length > 0,
+        },
+        {
+          key: "d",
+          action: "remove",
+          enabled: (_row, index) =>
+            index < patterns.length &&
+            canReset(view, entryTarget(patterns[index])),
+        },
+      ],
+    });
+    if (!choice) return;
+    cursor = choice.index;
+    const existing = patterns[choice.index];
+
+    if (choice.key === "u") {
+      unstageUnder(view.staged, entryTarget(existing).path);
+    } else if (choice.key === "d") {
+      await removeEntry(session, view, entryTarget(existing));
+    } else if (!usable(ctx, view.snap, view.target)) {
+    } else {
+      let pattern: string | undefined = existing;
+      if (pattern === undefined || choice.key === "a") {
+        const input = await ctx.ui.input(
+          `${OVERRIDES.key} (${view.target} file)`,
+          "provider/model, a wildcard like openrouter/* or *gemini*, or a bare model id",
+        );
+        pattern = input?.trim();
+        if (pattern && /\s/.test(pattern)) {
+          ctx.ui.notify(
+            `"${pattern}" is not a model pattern: it contains whitespace. Use provider/model or a wildcard such as openrouter/*.`,
+            "warning",
+          );
+          pattern = undefined;
+        }
+      }
+      if (!pattern) continue;
+      const entry = entryTarget(pattern);
+      if (view.staged.get(entry.key)?.edit.kind === "reset") {
+        ctx.ui.notify(
+          `${entry.key} is staged for removal. Unstage it (u) to edit it again.`,
+          "warning",
+        );
+        continue;
+      }
+      await itemsScreen(
+        session,
+        [...crumbs, pattern],
+        entryItems(pattern),
+        false,
+      );
+    }
+  }
 }
