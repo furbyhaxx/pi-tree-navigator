@@ -357,13 +357,12 @@ describe("/anchor dispatch", () => {
     );
     assert.equal(headless.editors.length, 0);
 
-    const ui = setup({ cwd: files.directory });
+    const ui = setup({ cwd: files.directory, screens: [press(ESC)] });
     await ui.run("restructure inspect session.jsonl");
-    assert.deepEqual(ui.editors, [
-      "Retrospective session inspection (read-only)",
-    ]);
+    assert.deepEqual(ui.editors, []);
+    assert.equal(ui.rendered.length, 1);
+    assert.match(ui.rendered[0].join("\n"), /Session\s+Original/);
     assert.match(ui.notifications[0].message, /1 user turns/);
-    assert.equal(ui.rendered.length, 0);
   });
 });
 
@@ -566,7 +565,7 @@ describe("/anchor screens", () => {
     const test = setup({
       cwd: files.directory,
       sessionFile: files.path,
-      screens: [press(ENTER), press(ESC)],
+      screens: [press(ENTER), press(ESC), press(ESC)],
     });
     await test.run("clone");
     const text = test.rendered[0].join("\n");
@@ -578,10 +577,9 @@ describe("/anchor screens", () => {
     ]) {
       assert.ok(text.includes(label), label);
     }
-    assert.deepEqual(test.editors, [
-      "Retrospective session inspection (read-only)",
-    ]);
-    assert.equal(test.rendered.length, 2);
+    assert.deepEqual(test.editors, []);
+    assert.match(test.rendered[1].join("\n"), /Session\s+Original/);
+    assert.equal(test.rendered.length, 3);
   });
 
   it("prompts for a plan path from the clone menu like the old command", async () => {
