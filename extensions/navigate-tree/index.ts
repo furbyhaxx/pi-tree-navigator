@@ -85,6 +85,7 @@ import {
 } from "./auto-navigate.ts";
 import type { AutoNavigatePartial } from "./auto-navigate-config.ts";
 import {
+  CONTINUITY_CAPTURE_DEFAULT,
   loadTreeNavigatorConfig,
   resolveAutoNavigateConfig,
   resolveRewindHintReserve,
@@ -98,8 +99,16 @@ import {
   splitContextEstimate,
 } from "./context-tokens.ts";
 import { renderFoldCaptureSection } from "./continuity-briefing.ts";
+import {
+  captureIntent,
+  createModelClassifier,
+  heuristicClassifier,
+  type IntentClassifier,
+} from "./continuity-capture.ts";
 import { LEDGER_DETAILS_KEY } from "./continuity-ledger.ts";
 import {
+  appendOpsEntry,
+  type BranchLedger,
   type FoldContinuity,
   readBranchLedger,
   reconcileFoldContinuity,
@@ -1409,6 +1418,29 @@ function continuityRequestSection(
   } catch {
     return undefined;
   }
+}
+
+/** Wall-clock bound on one continuity capture pass: a slow classifier must not stall a turn. */
+const CONTINUITY_CAPTURE_TIMEOUT_MS = 15_000;
+
+/** Whether the latest assistant message on `branch` still lacks tool results. */
+function endsInOpenToolBatch(branch: readonly SessionEntry[]): boolean {
+  const at = branch.findLastIndex(
+    (entry) => entry.type === "message" && entry.message.role === "assistant",
+  );
+  const entry = branch[at];
+  if (entry?.type !== "message" || entry.message.role !== "assistant") {
+    return false;
+  }
+  const calls = entry.message.content.filter(
+    (block) => block.type === "toolCall",
+  ).length;
+  const results = branch
+    .slice(at + 1)
+    .filter(
+      (e) => e.type === "message" && e.message.role === "toolResult",
+    ).length;
+  return results < calls;
 }
 
 /**
@@ -3065,6 +3097,128 @@ export default function (pi: ExtensionAPI) {
     return undefined;
   });
 
+  // Continuity capture: the user's instructions on the active branch become
+  // ledger ops, persisted as one `navigate-tree-continuity-ops` entry. Config
+  // is per `session_start`, like the hint's.
+  let continuityConfig = {
+    capture: CONTINUITY_CAPTURE_DEFAULT,
+    intentClassifier: null as string | null,
+  };
+  const continuityWarned = new Map<string, Set<string>>();
+  // Sessions whose model classifier hung once: heuristics only from then on.
+  const classifierTimedOut = new Set<string>();
+
+  // Runs at a `turn_end` boundary, where the assistant and all its tool
+  // results are already on the branch, so the entry cannot land inside a tool
+  // batch (`endsInOpenToolBatch` guards the rest). A plain `appendEntry` is
+  // safe there: pi previews every handler's drafts against the live branch.
+  // Fail-open and time-bounded; never throws into the turn.
+  async function captureContinuity(
+    sm: SessionManager,
+    sessionId: string,
+    ctx: {
+      hasUI: boolean;
+      ui: { notify(message: string, type?: "warning"): void };
+      modelRegistry?: Parameters<typeof createModelClassifier>[0];
+      signal?: AbortSignal;
+    },
+    message: { stopReason?: string },
+  ): Promise<void> {
+    if (!continuityConfig.capture) return;
+    if (message.stopReason === "error" || message.stopReason === "aborted") {
+      return;
+    }
+    // Every ctx getter is read before the first await (stale-ctx contract).
+    let notify: ((text: string) => void) | undefined;
+    let registry: typeof ctx.modelRegistry;
+    let parentSignal: AbortSignal | undefined;
+    let branch: SessionEntry[];
+    let leafId: string | null;
+    let base: BranchLedger;
+    try {
+      if (ctx.hasUI) {
+        const ui = ctx.ui;
+        notify = (text) => ui.notify(text, "warning");
+      }
+      registry = ctx.modelRegistry;
+      parentSignal = ctx.signal;
+      branch = sm.getBranch();
+      leafId = sm.getLeafId();
+      if (endsInOpenToolBatch(branch)) return;
+      base = readBranchLedger(branch);
+    } catch {
+      return;
+    }
+    if (parentSignal?.aborted) return;
+    const warned = continuityWarned.get(sessionId) ?? new Set<string>();
+    continuityWarned.set(sessionId, warned);
+    const warn = (text: string) => {
+      if (warned.has(text)) return;
+      warned.add(text);
+      try {
+        notify?.(text);
+      } catch {
+        // Stale ctx: nothing left to surface with.
+      }
+    };
+    const model = classifierTimedOut.has(sessionId)
+      ? null
+      : continuityConfig.intentClassifier;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    parentSignal?.addEventListener("abort", abort, { once: true });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        resolve("timeout");
+      }, CONTINUITY_CAPTURE_TIMEOUT_MS);
+    });
+    const { ledger, watermark } = base;
+    const run = (async () => {
+      const classifier: IntentClassifier =
+        (model !== null && registry
+          ? await createModelClassifier(registry, model, { onWarning: warn })
+          : undefined) ?? heuristicClassifier;
+      return {
+        usedModel: classifier !== heuristicClassifier,
+        result: await captureIntent(branch, watermark, ledger, classifier, {
+          signal: controller.signal,
+        }),
+      };
+    })().catch(() => undefined);
+    let outcome: Awaited<typeof run> | "timeout";
+    try {
+      outcome = await Promise.race([run, deadline]);
+    } finally {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener("abort", abort);
+    }
+    if (outcome === "timeout") {
+      if (model === null) return;
+      classifierTimedOut.add(sessionId);
+      warn(
+        `${TOOL_NAME}: continuity classifier ${model} did not answer within ${CONTINUITY_CAPTURE_TIMEOUT_MS / 1000} s; capture uses heuristics for the rest of this session.`,
+      );
+      return await captureContinuity(sm, sessionId, ctx, message);
+    }
+    try {
+      // A moved leaf or an abort during the await: the scan is stale.
+      if (!outcome || parentSignal?.aborted || sm.getLeafId() !== leafId)
+        return;
+      const { result, usedModel } = outcome;
+      for (const text of result.warnings) warn(text);
+      // Heuristic verdicts are free to recompute; only a model's are worth a
+      // watermark of their own.
+      if (result.ops.length === 0 && !(usedModel && result.classified > 0)) {
+        return;
+      }
+      appendOpsEntry(pi, result.ops, result.watermark);
+    } catch {
+      // Fail-open: the next turn rescans from the same watermark.
+    }
+  }
+
   // Rewind turn and summary attempts (#80, #90). Registered before the hint
   // / start-anchor handler so a completed rewind is already on the branch
   // when that handler reads the context usage.
@@ -3172,6 +3326,9 @@ export default function (pi: ExtensionAPI) {
       // A forced-rewind attempt (#101, D6): anything but an accepted
       // `rewind` (which makes the rewind pending) is hidden and re-sent.
       if (!forcedActive(sessionId)) {
+        if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
+          await captureContinuity(sm, sessionId, ctx, message);
+        }
         return await maybeRunAutoNavigate(sm, sessionId, message, event, ctx);
       }
       rewindTurns.add(message);
@@ -3259,6 +3416,9 @@ export default function (pi: ExtensionAPI) {
           );
     if (isRewindTurn) {
       pending.toolResultEntryId = resultIds.get(pending.toolCallId);
+      // The folded span's user input must be in the ledger the request and the
+      // fold start from. Before the abort check below: no await may follow it.
+      await captureContinuity(sm, sessionId, ctx, message);
       let aborted = message.stopReason === "aborted";
       try {
         aborted ||= ctx.signal?.aborted === true;
@@ -3865,6 +4025,12 @@ export default function (pi: ExtensionAPI) {
     autoNavigateStateBySession.delete(sessionId);
     hintTracker = new RewindHintTracker();
     toolActive = true;
+    continuityConfig = {
+      capture: CONTINUITY_CAPTURE_DEFAULT,
+      intentClassifier: null,
+    };
+    continuityWarned.delete(sessionId);
+    classifierTimedOut.delete(sessionId);
     let reserve: number | null = null;
     let byModel: ReadonlyMap<string, number | null> = new Map();
     let startTurns = START_ANCHOR_DEFAULT_TURNS;
@@ -3887,6 +4053,7 @@ export default function (pi: ExtensionAPI) {
       loadedAutoBase = loaded.config.autoNavigate;
       loadedAutoByModel = loaded.config.autoNavigateByModel ?? new Map();
       loadedProposal = loaded.config.proposal;
+      continuityConfig = loaded.config.continuity;
       warnings = loaded.warnings;
     } catch {
       // The loader is fail-closed and should never throw; this guard exists
