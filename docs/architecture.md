@@ -7,7 +7,9 @@ live rewind lifecycle handling: in-band summary requests, overflow recovery,
 branch creation, agent-context refresh and history-rewrite notifications.
 
 - `helpers.ts`: label conventions, validation and formatting.
-- `config.ts`: layered global/trusted-project configuration.
+- `config.ts`: layered global/trusted-project/runtime configuration.
+- `runtime-config.ts`: session-ID-scoped in-memory overrides, cleared at session
+  start/reload; shared by settings, live navigation and clone proposals.
 - `context-tokens.ts`, `rewind-hint.ts`: baseline-safe context estimates, effective
   system-state accounting, rewind hints and recovery diagnostics.
 - `output-budget.ts`: conservative wire-level output caps for overflow recovery;
@@ -18,6 +20,13 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `retrospective.ts`: range validation, clone construction, state checks and publication.
 - `anchor-command.ts`, `frame.ts`: the unified `/anchor` command and the shared
   editor-replacing `FrameList` panel (breadcrumb rule, fuzzy search, frozen height).
+- `tree-screen.ts`, `fold-screen.ts`: real-entry navigation and the confirmed
+  anchor/label/focus fold request; neither screen generates a summary itself.
+- `current-screen.ts`: branch-local ledger inspection and user-authorized edits.
+- `settings-screen.ts`, `settings-model-picker.ts`: staged scope-aware settings
+  with parser validation, model/thinking selection and editable tool policies.
+- `clone-screen.ts`, `clone-views.ts`: readable clone/proposal review with explicit
+  raw-JSON escape hatches; no implicit provider requests or session switches.
 - `retrospective-command.ts`: `/anchor clone` inspection, proposal dispatch, preview
   and confirmation.
 - `continuity-ledger.ts`, `continuity-briefing.ts`: pure session continuity ledger
@@ -34,8 +43,8 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `proposal-source.ts`: deterministic outlines and filtered full-text source records.
 - `proposal-engine.ts`: optional bounded model analysis and explicit heuristic fallback.
 - `proposal-model.ts`: registry-authenticated, provider-neutral side calls.
-- `proposal-command.ts`: disclosure confirmation, cancellable generation, editable
-  plan review and exclusive private-plan saving.
+- `proposal-command.ts`: disclosure confirmation, cancellable generation, readable
+  plan review, optional advanced editing and exclusive private-plan saving.
 - `auto-navigate-config.ts`, `auto-navigate.ts`: wildcard `model_overrides`
   matching and sidecar `auto_navigate` anchor/rewind extraction.
 - `handoff.ts`: report metadata, full/synthesized materialization, unique recorded

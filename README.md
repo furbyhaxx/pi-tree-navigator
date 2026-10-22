@@ -35,9 +35,27 @@ This fork adds retrospective cloning: turn completed work in a linear or branche
 session into nested summary branches without modifying the original. The clone gets a
 new ID and a ` (restructured)` name suffix, and both sessions remain resumable.
 
-Run `/anchor` for the unified menu (`tree`, `list`, `current`, `fold`, `clone`, `settings`;
-`tree`, `fold` and `settings` are placeholders until their slices land). `/tree-clone` no longer
-exists; use `/anchor clone`.
+Run `/anchor` for the unified menu: `tree`, `list`, `current`, `fold`, `clone`,
+`settings`. `/tree-clone` no longer exists; use `/anchor clone`.
+
+- **Tree:** browse handoffs, archived work, anchors and user turns. Enter shows
+  details; `g` confirms navigation to the real entry; `f` filters the outline.
+  Pi's native `/tree` remains available for its complete graph.
+- **List:** inspect active anchors, create one with `n`, or request a fold with `r`.
+- **Current:** inspect and edit the continuity ledger; pin/unpin, retract, mark
+  sub-goals done, or show historical items. Writes are blocked while the agent runs.
+- **Fold:** choose an anchor, a fresh completion label and summary focus, then
+  confirm the request. It asks the agent to perform an in-band rewind; the dialog
+  itself does not summarize, move the leaf or call a provider.
+- **Clone:** inspect, propose, review, preview and create with readable screens.
+  Raw JSON is an explicit advanced option, never the default review surface.
+- **Settings:** stage scalar settings, model choices, per-model overrides and
+  tool disclosure policies, then save to global, trusted project or runtime scope.
+  `/anchor settings show` prints effective settings without opening a panel.
+
+All panels share a breadcrumb frame, fuzzy search (`/`), navigation keys and an
+Escape/back path. Filtering keeps the panel height stable; narrow hint bars keep
+Escape and search visible. Destructive or session-moving actions require confirmation.
 
 Use `/anchor clone inspect <session.jsonl>`, then `/anchor clone propose <session.jsonl>`
 to derive a local heuristic tree. Add `--llm` to refine it with the current model,
@@ -103,18 +121,26 @@ Labels are unique on the active branch: `anchor` refuses a `name` and `rewind` r
 
 ## Configuration (`tree-navigator.json`)
 
-Both the rewind hint and the automatic start anchor read one two-layer config file:
+The extension reads global and trusted-project files, with optional session-only
+runtime overrides set through `/anchor settings`:
 
 | Layer | Path |
 |---|---|
 | Global | `join(getAgentDir(), "tree-navigator.json")` (`PI_CODING_AGENT_DIR`-aware) |
 | Project | `join(cwd, CONFIG_DIR_NAME, "tree-navigator.json")` (`.pi/` by default; read only when the project is trusted — untrusted projects are ignored silently) |
+| Runtime | In memory for the current session; cleared on session start/switch or `/reload`, never written to a config file |
 
 ```json
 { "rewindHintReserveTokens": 50000, "anchorStartAfterTurns": 2 }
 ```
 
-A project key, when present, wins (including the hint's disable sentinels); absent → global; absent everywhere → the field's default. File-level problems (non-ENOENT read error, invalid JSON, non-object root) warn and make that layer contribute nothing for *every* field, so the other layer still applies; a missing file is silent. Each field-level invalid value emits its own field-scoped warning when the session has a UI (headless sessions stay silent, like every `ui.notify`).
+A runtime key wins over project, which wins over global (including the hint's
+disable sentinels); absent everywhere uses the field's default. Settings saves apply
+immediately to the current session; no reload is needed. Reset removes a key from
+the selected scope, revealing the lower layer rather than forcing the default.
+Unknown keys and existing JSON key aliases are preserved on disk. An untrusted
+project is neither read nor edited, and malformed files must be corrected before
+that scope can be saved. File-level problems (non-ENOENT read error, invalid JSON, non-object root) warn and make that layer contribute nothing for *every* field, so the other layer still applies; a missing file is silent. Each field-level invalid value emits its own field-scoped warning when the session has a UI (headless sessions stay silent, like every `ui.notify`).
 
 ## Rewind hint (optional)
 

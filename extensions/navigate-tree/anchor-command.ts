@@ -138,7 +138,7 @@ const CLONE_ROWS: Record<(typeof CLONE_SUBCOMMANDS)[number]["name"], FrameRow> =
   {
     inspect: {
       label: "Inspect a session",
-      value: "read-only JSON",
+      value: "read-only overview",
       description:
         "/anchor clone inspect [session.jsonl]: summarize a session file; the current session when no path is given.",
     },
@@ -150,7 +150,7 @@ const CLONE_ROWS: Record<(typeof CLONE_SUBCOMMANDS)[number]["name"], FrameRow> =
     },
     preview: {
       label: "Preview a plan",
-      value: "read-only JSON",
+      value: "review planned changes",
       description:
         "/anchor clone preview <plan.json>: review the clone a plan would create.",
     },

@@ -96,9 +96,10 @@ make model calls or establish that the report's claims are true.
 ```
 
 `inspect` without a path inspects the current persisted session. Inspection and
-preview use Pi's editor dialog as a viewer; edits there are ignored. `create`
-requires an idle UI session and confirmation. No command appends preview content
-to the source. Quoted paths support spaces.
+preview use readable, searchable frames with counts, phase titles and warnings.
+Press `j` for an explicit raw-JSON viewer; edits in that viewer are ignored.
+`create` requires an idle UI session, preview review and confirmation. No command
+appends preview content to the source. Quoted paths support spaces.
 
 `propose` without a path uses the current session. It derives names, titles and
 nesting from existing labels, user turns and rewind summaries. Where completion
@@ -116,8 +117,10 @@ switching the current session model. The default model and thinking level are
 the current session's; `provider/model:thinking` overrides both for the side call.
 Escape cancels generation. No clone is created by proposing a tree.
 
-The proposal shows a tree outline, then an editable plan. Cancelling the editable
-review saves nothing. Accepted plans are saved as new `0600` files in the source's
+The proposal shows a readable tree outline with goals, outcomes, reports and
+analysis usage. Enter or `s` saves it; Escape cancels without saving. `e` explicitly
+opens the raw JSON plan editor for advanced changes; invalid edits are refused.
+Accepted plans are saved as new `0600` files in the source's
 `.tree-clone-plans/` directory, or the explicit `--output <plan.json>` path.
 Existing files are never overwritten. Source changes during generation require
 a new proposal. Preview and clone confirmation are separate steps.
@@ -176,6 +179,8 @@ still requires human review.
 ### Offline CLI
 
 From this checkout with installed dependencies and Node 22.19+:
+Use `node scripts/restructure-session.mjs --help` or `<command> --help` for syntax,
+flags and the distinction between offline operations and paid model analysis.
 
 ```bash
 node scripts/restructure-session.mjs inspect /path/to/session.jsonl

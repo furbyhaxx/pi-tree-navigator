@@ -213,7 +213,7 @@ export async function runCloneSubcommand(
         );
       } else {
         ctx.ui.notify(
-          `Inspected "${inspected.name}": ${inspected.entries} entries and ${inspected.turns.length} user turns. Rerun /anchor clone inspect <session.jsonl> in a UI-capable Pi session to view the full JSON.`,
+          `Inspected "${inspected.name}": ${inspected.entries} entries and ${inspected.turns.length} user turns. Rerun /anchor clone inspect <session.jsonl> in a UI-capable Pi session to browse the full inspection.`,
           "info",
         );
       }
