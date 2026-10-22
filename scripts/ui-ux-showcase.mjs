@@ -520,6 +520,55 @@ function renderLiveRows(width) {
   return out.join("\n");
 }
 
+// The real /anchor current screen: real row builders, real FrameList, a faked host.
+const liveScreen = await Promise.all([
+  import("../extensions/navigate-tree/current-screen.ts"),
+  import("../extensions/navigate-tree/frame.ts"),
+  import("../extensions/navigate-tree/continuity-ledger.ts"),
+]).catch(() => undefined);
+
+function sampleLedger({ applyOps, createLedger }) {
+  const step = (ledger, origin, ops) => applyOps(ledger, ops, { origin }).ledger;
+  let ledger = step(createLedger(), "user", [
+    { op: "add", kind: "objective", text: "Endless-session navigation: keep user intent across every fold" },
+  ]);
+  ledger = step(ledger, "user", [
+    { op: "add", kind: "rule", text: "Always answer in German", quote: "from now on, antworte immer auf Deutsch" },
+    { op: "add", kind: "rule", text: "Never edit the lockfile" },
+  ]);
+  ledger = step(ledger, "classifier", [{ op: "add", kind: "rule", text: "Prefer tabs over spaces" }]);
+  ledger = step(ledger, "agent", [
+    { op: "add", kind: "decision", text: "Use SQLite for the ledger index" },
+    { op: "add", kind: "sub-goal", text: "Write the current-screen tests", scopeAnchor: "impl-start" },
+    { op: "add", kind: "fact", text: "The sidecar needs Node 22.18 or newer" },
+    { op: "add", kind: "file", file: { path: "extensions/navigate-tree/frame.ts", lines: "180-260", why: "FrameList geometry and hint bar" } },
+  ]);
+  ledger = step(ledger, "user", [
+    { op: "add", kind: "decision", text: "Ledger edits are user-origin and pinned" },
+    { op: "add", kind: "sub-goal", text: "Document the continuity screen" },
+    { op: "add", kind: "steering", text: "Keep the screen usable over SSH on a phone", scopeAnchor: "impl-start" },
+  ]);
+  ledger = step(ledger, "agent", [{ op: "markStale", id: "P8" }]);
+  return step(ledger, "user", [{ op: "pin", id: "R4" }]);
+}
+
+function renderCurrentScreen(width) {
+  const rule = theme.borderAccent("─".repeat(width));
+  const out = [rule, theme.bold("9. Live /anchor current (real FrameList and row builders)"), rule, ""];
+  if (!liveScreen) return [...out, theme.muted("  current-screen.ts could not be imported; skipped"), ""].join("\n");
+  const [{ currentFrame }, { FrameList }, ledgerModule] = liveScreen;
+  const frameTheme = { fg: (role, text) => (theme[role] ?? theme.text)(text), bold: theme.bold, italic: theme.italic };
+  const draw = (title, ledger, view) => {
+    const { screen } = currentFrame(ledger, view);
+    const tui = { terminal: { rows: 40, columns: width }, requestRender() {} };
+    out.push(theme.muted(`  ${title}`), ...new FrameList({ ...screen, tui, theme: frameTheme }).render(width), "");
+  };
+  const ledger = sampleLedger(ledgerModule);
+  draw("realistic ledger", ledger, { showHistory: false, cursor: 1 });
+  draw("empty ledger", ledgerModule.createLedger(), { showHistory: false, cursor: 0 });
+  return out.join("\n");
+}
+
 function renderCliAndTranscriptShowcase(width) {
   const rule = theme.borderAccent("─".repeat(width));
   return [
@@ -573,6 +622,7 @@ function renderCliAndTranscriptShowcase(width) {
     `     ${theme.dim("ctrl+o or click to expand full report, ledger diff & 7 read files")}`,
     "",
     renderLiveRows(width),
+    renderCurrentScreen(width),
   ].join("\n");
 }
 
