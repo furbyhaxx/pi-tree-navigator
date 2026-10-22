@@ -97,6 +97,14 @@ import {
   estimateRequestTokens,
   splitContextEstimate,
 } from "./context-tokens.ts";
+import { renderFoldCaptureSection } from "./continuity-briefing.ts";
+import { LEDGER_DETAILS_KEY } from "./continuity-ledger.ts";
+import {
+  type FoldContinuity,
+  readBranchLedger,
+  reconcileFoldContinuity,
+  spanUserEntryRefs,
+} from "./continuity-store.ts";
 import {
   getHandoff,
   type HandoffMode,
@@ -151,9 +159,11 @@ import {
   RewindHintTracker,
 } from "./rewind-hint.ts";
 import {
+  appendContinuityBriefing,
   buildSummaryRequestText,
   computeFileLists,
   formatFileOperations,
+  stripContinuityBriefing,
 } from "./summary-prompt.ts";
 
 /**
@@ -1375,17 +1385,49 @@ function endingText(
 }
 
 /**
+ * The continuity block of the summary request: what the ledger keeps in force
+ * and the user messages the model may cite. Absent (the request is then
+ * byte-identical to one without a ledger) when the ledger has nothing active
+ * and the folded span holds no user message. Fail-open: a fold never depends
+ * on it.
+ */
+function continuityRequestSection(
+  sm: SessionManager,
+  pending: PendingRewind,
+): string | undefined {
+  try {
+    const branch = sm.getBranch();
+    const { ledger } = readBranchLedger(branch);
+    const userEntries = spanUserEntryRefs(branch, pending.target);
+    if (
+      userEntries.length === 0 &&
+      !ledger.items.some((item) => item.status === "active")
+    ) {
+      return undefined;
+    }
+    return renderFoldCaptureSection(ledger, pending.rewindTo, userEntries);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The summary instruction (#90, S1/S3): a `navigate_tree` custom message,
  * returned as a boundary entry by the rewind turn's `turn_end`.
  */
-function summaryRequestDraft(pending: PendingRewind): SessionBoundaryDraft {
+function summaryRequestDraft(
+  pending: PendingRewind,
+  continuitySection?: string,
+): SessionBoundaryDraft {
   return {
     type: "custom_message",
     customType: SUMMARY_REQUEST_CUSTOM_TYPE,
-    content: buildSummaryRequestText(pending.first, pending.summaryFocus, {
-      mode: pending.handoffMode,
-      childCount: pending.childCount,
-    }),
+    content: buildSummaryRequestText(
+      pending.first,
+      pending.summaryFocus,
+      { mode: pending.handoffMode, childCount: pending.childCount },
+      continuitySection,
+    ),
     display: true,
     details: {
       toolCallId: pending.toolCallId,
@@ -2697,6 +2739,7 @@ export default function (pi: ExtensionAPI) {
     let entries: SessionEntry[];
     let readFiles: string[];
     let modifiedFiles: string[];
+    let continuity: FoldContinuity;
     let summaryId: string;
     // The leaf right before the branch call (the label write above appended
     // an entry, so it is not `oldLeafId`).
@@ -2738,9 +2781,18 @@ export default function (pi: ExtensionAPI) {
           for (const entry of path.slice(at + 1)) sourceIds.add(entry.id);
         }
       }
+      // Pure: the ledger only changes through the branch_summary written
+      // below, so every failure ending before it leaves the ledger untouched.
+      continuity = reconcileFoldContinuity(
+        sm.getBranch(),
+        summaryText,
+        pending.rewindTo,
+      );
       const handoff = makeHandoff({
         name: pending.newLabel,
-        report: summaryText + formatFileOperations(readFiles, modifiedFiles),
+        report:
+          continuity.summaryText +
+          formatFileOperations(readFiles, modifiedFiles),
         mode: pending.handoffMode,
         children: children.map((child) => child.id),
         sourceEntries: [...sourceIds].flatMap((id) => {
@@ -2748,15 +2800,32 @@ export default function (pi: ExtensionAPI) {
           return entry ? [entry] : [];
         }),
       });
-      const materialized = materializeHandoff(
+      // A child's own briefing is stale in its parent: only this fold's stays.
+      const handoffText = materializeHandoff(
         handoff,
         children.flatMap((child) =>
           child.type === "branch_summary"
-            ? [{ id: child.id, summary: child.summary }]
+            ? [
+                {
+                  id: child.id,
+                  summary: stripContinuityBriefing(child.summary),
+                },
+              ]
             : [],
         ),
       );
-      const details = { readFiles, modifiedFiles, treeNavigator: handoff };
+      const materialized =
+        continuity.briefing === undefined
+          ? handoffText
+          : appendContinuityBriefing(handoffText, continuity.briefing);
+      const details = {
+        readFiles,
+        modifiedFiles,
+        treeNavigator: handoff,
+        ...(continuity.snapshot && {
+          [LEDGER_DETAILS_KEY]: continuity.snapshot,
+        }),
+      };
       let previewId = "tree-navigator-fold-preview";
       while (all.has(previewId)) previewId += "-";
       const preview: SessionEntry = {
@@ -2802,6 +2871,7 @@ export default function (pi: ExtensionAPI) {
         customType: REWIND_CUSTOM_TYPE,
         content:
           buildRewindDoneText(pending, estimateContextTokens(prospective)) +
+          (continuity.notice ? `\n\n${continuity.notice}` : "") +
           (lateEntries.length
             ? `\n\n${buildLateEntriesNote(lateEntries.length)}`
             : "") +
@@ -2904,6 +2974,7 @@ export default function (pi: ExtensionAPI) {
     return [
       rewindMessageDraft(
         buildRewindDoneText(pending, afterTokens) +
+          (continuity.notice ? `\n\n${continuity.notice}` : "") +
           (reappended > 0 ? `\n\n${buildLateEntriesNote(reappended)}` : "") +
           (refreshed ? "" : `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`),
         {
@@ -2924,6 +2995,7 @@ export default function (pi: ExtensionAPI) {
           readFiles,
           modifiedFiles,
           reappendedLateMessages: reappended,
+          ...(continuity.report && { continuity: continuity.report }),
         },
       ),
     ];
@@ -3207,7 +3279,10 @@ export default function (pi: ExtensionAPI) {
       // A boundary entry: pi commits it right after the rewind's tool
       // result, BEFORE it drains queued steers, and `continue` guarantees
       // the summary request (#90, S1).
-      return deliver([summaryRequestDraft(pending)], true);
+      return deliver(
+        [summaryRequestDraft(pending, continuityRequestSection(sm, pending))],
+        true,
+      );
     }
 
     // A summary attempt. Its own entries — the assistant and every
