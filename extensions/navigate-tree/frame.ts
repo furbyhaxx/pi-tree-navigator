@@ -444,6 +444,7 @@ export type FrameAction = (row: FrameRow, index: number) => void;
 /** A key active while the list (not the search input) has focus. */
 export interface FrameShortcut {
   key: KeyId;
+  priority?: FrameKeybindingPriority;
   /** Hint-bar label; a function is resolved for the selected row. */
   action: string | ((row: FrameRow, index: number) => string);
   /** Hidden and ignored on rows where this returns false. */
@@ -466,6 +467,8 @@ export interface FrameListOptions {
   keyboard?: KeybindingsManager;
   /** Initial row index. */
   cursor?: number;
+  /** Restore a filter when a wrapper rebuilds the list on resize. */
+  query?: string;
   onSelect?: FrameAction;
   onCancel?: () => void;
   shortcuts?: readonly FrameShortcut[];
@@ -510,6 +513,11 @@ export class FrameList implements Component, Focusable {
       Math.max(0, this.visible.length - 1),
     );
     this.width = options.tui.terminal.columns;
+    if (options.query) {
+      this.input.handleInput(`\x1b[200~${options.query}\x1b[201~`);
+      this.setQuery(options.query);
+      this.enterSearch();
+    }
   }
 
   /** Original index of the selected row, or -1 when the filter matches nothing. */
@@ -699,8 +707,9 @@ export class FrameList implements Component, Focusable {
     const shortcuts = row
       ? (this.options.shortcuts ?? [])
           .filter((shortcut) => shortcut.enabled?.(row, this.cursor) ?? true)
-          .map(({ key, action }) => ({
+          .map(({ key, action, priority }) => ({
             key,
+            priority,
             action:
               typeof action === "function" ? action(row, this.cursor) : action,
           }))
@@ -791,7 +800,10 @@ export interface FrameScreen {
   enterAction?: string;
   cancelAction?: string;
   cursor?: number;
-  shortcuts?: readonly Pick<FrameShortcut, "key" | "action" | "enabled">[];
+  shortcuts?: readonly Pick<
+    FrameShortcut,
+    "key" | "action" | "enabled" | "priority"
+  >[];
 }
 
 /** Show a frame in place of the editor and resolve with the user's choice, or undefined when cancelled. */

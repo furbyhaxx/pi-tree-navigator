@@ -385,7 +385,7 @@ async function goTo(
   if (item.current) {
     // The host returns without moving when the target already is the leaf.
     const hostNoop = ctx.sessionManager.getLeafId() === item.targetId;
-    if (item.destination === "at" || hostNoop) {
+    if (hostNoop) {
       ctx.ui.notify(
         item.destination === "at"
           ? "You are already here. Select another row and press g to go there."

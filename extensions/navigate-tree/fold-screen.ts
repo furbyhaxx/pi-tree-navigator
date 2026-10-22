@@ -316,7 +316,24 @@ async function foldTo(
         step = "focus";
         continue;
       }
-      deps.requestFold(ctx, fresh.name, {
+      const anchors = deps.listAnchors(ctx);
+      const confirmedAnchor = anchors.find(({ name }) => name === fresh.name);
+      if (!confirmedAnchor || !foldable(confirmedAnchor, deps)) {
+        ctx.ui.notify(
+          "The selected anchor changed while confirming. Pick an anchor again.",
+          "warning",
+        );
+        return "pick";
+      }
+      if (anchors.some(({ name }) => name === label)) {
+        ctx.ui.notify(
+          `Label '${label}' was taken while confirming. Pick a fresh label.`,
+          "warning",
+        );
+        step = "label";
+        continue;
+      }
+      deps.requestFold(ctx, confirmedAnchor.name, {
         label,
         ...(focus?.focus !== undefined && { focus: focus.focus }),
       });

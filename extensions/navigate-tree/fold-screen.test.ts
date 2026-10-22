@@ -334,6 +334,35 @@ describe("fold wizard", () => {
     assert.equal(h.folds.length, 1);
   });
 
+  it("rechecks the selected anchor after confirmation before sending a request", async () => {
+    const h = harness({ inputs: [""], editors: [FOCUS], confirms: [true] });
+    h.ctx.ui.confirm = async () => {
+      h.state.anchors = [];
+      return true;
+    };
+    await h.run(press(ENTER), press(ESC));
+    assert.deepEqual(h.folds, []);
+    assert.match(h.notifications[0].message, /changed while confirming/);
+  });
+
+  it("asks for a new label when confirmation races with another anchor", async () => {
+    const h = harness({
+      inputs: ["", undefined],
+      editors: [FOCUS],
+      confirms: [true],
+    });
+    h.ctx.ui.confirm = async () => {
+      h.state.anchors.push({
+        ...h.state.anchors[0],
+        name: "impl-start-folded",
+      });
+      return true;
+    };
+    await h.run(press(ENTER), press(ESC));
+    assert.deepEqual(h.folds, []);
+    assert.match(h.notifications[0].message, /taken while confirming/);
+  });
+
   it("goes back to the list when the anchor shrank below the minimum during the wizard", async () => {
     const h = harness({ inputs: [""], editors: [FOCUS] });
     const editor = h.ctx.ui.editor;

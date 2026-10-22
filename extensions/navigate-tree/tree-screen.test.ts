@@ -562,6 +562,17 @@ describe("tree destinations and the current marker", () => {
     assert.notEqual(note, a1);
   });
 
+  it("allows returning to the last assistant when runtime metadata follows it", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Set up the parser project"));
+    const answer = sm.appendMessage(assistant("Project created"));
+    sm.appendThinkingLevelChange("high");
+    const h = harness(sm, { confirms: [true], native: true });
+    await h.run(press("g"));
+    assert.deepEqual(h.navigated, [answer]);
+    assert.equal(sm.getLeafId(), answer);
+  });
+
   it("allows going before the current user message when only metadata follows it", async () => {
     const sm = SessionManager.inMemory("/tmp");
     sm.appendMessage(user("Set up the parser project"));

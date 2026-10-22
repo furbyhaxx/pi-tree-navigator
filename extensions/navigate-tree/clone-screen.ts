@@ -73,6 +73,7 @@ class LinesView implements Component, Focusable {
         .lines(Math.max(1, width - ROW_PREFIX))
         .map((label) => ({ label })),
       cursor: this.width < 0 ? 0 : this.list.cursor,
+      query: this.width < 0 ? undefined : this.list.search,
       onSelect: () => this.done("enter"),
       onCancel: () => this.done(undefined),
       shortcuts: this.screen.shortcuts?.map((shortcut) => ({
