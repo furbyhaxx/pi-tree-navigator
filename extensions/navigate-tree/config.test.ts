@@ -11,8 +11,9 @@
  * Fields with deliberately different failure semantics:
  *   - `rewindHintReserveTokens`: field-level invalid disables the hint for the
  *     session with NO cross-layer fallback.
- *   - `anchorStartAfterTurns` and `parentHandoffMode`: invalid values warn
- *     and fall through to the other layer's valid value, else their defaults.
+ *   - `anchorStartAfterTurns`, `parentHandoffMode` and the `continuity` keys:
+ *     invalid values warn and fall through to the other layer's valid value,
+ *     else their defaults.
  *
  * The removed `rewindHintAtPercent` key (0.3.0) only warns: it never
  * enables, disables, or invalidates the hint.
@@ -21,6 +22,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CONTINUITY_CAPTURE_DEFAULT,
   type HintField,
   loadTreeNavigatorConfig,
   mergeTreeNavigatorConfig,
@@ -117,18 +119,25 @@ function layer(partial: {
   };
 }
 
+const DEFAULT_CONTINUITY = {
+  capture: CONTINUITY_CAPTURE_DEFAULT,
+  intentClassifier: null as string | null,
+};
+
 /** The loader's expected config object (start defaults unless overridden). */
 function cfg(
   hint: number | null,
   start = START_ANCHOR_DEFAULT_TURNS,
   byModel: Array<[string, number | null]> = [],
   parentHandoffMode: HandoffMode = "full",
+  continuity = DEFAULT_CONTINUITY,
 ) {
   return {
     rewindHintReserveTokens: hint,
     rewindHintModelReserveTokens: new Map(byModel),
     anchorStartAfterTurns: start,
     parentHandoffMode,
+    continuity,
   };
 }
 
@@ -1317,6 +1326,143 @@ describe("modelOverrides (#86)", () => {
         config: cfg(null, START_ANCHOR_DEFAULT_TURNS, [[DEEPSEEK, 50000]]),
         warnings: [WARN_INVALID_JSON_PROJECT],
       });
+    });
+  });
+});
+
+describe("continuity config", () => {
+  const CLASSIFIER = "typesafe/jev-latest";
+  const OTHER_CLASSIFIER = "openrouter/typesafe/jev-1.13";
+  const warnInvalidCapture = (which: "global" | "project", path: string) =>
+    `navigate_tree: invalid continuity.capture in ${which} config at ${path} — expected true or false; falling back to the other layer's valid value, else the default true.`;
+  const warnInvalidClassifier = (which: "global" | "project", path: string) =>
+    `navigate_tree: invalid continuity.intentClassifier in ${which} config at ${path} — expected "provider/id" of a classifier model or a disable sentinel (null, false, "off", "disabled"); falling back to the other layer's valid value, else off (heuristics only).`;
+
+  async function load(
+    global: unknown,
+    project?: unknown,
+    projectTrusted = true,
+  ) {
+    const reader = readerFor({
+      ...(global === undefined
+        ? {}
+        : { [GLOBAL_PATH]: JSON.stringify(global) }),
+      ...(project === undefined
+        ? {}
+        : { [PROJECT_PATH]: JSON.stringify(project) }),
+    });
+    const out = await loadTreeNavigatorConfig({
+      agentDir: AGENT_DIR,
+      projectPath: PROJECT_PATH,
+      projectTrusted,
+      readFile: reader.readFile,
+    });
+    return { continuity: out.config.continuity, warnings: out.warnings };
+  }
+
+  it("defaults to capture on and heuristics only", async () => {
+    assert.deepEqual(await load(undefined), {
+      continuity: { capture: true, intentClassifier: null },
+      warnings: [],
+    });
+  });
+
+  it("reads both keys, camelCase and snake_case", async () => {
+    assert.deepEqual(
+      await load({
+        continuity: { capture: false, intentClassifier: CLASSIFIER },
+      }),
+      {
+        continuity: { capture: false, intentClassifier: CLASSIFIER },
+        warnings: [],
+      },
+    );
+    assert.deepEqual(
+      await load({
+        continuity: { intent_classifier: ` ${OTHER_CLASSIFIER} ` },
+      }),
+      {
+        continuity: { capture: true, intentClassifier: OTHER_CLASSIFIER },
+        warnings: [],
+      },
+    );
+  });
+
+  it("a trusted project overrides global per key; an untrusted one is not read", async () => {
+    const global = {
+      continuity: { capture: true, intentClassifier: CLASSIFIER },
+    };
+    const project = { continuity: { capture: false } };
+    assert.deepEqual(await load(global, project), {
+      continuity: { capture: false, intentClassifier: CLASSIFIER },
+      warnings: [],
+    });
+    assert.deepEqual(await load(global, project, false), {
+      continuity: { capture: true, intentClassifier: CLASSIFIER },
+      warnings: [],
+    });
+  });
+
+  for (const sentinel of [null, false, "off", " OFF ", "disabled"]) {
+    it(`${JSON.stringify(sentinel)} disables a classifier set by the other layer`, async () => {
+      const out = await load(
+        { continuity: { intentClassifier: CLASSIFIER } },
+        { continuity: { intentClassifier: sentinel } },
+      );
+      assert.deepEqual(out, {
+        continuity: { capture: true, intentClassifier: null },
+        warnings: [],
+      });
+    });
+  }
+
+  it("an invalid project value warns and falls back to global, per key", async () => {
+    const out = await load(
+      { continuity: { capture: false, intentClassifier: CLASSIFIER } },
+      { continuity: { capture: "yes", intentClassifier: "no-slash" } },
+    );
+    assert.deepEqual(out, {
+      continuity: { capture: false, intentClassifier: CLASSIFIER },
+      warnings: [
+        warnInvalidCapture("project", PROJECT_PATH),
+        warnInvalidClassifier("project", PROJECT_PATH),
+      ],
+    });
+  });
+
+  it("an invalid value with no valid layer warns and uses the default", async () => {
+    const out = await load({
+      continuity: { capture: 1, intentClassifier: true },
+    });
+    assert.deepEqual(out, {
+      continuity: { capture: true, intentClassifier: null },
+      warnings: [
+        warnInvalidCapture("global", GLOBAL_PATH),
+        warnInvalidClassifier("global", GLOBAL_PATH),
+      ],
+    });
+  });
+
+  for (const bad of ["", "provider/", "/id", "has space/id", 5, []]) {
+    it(`rejects intentClassifier ${JSON.stringify(bad)}`, async () => {
+      const out = await load({ continuity: { intentClassifier: bad } });
+      assert.equal(out.continuity.intentClassifier, null);
+      assert.deepEqual(out.warnings, [
+        warnInvalidClassifier("global", GLOBAL_PATH),
+      ]);
+    });
+  }
+
+  it("a non-object continuity block warns and is ignored", async () => {
+    const out = await load(
+      { continuity: { capture: false } },
+      { continuity: "off" },
+    );
+    assert.deepEqual(out, {
+      continuity: { capture: false, intentClassifier: null },
+      warnings: [
+        `navigate_tree: continuity in project config at ${PROJECT_PATH} must be an object — ignored.`,
+      ],
     });
   });
 });

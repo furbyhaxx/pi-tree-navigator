@@ -22,6 +22,12 @@
  *   - `parentHandoffMode`: whether completed child reports are included in
  *     the parent's model context. Invalid values warn and fall through like
  *     `anchorStartAfterTurns`, defaulting to `full`.
+ *   - `continuity` (`capture`, `intentClassifier`/`intent_classifier`): the
+ *     session continuity ledger's capture of user intent. `capture` defaults to
+ *     true; `intentClassifier` is a `provider/id` classifier model or a disable
+ *     sentinel and defaults to off (heuristics only). Each key is parsed and
+ *     merged on its own and, like `parentHandoffMode`, an invalid value warns
+ *     and falls through to the other layer's valid value, else the default.
  *   - `modelOverrides` (issue #86): per-model `rewindHintReserveTokens`,
  *     keyed by exact `provider/modelId`, mirroring pi's
  *     `compaction.modelOverrides`. Layers merge per key (project entry over
@@ -66,6 +72,7 @@ import {
   modelPatternSpecificity,
   parseAutoNavigatePartial,
 } from "./auto-navigate-config.ts";
+import { parseClassifierModel } from "./continuity-capture.ts";
 import type { HandoffMode } from "./handoff.ts";
 import {
   mergeProposalOptions,
@@ -79,6 +86,7 @@ export const REWIND_HINT_MAX_RESERVE = 1_000_000;
 export const START_ANCHOR_MIN_TURNS = 1;
 export const START_ANCHOR_MAX_TURNS = 50;
 export const PARENT_HANDOFF_MODE_DEFAULT: HandoffMode = "full";
+export const CONTINUITY_CAPTURE_DEFAULT = true;
 /**
  * Effective turn bound when `anchorStartAfterTurns` is absent everywhere
  * (or invalid in every layer that touched it). Unlike the hint, the start
@@ -120,6 +128,15 @@ export type StartAnchorField = FallbackField<number>;
 /** Per-field parse outcome for `parentHandoffMode`. */
 export type ParentHandoffModeField = FallbackField<HandoffMode>;
 
+/** Per-field parse outcomes for the `continuity` block. */
+export interface ContinuityLayer {
+  capture: FallbackField<boolean>;
+  /** `ok` with `null` is an explicit "off". */
+  intentClassifier: FallbackField<string | null>;
+  /** `continuity` is present but not an object; the loader warns and ignores it. */
+  notObject: boolean;
+}
+
 /** One config layer's parsed fields (file-level failures are all-absent). */
 export interface ParsedLayer {
   hint: HintField;
@@ -129,6 +146,7 @@ export interface ParsedLayer {
   proposal?:
     | { kind: "ok"; value: ProposalOptions }
     | { kind: "invalid"; error: string };
+  continuity?: ContinuityLayer;
   /** Sidecar auto-navigation policy (`auto_navigate`). */
   autoNavigate?:
     | { kind: "ok"; value: AutoNavigatePartial }
@@ -305,6 +323,55 @@ function parseParentHandoffModeField(
     : { kind: "invalid" };
 }
 
+function parseCaptureField(
+  block: Record<string, unknown>,
+): ContinuityLayer["capture"] {
+  if (!("capture" in block)) return { kind: "absent" };
+  return typeof block.capture === "boolean"
+    ? { kind: "ok", value: block.capture }
+    : { kind: "invalid" };
+}
+
+function parseIntentClassifierField(
+  block: Record<string, unknown>,
+): ContinuityLayer["intentClassifier"] {
+  const hasSnake = "intent_classifier" in block;
+  if (!hasSnake && !("intentClassifier" in block)) return { kind: "absent" };
+  const value = hasSnake ? block.intent_classifier : block.intentClassifier;
+  if (value === null || value === false) return { kind: "ok", value: null };
+  if (typeof value !== "string") return { kind: "invalid" };
+  const trimmed = value.trim();
+  if (DISABLE_SENTINELS.has(trimmed.toLowerCase())) {
+    return { kind: "ok", value: null };
+  }
+  return parseClassifierModel(trimmed)
+    ? { kind: "ok", value: trimmed }
+    : { kind: "invalid" };
+}
+
+function parseContinuityField(
+  record: Record<string, unknown>,
+): Pick<ParsedLayer, "continuity"> {
+  if (!("continuity" in record)) return {};
+  const block = record.continuity;
+  if (!isPlainObject(block)) {
+    return {
+      continuity: {
+        capture: { kind: "absent" },
+        intentClassifier: { kind: "absent" },
+        notObject: true,
+      },
+    };
+  }
+  return {
+    continuity: {
+      capture: parseCaptureField(block),
+      intentClassifier: parseIntentClassifierField(block),
+      notObject: false,
+    },
+  };
+}
+
 /**
  * Parse one already-JSON.parsed config root. A non-object root (null, array,
  * primitive) is `unusable` — a file-level failure so the other layer can
@@ -324,6 +391,7 @@ export function parseTreeNavigatorConfig(raw: unknown): ParsedRoot {
       parentHandoffMode: parseParentHandoffModeField(record),
       ...parseModelOverrides(record),
       ...parseProposalField(record),
+      ...parseContinuityField(record),
       ...parseAutoNavigateField(record),
     },
   };
@@ -437,6 +505,29 @@ function mergeProposalField(
   };
 }
 
+function mergeContinuityField(
+  globalLayer: ParsedLayer,
+  projectLayer: ParsedLayer,
+): Pick<ParsedLayer, "continuity"> {
+  const global = globalLayer.continuity;
+  const project = projectLayer.continuity;
+  if (!global && !project) return {};
+  const absent = { kind: "absent" } as const;
+  return {
+    continuity: {
+      capture: mergeFallbackField(
+        global?.capture ?? absent,
+        project?.capture ?? absent,
+      ),
+      intentClassifier: mergeFallbackField(
+        global?.intentClassifier ?? absent,
+        project?.intentClassifier ?? absent,
+      ),
+      notObject: false,
+    },
+  };
+}
+
 /**
  * Merge a single field. For the hint, `absent` is the only value that falls
  * through: a project layer that is absent (or file-level unusable, which
@@ -489,6 +580,7 @@ export function mergeTreeNavigatorConfig(
     ]),
     modelOverridesProblems: noModelOverridesProblems(),
     ...mergeProposalField(globalLayer, projectLayer),
+    ...mergeContinuityField(globalLayer, projectLayer),
     ...mergeAutoNavigateField(globalLayer, projectLayer),
   };
 }
@@ -684,6 +776,22 @@ async function loadLayer(
       `navigate_tree: invalid parentHandoffMode in ${layer} config at ${path} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
     );
   }
+  const continuity = parsed.layer.continuity;
+  if (continuity?.notObject) {
+    warnings.push(
+      `navigate_tree: continuity in ${layer} config at ${path} must be an object — ignored.`,
+    );
+  }
+  if (continuity?.capture.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid continuity.capture in ${layer} config at ${path} — expected true or false; falling back to the other layer's valid value, else the default ${CONTINUITY_CAPTURE_DEFAULT}.`,
+    );
+  }
+  if (continuity?.intentClassifier.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid continuity.intentClassifier in ${layer} config at ${path} — expected "provider/id" of a classifier model or a disable sentinel (null, false, "off", "disabled"); falling back to the other layer's valid value, else off (heuristics only).`,
+    );
+  }
   if (parsed.layer.proposal?.kind === "invalid") {
     warnings.push(
       `navigate_tree: invalid treeProposal in ${layer} config at ${path} — ${parsed.layer.proposal.error}; model proposals are blocked until this is corrected.`,
@@ -723,6 +831,11 @@ export async function loadTreeNavigatorConfig(opts: {
     rewindHintModelReserveTokens: Map<string, number | null>;
     anchorStartAfterTurns: number;
     parentHandoffMode: HandoffMode;
+    continuity: {
+      capture: boolean;
+      /** `provider/id` of a classifier model, or null for heuristics only. */
+      intentClassifier: string | null;
+    };
     proposal?: ProposalOptions;
     proposalError?: string;
     autoNavigate?: AutoNavigatePartial;
@@ -770,6 +883,16 @@ export async function loadTreeNavigatorConfig(opts: {
         effective.parentHandoffMode.kind === "ok"
           ? effective.parentHandoffMode.value
           : PARENT_HANDOFF_MODE_DEFAULT,
+      continuity: {
+        capture:
+          effective.continuity?.capture.kind === "ok"
+            ? effective.continuity.capture.value
+            : CONTINUITY_CAPTURE_DEFAULT,
+        intentClassifier:
+          effective.continuity?.intentClassifier.kind === "ok"
+            ? effective.continuity.intentClassifier.value
+            : null,
+      },
       ...(effective.proposal?.kind === "ok"
         ? { proposal: effective.proposal.value }
         : {}),
