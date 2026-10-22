@@ -119,6 +119,7 @@ import {
 import {
   appendOpsEntry,
   type BranchLedger,
+  CONTINUITY_OPS_CUSTOM_TYPE,
   type FoldContinuity,
   readBranchLedger,
   reconcileFoldContinuity,
@@ -187,6 +188,11 @@ import {
   formatFileOperations,
   stripContinuityBriefing,
 } from "./summary-prompt.ts";
+import {
+  renderContinuityOps,
+  renderToolCall,
+  renderToolResult,
+} from "./tool-renderer.ts";
 
 /**
  * Always-on anchor mandate appended to the system prompt on every agent
@@ -3921,6 +3927,7 @@ export default function (pi: ExtensionAPI) {
       );
     },
   );
+  pi.registerEntryRenderer(CONTINUITY_OPS_CUSTOM_TYPE, renderContinuityOps);
   // The final error of rewind-driven compaction (#101, D8): one
   // error-styled row, full text, nothing to expand. Every other rewind
   // message (the continuation, the forced-rewind message) keeps pi's
@@ -4832,6 +4839,10 @@ Operations (set \`action\`):
         }),
       ),
     }),
+    renderCall: (args, theme, context) =>
+      renderToolCall(args, theme, context.expanded),
+    renderResult: (result, options, theme, context) =>
+      renderToolResult(result, options, theme, context.isError),
     execute: async (toolCallId, params, _signal, _onUpdate, ctx) => {
       const sm = ctx.sessionManager as SessionManager;
       const p = params as {
