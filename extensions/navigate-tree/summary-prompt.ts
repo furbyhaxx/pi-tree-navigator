@@ -59,6 +59,7 @@ export function buildSummaryInstruction(
   first: number,
   focus: string,
   parent?: { mode: "full" | "synthesized"; childCount: number },
+  continuitySection?: string,
 ): string {
   // Substitute in the prompt only: a focus that quotes `{first}` stays
   // verbatim.
@@ -70,7 +71,10 @@ export function buildSummaryInstruction(
     );
     prompt += `\n\nThis is a work handoff, not an alternative conversation. There are ${parent.childCount} child handoffs in scope. ${parent.mode === "full" ? "Child reports will be attached verbatim once each; write the parent's own scope, final outcome, superseding decisions and remaining work without recopying child reports." : "Synthesize the child reports into this parent's handoff. Keep their relevant decisions, rejected or superseded approaches, deliverables, verification evidence and limits, commits, deferred/open work, and key facts needed for subsequent work. Omit child detail only when it is no longer relevant to the parent."} Include explicit Delivered, Verification, Rejected or Superseded, Commits, and Open or Deferred sections when supported by the evidence. Distinguish historical next steps from still-open work.`;
   }
-  return `${prompt}\n\nAdditional focus: ${focus}`;
+  const instruction = `${prompt}\n\nAdditional focus: ${focus}`;
+  return continuitySection === undefined
+    ? instruction
+    : `${instruction}\n\n${continuitySection}`;
 }
 
 /**
@@ -82,8 +86,9 @@ export function buildSummaryRequestText(
   first: number,
   focus: string,
   parent?: { mode: "full" | "synthesized"; childCount: number },
+  continuitySection?: string,
 ): string {
-  return `[navigate_tree]\n${buildSummaryInstruction(first, focus, parent)}`;
+  return `[navigate_tree]\n${buildSummaryInstruction(first, focus, parent, continuitySection)}`;
 }
 
 /**
@@ -143,4 +148,28 @@ export function buildStoredSummary(
     summaryText +
     formatFileOperations(readFiles, modifiedFiles)
   );
+}
+
+const CONTINUITY_HEADING = "## Continuity ledger";
+// First line of the rendered briefing (`renderBriefing`), the marker of an embedded one.
+const CONTINUITY_MARKER = "[navigate_tree continuity ledger rev ";
+
+/** Append a rendered continuity briefing to stored handoff text, as its last section. */
+export function appendContinuityBriefing(
+  text: string,
+  briefing: string,
+): string {
+  return `${text}\n\n${CONTINUITY_HEADING}\n\n${briefing}`;
+}
+
+/**
+ * Remove the briefing `appendContinuityBriefing` added. A child's handoff
+ * is embedded in its parent's, and only the parent's current briefing may
+ * stay in force.
+ */
+export function stripContinuityBriefing(text: string): string {
+  const at = text.lastIndexOf(
+    `\n\n${CONTINUITY_HEADING}\n\n${CONTINUITY_MARKER}`,
+  );
+  return at < 0 ? text : text.slice(0, at);
 }

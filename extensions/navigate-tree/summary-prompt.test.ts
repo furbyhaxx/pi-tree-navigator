@@ -13,7 +13,10 @@
 
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { renderBriefing } from "./continuity-briefing.ts";
+import { applyOps, createLedger } from "./continuity-ledger.ts";
 import {
+  appendContinuityBriefing,
   BRANCH_SUMMARY_PREAMBLE,
   buildStoredSummary,
   buildSummaryInstruction,
@@ -21,6 +24,7 @@ import {
   computeFileLists,
   formatFileOperations,
   REWIND_SUMMARY_PROMPT,
+  stripContinuityBriefing,
 } from "./summary-prompt.ts";
 
 // =============================================================================
@@ -254,5 +258,67 @@ describe("buildSummaryRequestText", () => {
       ),
     );
     assert.ok(text.endsWith("\n\nAdditional focus: keep the parser API"));
+  });
+});
+
+// =============================================================================
+// Continuity section and embedded briefing
+// =============================================================================
+
+describe("continuity section", () => {
+  const section = "Continuity ledger rev 3. These items stay in force.";
+
+  it("is appended after the focus line, for both builders and with a parent", () => {
+    const parent = { mode: "full", childCount: 2 } as const;
+    for (const p of [undefined, parent]) {
+      const plain = buildSummaryInstruction(4, "focus", p);
+      assert.equal(
+        buildSummaryInstruction(4, "focus", p, section),
+        `${plain}\n\n${section}`,
+      );
+      assert.equal(
+        buildSummaryRequestText(4, "focus", p, section),
+        `[navigate_tree]\n${plain}\n\n${section}`,
+      );
+    }
+  });
+
+  it("leaves the request byte-identical when no section is given", () => {
+    assert.ok(
+      buildSummaryInstruction(4, "focus").endsWith("Additional focus: focus"),
+    );
+    assert.equal(
+      buildSummaryRequestText(4, "focus", undefined, undefined),
+      buildSummaryRequestText(4, "focus"),
+    );
+  });
+});
+
+describe("appendContinuityBriefing / stripContinuityBriefing", () => {
+  const briefing = renderBriefing(
+    applyOps(
+      createLedger(),
+      [{ op: "add", kind: "rule", text: "Never edit the lockfile" }],
+      { origin: "user" },
+    ).ledger,
+    { maxTokens: 2500 },
+  ).text;
+
+  it("appends the briefing under its own heading as the last section", () => {
+    assert.equal(
+      appendContinuityBriefing("# Work handoff: x\n\n## Goal\ny", briefing),
+      `# Work handoff: x\n\n## Goal\ny\n\n## Continuity ledger\n\n${briefing}`,
+    );
+  });
+
+  it("strips exactly what was appended, and leaves other text alone", () => {
+    const text = "# Work handoff: x\n\n## Goal\ny";
+    assert.equal(
+      stripContinuityBriefing(appendContinuityBriefing(text, briefing)),
+      text,
+    );
+    assert.equal(stripContinuityBriefing(text), text);
+    const prose = `${text}\n\n## Continuity ledger\n\nmy own notes`;
+    assert.equal(stripContinuityBriefing(prose), prose);
   });
 });
