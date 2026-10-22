@@ -78,16 +78,17 @@ export function handoffView(
   });
 }
 
+/** `1.2k` / `3.4M` style count. */
+export function compactCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
 /** Compact inclusive accounting, shared by transcript cards and native tree rows. */
 export function handoffUsage(data: HandoffData): string {
   const s = data.stats;
-  const compact = (n: number) =>
-    n >= 1_000_000
-      ? `${(n / 1_000_000).toFixed(1)}M`
-      : n >= 1_000
-        ? `${(n / 1_000).toFixed(1)}k`
-        : String(n);
-  return `${s.messages} messages · ${s.toolCalls} tool calls · tokens in ${compact(s.input)} / out ${compact(s.output)} / cache read ${compact(s.cacheRead)} / write ${compact(s.cacheWrite)} · recorded inclusive $${s.cost.toFixed(4)}`;
+  return `${s.messages} messages · ${s.toolCalls} tool calls · tokens in ${compactCount(s.input)} / out ${compactCount(s.output)} / cache read ${compactCount(s.cacheRead)} / write ${compactCount(s.cacheWrite)} · recorded inclusive $${s.cost.toFixed(4)}`;
 }
 
 /** Native tree row body; the native list still owns selection and clipping. */
