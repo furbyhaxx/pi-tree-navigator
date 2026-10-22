@@ -10,6 +10,7 @@ import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   type ExtensionCommandContext,
+  type SessionEntry,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -96,7 +97,12 @@ const press =
 
 function harness(
   sm: SessionManager,
-  options: { confirms?: boolean[]; anchors?: TreeAnchor[] } = {},
+  options: {
+    confirms?: boolean[];
+    anchors?: TreeAnchor[];
+    /** Move the real session like the host's `navigateTree`. */
+    native?: boolean;
+  } = {},
 ) {
   const state = { idle: true, cancelNavigation: false };
   const navigated: string[] = [];
@@ -116,6 +122,15 @@ function harness(
     sessionManager: sm,
     async navigateTree(id: string) {
       navigated.push(id);
+      if (options.native && !state.cancelNavigation && id !== sm.getLeafId()) {
+        const entry = sm.getEntry(id) as SessionEntry;
+        const before =
+          entry.type === "custom_message" ||
+          (entry.type === "message" && entry.message.role === "user");
+        if (!before) sm.branch(id);
+        else if (entry.parentId === null) sm.resetLeaf();
+        else sm.branch(entry.parentId);
+      }
       return { cancelled: state.cancelNavigation };
     },
     ui: {
@@ -441,5 +456,185 @@ describe("tree screen", () => {
     assert.match(textOf(searched), /Please also make/);
     assert.ok(!textOf(searched).includes("◆ impl-start"));
     fits(searched);
+  });
+});
+
+describe("tree destinations and the current marker", () => {
+  /** Fails the test when the host is asked to move before the dialog is answered. */
+  const guardConfirm = (h: ReturnType<typeof harness>): void => {
+    const confirm = h.ctx.ui.confirm.bind(h.ctx.ui);
+    h.ctx.ui.confirm = async (title, message) => {
+      assert.deepEqual(h.navigated, [], "navigated before the confirmation");
+      return confirm(title, message);
+    };
+  };
+
+  it("goes before an anchored user message, says so, and drops the anchor from the branch", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Set up the parser project"));
+    const a1 = sm.appendMessage(assistant("Project created"));
+    const u2 = sm.appendMessage(user("Refactor the lexer"));
+    sm.appendLabelChange(u2, `${LABEL_PREFIX}lex`);
+    const items = treeItems(sm);
+    assert.deepEqual(
+      items.map(({ kind, targetId, destination, current }) => [
+        kind,
+        targetId === u2,
+        destination,
+        current,
+      ]),
+      [
+        ["user", false, "before", false],
+        ["user", true, "before", false],
+        ["anchor", true, "before", true],
+      ],
+    );
+    assert.equal(items[2].anchor, "lex");
+    assert.equal(items.filter(({ kind }) => kind === "leaf").length, 0);
+
+    const h = harness(sm, { confirms: [true], native: true });
+    guardConfirm(h);
+    assert.equal(await h.run(press("g")), "done");
+    assert.deepEqual(h.navigated, [u2]);
+    const [title, message] = h.confirms[0];
+    assert.match(title, /Go to just before the message at anchor 'lex'/);
+    assert.match(message, /just before this message/);
+    assert.match(message, /text goes back into the editor/);
+    assert.match(message, /anchor 'lex'.*no longer be on the active branch/);
+    assert.match(message, /Nothing is deleted/);
+    assert.equal(sm.getLeafId(), a1);
+    assert.equal(
+      treeItems(sm).filter(({ kind }) => kind === "anchor").length,
+      0,
+    );
+    assert.match(
+      h.notifications[0].message,
+      /^Moved to just before the message/,
+    );
+  });
+
+  it("goes before an anchored custom message the same way", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Start"));
+    const a1 = sm.appendMessage(assistant("Ready"));
+    const note = sm.appendCustomMessageEntry("note", "Remember the key", true);
+    sm.appendLabelChange(note, `${LABEL_PREFIX}note`);
+    const [, anchor] = treeItems(sm);
+    assert.deepEqual(
+      [anchor.kind, anchor.targetId, anchor.destination, anchor.current],
+      ["anchor", note, "before", true],
+    );
+
+    const h = harness(sm, { confirms: [true], native: true });
+    guardConfirm(h);
+    assert.equal(await h.run(press("g")), "done");
+    assert.deepEqual(h.navigated, [note]);
+    assert.match(h.confirms[0][1], /just before this message/);
+    assert.match(h.confirms[0][1], /anchor 'note'.*no longer/);
+    assert.equal(sm.getLeafId(), a1);
+  });
+
+  it("marks a custom message leaf as current and leaves it alone, since the host does nothing at the leaf", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Start"));
+    const a1 = sm.appendMessage(assistant("Ready"));
+    const note = sm.appendCustomMessageEntry("note", "Remember the key", true);
+    const items = treeItems(sm);
+    assert.deepEqual(
+      items.map(({ kind, destination, current }) => [
+        kind,
+        destination,
+        current,
+      ]),
+      [
+        ["user", "before", false],
+        ["leaf", "before", true],
+      ],
+    );
+    const h = harness(sm, { native: true });
+    assert.equal(await h.run(press("g"), press(ESC)), "back");
+    assert.equal(
+      h.notifications[0].message,
+      "This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press g to go there.",
+    );
+    assert.deepEqual(h.navigated, []);
+    assert.equal(sm.getLeafId(), note);
+    assert.notEqual(note, a1);
+  });
+
+  it("allows going before the current user message when only metadata follows it", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Set up the parser project"));
+    const a1 = sm.appendMessage(assistant("Project created"));
+    const u2 = sm.appendMessage(user("Refactor the lexer"));
+    sm.appendThinkingLevelChange("high");
+    const items = treeItems(sm);
+    assert.deepEqual(
+      items.map(({ targetId, current }) => [targetId === u2, current]),
+      [
+        [false, false],
+        [true, true],
+      ],
+    );
+    const h = harness(sm, { confirms: [true], native: true });
+    guardConfirm(h);
+    assert.equal(await h.run(press("g")), "done");
+    assert.deepEqual(h.navigated, [u2]);
+    assert.match(h.confirms[0][1], /just before this message/);
+    assert.ok(!h.confirms[0][1].includes("The anchor"));
+    assert.equal(sm.getLeafId(), a1);
+  });
+
+  it("says there is nothing to move back from when the user message is the leaf itself", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Set up the parser project"));
+    sm.appendMessage(assistant("Project created"));
+    const u2 = sm.appendMessage(user("Refactor the lexer"));
+    const h = harness(sm, { confirms: [true], native: true });
+    await h.run(press("g"), press(ESC));
+    assert.deepEqual(h.confirms, []);
+    assert.deepEqual(h.navigated, []);
+    assert.match(h.notifications[0].message, /last entry of the session/);
+    assert.equal(sm.getLeafId(), u2);
+  });
+
+  it("marks a compaction leaf as the current position, not the entry before it", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Set up the parser project"));
+    const a1 = sm.appendMessage(assistant("Project created"));
+    sm.appendLabelChange(a1, `${LABEL_PREFIX}setup`);
+    const compaction = sm.appendCompaction("Parser set up", a1, 4200);
+    const items = treeItems(sm);
+    assert.deepEqual(
+      items.map(({ kind, targetId, current }) => [kind, targetId, current]),
+      [
+        ["user", items[0].targetId, false],
+        ["anchor", a1, false],
+        ["leaf", compaction, true],
+      ],
+    );
+    assert.equal(treeRow(items[2]).label, "● [current]");
+    assert.equal(treeRow(items[2]).labelHint, "compaction");
+
+    const h = harness(sm, { confirms: [true], native: true });
+    await h.run(press("g"), press(ESC));
+    assert.deepEqual(h.confirms, []);
+    assert.deepEqual(h.navigated, []);
+    assert.match(h.notifications[0].message, /already here/);
+    assert.equal(sm.getLeafId(), compaction);
+  });
+
+  it("navigates nothing when going before an anchored message is declined", async () => {
+    const sm = SessionManager.inMemory("/tmp");
+    sm.appendMessage(user("Set up the parser project"));
+    sm.appendMessage(assistant("Project created"));
+    const u2 = sm.appendMessage(user("Refactor the lexer"));
+    sm.appendLabelChange(u2, `${LABEL_PREFIX}lex`);
+    const leaf = sm.getLeafId();
+    const h = harness(sm, { confirms: [false], native: true });
+    assert.equal(await h.run(press("g"), press(ESC)), "back");
+    assert.equal(h.confirms.length, 1);
+    assert.deepEqual(h.navigated, []);
+    assert.equal(sm.getLeafId(), leaf);
   });
 });

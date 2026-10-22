@@ -4,7 +4,9 @@
  * `treeItems` turns the session into rows: folded handoffs (with the archived
  * work they replaced and the handoffs they contain), anchors, user turns and
  * the current position. `openTreeScreen` drives the list and moves the session
- * leaf with `g`; nothing here ever deletes an entry.
+ * leaf with `g` through the host's `navigateTree`; nothing here ever deletes
+ * an entry. The host goes to just before a user or custom message (and puts
+ * its text back in the editor) and to any other entry itself; rows say which.
  */
 import type {
   ExtensionCommandContext,
@@ -44,13 +46,20 @@ export interface TreeScreenDeps {
 
 export type TreeItemKind = "handoff" | "anchor" | "user" | "archived" | "leaf";
 
+/** Where the host puts the session leaf for a target: on it, or just before it (user and custom messages). */
+export type TreeDestination = "at" | "before";
+
 /** One outline row with everything the list, the details and the confirm need. */
 export interface TreeItem {
   kind: TreeItemKind;
-  /** Entry `g` moves the session leaf to. */
+  /** Entry handed to the host's `navigateTree` by `g`. */
   targetId: string;
+  /** `before` for user and custom messages: the leaf lands on their parent, so the target leaves the active branch. */
+  destination: TreeDestination;
+  /** Name of the anchor sitting on the target entry. */
+  anchor?: string;
   depth: number;
-  /** The row of the session's current position. */
+  /** The row of the session's current position; one row at most. */
   current: boolean;
   text: string;
   /** Handoffs and anchors carry `text` in the label; the other kinds draw it dim. */
@@ -60,7 +69,7 @@ export interface TreeItem {
   detail?: string;
   /** Shown by Enter. */
   details: string;
-  /** What `g` goes to, worded for dialogs and notices. */
+  /** Where `g` ends up, worded for dialogs and notices. */
   subject: string;
 }
 
@@ -84,6 +93,7 @@ const TIP_TYPES: ReadonlySet<SessionEntry["type"]> = new Set([
   "message",
   "custom_message",
   "branch_summary",
+  "compaction",
 ]);
 
 const FILTERS = ["all", "anchors", "users"] as const;
@@ -100,6 +110,12 @@ const clip = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
 const plural = (count: number, word: string): string =>
   `${count} ${word}${count === 1 ? "" : "s"}`;
+
+const destinationOf = (entry: SessionEntry | undefined): TreeDestination =>
+  entry?.type === "custom_message" ||
+  (entry?.type === "message" && entry.message.role === "user")
+    ? "before"
+    : "at";
 
 function messageText(entry: SessionEntry): string {
   if (entry.type !== "message" || !("content" in entry.message)) return "";
@@ -195,6 +211,7 @@ export function treeItems(
     items.push({
       kind: "handoff",
       targetId: entry.id,
+      destination: "at",
       depth,
       current: false,
       text: title,
@@ -212,15 +229,17 @@ export function treeItems(
       subject: `the fold “${clip(title, SUBJECT_CHARS)}”`,
     });
     if (turn !== undefined && name !== undefined) {
+      const destination = destinationOf(sm.getEntry(turn));
       items.push({
         kind: "archived",
         targetId: turn,
+        destination,
         depth: depth + 1,
         current: false,
         text: `archived: ${shownName}`,
         dim: true,
         details: `Archived work of '${shownName}': the complete branch this fold replaced in the context. Press g to go to its last turn; nothing is deleted.`,
-        subject: `the archived work of '${shownName}'`,
+        subject: `${destination === "before" ? "just before " : ""}the archived work of '${shownName}'`,
       });
     }
     if (depth >= MAX_NESTING) return;
@@ -237,29 +256,36 @@ export function treeItems(
       addHandoff(entry, 0, new Set());
       continue;
     }
+    const destination = destinationOf(entry);
+    const label = sm.getLabel(entry.id);
+    const rawName = label?.startsWith(LABEL_PREFIX)
+      ? label.slice(LABEL_PREFIX.length)
+      : undefined;
+    const name = rawName === undefined ? undefined : oneLine(rawName);
     if (entry.type === "message" && entry.message.role === "user") {
       const text = messageText(entry);
       items.push({
         kind: "user",
         targetId: entry.id,
+        destination,
+        ...(name !== undefined && { anchor: name }),
         depth: 0,
         current: false,
         text: toOneLine(text, PREVIEW_CHARS) ?? "(no text)",
         dim: true,
         details: `Your message:\n${clip(text || "(no text)", MESSAGE_CHARS)}`,
-        subject: `your message “${clip(oneLine(text), SUBJECT_CHARS)}”`,
+        subject: `just before your message “${clip(oneLine(text), SUBJECT_CHARS)}”`,
       });
     }
-    const label = sm.getLabel(entry.id);
-    if (label?.startsWith(LABEL_PREFIX)) {
-      const rawName = label.slice(LABEL_PREFIX.length);
-      const name = oneLine(rawName);
+    if (rawName !== undefined && name !== undefined) {
       const known = anchors.find((anchor) => anchor.name === rawName);
       const share =
         known && known.percent > 0 ? `${known.percent.toFixed(1)}%` : "—";
       items.push({
         kind: "anchor",
         targetId: entry.id,
+        destination,
+        anchor: name,
         depth: 0,
         current: false,
         text: name,
@@ -268,26 +294,37 @@ export function treeItems(
         ...(known && { value: share }),
         detail: `at: ${previewOf(entry)}`,
         details: `Anchor '${name}'${known ? `: ${share} of the window` : ""}${known?.auto ? " (set automatically)" : ""}.\nat: ${previewOf(entry)}`,
-        subject: `anchor '${name}'`,
+        subject:
+          destination === "before"
+            ? `just before the message at anchor '${name}'`
+            : `anchor '${name}'`,
       });
     }
   }
 
   const tip = branch.findLast((entry) => TIP_TYPES.has(entry.type));
   if (tip) {
-    const at = items.findLastIndex((item) => item.targetId === tip.id);
+    const at = items.findLastIndex(
+      (item) => item.targetId === tip.id && item.depth === 0,
+    );
     if (at >= 0) items[at].current = true;
-    else
+    else {
+      const destination = destinationOf(tip);
       items.push({
         kind: "leaf",
         targetId: tip.id,
+        destination,
         depth: 0,
         current: true,
         text: previewOf(tip),
         dim: true,
         details: `You are here: ${previewOf(tip)}`,
-        subject: "the current position",
+        subject:
+          destination === "before"
+            ? "just before the latest message"
+            : "the current position",
       });
+    }
   }
   return items;
 }
@@ -325,8 +362,12 @@ const passes = (item: TreeItem, filter: TreeFilter): boolean =>
 
 function confirmText(item: TreeItem): string {
   const move =
-    item.kind === "user"
-      ? "The session leaf moves to just before this message, so the conversation continues from there."
+    item.destination === "before"
+      ? `The session leaf moves to just before this message, so the conversation continues from there. Its text goes back into the editor when the editor is empty.${
+          item.anchor === undefined
+            ? ""
+            : ` The anchor '${item.anchor}' sits on this message, so it will no longer be on the active branch.`
+        }`
       : "The session leaf moves there, so new messages continue from that point.";
   return `${move}\nNothing is deleted: the rest of the session stays, and /tree or /anchor tree can bring you back.`;
 }
@@ -342,11 +383,17 @@ async function goTo(
     return true;
   };
   if (item.current) {
-    ctx.ui.notify(
-      "You are already here. Select another row and press g to go there.",
-      "info",
-    );
-    return false;
+    // The host returns without moving when the target already is the leaf.
+    const hostNoop = ctx.sessionManager.getLeafId() === item.targetId;
+    if (item.destination === "at" || hostNoop) {
+      ctx.ui.notify(
+        item.destination === "at"
+          ? "You are already here. Select another row and press g to go there."
+          : "This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press g to go there.",
+        "info",
+      );
+      return false;
+    }
   }
   if (refuseWhileBusy()) return false;
   const confirmed = await ctx.ui.confirm(
