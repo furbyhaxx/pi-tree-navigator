@@ -22,7 +22,14 @@ branch creation, agent-context refresh and history-rewrite notifications.
   and confirmation.
 - `continuity-ledger.ts`, `continuity-briefing.ts`: pure session continuity ledger
   (goals, rules, decisions, steering, file pointers) with user-authority invariants,
-  fold reconciliation and model-facing briefing. Not yet wired into the live fold.
+  fold reconciliation and model-facing briefing.
+- `continuity-store.ts`: branch-local persistence. Ledger state is the replay of
+  `navigate-tree-continuity-ops` entries on the active branch, replaced by the
+  snapshot in `branch_summary.details.continuity` at each fold. The fold embeds the
+  briefing in the stored handoff and reports rejected agent ops.
+- `continuity-capture.ts`: deterministic capture of user intent (rules, decisions,
+  objective, steering, `ask_user` answers) with a heuristic classifier and an
+  optional model classifier. User words are stored verbatim.
 - `proposal-options.ts`: exact model/thinking selectors and tool disclosure rules.
 - `proposal-source.ts`: deterministic outlines and filtered full-text source records.
 - `proposal-engine.ts`: optional bounded model analysis and explicit heuristic fallback.
@@ -86,3 +93,11 @@ for the clone workflow and supported inputs.
 - Existing graph edges remain unless an explicit completed fold redirects a
   continuation. Native rewind summaries can establish completion of tool calls
   through real results in their referenced archived history; no results are invented.
+- Continuity ledger state is branch-local: the replay of ops entries since the
+  last fold snapshot. A fold replaces it with the snapshot on its `branch_summary`;
+  a rewind to an earlier branch therefore restores that branch's ledger.
+- Ledger authority: items with a user origin (rules, decisions, the objective) are
+  never deleted, archived or rewritten by agent or classifier ops. Supersession must
+  cite a newer user entry. Rejected ops are reported in the fold result, not applied.
+- Continuity capture and fold reconciliation are fail-open: a classifier, store or
+  delta failure never blocks a turn or a fold, and a malformed delta applies nothing.
