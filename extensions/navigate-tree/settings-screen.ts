@@ -179,8 +179,13 @@ const fieldStatus = (field: {
 
 const continuityStatus =
   (pick: "capture" | "intentClassifier") =>
-  (layer: ParsedLayer): Status =>
-    layer.continuity ? fieldStatus(layer.continuity[pick]) : ABSENT;
+  (layer: ParsedLayer): Status => {
+    const field = layer.continuity?.[pick];
+    if (field === undefined) return ABSENT;
+    return field.kind === "invalid" && "problems" in field
+      ? { kind: "invalid", error: field.problems.join("; ") }
+      : fieldStatus(field);
+  };
 
 const autoStatus =
   (field: keyof AutoNavigatePartial) =>
@@ -248,9 +253,10 @@ const SETTINGS: readonly SettingDef[] = [
     kind: "classifier",
     off: true,
     onInvalid: "falls-through",
-    expects: "provider/id of a model, or off",
+    expects:
+      "recommended, provider/id of a model, off, or an object (edit the file)",
     description:
-      "Model (provider/id) that judges each new message for the ledger. off (default) uses heuristics only.",
+      "Judges new messages for the ledger: recommended, provider/id or an object. off (default): heuristics only.",
     status: continuityStatus("intentClassifier"),
     read: (config) => config.continuity.intentClassifier,
   },

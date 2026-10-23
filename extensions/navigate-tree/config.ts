@@ -24,8 +24,11 @@
  *     `anchorStartAfterTurns`, defaulting to `full`.
  *   - `continuity` (`capture`, `intentClassifier`/`intent_classifier`): the
  *     session continuity ledger's capture of user intent. `capture` defaults to
- *     true; `intentClassifier` is a `provider/id` classifier model or a disable
- *     sentinel and defaults to off (heuristics only). Each key is parsed and
+ *     true; `intentClassifier` is `"recommended"` (the benchmarked preset of
+ *     `intent-policy.ts`), an object policy that overrides the preset (strictly
+ *     validated; the effective value is its canonical JSON text), a `provider/id`
+ *     classifier model or a disable sentinel and defaults to off (heuristics
+ *     only). Each key is parsed and
  *     merged on its own and, like `parentHandoffMode`, an invalid value warns
  *     and falls through to the other layer's valid value, else the default.
  *   - `modelOverrides` (issue #86): per-model `rewindHintReserveTokens`,
@@ -72,8 +75,12 @@ import {
   modelPatternSpecificity,
   parseAutoNavigatePartial,
 } from "./auto-navigate-config.ts";
-import { parseClassifierModel } from "./continuity-capture.ts";
 import type { HandoffMode } from "./handoff.ts";
+import {
+  parseClassifierModel,
+  parseIntentPolicyObject,
+  RECOMMENDED_INTENT_CLASSIFIER,
+} from "./intent-policy.ts";
 import {
   mergeProposalOptions,
   type ProposalOptions,
@@ -131,8 +138,13 @@ export type ParentHandoffModeField = FallbackField<HandoffMode>;
 /** Per-field parse outcomes for the `continuity` block. */
 export interface ContinuityLayer {
   capture: FallbackField<boolean>;
-  /** `ok` with `null` is an explicit "off". */
-  intentClassifier: FallbackField<string | null>;
+  /**
+   * `ok` with `null` is an explicit "off"; an object policy arrives as its
+   * canonical JSON text. An invalid object lists what is wrong with it.
+   */
+  intentClassifier:
+    | FallbackField<string | null>
+    | { kind: "invalid"; problems: readonly string[] };
   /** `continuity` is present but not an object; the loader warns and ignores it. */
   notObject: boolean;
 }
@@ -339,12 +351,21 @@ function parseIntentClassifierField(
   if (!hasSnake && !("intentClassifier" in block)) return { kind: "absent" };
   const value = hasSnake ? block.intent_classifier : block.intentClassifier;
   if (value === null || value === false) return { kind: "ok", value: null };
+  if (isPlainObject(value)) {
+    const checked = parseIntentPolicyObject(value);
+    return checked.ok
+      ? { kind: "ok", value: checked.canonical }
+      : { kind: "invalid", problems: checked.problems };
+  }
   if (typeof value !== "string") return { kind: "invalid" };
   const trimmed = value.trim();
   if (DISABLE_SENTINELS.has(trimmed.toLowerCase())) {
     return { kind: "ok", value: null };
   }
-  return parseClassifierModel(trimmed)
+  if (trimmed.toLowerCase() === RECOMMENDED_INTENT_CLASSIFIER) {
+    return { kind: "ok", value: RECOMMENDED_INTENT_CLASSIFIER };
+  }
+  return parseClassifierModel(trimmed) && !trimmed.startsWith("{")
     ? { kind: "ok", value: trimmed }
     : { kind: "invalid" };
 }
@@ -543,10 +564,10 @@ function mergeHintField(
 }
 
 /** Merge fields where invalid values fall through to the other valid layer. */
-function mergeFallbackField<T>(
-  globalField: FallbackField<T>,
-  projectField: FallbackField<T>,
-): FallbackField<T> {
+function mergeFallbackField<F extends { kind: "absent" | "ok" | "invalid" }>(
+  globalField: F,
+  projectField: F,
+): F {
   if (projectField.kind === "ok") return projectField;
   if (projectField.kind === "invalid") {
     return globalField.kind === "ok" ? globalField : projectField;
@@ -792,9 +813,14 @@ function parseLayerRoot(where: string, root: unknown): LayerLoadResult {
       `navigate_tree: invalid continuity.capture in ${where} — expected true or false; falling back to the other layer's valid value, else the default ${CONTINUITY_CAPTURE_DEFAULT}.`,
     );
   }
-  if (continuity?.intentClassifier.kind === "invalid") {
+  const classifier = continuity?.intentClassifier;
+  if (classifier?.kind === "invalid") {
+    const expected =
+      "problems" in classifier
+        ? classifier.problems.join("; ")
+        : 'expected "recommended", "provider/id" of a classifier model, an object policy or a disable sentinel (null, false, "off", "disabled")';
     warnings.push(
-      `navigate_tree: invalid continuity.intentClassifier in ${where} — expected "provider/id" of a classifier model or a disable sentinel (null, false, "off", "disabled"); falling back to the other layer's valid value, else off (heuristics only).`,
+      `navigate_tree: invalid continuity.intentClassifier in ${where} — ${expected}; falling back to the other layer's valid value, else off (heuristics only).`,
     );
   }
   if (parsed.layer.proposal?.kind === "invalid") {
@@ -845,7 +871,7 @@ export async function loadTreeNavigatorConfig(opts: {
     parentHandoffMode: HandoffMode;
     continuity: {
       capture: boolean;
-      /** `provider/id` of a classifier model, or null for heuristics only. */
+      /** `"recommended"`, an object policy's canonical JSON text, `provider/id` of a classifier model, or null for heuristics only. */
       intentClassifier: string | null;
     };
     proposal?: ProposalOptions;

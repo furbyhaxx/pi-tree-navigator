@@ -219,6 +219,8 @@ function harness(setup: Setup = {}) {
             } else {
               screen.handleInput(HOME);
               screen.handleInput(DOWN);
+              // The classifier list also offers the recommended policy before custom.
+              if (header.includes("Classifier")) screen.handleInput(DOWN);
               screen.handleInput(ENTER);
             }
             return;

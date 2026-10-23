@@ -10,10 +10,7 @@
  * No I/O. Pi runtime imports are type-only.
  */
 
-import type {
-  ClassifierContext,
-  ClassifierResult,
-} from "@earendil-works/pi-ai";
+import type { ClassifierContext } from "@earendil-works/pi-ai";
 import type {
   ModelRegistry,
   SessionEntry,
@@ -31,6 +28,15 @@ import {
   TRUNCATION_MARKER,
 } from "./continuity-ledger.ts";
 import { extractTextContent, isValidName, LABEL_PREFIX } from "./helpers.ts";
+import {
+  classifierAsk,
+  parseClassifierModel,
+  RECOMMENDED_INTENT_CLASSIFIER,
+  resolveIntentPolicy,
+  resolveStageModels,
+  type StageAnswer,
+  type StageAsk,
+} from "./intent-policy.ts";
 
 export const INTENT_KINDS = [
   "objective",
@@ -254,17 +260,6 @@ const KIND_CRITERIA: Record<IntentKind, string> = {
 const isIntentKind = (value: string): value is IntentKind =>
   (INTENT_KINDS as readonly string[]).includes(value);
 
-/** Split `provider/id` at the first slash (ids may contain slashes). */
-export function parseClassifierModel(
-  value: string,
-): { provider: string; id: string } | undefined {
-  const slash = value.indexOf("/");
-  if (slash <= 0 || slash === value.length - 1 || /\s/.test(value)) {
-    return undefined;
-  }
-  return { provider: value.slice(0, slash), id: value.slice(slash + 1) };
-}
-
 const KIND_PRIORITY: Readonly<Record<string, number>> = {
   rule: 0,
   decision: 0,
@@ -341,33 +336,34 @@ const ephemeral = (warning?: string): IntentVerdict => ({
   ...(warning !== undefined && { warning }),
 });
 
+type Answers = Record<string, StageAnswer> | undefined;
+
 // `undefined` is an abstention: low confidence, or no usable kind answer.
-function verdictFrom(
-  result: ClassifierResult,
+function acceptedKind(
+  answers: Answers,
+  minConfidence: number,
+): IntentKind | undefined {
+  const kind = answers?.kind;
+  return kind !== undefined &&
+    kind.confidence >= minConfidence &&
+    isIntentKind(kind.choice)
+    ? kind.choice
+    : undefined;
+}
+
+// An answer to `contradicts` that names an offered choice with enough confidence.
+function acceptedContradiction(
+  answers: Answers,
   items: IntentInput["activeItems"],
   minConfidence: number,
-): IntentVerdict | undefined {
-  const kind = result.answers.kind;
-  if (
-    kind?.type !== "choice" ||
-    kind.confidence < minConfidence ||
-    !isIntentKind(kind.choice)
-  ) {
-    return undefined;
-  }
-  if (kind.choice === "ephemeral") return ephemeral();
-  const contradicts = result.answers.contradicts;
-  const named =
-    contradicts?.type === "choice" &&
+): string | undefined {
+  const contradicts = answers?.contradicts;
+  return contradicts !== undefined &&
     contradicts.confidence >= minConfidence &&
-    items.some((item) => item.id === contradicts.choice)
-      ? contradicts.choice
-      : undefined;
-  return {
-    kind: kind.choice,
-    by: "classifier",
-    ...(named !== undefined && { supersedes: [named] }),
-  };
+    (contradicts.choice === NO_CONTRADICTION ||
+      items.some((item) => item.id === contradicts.choice))
+    ? contradicts.choice
+    : undefined;
 }
 
 // An abstaining model must not hide an explicit marker or excerpt: keep what
@@ -375,75 +371,220 @@ function verdictFrom(
 async function abstentionVerdict(
   input: IntentInput,
   signal: AbortSignal | undefined,
+  heuristics: boolean,
 ): Promise<IntentVerdict> {
+  if (!heuristics) return ephemeral();
   const heuristic = await heuristicClassifier(input, signal);
   return heuristic.kind !== "ephemeral" || heuristic.excerpts !== undefined
     ? heuristic
     : ephemeral();
 }
 
+/** What `createModelClassifier` needs; a policy with catalog models also uses the optional methods. */
+export type IntentRegistry = Pick<
+  ModelRegistry,
+  "getModelOfType" | "classify"
+> &
+  Partial<Pick<ModelRegistry, "getAvailableOfType" | "streamSimple">>;
+
+type PolicyRegistry = IntentRegistry &
+  Required<Pick<ModelRegistry, "getAvailableOfType" | "streamSimple">>;
+
+const hasPolicyApi = (registry: IntentRegistry): registry is PolicyRegistry =>
+  typeof registry.getAvailableOfType === "function" &&
+  typeof registry.streamSimple === "function";
+
+const unknownModel = (setting: string) =>
+  `navigate_tree: continuity classifier model ${JSON.stringify(setting)} is not a known classifier model (expected "provider/id"); capture uses heuristics only.`;
+
+/** Every stage model of `policy`, resolved to something that can answer. */
+async function resolveAsks(
+  registry: IntentRegistry,
+  setting: string,
+  selectors: readonly string[],
+): Promise<Map<string, StageAsk> | { problem: string }> {
+  const unavailable = (reason: string) => ({
+    problem: `navigate_tree: continuity classifier ${JSON.stringify(setting.startsWith("{") ? "custom policy" : setting)} is unavailable (${reason}); capture uses heuristics only.`,
+  });
+  if (setting === RECOMMENDED_INTENT_CLASSIFIER || setting.startsWith("{")) {
+    if (!hasPolicyApi(registry)) {
+      return unavailable("the model registry cannot list models");
+    }
+    const resolved = await resolveStageModels(registry, selectors);
+    return resolved.ok ? resolved.asks : unavailable(resolved.reason);
+  }
+  const parsed = parseClassifierModel(setting);
+  const model = parsed
+    ? registry.getModelOfType("classifier", parsed.provider, parsed.id)
+    : undefined;
+  return model
+    ? new Map([[setting, classifierAsk(registry, model)]])
+    : { problem: unknownModel(setting) };
+}
+
 /**
- * Classify with a registry classifier model, one call per message. Resolves to
- * `undefined` (after `opts.onWarning`) when `model` is malformed or unknown;
- * never throws. When the model abstains (low confidence or a malformed kind
- * answer) the heuristic verdict stands if it found a rule, decision, objective
- * or excerpts, else the message is ephemeral; an abstention never supersedes.
- * After the first provider error the instance stops calling the model, answers
- * with the heuristic classifier so no explicit rule is lost during an outage,
- * and reports the failure once through `IntentVerdict.warning`; create a new
+ * Classify with registry models, one pass per message. `model` is a
+ * `continuity.intentClassifier` value: `provider/id` (one classifier model
+ * answers both questions), `"recommended"` or the canonical text of an object
+ * policy (see `intent-policy.ts`). Resolves to `undefined` (after
+ * `opts.onWarning`) when a model is malformed, unknown or has no credentials,
+ * and silently when the policy uses no model at all; never throws.
+ *
+ * The kind is judged by its stage alone and never escalated; without a kind
+ * model the heuristic judges it. A message that is not ephemeral then gets the
+ * `contradicts` answer of the supersession stage and, if that stage abstains,
+ * of the escalation stage. A model abstains on low confidence or an answer it
+ * did not offer. When the kind stage abstains the heuristic verdict stands if
+ * it found a rule, decision, objective or excerpts, else the message is
+ * ephemeral; an abstention never supersedes. After a stage model's first
+ * error the instance stops calling it and reports the failure once through
+ * `IntentVerdict.warning`; a failed kind stage answers with the heuristic
+ * classifier so no explicit rule is lost during an outage. Create a new
  * instance to retry.
  */
 export async function createModelClassifier(
-  registry: Pick<ModelRegistry, "getModelOfType" | "classify">,
+  registry: IntentRegistry,
   model: string,
   opts: { minConfidence?: number; onWarning?: (message: string) => void } = {},
 ): Promise<IntentClassifier | undefined> {
-  const minConfidence = opts.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
-  const parsed = parseClassifierModel(model);
-  const classifierModel = parsed
-    ? registry.getModelOfType("classifier", parsed.provider, parsed.id)
-    : undefined;
-  if (!classifierModel) {
-    opts.onWarning?.(
-      `navigate_tree: continuity classifier model ${JSON.stringify(model)} is not a known classifier model (expected "provider/id"); capture uses heuristics only.`,
-    );
+  const policy = resolveIntentPolicy(model);
+  if (!policy) {
+    opts.onWarning?.(unknownModel(model));
     return undefined;
   }
-  let failed = false;
+  const selectors = [
+    ...new Set(
+      [
+        policy.kind.model,
+        policy.supersession.model,
+        policy.escalation.model,
+      ].filter((selector) => selector !== null),
+    ),
+  ];
+  if (selectors.length === 0) return undefined;
+  const resolved = await resolveAsks(registry, model, selectors);
+  if ("problem" in resolved) {
+    opts.onWarning?.(resolved.problem);
+    return undefined;
+  }
+  const minConfidence =
+    opts.minConfidence ?? policy.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
+  const failed = new Set<string>();
+  const kindModel = policy.kind.model;
+
+  const ask = async (
+    selector: string,
+    context: ClassifierContext,
+    signal: AbortSignal | undefined,
+  ): Promise<{ answers: Answers } | { error: string }> => {
+    try {
+      return { answers: await resolved.get(selector)?.(context, signal) };
+    } catch (error) {
+      failed.add(selector);
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  };
+
   return async (input, signal) => {
     if (signal?.aborted) return ephemeral();
-    if (failed) return heuristicClassifier(input, signal);
+    const outage = async (): Promise<IntentVerdict> =>
+      policy.heuristics ? heuristicClassifier(input, signal) : ephemeral();
     const { context, items } = buildIntentClassifierContext(input);
-    let result: ClassifierResult | undefined;
-    let reason: string | undefined;
-    try {
-      result = await registry.classify(
-        classifierModel,
-        context,
-        signal ? { signal } : undefined,
+    const questions = (
+      ids: readonly string[],
+      instructions: Record<string, string | undefined>,
+    ): ClassifierContext => ({
+      state: context.state,
+      questions: Object.fromEntries(
+        ids.flatMap((id) => {
+          const question = context.questions[id];
+          const text = instructions[id];
+          return question
+            ? [
+                [
+                  id,
+                  text === undefined
+                    ? question
+                    : { ...question, instructions: text },
+                ],
+              ]
+            : [];
+        }),
+      ),
+    });
+    const supersession = items.length > 0 ? policy.supersession.model : null;
+    const sameModel = kindModel !== null && kindModel === supersession;
+    const warnings: string[] = [];
+
+    let base: IntentVerdict;
+    let shared: Answers;
+    if (kindModel === null) {
+      base = await heuristicClassifier(input, signal);
+      if (base.kind === "ephemeral") return base;
+    } else {
+      if (failed.has(kindModel)) return outage();
+      const out = await ask(
+        kindModel,
+        questions(sameModel ? ["kind", "contradicts"] : ["kind"], {
+          kind: policy.kind.instructions,
+          contradicts: policy.supersession.instructions,
+        }),
+        signal,
       );
-      if (result.stopReason !== "stop") {
-        reason = result.errorMessage ?? result.stopReason;
+      if (signal?.aborted) return ephemeral();
+      if ("error" in out) {
+        return {
+          ...(await outage()),
+          warning: `navigate_tree: continuity classifier ${kindModel} failed (${out.error}); user instructions are ${policy.heuristics ? "captured by heuristics instead" : "not captured until it answers again"}.`,
+        };
       }
-    } catch (error) {
-      reason = error instanceof Error ? error.message : String(error);
+      const kind = acceptedKind(out.answers, minConfidence);
+      if (kind === undefined) {
+        return abstentionVerdict(input, signal, policy.heuristics);
+      }
+      if (kind === "ephemeral") return ephemeral();
+      base = { kind, by: "classifier" };
+      if (sameModel) shared = out.answers;
     }
-    if (signal?.aborted) return ephemeral();
-    if (!result || reason !== undefined) {
-      const first = !failed;
-      failed = true;
-      const fallback = await heuristicClassifier(input, signal);
-      return first
-        ? {
-            ...fallback,
-            warning: `navigate_tree: continuity classifier ${model} failed (${reason}); user instructions are captured by heuristics instead.`,
-          }
-        : fallback;
+
+    // The answer of one model to `contradicts`, or undefined when it abstains or fails.
+    const askContradicts = async (
+      model: string | null,
+      instructions: string | undefined,
+    ) => {
+      if (model === null || failed.has(model)) return undefined;
+      const out = await ask(
+        model,
+        questions(["contradicts"], { contradicts: instructions }),
+        signal,
+      );
+      if ("error" in out) {
+        warnings.push(
+          `navigate_tree: continuity classifier ${model} failed (${out.error}); replacements of earlier items by it are skipped.`,
+        );
+        return undefined;
+      }
+      return acceptedContradiction(out.answers, items, minConfidence);
+    };
+    let contradicts: string | undefined;
+    if (items.length > 0) {
+      contradicts = shared
+        ? acceptedContradiction(shared, items, minConfidence)
+        : await askContradicts(supersession, policy.supersession.instructions);
+      contradicts ??= await askContradicts(
+        policy.escalation.model,
+        policy.escalation.instructions,
+      );
+      if (signal?.aborted) return ephemeral();
     }
-    return (
-      verdictFrom(result, items, minConfidence) ??
-      (await abstentionVerdict(input, signal))
-    );
+    const named = items.some((item) => item.id === contradicts)
+      ? contradicts
+      : undefined;
+    return {
+      ...base,
+      ...(named !== undefined && { supersedes: [named] }),
+      ...(warnings.length > 0 && { warning: warnings.join(" ") }),
+    };
   };
 }
 
