@@ -1406,76 +1406,143 @@ function isPreservedLateEntry(entry: SessionEntry): boolean {
   );
 }
 
-function toolEnvelopeIds(entry: SessionEntry): {
+function toolEnvelopeIds(message: AgentMessage): {
   calls: string[];
   result?: string;
 } {
-  if (entry.type !== "message") return { calls: [] };
-  if (entry.message.role === "toolResult") {
-    const id = entry.message.toolCallId;
-    return { calls: [], ...(typeof id === "string" ? { result: id } : {}) };
+  if (message.role === "toolResult") {
+    return { calls: [], result: message.toolCallId };
   }
-  if (
-    entry.message.role !== "assistant" ||
-    !Array.isArray(entry.message.content)
-  )
-    return { calls: [] };
-  const calls: string[] = [];
-  for (const block of entry.message.content) {
-    if (
-      block &&
-      typeof block === "object" &&
-      "type" in block &&
-      block.type === "toolCall" &&
-      "id" in block &&
-      typeof block.id === "string"
-    ) {
-      calls.push(block.id);
-    }
-  }
-  return { calls };
+  if (message.role !== "assistant") return { calls: [] };
+  return {
+    calls: message.content.flatMap((block) =>
+      block.type === "toolCall" ? [block.id] : [],
+    ),
+  };
 }
 
-/** Fold point that keeps trailing unanswered input, or why that cut is unsafe. */
-function recoveryCutOf(
-  branch: readonly SessionEntry[],
+/** Read-only fold boundary in the current canonical context, preserving unanswered input. */
+export function recoveryCutOf(
+  sm: SessionManager,
 ): { ok: true; foldPointId: string } | { ok: false; detail: string } {
-  if (branch.length === 0) {
-    return { ok: false, detail: "no session entries yet, nothing to fold" };
-  }
-  let end = branch.length;
-  while (end > 0 && isPreservedLateEntry(branch[end - 1])) end--;
-  if (end === 0) {
+  try {
+    const allEntries = sm.getEntries();
+    const byId = new Map(allEntries.map((entry) => [entry.id, entry]));
+    const order = new Map(allEntries.map((entry, index) => [entry.id, index]));
+    const projection = buildSessionProjection(allEntries, sm.getLeafId(), byId);
+    const occurrence = (entryId: string, callId: string) =>
+      JSON.stringify([entryId, callId]);
+    const archived = new Map<string, Set<string>>();
+    const visiting = new Set<string>();
+    // A summary can discharge only the exact occurrence completed on its fromId ancestry.
+    const completedThrough = (leafId: string): Set<string> => {
+      const cached = archived.get(leafId);
+      if (cached) return cached;
+      if (visiting.has(leafId)) throw new Error("cyclic summary history");
+      visiting.add(leafId);
+      const path: SessionEntry[] = [];
+      const seen = new Set<string>();
+      let id: string | null = leafId;
+      while (id !== null) {
+        if (seen.has(id)) throw new Error("cyclic session history");
+        seen.add(id);
+        const entry = byId.get(id);
+        if (!entry) throw new Error("missing summary history");
+        path.push(entry);
+        id = entry.parentId;
+      }
+      const pending = new Map<string, string>();
+      const completed = new Set<string>();
+      for (const entry of path.reverse()) {
+        if (entry.type === "branch_summary" && entry.fromId !== "root") {
+          const evidence = completedThrough(entry.fromId);
+          for (const [callId, key] of pending) {
+            if (!evidence.has(key)) continue;
+            pending.delete(callId);
+            completed.add(key);
+          }
+        }
+        for (const message of sessionEntryToContextMessages(entry)) {
+          const envelope = toolEnvelopeIds(message);
+          for (const callId of envelope.calls) {
+            if (pending.has(callId))
+              throw new Error("duplicate outstanding archived tool call");
+            pending.set(callId, occurrence(entry.id, callId));
+          }
+          if (envelope.result !== undefined) {
+            const key = pending.get(envelope.result);
+            if (!key) throw new Error("orphan archived tool result");
+            pending.delete(envelope.result);
+            completed.add(key);
+          }
+        }
+      }
+      visiting.delete(leafId);
+      archived.set(leafId, completed);
+      return completed;
+    };
+
+    const pending = new Map<string, string>();
+    let foldPointId: string | undefined;
+    let unansweredInput = false;
+    // Native projection places the compaction before its older retained messages.
+    const chronological = projection.entries.toSorted(
+      (a, b) =>
+        (order.get(a.sourceEntry.id) ?? -1) -
+        (order.get(b.sourceEntry.id) ?? -1),
+    );
+    for (const { sourceEntry, messages } of chronological) {
+      if (messages.length === 0) continue;
+      if (isPreservedLateEntry(sourceEntry)) unansweredInput = true;
+      if (
+        pending.size > 0 &&
+        sourceEntry.type === "branch_summary" &&
+        sourceEntry.fromId !== "root"
+      ) {
+        const evidence = completedThrough(sourceEntry.fromId);
+        for (const [callId, key] of pending) {
+          if (evidence.has(key)) pending.delete(callId);
+        }
+      }
+      for (const message of messages) {
+        const envelope = toolEnvelopeIds(message);
+        for (const callId of envelope.calls) {
+          if (pending.has(callId))
+            throw new Error("duplicate outstanding tool call");
+          pending.set(callId, occurrence(sourceEntry.id, callId));
+        }
+        if (envelope.result !== undefined) {
+          if (!pending.delete(envelope.result))
+            throw new Error("tool result without its call");
+        }
+        if (
+          (message.role === "assistant" &&
+            message.stopReason !== "error" &&
+            message.stopReason !== "aborted") ||
+          message.role === "toolResult" ||
+          sourceEntry.type === "branch_summary"
+        ) {
+          foldPointId = sourceEntry.id;
+          unansweredInput = false;
+        } else if (sourceEntry.type === "compaction" && !unansweredInput) {
+          foldPointId = sourceEntry.id;
+        }
+      }
+    }
+    if (pending.size) throw new Error("tool call without its result");
+    if (!foldPointId) {
+      return {
+        ok: false,
+        detail: "the active context has no completed work to fold",
+      };
+    }
+    return { ok: true, foldPointId };
+  } catch (error) {
     return {
       ok: false,
-      detail:
-        "the active branch is only unanswered input, so there is no span to fold",
+      detail: `the recovery cut is unsafe: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
-  const calls = new Set<string>();
-  const results = new Set<string>();
-  for (const entry of branch.slice(0, end)) {
-    const envelope = toolEnvelopeIds(entry);
-    for (const id of envelope.calls) calls.add(id);
-    if (envelope.result) results.add(envelope.result);
-  }
-  for (const id of calls) {
-    if (!results.has(id)) {
-      return {
-        ok: false,
-        detail: "folding here would leave a tool call without its result",
-      };
-    }
-  }
-  for (const id of results) {
-    if (!calls.has(id)) {
-      return {
-        ok: false,
-        detail: "folding here would leave a tool result without its call",
-      };
-    }
-  }
-  return { ok: true, foldPointId: branch[end - 1].id };
 }
 
 function collectLateEntries(
@@ -4421,14 +4488,7 @@ export default function (pi: ExtensionAPI) {
       refuse("the system prompt alone leaves no room for a recovered request");
       return;
     }
-    let branch: SessionEntry[];
-    try {
-      branch = sm.getBranch();
-    } catch {
-      refuse("the active branch could not be read");
-      return;
-    }
-    const cut = recoveryCutOf(branch);
+    const cut = recoveryCutOf(sm);
     if (!cut.ok) {
       refuse(cut.detail);
       return;
