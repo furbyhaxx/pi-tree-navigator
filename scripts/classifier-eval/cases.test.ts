@@ -145,7 +145,7 @@ test("inputs stay inside the limits where truncation would change a reference", 
         numbers.add(i.id.slice(1));
       }
       assert.equal(numbers.size, c.input.activeItems.length, c.id);
-    } else {
+    } else if (c.input.type === "milestone") {
       const { records } = c.input;
       assert.ok(records.length >= 3 && records.length <= MAX_RECORDS, c.id);
       assert.equal(new Set(idsOf(c)).size, records.length, c.id);
@@ -180,7 +180,7 @@ test("prepared requests carry every reference and keep the text unchanged", () =
         [...c.input.activeItems].sort(byId),
         c.id,
       );
-    } else {
+    } else if (c.input.type === "milestone") {
       assert.ok(state.structure, `${c.id} sends no structure`);
       assert.deepEqual(
         Object.keys(prepared.questions).sort(),
