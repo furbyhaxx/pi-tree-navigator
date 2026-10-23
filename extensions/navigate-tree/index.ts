@@ -196,6 +196,11 @@ import {
   sanitizeLegacyText,
   withLegacyOutcome,
 } from "./legacy-rewind.ts";
+import {
+  collectOpenUserRequests,
+  type OpenUserRequest,
+  renderOpenUserRequests,
+} from "./open-user-requests.ts";
 import { capRecoveryOutput } from "./output-budget.ts";
 import {
   createProposalModelRunner,
@@ -1648,6 +1653,8 @@ export interface FoldMaterialization {
   /** Input after the fold point, re-appended after the summary. */
   lateEntries: LateEntry[];
   continuity: FoldContinuity;
+  /** Open collapsed user instructions, separate from generated narrative. */
+  openUserRequests: OpenUserRequest[];
 }
 
 /** `ok: false` is the reason `commitFold` would refuse for; nothing was written either way. */
@@ -1680,6 +1687,7 @@ export type FoldCommitOutcome =
       modifiedFiles: string[];
       /** The message that tells the model the fold landed. */
       continuation: string;
+      openUserRequests: OpenUserRequest[];
       continuityNotice?: string;
       continuityReport?: FoldContinuity["report"];
     };
@@ -1819,6 +1827,17 @@ export function previewFoldCommit(
     );
     if (foldPointAt < 0)
       return refuse("the folded work is no longer in the projected context");
+    const retainedIds = new Set(
+      buildSessionProjection(sm.getEntries(), targetId).entries.map(
+        (entry) => entry.sourceEntry.id,
+      ),
+    );
+    const openUserRequests = collectOpenUserRequests(
+      currentEntries,
+      foldPointId,
+      retainedIds,
+      REWIND_CUSTOM_TYPE,
+    );
     const foldEstimateBefore = estimateContentTokens([
       ...currentEntries
         .slice(0, foldPointAt + 1)
@@ -1830,6 +1849,7 @@ export function previewFoldCommit(
       customType: REWIND_CUSTOM_TYPE,
       content:
         input.continuationText(requestAccounting(sm, prospective).tokens) +
+        renderOpenUserRequests(openUserRequests) +
         (continuity.notice ? `\n\n${continuity.notice}` : "") +
         (lateEntries.length
           ? `\n\n${buildLateEntriesNote(lateEntries.length)}`
@@ -1875,6 +1895,7 @@ export function previewFoldCommit(
       modifiedFiles,
       lateEntries,
       continuity,
+      openUserRequests,
     };
   } catch (err) {
     return refuse(
@@ -1904,6 +1925,7 @@ export async function commitFold(
     modifiedFiles,
     lateEntries,
     continuity,
+    openUserRequests,
     foldEstimateBefore,
     foldEstimateAfter,
   } = preview;
@@ -1999,8 +2021,10 @@ export async function commitFold(
     historyRewriteNotified,
     readFiles,
     modifiedFiles,
+    openUserRequests,
     continuation:
       input.continuationText(afterTokens) +
+      renderOpenUserRequests(openUserRequests) +
       (continuity.notice ? `\n\n${continuity.notice}` : "") +
       (reappended > 0 ? `\n\n${buildLateEntriesNote(reappended)}` : "") +
       (refreshed ? "" : `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`),
@@ -2406,6 +2430,7 @@ function foldDoneDraft(
     readFiles: landed.readFiles,
     modifiedFiles: landed.modifiedFiles,
     reappendedLateMessages: landed.reappended,
+    openUserRequests: landed.openUserRequests,
     ...(forced && { forced: true }),
     ...(landed.continuityReport && { continuity: landed.continuityReport }),
   });

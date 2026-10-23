@@ -1,0 +1,97 @@
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+
+/** A still-open user instruction quoted from the canonical context. */
+export interface OpenUserRequest {
+  sourceEntryId: string;
+  text: string;
+}
+
+function storedRequests(details: unknown): OpenUserRequest[] {
+  if (
+    !details ||
+    typeof details !== "object" ||
+    !("openUserRequests" in details)
+  )
+    return [];
+  const requests = details.openUserRequests;
+  if (!Array.isArray(requests)) return [];
+  return requests.filter(
+    (request): request is OpenUserRequest =>
+      request !== null &&
+      typeof request === "object" &&
+      typeof request.sourceEntryId === "string" &&
+      typeof request.text === "string",
+  );
+}
+
+/** Collect collapsed open requests without resurrecting edited or retained input. */
+export function collectOpenUserRequests(
+  entries: readonly { sourceEntry: SessionEntry; messages: AgentMessage[] }[],
+  foldPointId: string,
+  retainedIds: ReadonlySet<string>,
+  continuationType: string,
+): OpenUserRequest[] {
+  let open = new Map<string, OpenUserRequest & { collapsed: boolean }>();
+  for (const entry of entries) {
+    const collapsed = !retainedIds.has(entry.sourceEntry.id);
+    for (const message of entry.messages) {
+      if (message.role === "user") {
+        const text =
+          typeof message.content === "string"
+            ? message.content
+            : message.content
+                .flatMap((block) => (block.type === "text" ? [block.text] : []))
+                .join("");
+        if (text.length > 0)
+          open.set(entry.sourceEntry.id, {
+            sourceEntryId: entry.sourceEntry.id,
+            text,
+            collapsed,
+          });
+      } else if (
+        message.role === "assistant" &&
+        message.stopReason === "stop" &&
+        !message.content.some((block) => block.type === "toolCall") &&
+        message.content.some(
+          (block) => block.type === "text" && block.text.trim().length > 0,
+        )
+      ) {
+        open.clear();
+      } else if (
+        message.role === "custom" &&
+        message.customType === continuationType
+      ) {
+        const inherited = new Map<
+          string,
+          OpenUserRequest & { collapsed: boolean }
+        >();
+        for (const request of storedRequests(message.details)) {
+          inherited.set(request.sourceEntryId, { ...request, collapsed });
+        }
+        // Archived requests precede late input delivered before the receipt.
+        open = new Map([...inherited, ...open]);
+      }
+    }
+    if (entry.sourceEntry.id === foldPointId) break;
+  }
+  return [...open.values()]
+    .filter((request) => request.collapsed)
+    .map(({ sourceEntryId, text }) => ({ sourceEntryId, text }));
+}
+
+/** Frame archived user input separately from generated handoff narrative. */
+export function renderOpenUserRequests(
+  requests: readonly OpenUserRequest[],
+): string {
+  if (requests.length === 0) return "";
+  return (
+    "\n\nThis rewind is completed; do not repeat it. Fulfill the remaining request(s) in the quoted archived user input below.\n" +
+    requests
+      .map(
+        (request) =>
+          `\nQuoted archived user request (source entry ID: ${request.sourceEntryId}):\n<archived-user-request>\n${request.text}\n</archived-user-request>`,
+      )
+      .join("\n")
+  );
+}
