@@ -18,11 +18,16 @@ export interface FoldSummaryRunner {
   readonly name: string;
   readonly contextWindow: number;
   readonly maxOutputTokens: number;
+  /** Reasoning level of every call unless a request turns it off. */
+  readonly thinking: ThinkingLevel | "off";
   complete(request: {
     systemPrompt?: string;
     messages: Message[];
     tools?: Tool[];
+    /** Response ceiling; reasoning tokens share it on adaptive and effort-based models. */
     maxTokens: number;
+    /** `"off"` sends this call without reasoning. */
+    reasoning?: "off";
     signal?: AbortSignal;
   }): Promise<{
     text: string;
@@ -42,6 +47,7 @@ export function createFoldSummaryRunner(options: {
   const { registry, model, thinking, sessionId } = options;
   return {
     name: `${model.provider}/${model.id}:${thinking}`,
+    thinking,
     contextWindow: model.contextWindow,
     maxOutputTokens: Math.min(
       model.maxTokens,
@@ -58,7 +64,10 @@ export function createFoldSummaryRunner(options: {
           },
           {
             signal: request.signal,
-            reasoning: thinking === "off" ? undefined : thinking,
+            reasoning:
+              thinking === "off" || request.reasoning === "off"
+                ? undefined
+                : thinking,
             maxTokens: request.maxTokens,
             toolChoice: "none",
             sessionId,
@@ -158,6 +167,25 @@ const DEFAULT_MAP_OUTPUT_TOKENS = 3000;
 export const DEFAULT_REDUCE_OUTPUT_TOKENS = 8000;
 const DEFAULT_CHUNK_INPUT_TOKENS = 120_000;
 const HEADROOM_TOKENS = 4096;
+
+const REASONING_ALLOWANCE: Readonly<Record<string, number>> = {
+  off: 0,
+  minimal: 1024,
+  low: 4096,
+  medium: 8192,
+  high: 16384,
+  xhigh: 32768,
+  max: 32768,
+};
+
+/**
+ * Response tokens reserved for reasoning on top of an answer cap. Adaptive
+ * Anthropic and OpenAI reasoning models count thinking against the same
+ * ceiling as the answer, so an answer-sized cap ends in `length`.
+ */
+export function reasoningAllowance(thinking: ThinkingLevel | "off"): number {
+  return REASONING_ALLOWANCE[thinking] ?? REASONING_ALLOWANCE.xhigh;
+}
 // Covers a note's or chunk's label line and the per-message role framing.
 const FRAME_TOKENS = 64;
 const MIN_PART_BYTES = 64;
@@ -366,6 +394,16 @@ export async function summarizeFold(
     options.limits?.reduceOutputTokens ?? DEFAULT_REDUCE_OUTPUT_TOKENS,
     runner.maxOutputTokens,
   );
+  // Response ceilings: the answer plus room for reasoning, and the larger
+  // reasoning-off ceiling a `length` retry may use. Planning reserves the latter.
+  const allowance = reasoningAllowance(runner.thinking);
+  const ceiling = (answer: number) =>
+    Math.min(runner.maxOutputTokens, answer + allowance);
+  const retryCeiling = (answer: number) =>
+    Math.min(runner.maxOutputTokens, Math.max(answer + allowance, 2 * answer));
+  const reduceCeiling = ceiling(reduceOut);
+  const mapReserve = retryCeiling(mapOut);
+  const reduceReserve = retryCeiling(reduceOut);
   const usage: Usage[] = [];
   let calls = 0;
   let plannedCalls = 0;
@@ -412,6 +450,31 @@ export async function summarizeFold(
     return { response };
   };
 
+  /**
+   * One call whose `length` stop is retried once without reasoning and with the
+   * reserved ceiling: reasoning that exhausts the shared ceiling must not end
+   * the fold. The retry is a billed call and counts against `maxCalls`.
+   */
+  const invokeWithRetry = async (
+    phase: FoldSummaryProgress["phase"],
+    request: Omit<Request, "signal" | "maxTokens" | "reasoning">,
+    answer: number,
+  ): Promise<{ response: Completion } | { failure: Failure }> => {
+    const first = await invoke(phase, {
+      ...request,
+      maxTokens: ceiling(answer),
+    });
+    if ("failure" in first || first.response.stopReason !== "length")
+      return first;
+    if (calls >= maxCalls) return first;
+    plannedCalls++;
+    return invoke(phase, {
+      ...request,
+      maxTokens: retryCeiling(answer),
+      reasoning: "off",
+    });
+  };
+
   const summaryOf = (response: Completion): string | null =>
     response.stopReason === "stop" ? extractSummaryText(response.text) : null;
 
@@ -434,12 +497,12 @@ export async function summarizeFold(
         ),
       ],
     };
-    const { fits, inputEstimate } = options.admit(request, reduceOut);
+    const { fits, inputEstimate } = options.admit(request, reduceCeiling);
     if (fits) {
       plannedCalls = 1;
       const attempt = await invoke("in-context", {
         ...request,
-        maxTokens: reduceOut,
+        maxTokens: reduceCeiling,
       });
       if ("failure" in attempt) return attempt.failure;
       const text = summaryOf(attempt.response);
@@ -476,7 +539,7 @@ export async function summarizeFold(
     FRAME_TOKENS;
   const budget = Math.min(
     options.limits?.chunkInputTokens ?? DEFAULT_CHUNK_INPUT_TOKENS,
-    runner.contextWindow - mapOut - mapOverhead - HEADROOM_TOKENS,
+    runner.contextWindow - mapReserve - mapOverhead - HEADROOM_TOKENS,
   );
   const chunks = packRecords(records, budget);
   if (!chunks)
@@ -497,7 +560,7 @@ export async function summarizeFold(
     : "";
   const finalCapacity =
     runner.contextWindow -
-    reduceOut -
+    reduceReserve -
     estimate(REDUCE_SYSTEM) -
     estimate(backgroundMessage) -
     estimate(finalInstruction) -
@@ -526,21 +589,24 @@ export async function summarizeFold(
   let notes: Note[] = [];
   for (const [index, chunk] of chunks.entries()) {
     const label = `Evidence records ${index + 1}/${chunks.length} (records ${chunk.ids[0]} to ${chunk.ids.at(-1)}):`;
-    const attempt = await invoke("map", {
-      systemPrompt: MAP_SYSTEM,
-      messages: [
-        userMessage(
-          extractionMessage(background, label, chunk.text, instruction),
-        ),
-      ],
-      maxTokens: mapOut,
-    });
+    const attempt = await invokeWithRetry(
+      "map",
+      {
+        systemPrompt: MAP_SYSTEM,
+        messages: [
+          userMessage(
+            extractionMessage(background, label, chunk.text, instruction),
+          ),
+        ],
+      },
+      mapOut,
+    );
     if ("failure" in attempt) return attempt.failure;
     const text = attempt.response.text.trim();
     if (attempt.response.stopReason !== "stop" || !text)
       return fail(
         "invalid-summary",
-        `map call ${index + 1}/${chunks.length} ended with stop reason "${attempt.response.stopReason}" and ${text ? "incomplete" : "no"} notes`,
+        `map call ${index + 1}/${chunks.length} ended with stop reason "${attempt.response.stopReason}" and ${text ? "incomplete" : "no"} notes${attempt.response.stopReason === "length" ? ", also after a retry without reasoning" : ""}`,
       );
     coverage.push(chunk.ids);
     notes.push({
@@ -574,20 +640,23 @@ export async function summarizeFold(
       const body = members
         .map((note, index) => noteText(note, index, members.length))
         .join("\n\n");
-      const attempt = await invoke("reduce", {
-        systemPrompt: MAP_SYSTEM,
-        messages: [
-          userMessage(
-            extractionMessage(
-              background,
-              `Evidence notes to consolidate (${members.length} notes from earlier extraction passes, in order):`,
-              body,
-              instruction,
+      const attempt = await invokeWithRetry(
+        "reduce",
+        {
+          systemPrompt: MAP_SYSTEM,
+          messages: [
+            userMessage(
+              extractionMessage(
+                background,
+                `Evidence notes to consolidate (${members.length} notes from earlier extraction passes, in order):`,
+                body,
+                instruction,
+              ),
             ),
-          ),
-        ],
-        maxTokens: mapOut,
-      });
+          ],
+        },
+        mapOut,
+      );
       if ("failure" in attempt) return attempt.failure;
       const text = attempt.response.text.trim();
       if (attempt.response.stopReason !== "stop" || !text)
@@ -614,12 +683,11 @@ export async function summarizeFold(
       ),
       userMessage(finalInstruction),
     ],
-    maxTokens: reduceOut,
   };
   let lastDetail = "";
   for (let attempt = 0; attempt <= FINAL_RETRIES; attempt++) {
     if (attempt > 0 && calls >= maxCalls) break;
-    const result = await invoke("reduce", reduceRequest);
+    const result = await invokeWithRetry("reduce", reduceRequest, reduceOut);
     if ("failure" in result) return result.failure;
     const text = summaryOf(result.response);
     if (text !== null)

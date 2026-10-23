@@ -16,6 +16,7 @@ import {
   type FoldSegmentRecord,
   type FoldSummaryProgress,
   type FoldSummaryRunner,
+  reasoningAllowance,
   type SummarizeFoldOptions,
   summarizeFold,
 } from "./fold-summarizer.ts";
@@ -64,12 +65,15 @@ interface Harness {
 function harness(
   reply: (request: Request, index: number) => Partial<Completion> = () => ({}),
   contextWindow = 8000,
+  thinking: FoldSummaryRunner["thinking"] = "off",
+  maxOutputTokens = 2000,
 ): Harness {
   const requests: Request[] = [];
   const runner: FoldSummaryRunner = {
     name: "fake",
     contextWindow,
-    maxOutputTokens: 2000,
+    maxOutputTokens,
+    thinking,
     async complete(request) {
       const index = requests.length;
       requests.push(request);
@@ -315,15 +319,69 @@ describe("summarizeFold chunked strategy", () => {
     assert.equal(requests.length, planned.calls);
   });
 
-  it("fails a map call that stops at its output limit instead of storing cut-off notes", async () => {
-    const { runner } = harness((request, index) =>
-      index === 1 && !isFinal(request) ? { stopReason: "length" } : {},
+  it("retries a map call that stops at its output limit once without reasoning, keeping only the complete notes", async () => {
+    const { runner, requests } = harness(
+      (request, index) =>
+        index === 0 && !isFinal(request)
+          ? { stopReason: "length", text: "CUT" }
+          : {},
+      200_000,
+      "medium",
+      64_000,
+    );
+    const result = await summarizeFold(options(runner));
+    assert.ok(result.ok, JSON.stringify(result));
+    const [cut, retry] = [requests[0], requests[1]];
+    assert.equal(cut.reasoning, undefined);
+    assert.equal(retry.reasoning, "off");
+    assert.equal(text(retry.messages[0]), text(cut.messages[0]));
+    assert.ok(retry.maxTokens >= cut.maxTokens);
+    assert.equal(result.calls, requests.length);
+    const reduce = requests.at(-1);
+    assert.ok(reduce && isFinal(reduce));
+    assert.ok(
+      !reduce.messages.some((message) => text(message).includes("CUT")),
+    );
+  });
+
+  it("fails a map call that still stops at its output limit after the retry, without storing cut-off notes", async () => {
+    const { runner, requests } = harness((request, index) =>
+      (index === 1 || index === 2) && !isFinal(request)
+        ? { stopReason: "length" }
+        : {},
     );
     const result = await summarizeFold(options(runner));
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.equal(result.reason, "invalid-summary");
-    assert.match(result.detail, /map call 2\//);
+    assert.match(
+      result.detail,
+      /map call 2\/.*after a retry without reasoning/,
+    );
+    assert.equal(requests.length, 3);
+  });
+
+  it("leaves reasoning room on top of every answer cap, as adaptive and effort models share the ceiling", async () => {
+    const { runner, requests } = harness(() => ({}), 200_000, "medium", 64_000);
+    const admitted: number[] = [];
+    const result = await summarizeFold(
+      options(runner, {
+        inContext: inContext(),
+        admit: (_request, maxOutputTokens) => {
+          admitted.push(maxOutputTokens);
+          return { fits: false, inputEstimate: 999_999 };
+        },
+      }),
+    );
+    assert.ok(result.ok, JSON.stringify(result));
+    const allowance = reasoningAllowance("medium");
+    assert.equal(allowance, 8192);
+    assert.deepEqual(admitted, [400 + allowance]);
+    for (const request of requests)
+      assert.equal(
+        request.maxTokens,
+        (isFinal(request) ? 400 : 200) + allowance,
+      );
   });
 });
 
@@ -588,6 +646,7 @@ describe("createFoldSummaryRunner", () => {
       sessionId: "session-1",
     });
     assert.equal(runner.name, "test/fold:high");
+    assert.equal(runner.thinking, "high");
     assert.equal(runner.contextWindow, 32000);
     assert.equal(runner.maxOutputTokens, 4000);
     const controller = new AbortController();
@@ -633,5 +692,24 @@ describe("createFoldSummaryRunner", () => {
     }).complete({ messages: [], maxTokens: 10 });
     assert.equal(response.stopReason, "stop");
     assert.equal(observed?.reasoning, undefined);
+  });
+
+  it("omits reasoning for a request that turns it off", async () => {
+    let observed: SimpleStreamOptions | undefined;
+    const registry: Pick<ModelRegistry, "streamSimple"> = {
+      streamSimple(_model, _context, actualOptions) {
+        observed = actualOptions;
+        const stream = createAssistantMessageEventStream();
+        stream.end(reply("stop"));
+        return stream;
+      },
+    };
+    await createFoldSummaryRunner({
+      registry,
+      model,
+      thinking: "high",
+    }).complete({ messages: [], maxTokens: 10, reasoning: "off" });
+    assert.equal(observed?.reasoning, undefined);
+    assert.equal(observed?.maxTokens, 10);
   });
 });

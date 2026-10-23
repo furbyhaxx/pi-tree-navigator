@@ -150,6 +150,7 @@ import {
 import {
   createFoldSummaryRunner,
   DEFAULT_REDUCE_OUTPUT_TOKENS,
+  reasoningAllowance,
   type SummarizeFoldOptions,
 } from "./fold-summarizer.ts";
 import {
@@ -2036,14 +2037,18 @@ function summarizerReduceTokens(
       }
     | undefined,
 ): number {
-  const maxTokens = model?.maxTokens;
-  if (typeof maxTokens !== "number" || maxTokens <= 0)
-    return foldSummaryPlaceholderTokens(undefined);
-  const runnerMax = Math.min(
-    maxTokens,
-    Math.floor((model?.contextWindow ?? 0) / 4),
-  );
+  const runnerMax = summarizerOutputCap(model);
+  if (runnerMax === undefined) return foldSummaryPlaceholderTokens(undefined);
   return Math.min(DEFAULT_REDUCE_OUTPUT_TOKENS, runnerMax);
+}
+
+/** `createFoldSummaryRunner`'s response cap, or undefined without a model limit. */
+function summarizerOutputCap(
+  model: { maxTokens?: number; contextWindow?: number } | undefined,
+): number | undefined {
+  const maxTokens = model?.maxTokens;
+  if (typeof maxTokens !== "number" || maxTokens <= 0) return undefined;
+  return Math.min(maxTokens, Math.floor((model?.contextWindow ?? 0) / 4));
 }
 
 function previewStrategy(
@@ -2137,11 +2142,17 @@ export function priceFoldCandidates(
     suggestLabel(anchorName: string): string;
     /** Last folded entry. Later user and custom input is priced as late, not subtracted. */
     foldPointId?: string;
+    /** The summarizer's reasoning level; its allowance decides whether the in-context call fits. */
+    thinking?: ThinkingLevel | "off";
   },
 ): FoldCandidatePrice[] {
   const contextWindow = input.model?.contextWindow ?? 0;
   const beforeTokens = estimateAdmissionTokens(sm);
   const reduceOut = summarizerReduceTokens(input.model);
+  const reduceCeiling = Math.min(
+    reduceOut + reasoningAllowance(input.thinking ?? "off"),
+    summarizerOutputCap(input.model) ?? Number.POSITIVE_INFINITY,
+  );
   const placeholder = foldPlaceholderSummary(reduceOut);
   const leafId = input.foldPointId ?? sm.getLeafId();
   return collectActiveAnchors(sm).map((anchor) => {
@@ -2175,7 +2186,7 @@ export function priceFoldCandidates(
       strategy = previewStrategy(
         preparedInContext(sm, targetId, leafId, input.captured, input.model),
         contextWindow,
-        reduceOut,
+        reduceCeiling,
         input.focus,
         {
           mode: input.handoffMode,
@@ -2817,6 +2828,7 @@ export default function (pi: ExtensionAPI) {
         focus,
         suggestLabel: (name) => suggestFoldLabel(sm, name),
         foldPointId: cut.foldPointId,
+        thinking: host.thinking,
       });
       const selected = selectFoldTarget(
         candidates,
@@ -3009,6 +3021,7 @@ export default function (pi: ExtensionAPI) {
           captured: capturedSystems.get(sessionId),
           focus: defaultFoldFocus(sm),
           suggestLabel: (name) => suggestFoldLabel(sm, name),
+          thinking: foldHostOf(commandCtx).thinking,
         });
       },
       recommend,
@@ -4500,6 +4513,7 @@ export default function (pi: ExtensionAPI) {
           focus,
           suggestLabel: (name) => suggestFoldLabel(sm, name),
           foldPointId: boundary,
+          thinking: host.thinking,
         });
         const selected = selectFoldTarget(
           candidates,

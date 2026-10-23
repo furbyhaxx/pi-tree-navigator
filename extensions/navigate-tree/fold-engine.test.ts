@@ -63,6 +63,7 @@ function fakeRunner(
     name: "fake",
     contextWindow,
     maxOutputTokens: 2000,
+    thinking: "off",
     async complete(call) {
       const index = calls.length;
       calls.push(call);
