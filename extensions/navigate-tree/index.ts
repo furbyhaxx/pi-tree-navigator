@@ -1980,6 +1980,346 @@ export function buildLateEntriesNote(count: number): string {
     : `The ${count} messages between the branch_summary and this one arrived while the rewind was pending — they are new and still unanswered; handle them now.`;
 }
 
+/** What the commit stage of a fold needs; the caller owns the summary and its own bookkeeping. */
+export interface FoldCommitInput {
+  /** The anchor entry the new branch starts from. */
+  targetId: string;
+  /** The anchor name that must still resolve to `targetId`. */
+  rewindTo: string;
+  /** The summary's label; must still be free. */
+  newLabel: string;
+  /** The model's summary, continuity delta included. */
+  summaryText: string;
+  handoffMode: HandoffMode;
+  /** Tokens; 0 skips the headroom gate. */
+  contextWindow: number;
+  /** Input after this entry is late: kept out of the fold and re-appended after it. */
+  foldPointId: string;
+  /** Gets the `branch:<newLabel>` completion marker before the branch is written. */
+  branchLabelEntryId?: string;
+  /** Entries whose tool calls never ran: left out of the file lists. */
+  excludeFromFileLists: readonly string[];
+  /** The continuation's lead text for a post-fold request of `afterTokens`. */
+  continuationText(afterTokens: number): string;
+  /** Best-effort label write; false when it failed. */
+  writeLabel(entryId: string, label: string | undefined): boolean;
+  /** Runs once the branch has landed, before any later step; must not throw. */
+  onBranched?(): void;
+}
+
+/** `ok: false` writes nothing; the session is as the caller found it. */
+export type FoldCommitOutcome =
+  | { ok: false; reason: string }
+  | {
+      ok: true;
+      summaryId: string;
+      oldLeafId: string | null;
+      collapsedEntries: number;
+      afterTokens: number;
+      foldEstimateBefore: number;
+      foldEstimateAfter: number;
+      /** Late entries re-appended after the summary. */
+      reappended: number;
+      refreshed: boolean;
+      historyRewriteNotified: boolean;
+      readFiles: string[];
+      modifiedFiles: string[];
+      /** The message that tells the model the fold landed. */
+      continuation: string;
+      continuityNotice?: string;
+      continuityReport?: FoldContinuity["report"];
+    };
+
+/**
+ * The commit stage of a fold: revalidate, materialize the handoff, gate it on
+ * the projected budget, branch from the target, label, re-append late input,
+ * refresh the agent and emit `session_tree`. Throws only before anything is
+ * written; every step after the branch is guarded.
+ */
+export async function commitFold(
+  sm: SessionManager,
+  input: FoldCommitInput,
+): Promise<FoldCommitOutcome> {
+  const { targetId, rewindTo, newLabel, foldPointId, branchLabelEntryId } =
+    input;
+  const refuse = (reason: string): FoldCommitOutcome => ({ ok: false, reason });
+  // A compaction or tree move since the summary was requested invalidates the
+  // fold: the anchor must still be the same labeled entry on the active
+  // branch, and the new label must still be free.
+  if (findLabeledEntry(sm, LABEL_PREFIX + rewindTo) !== targetId) {
+    return refuse(`'${rewindTo}' is no longer on the active branch`);
+  }
+  if (findLabeledEntry(sm, LABEL_PREFIX + newLabel)) {
+    return refuse(`a label '${newLabel}' now exists on the active branch`);
+  }
+  const staleReason = rewindStaleReason(sm, foldPointId);
+  if (staleReason) return refuse(staleReason);
+  const oldLeafId = sm.getLeafId();
+  // Input that arrived after the fold point (user steers drained at the
+  // rewind turn's boundary, other extensions' messages) sits on the segment
+  // about to be abandoned. It is new input, not collapsed work: it is
+  // re-appended onto the new branch below, in order, ahead of the
+  // continuation (which flags it as unanswered).
+  const lateEntries = collectLateEntries(sm, foldPointId);
+  // Completion marker (#90, O8): `branch:<newLabel>` on the abandoned
+  // branch's last real entry, written before the branch so the restart check
+  // never reads this fold as died mid-flight.
+  const branchLabel = BRANCH_LABEL_PREFIX + newLabel;
+  let branchLabelWritten = false;
+  let foldEstimateBefore = 0;
+  let foldEstimateAfter = 0;
+  let entries: SessionEntry[];
+  let readFiles: string[];
+  let modifiedFiles: string[];
+  let continuity: FoldContinuity;
+  let summaryId: string;
+  // The leaf right before the branch call (the label write above appended
+  // an entry, so it is not `oldLeafId`).
+  let leafBeforeBranch: string | null | undefined;
+  try {
+    ({ entries } = collectEntriesForBranchSummary(sm, oldLeafId, targetId));
+    // Hidden attempts' tool calls never ran (blocked): keep them out of
+    // the file lists (#90, O3-B).
+    const hidden = new Set(input.excludeFromFileLists);
+    const { fileOps } = prepareBranchEntries(
+      entries.filter((e) => !hidden.has(e.id)),
+      Number.MAX_SAFE_INTEGER,
+    );
+    ({ readFiles, modifiedFiles } = computeFileLists(fileOps));
+    // `fromHook: true` pairs with the `session_tree` payload's
+    // `fromExtension: true`, as pi's own navigateTree does for an
+    // extension-provided summary.
+    leafBeforeBranch = sm.getLeafId();
+    const children = entries.filter((entry) => entry.type === "branch_summary");
+    const all = new Map(sm.getEntries().map((entry) => [entry.id, entry]));
+    const sourceIds = new Set(
+      entries
+        .filter((entry) => entry.type !== "branch_summary")
+        .map((entry) => entry.id),
+    );
+    for (const child of children) {
+      sourceIds.add(child.id);
+      const metadata = getHandoff(child);
+      if (metadata) for (const id of metadata.sourceIds) sourceIds.add(id);
+      else if (child.type === "branch_summary") {
+        const path = sm.getBranch(child.fromId);
+        const at = path.findIndex((entry) => entry.id === child.parentId);
+        for (const entry of path.slice(at + 1)) sourceIds.add(entry.id);
+      }
+    }
+    // Pure: the ledger only changes through the branch_summary written
+    // below, so every failure ending before it leaves the ledger untouched.
+    continuity = reconcileFoldContinuity(
+      sm.getBranch(),
+      input.summaryText,
+      rewindTo,
+    );
+    const handoff = makeHandoff({
+      name: newLabel,
+      report:
+        continuity.summaryText + formatFileOperations(readFiles, modifiedFiles),
+      mode: input.handoffMode,
+      children: children.map((child) => child.id),
+      sourceEntries: [...sourceIds].flatMap((id) => {
+        const entry = all.get(id);
+        return entry ? [entry] : [];
+      }),
+    });
+    // A child's own briefing is stale in its parent: only this fold's stays.
+    const handoffText = materializeHandoff(
+      handoff,
+      children.flatMap((child) =>
+        child.type === "branch_summary"
+          ? [
+              {
+                id: child.id,
+                summary: stripContinuityBriefing(child.summary),
+              },
+            ]
+          : [],
+      ),
+    );
+    const materialized =
+      continuity.briefing === undefined
+        ? handoffText
+        : appendContinuityBriefing(handoffText, continuity.briefing);
+    const details = {
+      readFiles,
+      modifiedFiles,
+      treeNavigator: handoff,
+      ...(continuity.snapshot && {
+        [LEDGER_DETAILS_KEY]: continuity.snapshot,
+      }),
+    };
+    let previewId = "tree-navigator-fold-preview";
+    while (all.has(previewId)) previewId += "-";
+    const preview: SessionEntry = {
+      type: "branch_summary",
+      id: previewId,
+      parentId: targetId,
+      timestamp: new Date().toISOString(),
+      fromId: oldLeafId ?? foldPointId,
+      summary: materialized,
+      details,
+      fromHook: true,
+    };
+    const prospectiveEntries = [...all.values(), preview];
+    const prospective = projectHandoffs(
+      buildSessionProjection(prospectiveEntries, previewId),
+      prospectiveEntries,
+    ).messages;
+    const lateMessages: AgentMessage[] = lateEntries.map((late) =>
+      late.kind === "user"
+        ? late.message
+        : {
+            role: "custom",
+            customType: late.customType,
+            content: late.content,
+            display: late.display,
+            details: late.details,
+            timestamp: Date.now(),
+          },
+    );
+    prospective.push(...lateMessages);
+    const currentEntries = sm.buildSessionProjection().entries;
+    const foldPointAt = currentEntries.findIndex(
+      (entry) => entry.sourceEntry.id === foldPointId,
+    );
+    if (foldPointAt < 0)
+      return refuse("the rewind call is no longer in the projected context");
+    foldEstimateBefore = estimateContentTokens([
+      ...currentEntries
+        .slice(0, foldPointAt)
+        .flatMap((entry) => entry.messages),
+      ...lateMessages,
+    ]);
+    const continuation = {
+      role: "custom" as const,
+      customType: REWIND_CUSTOM_TYPE,
+      content:
+        input.continuationText(requestAccounting(sm, prospective).tokens) +
+        (continuity.notice ? `\n\n${continuity.notice}` : "") +
+        (lateEntries.length
+          ? `\n\n${buildLateEntriesNote(lateEntries.length)}`
+          : "") +
+        `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`,
+      display: true,
+      timestamp: Date.now(),
+    };
+    prospective.push(continuation);
+    foldEstimateAfter = estimateContentTokens(prospective);
+    if (foldEstimateAfter >= foldEstimateBefore) {
+      const restoresCompacted =
+        precedesLatestCompaction(sm.getBranch(), targetId) &&
+        estimateContentTokens(projectAtEntry(sm.getEntries(), targetId, all)) >=
+          foldEstimateBefore;
+      return refuse(
+        restoresCompacted
+          ? `'${rewindTo}' lies before the latest compaction, so folding to it restores the compacted history instead of reducing projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`
+          : `the materialized handoff does not reduce projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`,
+      );
+    }
+    if (
+      input.contextWindow > 0 &&
+      requestAccounting(sm, prospective).tokens +
+        RECOVERY_MIN_OUTPUT_TOKENS +
+        RECOVERY_HEADROOM_TOKENS >
+        input.contextWindow
+    ) {
+      return refuse(
+        "the materialized handoff leaves insufficient request headroom; original history was kept",
+      );
+    }
+    if (branchLabelEntryId)
+      branchLabelWritten = input.writeLabel(branchLabelEntryId, branchLabel);
+    leafBeforeBranch = sm.getLeafId();
+    summaryId = sm.branchWithSummary(targetId, materialized, details, true);
+  } catch (err) {
+    // pi's branchWithSummary moves the leaf and appends in memory before
+    // the file append that may throw: put the leaf back, or the session
+    // stays collapsed while the model is told nothing was.
+    try {
+      if (leafBeforeBranch && sm.getLeafId() !== leafBeforeBranch) {
+        sm.branch(leafBeforeBranch);
+      }
+    } catch {
+      // Fail-open: the refusal below still reaches the model.
+    }
+    // Nothing branched: undo the completion marker, then tell the model,
+    // or a text-only summary turn would end the run with no word of it.
+    if (branchLabelWritten && branchLabelEntryId) {
+      input.writeLabel(branchLabelEntryId, undefined);
+    }
+    return refuse(
+      `the branch could not be written (${err instanceof Error ? err.message : String(err)})`,
+    );
+  }
+  input.onBranched?.();
+  // The summary landed unlabeled if both writes fail; `list` simply won't
+  // show it.
+  input.writeLabel(summaryId, LABEL_PREFIX + newLabel);
+  // Direct appends, not the steer queue: no second pass through other
+  // extensions' input handlers, and anything still queued is delivered
+  // after these, keeping the original order.
+  let reappended = 0;
+  for (const late of lateEntries) {
+    try {
+      if (late.kind === "user") {
+        sm.appendMessage(
+          late.message as Parameters<SessionManager["appendMessage"]>[0],
+        );
+      } else {
+        sm.appendCustomMessageEntry(
+          late.customType,
+          late.content as Parameters<
+            SessionManager["appendCustomMessageEntry"]
+          >[1],
+          late.display,
+          late.details,
+        );
+      }
+      reappended++;
+    } catch {
+      // Fail-open: the original stays on disk on the abandoned branch.
+    }
+  }
+  // The branch has landed: every step below is guarded so the
+  // continuation always reaches the model.
+  let afterTokens = 0;
+  try {
+    afterTokens = estimateAdmissionTokens(sm);
+  } catch {
+    afterTokens = 0;
+  }
+  const refreshed = refreshAgentMessages(sm);
+  const historyRewriteNotified = await emitSessionTree(
+    sm,
+    oldLeafId,
+    summaryId,
+  );
+  return {
+    ok: true,
+    summaryId,
+    oldLeafId,
+    collapsedEntries: entries.length,
+    afterTokens,
+    foldEstimateBefore,
+    foldEstimateAfter,
+    reappended,
+    refreshed,
+    historyRewriteNotified,
+    readFiles,
+    modifiedFiles,
+    continuation:
+      input.continuationText(afterTokens) +
+      (continuity.notice ? `\n\n${continuity.notice}` : "") +
+      (reappended > 0 ? `\n\n${buildLateEntriesNote(reappended)}` : "") +
+      (refreshed ? "" : `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`),
+    ...(continuity.notice && { continuityNotice: continuity.notice }),
+    ...(continuity.report && { continuityReport: continuity.report }),
+  };
+}
+
 interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
   details: Record<string, unknown>;
@@ -2903,311 +3243,61 @@ export default function (pi: ExtensionAPI) {
     summaryEntryId: string | undefined,
     turnIds: readonly string[],
   ): Promise<SessionBoundaryDraft[]> {
-    const fail = (reason: string) =>
-      endAtBoundary(sm, sessionId, pending, "failed", reason, turnIds);
-    // A compaction or tree move during the summary turn invalidates the
-    // rewind: the anchor must still be the same labeled entry on the active
-    // branch, and the new label must still be free.
-    if (
-      findLabeledEntry(sm, LABEL_PREFIX + pending.rewindTo) !== pending.target
-    ) {
-      return fail(`'${pending.rewindTo}' is no longer on the active branch`);
-    }
-    if (findLabeledEntry(sm, LABEL_PREFIX + pending.newLabel)) {
-      return fail(
-        `a label '${pending.newLabel}' now exists on the active branch`,
-      );
-    }
-    const staleReason = rewindStaleReason(sm, pending.rewindEntryId);
-    if (staleReason) return fail(staleReason);
-    const oldLeafId = sm.getLeafId();
-    // Input that arrived after the rewind call (user steers drained at the
-    // rewind turn's boundary, other extensions' messages) sits on the segment
-    // about to be abandoned. It is new input, not collapsed work: it is
-    // re-appended onto the new branch below, in order, ahead of the
-    // continuation (which flags it as unanswered).
-    const lateEntries = collectLateEntries(sm, pending.rewindEntryId);
-    // Completion marker (#90, O8): `branch:<newLabel>` on the summary turn,
-    // the abandoned branch's last real entry, written before the branch so
-    // the restart check never reads this rewind as died mid-flight.
-    const branchLabel = BRANCH_LABEL_PREFIX + pending.newLabel;
-    let branchLabelWritten = false;
-    let foldEstimateBefore = 0;
-    let foldEstimateAfter = 0;
-    let entries: SessionEntry[];
-    let readFiles: string[];
-    let modifiedFiles: string[];
-    let continuity: FoldContinuity;
-    let summaryId: string;
-    // The leaf right before the branch call (the label write above appended
-    // an entry, so it is not `oldLeafId`).
-    let leafBeforeBranch: string | null | undefined;
-    try {
-      ({ entries } = collectEntriesForBranchSummary(
+    const landed = { forced: false };
+    const outcome = await commitFold(sm, {
+      targetId: pending.target,
+      rewindTo: pending.rewindTo,
+      newLabel: pending.newLabel,
+      summaryText,
+      handoffMode: pending.handoffMode,
+      contextWindow: pending.contextWindow,
+      foldPointId: pending.rewindEntryId,
+      branchLabelEntryId: summaryEntryId,
+      excludeFromFileLists: pending.hiddenEntryIds,
+      continuationText: (afterTokens) =>
+        buildRewindDoneText(pending, afterTokens),
+      writeLabel: (entryId, label) => writeLabel(sm, entryId, label),
+      onBranched: () => {
+        pendingRewinds.delete(sessionId);
+        // A forced rewind landed: the gate lifts (#101, D7).
+        landed.forced = forcedActive(sessionId);
+        forcedRewinds.delete(sessionId);
+      },
+    });
+    if (!outcome.ok) {
+      return endAtBoundary(
         sm,
-        oldLeafId,
-        pending.target,
-      ));
-      // Hidden attempts' tool calls never ran (blocked): keep them out of
-      // the file lists (#90, O3-B).
-      const hidden = new Set(pending.hiddenEntryIds);
-      const { fileOps } = prepareBranchEntries(
-        entries.filter((e) => !hidden.has(e.id)),
-        Number.MAX_SAFE_INTEGER,
-      );
-      ({ readFiles, modifiedFiles } = computeFileLists(fileOps));
-      // `fromHook: true` pairs with the `session_tree` payload's
-      // `fromExtension: true`, as pi's own navigateTree does for an
-      // extension-provided summary.
-      leafBeforeBranch = sm.getLeafId();
-      const children = entries.filter(
-        (entry) => entry.type === "branch_summary",
-      );
-      const all = new Map(sm.getEntries().map((entry) => [entry.id, entry]));
-      const sourceIds = new Set(
-        entries
-          .filter((entry) => entry.type !== "branch_summary")
-          .map((entry) => entry.id),
-      );
-      for (const child of children) {
-        sourceIds.add(child.id);
-        const metadata = getHandoff(child);
-        if (metadata) for (const id of metadata.sourceIds) sourceIds.add(id);
-        else if (child.type === "branch_summary") {
-          const path = sm.getBranch(child.fromId);
-          const at = path.findIndex((entry) => entry.id === child.parentId);
-          for (const entry of path.slice(at + 1)) sourceIds.add(entry.id);
-        }
-      }
-      // Pure: the ledger only changes through the branch_summary written
-      // below, so every failure ending before it leaves the ledger untouched.
-      continuity = reconcileFoldContinuity(
-        sm.getBranch(),
-        summaryText,
-        pending.rewindTo,
-      );
-      const handoff = makeHandoff({
-        name: pending.newLabel,
-        report:
-          continuity.summaryText +
-          formatFileOperations(readFiles, modifiedFiles),
-        mode: pending.handoffMode,
-        children: children.map((child) => child.id),
-        sourceEntries: [...sourceIds].flatMap((id) => {
-          const entry = all.get(id);
-          return entry ? [entry] : [];
-        }),
-      });
-      // A child's own briefing is stale in its parent: only this fold's stays.
-      const handoffText = materializeHandoff(
-        handoff,
-        children.flatMap((child) =>
-          child.type === "branch_summary"
-            ? [
-                {
-                  id: child.id,
-                  summary: stripContinuityBriefing(child.summary),
-                },
-              ]
-            : [],
-        ),
-      );
-      const materialized =
-        continuity.briefing === undefined
-          ? handoffText
-          : appendContinuityBriefing(handoffText, continuity.briefing);
-      const details = {
-        readFiles,
-        modifiedFiles,
-        treeNavigator: handoff,
-        ...(continuity.snapshot && {
-          [LEDGER_DETAILS_KEY]: continuity.snapshot,
-        }),
-      };
-      let previewId = "tree-navigator-fold-preview";
-      while (all.has(previewId)) previewId += "-";
-      const preview: SessionEntry = {
-        type: "branch_summary",
-        id: previewId,
-        parentId: pending.target,
-        timestamp: new Date().toISOString(),
-        fromId: oldLeafId ?? pending.rewindEntryId,
-        summary: materialized,
-        details,
-        fromHook: true,
-      };
-      const prospectiveEntries = [...all.values(), preview];
-      const prospective = projectHandoffs(
-        buildSessionProjection(prospectiveEntries, previewId),
-        prospectiveEntries,
-      ).messages;
-      const lateMessages: AgentMessage[] = lateEntries.map((late) =>
-        late.kind === "user"
-          ? late.message
-          : {
-              role: "custom",
-              customType: late.customType,
-              content: late.content,
-              display: late.display,
-              details: late.details,
-              timestamp: Date.now(),
-            },
-      );
-      prospective.push(...lateMessages);
-      const currentEntries = sm.buildSessionProjection().entries;
-      const rewindAt = currentEntries.findIndex(
-        (entry) => entry.sourceEntry.id === pending.rewindEntryId,
-      );
-      if (rewindAt < 0)
-        return fail("the rewind call is no longer in the projected context");
-      foldEstimateBefore = estimateContentTokens([
-        ...currentEntries.slice(0, rewindAt).flatMap((entry) => entry.messages),
-        ...lateMessages,
-      ]);
-      const continuation = {
-        role: "custom" as const,
-        customType: REWIND_CUSTOM_TYPE,
-        content:
-          buildRewindDoneText(
-            pending,
-            requestAccounting(sm, prospective).tokens,
-          ) +
-          (continuity.notice ? `\n\n${continuity.notice}` : "") +
-          (lateEntries.length
-            ? `\n\n${buildLateEntriesNote(lateEntries.length)}`
-            : "") +
-          `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`,
-        display: true,
-        timestamp: Date.now(),
-      };
-      prospective.push(continuation);
-      foldEstimateAfter = estimateContentTokens(prospective);
-      if (foldEstimateAfter >= foldEstimateBefore) {
-        const restoresCompacted =
-          precedesLatestCompaction(sm.getBranch(), pending.target) &&
-          estimateContentTokens(
-            projectAtEntry(sm.getEntries(), pending.target, all),
-          ) >= foldEstimateBefore;
-        return fail(
-          restoresCompacted
-            ? `'${pending.rewindTo}' lies before the latest compaction, so folding to it restores the compacted history instead of reducing projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`
-            : `the materialized handoff does not reduce projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`,
-        );
-      }
-      if (
-        pending.contextWindow > 0 &&
-        requestAccounting(sm, prospective).tokens +
-          RECOVERY_MIN_OUTPUT_TOKENS +
-          RECOVERY_HEADROOM_TOKENS >
-          pending.contextWindow
-      ) {
-        return fail(
-          "the materialized handoff leaves insufficient request headroom; original history was kept",
-        );
-      }
-      if (summaryEntryId)
-        branchLabelWritten = writeLabel(sm, summaryEntryId, branchLabel);
-      leafBeforeBranch = sm.getLeafId();
-      summaryId = sm.branchWithSummary(
-        pending.target,
-        materialized,
-        details,
-        true,
-      );
-    } catch (err) {
-      // pi's branchWithSummary moves the leaf and appends in memory before
-      // the file append that may throw: put the leaf back, or the session
-      // stays collapsed while the model is told nothing was.
-      try {
-        if (leafBeforeBranch && sm.getLeafId() !== leafBeforeBranch) {
-          sm.branch(leafBeforeBranch);
-        }
-      } catch {
-        // Fail-open: the ending below still reaches the model.
-      }
-      // Nothing branched: undo the completion marker, then tell the model,
-      // or a text-only summary turn would end the run with no word of it.
-      if (branchLabelWritten && summaryEntryId) {
-        writeLabel(sm, summaryEntryId, undefined);
-      }
-      return fail(
-        `the branch could not be written (${err instanceof Error ? err.message : String(err)})`,
+        sessionId,
+        pending,
+        "failed",
+        outcome.reason,
+        turnIds,
       );
     }
-    pendingRewinds.delete(sessionId);
-    // A forced rewind landed: the gate lifts (#101, D7).
-    const forcedFold = forcedActive(sessionId);
-    forcedRewinds.delete(sessionId);
-    // The summary landed unlabeled if both writes fail; `list` simply won't
-    // show it.
-    writeLabel(sm, summaryId, LABEL_PREFIX + pending.newLabel);
-    // Direct appends, not the steer queue: no second pass through other
-    // extensions' input handlers, and anything still queued is delivered
-    // after these, keeping the original order.
-    let reappended = 0;
-    for (const late of lateEntries) {
-      try {
-        if (late.kind === "user") {
-          sm.appendMessage(
-            late.message as Parameters<SessionManager["appendMessage"]>[0],
-          );
-        } else {
-          sm.appendCustomMessageEntry(
-            late.customType,
-            late.content as Parameters<
-              SessionManager["appendCustomMessageEntry"]
-            >[1],
-            late.display,
-            late.details,
-          );
-        }
-        reappended++;
-      } catch {
-        // Fail-open: the original stays on disk on the abandoned branch.
-      }
-    }
-    // The branch has landed: every step below is guarded so the
-    // continuation always reaches the model.
-    let afterTokens = 0;
-    try {
-      afterTokens = estimateAdmissionTokens(sm);
-    } catch {
-      afterTokens = 0;
-    }
-    const refreshed = refreshAgentMessages(sm);
-    const historyRewriteNotified = await emitSessionTree(
-      sm,
-      oldLeafId,
-      summaryId,
-    );
     return [
-      rewindMessageDraft(
-        buildRewindDoneText(pending, afterTokens) +
-          (continuity.notice ? `\n\n${continuity.notice}` : "") +
-          (reappended > 0 ? `\n\n${buildLateEntriesNote(reappended)}` : "") +
-          (refreshed ? "" : `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`),
-        {
-          status: "done",
-          rewindTo: pending.rewindTo,
-          newLabel: pending.newLabel,
-          targetId: pending.target,
-          summaryId,
-          collapsedEntries: entries.length,
-          contextBefore: pending.beforeTokens,
-          contextAfter: afterTokens,
-          contextWindow: pending.contextWindow,
-          summaryAttempts: pending.attempts + 1,
-          foldEstimateBefore,
-          foldEstimateAfter,
-          agentMessagesRefreshed: refreshed,
-          historyRewriteNotified,
-          readFiles,
-          modifiedFiles,
-          reappendedLateMessages: reappended,
-          ...(forcedFold && { forced: true }),
-          ...(continuity.report && { continuity: continuity.report }),
-        },
-      ),
+      rewindMessageDraft(outcome.continuation, {
+        status: "done",
+        rewindTo: pending.rewindTo,
+        newLabel: pending.newLabel,
+        targetId: pending.target,
+        summaryId: outcome.summaryId,
+        collapsedEntries: outcome.collapsedEntries,
+        contextBefore: pending.beforeTokens,
+        contextAfter: outcome.afterTokens,
+        contextWindow: pending.contextWindow,
+        summaryAttempts: pending.attempts + 1,
+        foldEstimateBefore: outcome.foldEstimateBefore,
+        foldEstimateAfter: outcome.foldEstimateAfter,
+        agentMessagesRefreshed: outcome.refreshed,
+        historyRewriteNotified: outcome.historyRewriteNotified,
+        readFiles: outcome.readFiles,
+        modifiedFiles: outcome.modifiedFiles,
+        reappendedLateMessages: outcome.reappended,
+        ...(landed.forced && { forced: true }),
+        ...(outcome.continuityReport && {
+          continuity: outcome.continuityReport,
+        }),
+      }),
     ];
   }
 
