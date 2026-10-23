@@ -22,9 +22,9 @@ import {
 } from "./intent-policy.ts";
 import { parseProposalModel } from "./proposal-options.ts";
 
-/** What is being picked: a chat model with thinking, or a classifier model. */
+/** A chat model with thinking, a classifier, or either model type for a policy stage. */
 export interface SettingsModelPickerOptions {
-  kind: "model" | "classifier";
+  kind: "model" | "classifier" | "stage";
   /** The configured value: a selector, `current`, `recommended` (classifier), or null for a disabled classifier. */
   current: string | null;
 }
@@ -94,7 +94,7 @@ function configuredModel(
   current: string | null,
 ): Configured | undefined {
   if (current === null || current === "current") return undefined;
-  if (kind === "classifier") {
+  if (kind !== "model") {
     return isObjectPolicy(current) ? undefined : parseClassifierModel(current);
   }
   try {
@@ -118,13 +118,24 @@ async function listModels(
 ): Promise<Listed[]> {
   const registry = ctx.modelRegistry;
   try {
-    if (kind === "classifier") {
-      return (await registry.getAvailableOfType("classifier")).map((model) => ({
-        provider: model.provider,
-        id: model.id,
-        name: model.name || model.id,
-        levels: [],
-      }));
+    if (kind !== "model") {
+      const models = [
+        ...(await registry.getAvailableOfType("classifier")),
+        ...(kind === "stage" ? registry.getAvailable() : []),
+      ];
+      return [
+        ...new Map(
+          models.map((model) => [
+            `${model.provider}/${model.id}`,
+            {
+              provider: model.provider,
+              id: model.id,
+              name: model.name || model.id,
+              levels: [],
+            },
+          ]),
+        ).values(),
+      ];
     }
     return registry.getAvailable().map((model) => ({
       provider: model.provider,
@@ -147,7 +158,7 @@ function usable(
   kind: SettingsModelPickerOptions["kind"],
   entry: Listed,
 ): boolean {
-  return kind === "classifier"
+  return kind !== "model"
     ? classifierSelector(entry.provider, entry.id) !== undefined
     : entry.levels.length > 0 &&
         llmSelector(entry.provider, entry.id, entry.levels[0]) !== undefined;
@@ -184,7 +195,7 @@ function customError(
   text: string,
 ): string | undefined {
   if (!isSafe(text)) return "it contains control characters";
-  if (kind === "classifier") {
+  if (kind !== "model") {
     return parseClassifierModel(text) ? undefined : "expected provider/id";
   }
   try {
@@ -204,7 +215,7 @@ async function promptCustom(
   while (true) {
     const text = (
       await ctx.ui.input(
-        kind === "model" ? "Custom model" : "Custom classifier",
+        kind === "classifier" ? "Custom classifier" : "Custom model",
         expects,
       )
     )?.trim();
@@ -241,7 +252,11 @@ function buildChoices(
           pick: async () => "current",
         }
       : {
-          row: { label: "off", labelHint: "heuristics only" },
+          row: {
+            label: "off",
+            labelHint:
+              kind === "stage" ? "disable this stage" : "heuristics only",
+          },
           selected: current === null,
           pick: async () => null,
         };
@@ -293,7 +308,7 @@ function buildChoices(
         ...(selected && { value: SELECTED, tone: "success" }),
       },
       pick: async () =>
-        kind === "classifier"
+        kind !== "model"
           ? classifierSelector(entry.provider, entry.id)
           : pickThinking(ctx, entry, configured),
     };
@@ -355,11 +370,14 @@ export async function pickSettingsModel(
   );
   while (true) {
     const chosen = await selectFrame(ctx, {
-      breadcrumbs: [...BREADCRUMBS, kind === "model" ? "Model" : "Classifier"],
+      breadcrumbs: [
+        ...BREADCRUMBS,
+        kind === "classifier" ? "Classifier" : "Model",
+      ],
       rows,
       cursor,
       placeholder:
-        kind === "model"
+        kind !== "classifier"
           ? "Type to search models, ids, or providers…"
           : "Type to search classifiers, ids, or providers…",
       cancelAction: "back",

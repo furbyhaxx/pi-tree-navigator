@@ -171,7 +171,7 @@ function harness(setup: Setup = {}) {
     seen,
     pending: () => scripts.length,
     run(
-      kind: "model" | "classifier",
+      kind: "model" | "classifier" | "stage",
       current: string | null,
       ...screens: Script[]
     ) {
@@ -186,6 +186,30 @@ const selectedLine = (lines: readonly string[]): string =>
   lines.find((line) => line.includes(" → ")) ?? "";
 
 describe("settings model picker: results", () => {
+  it("offers chat and decision models for a policy stage without a thinking step", async () => {
+    const h = harness({ models: [plain], classifiers: [CLASSIFIERS[1]] });
+    const result = await h.run("stage", null, (screen) => {
+      const body = text(screen.render(80));
+      assert.match(body, /Plain Chat/);
+      assert.match(body, /Tiny Judge/);
+      assert.doesNotMatch(body, /recommended|heuristics only/);
+      for (const key of down(1)) screen.handleInput(key);
+      screen.handleInput(ENTER);
+    });
+    assert.equal(result, "acme/plain");
+    assert.equal(h.pending(), 0);
+    assert.equal(h.ctx.model, h.session);
+    assert.deepEqual(h.calls, [
+      "getAvailableOfType:classifier",
+      "getAvailable",
+    ]);
+  });
+
+  it("can disable a policy stage without changing other settings", async () => {
+    const h = harness();
+    assert.equal(await h.run("stage", null, press(ENTER)), null);
+    assert.match(text(h.seen[0]), /disable this stage/);
+  });
   it("returns a parser-valid provider/model:thinking and leaves the session model alone", async () => {
     const h = harness();
     // Rows: current, then models sorted by provider/name, then custom.
