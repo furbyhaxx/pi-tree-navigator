@@ -449,6 +449,40 @@ describe("/anchor screens", () => {
     assert.equal(test.remainingScreens(), 0);
   });
 
+  it("explains in the list, the full line and the headless list why a pre-compaction anchor cannot be folded", async () => {
+    const note = "Before compaction: folding would restore compacted history.";
+    const anchors: AnchorRow[] = [
+      {
+        name: "planned",
+        percent: 48.1,
+        tokens: 179_000,
+        savableTokens: 0,
+        beforeCompaction: true,
+      },
+      { ...ANCHORS[1], beforeCompaction: true },
+    ];
+    const test = setup({
+      width: 60,
+      anchors,
+      screens: [press(ENTER), press(ESC)],
+    });
+    await test.run("list");
+    for (const line of test.rendered[0])
+      assert.ok(visibleWidth(line) <= 60, line);
+    assert.ok(
+      test.rendered[0].join("\n").includes("Before compaction: folding"),
+    );
+    assert.equal(
+      test.notifications[0].message,
+      `Anchor 'planned': 48.1% of the window (179.0k tok). ${note}`,
+    );
+    const headless = setup({ hasUI: false, anchors });
+    await headless.run("list");
+    const lines = headless.notifications[0].message.split("\n");
+    assert.match(lines[1], /planned .* −0 savable {2}\(before compaction\)$/);
+    assert.ok(!lines[2].includes("before compaction"));
+  });
+
   it("ignores r on the new-anchor row", async () => {
     const test = setup({ screens: [press(DOWN, DOWN, "r", ESC)] });
     await test.run("list");

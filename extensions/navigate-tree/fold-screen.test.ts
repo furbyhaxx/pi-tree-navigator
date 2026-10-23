@@ -183,10 +183,41 @@ describe("fold anchor rows", () => {
       anchor("a-rather-long-milestone-name-for-a-phone", 30_000, {
         afterPreview: "A long instruction that cannot possibly fit in one line",
       }),
+      anchor("a-rather-long-name-before-the-compaction", 0, {
+        beforeCompaction: true,
+      }),
     ]);
     await h.run(press(ESC));
     for (const line of h.rendered[0])
       assert.ok(visibleWidth(line) <= COLUMNS, line);
+  });
+
+  it("says why a pre-compaction anchor cannot be folded, and still folds one that frees enough", async () => {
+    const h = harness({ inputs: [undefined] }, [
+      anchor("planned", 0, { beforeCompaction: true }),
+      anchor("early", 30_000, { beforeCompaction: true }),
+    ]);
+    await h.run(press(DOWN, ENTER), press(ESC));
+    const text = h.rendered[0].join("\n");
+    assert.match(text, /◆ planned\s+before compaction/);
+    assert.match(text, /◆ early\s+−30\.0k tok/);
+    const [blocked, foldableRow] = h.state.anchors.map((row) =>
+      foldRow(row, h.deps),
+    );
+    assert.equal(blocked.tone, "muted");
+    assert.equal(
+      blocked.description,
+      "Before compaction: folding would restore compacted history. Pick an anchor created after the compaction.",
+    );
+    assert.equal(foldableRow.tone, "text");
+    assert.deepEqual(h.notifications, [
+      {
+        message:
+          "'planned': Before compaction: folding would restore compacted history. Pick an anchor created after the compaction.",
+        type: "warning",
+      },
+    ]);
+    assert.deepEqual(h.folds, []);
   });
 });
 

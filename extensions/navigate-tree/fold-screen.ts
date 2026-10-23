@@ -54,7 +54,18 @@ const stepTitle = (step: number, title: string): string =>
 const foldable = (anchor: AnchorRow, deps: FoldScreenDeps): boolean =>
   anchor.savableTokens >= deps.minSavingsTokens;
 
+export const BEFORE_COMPACTION_NOTE =
+  "Before compaction: folding would restore compacted history.";
+
+/** A pre-compaction anchor whose fold cannot free enough, because the compaction would be undone. */
+export const blockedByCompaction = (
+  anchor: AnchorRow,
+  deps: FoldScreenDeps,
+): boolean => anchor.beforeCompaction === true && !foldable(anchor, deps);
+
 function tooLittleNotice(anchor: AnchorRow, deps: FoldScreenDeps): string {
+  if (blockedByCompaction(anchor, deps))
+    return `'${anchor.name}': ${BEFORE_COMPACTION_NOTE} Pick an anchor created after the compaction.`;
   return `'${anchor.name}' would free only about ${formatTokens(anchor.savableTokens)} tok; a fold needs at least ${formatTokens(deps.minSavingsTokens)}. Pick an older anchor, or fold once more work has piled up.`;
 }
 
@@ -66,12 +77,16 @@ export function foldRow(anchor: AnchorRow, deps: FoldScreenDeps): FrameRow {
     labelHint: anchor.auto ? "(auto)" : undefined,
     value: ok
       ? `−${formatTokens(anchor.savableTokens)} tok`
-      : "too little to fold",
+      : blockedByCompaction(anchor, deps)
+        ? "before compaction"
+        : "too little to fold",
     tone: ok ? "text" : "muted",
     detail: anchor.afterPreview ? `after: “${anchor.afterPreview}”` : undefined,
     description: ok
       ? `Fold the work since '${anchor.name}' into a summary; frees about ${formatTokens(anchor.savableTokens)} tok. Enter picks it.`
-      : `Only about ${formatTokens(anchor.savableTokens)} tok would be freed; a fold needs at least ${formatTokens(deps.minSavingsTokens)}. Pick an older anchor.`,
+      : blockedByCompaction(anchor, deps)
+        ? `${BEFORE_COMPACTION_NOTE} Pick an anchor created after the compaction.`
+        : `Only about ${formatTokens(anchor.savableTokens)} tok would be freed; a fold needs at least ${formatTokens(deps.minSavingsTokens)}. Pick an older anchor.`,
   };
 }
 
