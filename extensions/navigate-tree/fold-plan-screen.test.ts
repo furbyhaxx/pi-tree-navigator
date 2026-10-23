@@ -237,7 +237,7 @@ describe("fold plan screen", () => {
           rows.findIndex((line) => line.includes("◆ recent")),
         "newest anchor first, cursor on the recommended one",
       );
-      assert.match(plan, /◆ impl-start \(recommended\)\s+−60\.0k tok/);
+      assert.match(plan, /◆ impl-start\s+−60\.0k tok · recommended/);
       assert.match(plan, /after: “Implement the parser”/);
 
       screen.handleInput(ENTER);
@@ -293,10 +293,24 @@ describe("fold plan screen", () => {
         detail: "model returned 529",
       });
       await tick();
-      assert.match(h.view(screen), /✗ failed at summary: model returned 529/);
+      const failed = h.view(screen);
+      assert.match(failed, /✗ failed at summary: model returned 529/);
+      assert.match(failed, /enter back to plan/);
+      screen.handleInput(ENTER);
+      const plan = h.view(screen);
+      assert.match(plan, /✗ failed at summary: model returned 529/);
+      assert.match(plan, /rewind to impl-start/);
+      screen.handleInput(ENTER);
+      assert.equal(h.calls.start.length, 2, "Enter on the plan retries");
+      h.release(done());
+      await tick();
+      assert.match(
+        unwrapped(h.view(screen)),
+        /✓ folded as 'impl-start-folded'/,
+      );
       screen.handleInput(ENTER);
     });
-    assert.equal(exit, "back");
+    assert.equal(exit, "done");
 
     const thrown = harness();
     thrown.deps.start = async () => {
