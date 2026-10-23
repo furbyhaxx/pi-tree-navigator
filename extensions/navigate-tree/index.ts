@@ -2639,9 +2639,10 @@ export default function (pi: ExtensionAPI) {
       contextWindow: number;
       receiptId: string;
       detail?: string;
+      providerOverflow?: boolean;
     }
   >();
-  // One preflight recovery per agent run. Native overflow retry owns the next request.
+  // One independent recovery per agent run. Native overflow retry owns the next request.
   const preflightAttempted = new Set<string>();
   const nativeRetryOwned = new Set<string>();
   const recoveryCuts = new Map<string, string>();
@@ -2650,12 +2651,15 @@ export default function (pi: ExtensionAPI) {
     contextWindow: number;
     receiptId: string;
     detail?: string;
+    providerOverflow?: boolean;
   }) =>
     rewindMessageDraft(
-      `[${TOOL_NAME}] Request stopped before generation: estimated input ${failure.inputEstimate} tokens leaves fewer than ${RECOVERY_MIN_OUTPUT_TOKENS} output tokens plus ${RECOVERY_HEADROOM_TOKENS} headroom in the ${failure.contextWindow}-token operating window. No tool results were withheld.${failure.detail ? ` ${failure.detail}` : ""} Reduce context with /tree or /compact, or select a larger operating window.`,
+      `[${TOOL_NAME}] ${failure.providerOverflow ? "Provider context overflow recovery failed." : `Request stopped before generation: estimated input ${failure.inputEstimate} tokens leaves fewer than ${RECOVERY_MIN_OUTPUT_TOKENS} output tokens plus ${RECOVERY_HEADROOM_TOKENS} headroom in the ${failure.contextWindow}-token operating window.`} No tool results were withheld.${failure.detail ? ` ${failure.detail}` : ""} Reduce context with /tree or /compact, or select a larger operating window.`,
       {
         status: "failed",
-        reason: "insufficient request headroom",
+        reason: failure.providerOverflow
+          ? "provider context overflow"
+          : "insufficient request headroom",
         inputEstimate: failure.inputEstimate,
         contextWindow: failure.contextWindow,
         appliedWithheld: 0,
@@ -3215,6 +3219,114 @@ export default function (pi: ExtensionAPI) {
       }).run(request, options);
     } finally {
       runningFolds.delete(sessionId);
+    }
+  }
+
+  async function recoverIndependently(
+    ctx: ExtensionContext,
+    host: FoldHost,
+    signal: AbortSignal | undefined,
+  ): Promise<
+    | { status: "done"; draft: RewindMessageDraft }
+    | { status: "failed"; detail: string }
+    | { status: "cancelled" }
+  > {
+    const { sm, model } = host;
+    const sessionId = sm.getSessionId();
+    const contextWindow = model?.contextWindow ?? 0;
+    const runSignal = ctx.signal;
+    if (signal?.aborted) return { status: "cancelled" };
+    if (preflightAttempted.has(sessionId))
+      return {
+        status: "failed",
+        detail: "a recovery was already attempted for this request",
+      };
+    preflightAttempted.add(sessionId);
+    if (!model || contextWindow <= 0)
+      return { status: "failed", detail: "no operating window is available" };
+    const captured = capturedSystems.get(sessionId);
+    const systemHead = captured?.messages ?? [];
+    const modelKey = `${model.provider}/${model.id}`;
+    if (
+      accountRequest(systemHead).tokens +
+        RECOVERY_MIN_OUTPUT_TOKENS +
+        RECOVERY_HEADROOM_TOKENS >
+      contextWindow
+    )
+      return {
+        status: "failed",
+        detail:
+          "the system prompt alone leaves no room for a recovered request",
+      };
+    host.isIdle = () =>
+      !signal?.aborted &&
+      ctx.signal === runSignal &&
+      ctx.sessionManager === sm &&
+      ctx.sessionManager.getSessionId() === sessionId &&
+      `${ctx.model?.provider}/${ctx.model?.id}` === modelKey &&
+      ctx.model?.contextWindow === contextWindow &&
+      capturedSystems.get(sessionId) === captured;
+    const cut = recoveryCutOf(sm);
+    if (!cut.ok) {
+      return { status: "failed", detail: cut.detail };
+    }
+    try {
+      const focus = defaultFoldFocus(sm);
+      const candidates = priceFoldCandidates(sm, {
+        model,
+        handoffMode: parentModes.get(sessionId) ?? "full",
+        captured: capturedSystems.get(sessionId),
+        focus,
+        suggestLabel: (name) => suggestFoldLabel(sm, name),
+        foldPointId: cut.foldPointId,
+      });
+      const selected = selectFoldTarget(
+        candidates,
+        foldRecommendationBudget(
+          contextWindow,
+          resolveRewindHintReserve(
+            {
+              rewindHintReserveTokens,
+              rewindHintModelReserveTokens: hintByModel,
+            },
+            `${model.provider}/${model.id}`,
+          ),
+        ),
+      );
+      if (!selected.ok) {
+        return { status: "failed", detail: selected.reasons.join("; ") };
+      }
+      const request: FoldRequest = {
+        sessionId,
+        origin: "recovery",
+        rewindTo: selected.candidate.name,
+        newLabel: selected.candidate.suggestedLabel,
+        focus,
+      };
+      recoveryCuts.set(sessionId, cut.foldPointId);
+      let outcome: FoldResult;
+      try {
+        outcome = await runFold(host, request, { signal });
+      } finally {
+        recoveryCuts.delete(sessionId);
+      }
+      if (signal?.aborted || outcome.status === "cancelled")
+        return { status: "cancelled" };
+      if (outcome.status !== "done") {
+        return {
+          status: "failed",
+          detail:
+            outcome.status === "failed"
+              ? `${outcome.reason}: ${outcome.detail}`
+              : outcome.status,
+        };
+      }
+      return { status: "done", draft: foldDoneDraft(request, outcome) };
+    } catch (error) {
+      return {
+        status: "failed",
+        detail: `independent recovery failed: ${error instanceof Error ? error.message : String(error)}`,
+      };
     }
   }
 
@@ -3911,7 +4023,7 @@ export default function (pi: ExtensionAPI) {
 
   // The run would settle: recover an explicit overflow error (#101) and end
   // a forced rewind that Esc cut off.
-  pi.on("agent_before_settle", (event, ctx) => {
+  pi.on("agent_before_settle", async (event, ctx) => {
     let sm: SessionManager;
     let sessionId: string;
     try {
@@ -3941,19 +4053,71 @@ export default function (pi: ExtensionAPI) {
           "error" &&
         overflowed(failed, ctx.model)
       ) {
-        const at = rewindCompactionTarget(sm, sessionId, ctx.model);
-        const result = at
-          ? startRewindCompaction(sm, sessionId, at, last.id, [last.id])
-          : null;
-        if (result) {
+        const signal = ctx.signal;
+        if (
+          signal?.aborted ||
+          (toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+          piCompaction(sm, ctx.model)?.enabled !== false ||
+          nativeRetryOwned.has(sessionId)
+        )
+          return;
+        const host = foldHostOf(ctx);
+        // The SDK has no agent signal between runs at before-settlement.
+        const session = findOwningSession(sm);
+        const cancellation = new AbortController();
+        const originalAbort = session?.abort;
+        const recoveryAbort =
+          session && originalAbort
+            ? function (this: AgentSession) {
+                cancellation.abort();
+                return originalAbort.call(this);
+              }
+            : undefined;
+        if (session && recoveryAbort) session.abort = recoveryAbort;
+        let outcome: Awaited<ReturnType<typeof recoverIndependently>>;
+        try {
+          outcome = await recoverIndependently(
+            ctx,
+            host,
+            signal
+              ? AbortSignal.any([signal, cancellation.signal])
+              : cancellation.signal,
+          );
+        } finally {
+          if (session && originalAbort && session.abort === recoveryAbort)
+            session.abort = originalAbort;
+        }
+        if (
+          signal?.aborted ||
+          cancellation.signal.aborted ||
+          outcome.status === "cancelled"
+        )
+          return;
+        if (outcome.status === "failed") {
+          const failure = {
+            inputEstimate: estimateAdmissionTokens(sm),
+            contextWindow: host.model?.contextWindow ?? 0,
+            receiptId: randomUUID(),
+            detail: outcome.detail,
+            providerOverflow: true,
+          };
+          requestBudgetFailures.set(sessionId, failure);
           return {
             entries: keepValidDrafts(sm, [
               ...(event.entries ?? []),
-              ...result.drafts,
+              requestBudgetFailureDraft(failure),
             ]),
-            continue: result.continue,
+            continue: false,
           };
         }
+        refreshAgentMessages(sm);
+        return {
+          entries: keepValidDrafts(sm, [
+            ...(event.entries ?? []),
+            outcome.draft,
+          ]),
+          continue: true,
+        };
       }
     }
     // Esc during a forced rewind (#101, D16): the D8 row.
@@ -4030,16 +4194,8 @@ export default function (pi: ExtensionAPI) {
             "receiptId" in entry.details &&
             entry.details.receiptId === budgetFailure.receiptId,
         );
-      if (!delivered) {
-        const draft = requestBudgetFailureDraft(budgetFailure);
-        if (draft.type === "custom_message")
-          pi.sendMessage({
-            customType: draft.customType,
-            content: draft.content,
-            display: draft.display,
-            details: draft.details,
-          });
-      }
+      if (!delivered)
+        appendFoldMessage(sm, requestBudgetFailureDraft(budgetFailure));
       requestBudgetFailures.delete(sessionId);
       return;
     }
@@ -4484,71 +4640,14 @@ export default function (pi: ExtensionAPI) {
         // Stale ctx: settlement still persists the receipt.
       }
     };
-    if (preflightAttempted.has(sessionId)) {
-      refuse("a recovery was already attempted for this request");
-      return;
-    }
-    preflightAttempted.add(sessionId);
-    if (accountRequest(systemHead).tokens + reserve > contextWindow) {
-      refuse("the system prompt alone leaves no room for a recovered request");
-      return;
-    }
-    const cut = recoveryCutOf(sm);
-    if (!cut.ok) {
-      refuse(cut.detail);
-      return;
-    }
     try {
-      const focus = defaultFoldFocus(sm);
-      const candidates = priceFoldCandidates(sm, {
-        model,
-        handoffMode: parentModes.get(sessionId) ?? "full",
-        captured: capturedSystems.get(sessionId),
-        focus,
-        suggestLabel: (name) => suggestFoldLabel(sm, name),
-        foldPointId: cut.foldPointId,
-      });
-      const selected = selectFoldTarget(
-        candidates,
-        foldRecommendationBudget(
-          contextWindow,
-          resolveRewindHintReserve(
-            {
-              rewindHintReserveTokens,
-              rewindHintModelReserveTokens: hintByModel,
-            },
-            `${model.provider}/${model.id}`,
-          ),
-        ),
-      );
-      if (!selected.ok) {
-        refuse(selected.reasons.join("; "));
+      const outcome = await recoverIndependently(ctx, host, signal);
+      if (outcome.status === "cancelled") return;
+      if (outcome.status === "failed") {
+        refuse(outcome.detail);
         return;
       }
-      const request: FoldRequest = {
-        sessionId,
-        origin: "recovery",
-        rewindTo: selected.candidate.name,
-        newLabel: selected.candidate.suggestedLabel,
-        focus,
-      };
-      recoveryCuts.set(sessionId, cut.foldPointId);
-      let outcome: FoldResult;
-      try {
-        outcome = await runFold(host, request, { signal });
-      } finally {
-        recoveryCuts.delete(sessionId);
-      }
-      if (signal?.aborted || outcome.status === "cancelled") return;
-      if (outcome.status !== "done") {
-        refuse(
-          outcome.status === "failed"
-            ? `${outcome.reason}: ${outcome.detail}`
-            : outcome.status,
-        );
-        return;
-      }
-      const draft = foldDoneDraft(request, outcome);
+      const { draft } = outcome;
       try {
         sm.appendCustomMessageEntry(
           draft.customType,
