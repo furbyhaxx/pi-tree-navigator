@@ -33,6 +33,11 @@ const MAX_MESSAGE_CHARS = 3_800;
 const MAX_ITEM_CHARS = 200;
 const MAX_RECORDS = 24;
 const MAX_RECORD_CHARS = 680;
+const MAX_STATE_BYTES = 3_000;
+const MIN_HOLDOUT_PER_CLASS = 3;
+const MAX_STRUCTURE_TEXT_CHARS = 300;
+const MAX_STRUCTURE_ITEMS = 12;
+const COUNTS = { development: 16, holdout: 32 } as const;
 
 const LEAK_PATTERNS: RegExp[] = [
   /classif/i,
@@ -52,7 +57,16 @@ const LEAK_PATTERNS: RegExp[] = [
 const userCases = CASES.filter(
   (c) => c.task === "intent" || c.task === "supersession",
 );
+const milestoneCases = CASES.filter((c) => c.input.type === "milestone");
 const sorted = (values: readonly string[]) => [...values].sort();
+
+function textsOf(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(textsOf);
+  if (value && typeof value === "object")
+    return Object.values(value).flatMap(textsOf);
+  return [];
+}
 const idsOf = (c: EvalCase) =>
   c.input.type === "milestone" ? c.input.records.map((r) => r.id) : [];
 
@@ -79,18 +93,26 @@ test("case ids are unique and every task uses its own input type", () => {
   }
 });
 
-test("each task has 16 development and 8 holdout cases", () => {
-  assert.equal(CASES.length, 96);
+test("each task has 16 development and 32 holdout cases", () => {
+  assert.equal(CASES.length, 4 * (COUNTS.development + COUNTS.holdout));
   for (const task of TASKS)
-    for (const [split, count] of [
-      ["development", 16],
-      ["holdout", 8],
-    ] as const)
+    for (const split of SPLITS)
       assert.equal(
         CASES.filter((c) => c.task === task && c.split === split).length,
-        count,
+        COUNTS[split],
         `${task}/${split}`,
       );
+});
+
+test("holdout cases come from many independent families", () => {
+  for (const task of TASKS) {
+    const families = new Set(
+      CASES.filter((c) => c.task === task && c.split === "holdout").map(
+        (c) => c.family,
+      ),
+    );
+    assert.ok(families.size >= 10, `${task}: ${families.size} families`);
+  }
 });
 
 test("no family spans development and holdout", () => {
@@ -159,6 +181,7 @@ test("prepared requests carry every reference and keep the text unchanged", () =
         c.id,
       );
     } else {
+      assert.ok(state.structure, `${c.id} sends no structure`);
       assert.deepEqual(
         Object.keys(prepared.questions).sort(),
         ["boundary", "status"],
@@ -177,12 +200,79 @@ test("requests contain no annotator commentary or reference text", () => {
   const leaky = "This is one patch, not a lasting convention.";
   assert.ok(LEAK_PATTERNS.some((p) => p.test(leaky)));
   for (const c of CASES) {
-    const state = JSON.stringify(prepareCase(c).context.state);
+    const context = prepareCase(c).context;
+    const state = JSON.stringify(context.state);
+    const text = textsOf(context.state).join("\n");
     for (const pattern of LEAK_PATTERNS)
-      assert.doesNotMatch(state, pattern, `${c.id}: ${pattern}`);
+      assert.doesNotMatch(text, pattern, `${c.id}: ${pattern}`);
     assert.ok(!state.includes(c.id), `${c.id} appears in its own request`);
     for (const answer of Object.values(c.expected))
       assert.ok(!state.includes(answer.rationale), c.id);
+  }
+});
+
+test("every request state stays small", () => {
+  for (const c of CASES) {
+    const bytes = Buffer.byteLength(
+      JSON.stringify(prepareCase(c).context.state),
+    );
+    assert.ok(bytes < MAX_STATE_BYTES, `${c.id}: ${bytes} bytes`);
+  }
+});
+
+test("every milestone case carries session structure within the sent limits", () => {
+  for (const c of milestoneCases) {
+    const { structure } = milestoneInput(c);
+    assert.ok(structure?.objective, `${c.id} has no objective`);
+    const { goals = [], folds = [], anchors = [] } = structure;
+    assert.ok(goals.length >= 1 && folds.length >= 1, c.id);
+    for (const items of [goals, folds, anchors])
+      assert.ok(items.length <= MAX_STRUCTURE_ITEMS, c.id);
+    assert.equal(new Set(folds.map((f) => f.label)).size, folds.length, c.id);
+    for (const fold of folds)
+      assert.ok(fold.goal && fold.outcome, `${c.id} ${fold.label}`);
+    for (const text of textsOf(structure))
+      assert.ok(text.length <= MAX_STRUCTURE_TEXT_CHARS, `${c.id}: ${text}`);
+  }
+});
+
+test("structure describes earlier phases and never marks the judged records", () => {
+  for (const c of milestoneCases) {
+    const { records, structure, lastAnchor } = milestoneInput(c);
+    const ids = new Set(records.map((r) => r.id));
+    const last = records[records.length - 1].id;
+    const marked = new Set([...c.expected.boundary.choices, last]);
+    const recordTexts = records.map((r) => r.text.toLowerCase());
+    const { folds = [], anchors = [] } = structure ?? {};
+    const named = { ...structure, anchors: anchors.map((a) => a.name) };
+    for (const text of textsOf(named))
+      for (const id of ids)
+        assert.ok(!text.includes(id), `${c.id}: structure names record ${id}`);
+    for (const fold of folds)
+      for (const text of [fold.goal ?? "", fold.outcome ?? ""]) {
+        const lower = text.toLowerCase();
+        assert.ok(
+          !recordTexts.some((r) => r.includes(lower) || lower.includes(r)),
+          `${c.id}: ${fold.label} copies a record: ${text}`,
+        );
+      }
+    const older = anchors.filter((a) => a.afterRecordId === undefined);
+    assert.deepEqual(
+      older.map((a) => a.name),
+      lastAnchor === undefined ? [] : [lastAnchor],
+      `${c.id}: anchors before the records must end in lastAnchor`,
+    );
+    for (const { name, afterRecordId } of anchors) {
+      if (afterRecordId === undefined) continue;
+      assert.ok(
+        ids.has(afterRecordId),
+        `${c.id}: ${name} follows no shown record`,
+      );
+      assert.ok(
+        !marked.has(afterRecordId),
+        `${c.id}: ${name} marks a boundary`,
+      );
+    }
   }
 });
 
@@ -302,6 +392,24 @@ test("every split covers each kind, status, boundary form and language", () => {
     for (const language of ["en", "de", "gsw", "mixed"])
       assert.ok(languages.has(language as never), `${split} ${language}`);
   }
+});
+
+test("holdout has several cases for every reference class", () => {
+  const holdout = (task: EvalTask) =>
+    CASES.filter((c) => c.task === task && c.split === "holdout");
+  for (const kind of KINDS)
+    assert.ok(
+      holdout("intent").filter((c) => c.expected.kind.choices.includes(kind))
+        .length >= MIN_HOLDOUT_PER_CLASS,
+      `intent ${kind}`,
+    );
+  for (const task of ["milestone-status", "milestone-boundary"] as const)
+    for (const status of STATUSES)
+      assert.ok(
+        holdout(task).filter((c) => c.expected.status.choices[0] === status)
+          .length >= MIN_HOLDOUT_PER_CLASS,
+        `${task} ${status}`,
+      );
 });
 
 test("intent cases separate marker words from marker-free instructions", async () => {
