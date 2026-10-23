@@ -143,8 +143,10 @@ import {
 import {
   type FoldPlan,
   type FoldPlanCandidate,
+  type FoldPlanDeps,
   foldPlanResult,
   openFoldPlanScreen,
+  runFoldWithoutUi,
 } from "./fold-plan-screen.ts";
 import {
   createFoldSummaryRunner,
@@ -2440,6 +2442,9 @@ export default function (pi: ExtensionAPI) {
     openFoldPlan(ctx, preselect) {
       return openManualFold(ctx, preselect);
     },
+    foldWithoutUi(ctx, args) {
+      return runFoldWithoutUi(ctx, manualFoldDeps(ctx), args);
+    },
     contextBadge(ctx) {
       const cw = ctx.model?.contextWindow ?? 0;
       const tokens = estimateAdmissionTokens(
@@ -3002,11 +3007,11 @@ export default function (pi: ExtensionAPI) {
       : defaultFoldFocus(sm);
   }
 
-  /** The one-screen plan. `preselect` wraps the recommendation so list `r` lands on that anchor. */
-  function openManualFold(
+  /** Plan and engine access for a manual fold. `preselect` wraps the recommendation so list `r` lands on that anchor. */
+  function manualFoldDeps(
     ctx: ExtensionCommandContext,
     preselect?: string,
-  ): Promise<"back" | "done"> {
+  ): FoldPlanDeps {
     const recommend = (candidates: readonly FoldPlanCandidate[]) => {
       if (preselect) {
         const at = candidates.findIndex(
@@ -3016,7 +3021,7 @@ export default function (pi: ExtensionAPI) {
       }
       return recommendFoldIndex(candidates, foldBudget(ctx));
     };
-    return openFoldPlanScreen(ctx, {
+    return {
       candidates(commandCtx) {
         const sm = commandCtx.sessionManager as SessionManager;
         const sessionId = sm.getSessionId();
@@ -3073,7 +3078,14 @@ export default function (pi: ExtensionAPI) {
           };
         }
       },
-    });
+    };
+  }
+
+  function openManualFold(
+    ctx: ExtensionCommandContext,
+    preselect?: string,
+  ): Promise<"back" | "done"> {
+    return openFoldPlanScreen(ctx, manualFoldDeps(ctx, preselect));
   }
 
   foldApis.set(pi, { queueFold, runFoldNow });
@@ -4592,7 +4604,7 @@ Operations (set \`action\`):
   • 'anchor', name='<milestone-name>': label the current point. Anchor at the start of a stage you'll summarize (e.g. 'impl-start').
   • 'rewind', rewindTo='<existing>', newLabel='<new>': collapse work between rewindTo and the current leaf into a branch_summary labeled newLabel, so rewinds can chain.
   • 'list': show all anchors on the active branch, oldest first, with cumulative context % at each.
-  • 'pin', kind='sub-goal'|'decision'|'fact'|'file'|'steering', text='<what to keep>': record a durable item that survives folds; \`list\` shows them. 'file' takes path+why instead of text; 'steering' belongs to an anchor (scopeAnchor, default newest).
+  • 'pin', kind='sub-goal'|'decision'|'fact'|'file'|'steering', text='<what to keep>': record a durable item that survives folds; \`list\` shows them. 'file' takes path+why instead of text; 'steering' belongs to an anchor (scopeAnchor, default newest). Refused when the user disabled the continuity ledger (continuity.capture=false).
 
 \`name\` (anchor) and \`newLabel\` (rewind) write into one shared anchor namespace: labels are unique on the active branch — both actions refuse a name that already exists — and everything written there is addressable as a future \`rewindTo\`. Avoid the reserved \`${LABEL_PREFIX}\` prefix.`,
     promptSnippet:

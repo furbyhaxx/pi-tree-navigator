@@ -97,6 +97,7 @@ function setup(options: Options = {}) {
   const calls = {
     folds: [] as string[],
     plans: [] as (string | undefined)[],
+    headlessFolds: [] as string[],
     anchors: [] as string[],
     trees: 0,
     listed: 0,
@@ -139,6 +140,10 @@ function setup(options: Options = {}) {
           },
         };
       });
+    },
+    async foldWithoutUi(ctx, args) {
+      calls.headlessFolds.push(args);
+      ctx.ui.notify(`headless fold: ${args}`, "info");
     },
     contextBadge: () => "ctx 38.4% of 372k",
     readLedger: () => options.ledger,
@@ -301,8 +306,8 @@ describe("/anchor dispatch", () => {
       ["briefing", /No continuity items yet/],
       ["ledger", /No continuity items yet/],
       ["state", /No continuity items yet/],
-      ["fold", /guided fold requires an interactive terminal/],
-      ["rewind", /guided fold requires an interactive terminal/],
+      ["fold", /^headless fold: $/],
+      ["rewind", /^headless fold: $/],
       ["settings", /Anchor settings/],
       ["setting", /Anchor settings/],
       ["config", /Anchor settings/],
@@ -374,6 +379,25 @@ describe("/anchor dispatch", () => {
     assert.equal(ui.rendered.length, 1);
     assert.match(ui.rendered[0].join("\n"), /Session\s+Original/);
     assert.match(ui.notifications[0].message, /1 user turns/);
+  });
+
+  it("refuses options after inspect/preview paths instead of reading them as the filename", async () => {
+    const files = await sessionFile();
+    for (const args of [
+      "clone inspect session.jsonl --llm",
+      "clone preview plan.json --model openai/gpt-6-luna",
+    ]) {
+      const test = setup({ hasUI: false, cwd: files.directory });
+      await test.run(args);
+      const last = test.notifications.at(-1);
+      assert.equal(last?.type, "warning", args);
+      assert.match(last?.message ?? "", /takes no options \(got "--/, args);
+      assert.doesNotMatch(last?.message ?? "", /ENOENT/, args);
+    }
+
+    const quoted = setup({ hasUI: false, cwd: files.directory });
+    await quoted.run('clone inspect "session.jsonl"');
+    assert.match(quoted.notifications[0].message, /Inspected "Original"/);
   });
 });
 

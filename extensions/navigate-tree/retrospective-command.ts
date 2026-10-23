@@ -51,7 +51,10 @@ export const CLONE_SUBCOMMANDS = [
 
 type Subcommand = (typeof CLONE_SUBCOMMANDS)[number]["name"];
 
-function parsePathArgument(rawPath: string): string | undefined {
+function parsePathArgument(
+  rawPath: string,
+  subcommand: Subcommand,
+): string | undefined {
   const value = rawPath.trim();
   if (!value) return undefined;
 
@@ -69,6 +72,13 @@ function parsePathArgument(rawPath: string): string | undefined {
     return value.slice(1, -1) || undefined;
   }
 
+  // Unquoted paths may contain spaces; an option token there is a mistake, not part of the name.
+  const option = value.split(/\s+/).find((token) => token.startsWith("--"));
+  if (option) {
+    throw new Error(
+      `/anchor clone ${subcommand} takes no options (got "${option}"); only propose accepts options. Quote a path that contains "--". ${CLONE_USAGE}`,
+    );
+  }
   return value;
 }
 
@@ -77,7 +87,9 @@ async function getPath(
   rawPath: string | undefined,
   ctx: ExtensionCommandContext,
 ): Promise<string> {
-  const providedPath = rawPath ? parsePathArgument(rawPath) : undefined;
+  const providedPath = rawPath
+    ? parsePathArgument(rawPath, subcommand)
+    : undefined;
   if (providedPath) return resolve(ctx.cwd, providedPath);
 
   if (subcommand === "inspect") {
@@ -94,7 +106,7 @@ async function getPath(
 
   const label = subcommand === "preview" ? "preview" : "clone";
   const input = await ctx.ui.input(`Plan file to ${label}`, "<plan.json>");
-  const promptedPath = input ? parsePathArgument(input) : undefined;
+  const promptedPath = input ? parsePathArgument(input, subcommand) : undefined;
   if (!promptedPath) throw new Error(`No plan path provided. ${CLONE_USAGE}`);
   return resolve(ctx.cwd, promptedPath);
 }

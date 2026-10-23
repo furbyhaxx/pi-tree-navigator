@@ -773,6 +773,101 @@ async function editPlan(
   }
 }
 
+const HEADLESS_USAGE =
+  "Run /anchor fold <anchor|recommended> [new-label] to fold; the default label is suggested from the anchor.";
+
+/**
+ * `/anchor fold` without a UI. No argument prints the plan; `<anchor|recommended> [label]`
+ * is the explicit confirmation and folds now, or at the next turn boundary while the agent runs.
+ */
+export async function runFoldWithoutUi(
+  ctx: ExtensionCommandContext,
+  deps: FoldPlanDeps,
+  args: string,
+): Promise<void> {
+  const state = openState(ctx, deps);
+  const [anchorArg, labelArg, ...extra] = args
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!anchorArg) {
+    const rows = state.candidates.map((candidate) => {
+      const value = candidate.valid
+        ? `−${formatTokens(Math.max(0, candidate.beforeTokens - candidate.projectedAfterTokens))} tok · ${candidate.strategy}${candidate.name === state.recommended ? " · recommended" : ""}`
+        : `not foldable: ${oneLine(candidate.reason ?? NO_REASON)}`;
+      return `  ◆ ${candidate.name}  ${value}`;
+    });
+    ctx.ui.notify(
+      rows.length
+        ? [
+            `Fold plan (newest first) · summary by ${deps.summaryModel(ctx)}`,
+            ...rows,
+            HEADLESS_USAGE,
+          ].join("\n")
+        : NO_ANCHORS,
+      "info",
+    );
+    return;
+  }
+  if (extra.length) {
+    ctx.ui.notify(`Too many arguments. ${HEADLESS_USAGE}`, "warning");
+    return;
+  }
+  const name = anchorArg === "recommended" ? state.recommended : anchorArg;
+  const candidate = state.candidates.find((entry) => entry.name === name);
+  if (!candidate) {
+    ctx.ui.notify(
+      name
+        ? `No anchor '${name}' on the active branch. Run /anchor fold to see the plan.`
+        : "No anchor fits the recommendation budget. Run /anchor fold to see the plan and name an anchor.",
+      "warning",
+    );
+    return;
+  }
+  if (!candidate.valid) {
+    ctx.ui.notify(
+      `'${candidate.name}' cannot be folded: ${oneLine(candidate.reason ?? NO_REASON)}`,
+      "warning",
+    );
+    return;
+  }
+  const label = labelArg ?? candidate.suggestedLabel;
+  if (!isValidName(label)) {
+    ctx.ui.notify(
+      `'${label}' cannot be a label: use lowercase kebab-case, at most ${MAX_NAME_LENGTH} characters (e.g. '${candidate.suggestedLabel}').`,
+      "warning",
+    );
+    return;
+  }
+  if (state.candidates.some((entry) => entry.name === label)) {
+    ctx.ui.notify(
+      `An anchor named '${label}' already exists on this branch; pick a fresh name (e.g. '${candidate.suggestedLabel}').`,
+      "warning",
+    );
+    return;
+  }
+  const plan: FoldPlan = { anchor: candidate.name, label };
+  if (deps.isAgentRunning(ctx)) {
+    const queued = deps.queue(ctx, plan);
+    ctx.ui.notify(
+      queued.ok
+        ? `Fold to '${plan.anchor}' as '${label}' queued; it runs at the next turn boundary.`
+        : `Fold not queued: ${queued.reason}`,
+      queued.ok ? "info" : "warning",
+    );
+    return;
+  }
+  const result = await deps.start(ctx, plan, {
+    signal: new AbortController().signal,
+    onProgress() {},
+  });
+  const finished = describeResult(result);
+  ctx.ui.notify(
+    finished.text,
+    finished.tone === "success" ? "info" : "warning",
+  );
+}
+
 /**
  * Show the fold plan until a fold finished or was queued ("done") or the user left ("back").
  * Edits happen between two renders of the panel, because dialogs replace the screen.

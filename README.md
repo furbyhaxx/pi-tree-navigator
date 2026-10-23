@@ -47,7 +47,13 @@ Run `/anchor` for the unified menu: `tree`, `list`, `current`, `fold`, `clone`,
 - **Fold:** review one recommended plan, including the target, projected context
   and summary strategy. Enter runs the independent engine; label and focus are
   editable. A request made while the agent works runs at the next turn boundary.
-  Progress is visible and Escape cancels before commit.
+  Progress is visible and Escape cancels before commit. `/anchor fold <anchor>`
+  opens the plan with that anchor selected. Without a UI, `/anchor fold` prints
+  the plan and `/anchor fold <anchor|recommended> [new-label]` folds (or queues
+  while the agent works).
+- **Clone paths:** `inspect`, `preview` and `create` take one path and no options;
+  a stray `--option` is refused instead of becoming part of the filename. Quote
+  a path that contains `--`.
 - **Clone:** inspect, propose, review, preview and create with readable screens.
   Raw JSON is an explicit advanced option, never the default review surface.
 - **Settings:** stage scalar settings, model choices, per-model overrides and
