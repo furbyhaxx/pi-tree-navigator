@@ -367,7 +367,42 @@ user message ──capture──▶ ops entry ──replay──▶ ledger ─�
 | key (`tree-navigator.json`) | default | effect |
 |---|---|---|
 | `continuity.capture` | `true` | Turn capture and the agent's ledger writes on or off. |
-| `continuity.intentClassifier` | `null` | `provider/id` of a registry classifier model that judges each new user message; `null`, `false`, `"off"` or `"disabled"` keep the heuristics. A classifier error or a 15 s timeout falls back to the heuristics for the rest of the session. |
+| `continuity.intentClassifier` | `null` | Model policy that judges each new user message (below). `null`, `false`, `"off"` or `"disabled"` keep the local heuristics. A model error or a 15 s timeout falls back to the heuristics for the rest of the session. |
+
+`continuity.intentClassifier` accepts three forms. Every model is a `provider/id` from the Pi
+catalog with configured credentials; a Decisions classifier is preferred, otherwise a chat model
+answers the same questions as strict JSON.
+
+- `"provider/id"`: one model answers both the intent kind and the supersession question.
+- `"recommended"`: the benchmarked preset. `openrouter/microsoft/microsoft-decision-1` judges the
+  kind and which active item the message replaces; `openrouter/openai/gpt-6-luna` is asked the
+  supersession question only when the classifier abstains. The kind is never escalated: in the
+  benchmark, escalating it accepted unsafe answers. Cost was about $0.04 per 1,000 messages.
+- An object that overrides the preset field by field. A stage with `"model": null` is off;
+  `instructions` (1-1,000 characters) replaces the question wording.
+
+```json
+{
+  "continuity": {
+    "intentClassifier": {
+      "preset": "recommended",
+      "heuristics": true,
+      "minConfidence": 0.7,
+      "kind": { "model": "openrouter/microsoft/microsoft-decision-1" },
+      "supersession": {
+        "model": "openrouter/microsoft/microsoft-decision-1",
+        "escalation": { "model": null }
+      }
+    }
+  }
+}
+```
+
+Without `preset`, unset stages are off. `heuristics: false` requires a `kind.model`. Answers
+below `minConfidence` abstain; the heuristics then keep explicit markers. Any model policy
+sends each new user message (up to about 3 KB) and the active ledger items to the provider,
+which is why the default stays local. The evidence, including measured limits, is in
+`.project/analyses/classifier-eval/summary.md`.
 
 `/anchor current` (aliases `ledger`, `briefing`) browses and edits the active branch's ledger:
 `x` retracts an item after a confirmation (it stays in the session history), `e` edits its text
