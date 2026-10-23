@@ -332,20 +332,21 @@ const ephemeral = (warning?: string): IntentVerdict => ({
   ...(warning !== undefined && { warning }),
 });
 
+// `undefined` is an abstention: low confidence, or no usable kind answer.
 function verdictFrom(
   result: ClassifierResult,
   items: IntentInput["activeItems"],
   minConfidence: number,
-): IntentVerdict {
+): IntentVerdict | undefined {
   const kind = result.answers.kind;
   if (
     kind?.type !== "choice" ||
     kind.confidence < minConfidence ||
-    !isIntentKind(kind.choice) ||
-    kind.choice === "ephemeral"
+    !isIntentKind(kind.choice)
   ) {
-    return ephemeral();
+    return undefined;
   }
+  if (kind.choice === "ephemeral") return ephemeral();
   const contradicts = result.answers.contradicts;
   const named =
     contradicts?.type === "choice" &&
@@ -360,13 +361,27 @@ function verdictFrom(
   };
 }
 
+// An abstaining model must not hide an explicit marker or excerpt: keep what
+// the heuristic found, as the heuristic's own verdict, never a supersession.
+async function abstentionVerdict(
+  input: IntentInput,
+  signal: AbortSignal | undefined,
+): Promise<IntentVerdict> {
+  const heuristic = await heuristicClassifier(input, signal);
+  return heuristic.kind !== "ephemeral" || heuristic.excerpts !== undefined
+    ? heuristic
+    : ephemeral();
+}
+
 /**
  * Classify with a registry classifier model, one call per message. Resolves to
  * `undefined` (after `opts.onWarning`) when `model` is malformed or unknown;
- * never throws. A low-confidence or malformed answer is ephemeral. After the
- * first provider error the instance stops calling the model, answers with the
- * heuristic classifier so no explicit rule is lost during an outage, and
- * reports the failure once through `IntentVerdict.warning`; create a new
+ * never throws. When the model abstains (low confidence or a malformed kind
+ * answer) the heuristic verdict stands if it found a rule, decision, objective
+ * or excerpts, else the message is ephemeral; an abstention never supersedes.
+ * After the first provider error the instance stops calling the model, answers
+ * with the heuristic classifier so no explicit rule is lost during an outage,
+ * and reports the failure once through `IntentVerdict.warning`; create a new
  * instance to retry.
  */
 export async function createModelClassifier(
@@ -416,7 +431,10 @@ export async function createModelClassifier(
           }
         : fallback;
     }
-    return verdictFrom(result, items, minConfidence);
+    return (
+      verdictFrom(result, items, minConfidence) ??
+      (await abstentionVerdict(input, signal))
+    );
   };
 }
 

@@ -1289,14 +1289,106 @@ describe("createModelClassifier", () => {
     assert.deepEqual(Object.keys(calls[0]?.context.questions ?? {}), ["kind"]);
   });
 
-  it("treats a low-confidence answer as ephemeral, without a warning", async () => {
+  it("treats a low-confidence answer on marker-free text as ephemeral, without a warning", async () => {
     const { classifier } = await make(() => ({
       answers: { kind: answer("rule", 0.69), contradicts: answer("R1") },
+    }));
+    assert.deepEqual(
+      await classifier(input({ text: "Please tidy the formatting here." })),
+      { kind: "ephemeral", by: "classifier" },
+    );
+  });
+
+  it("keeps the heuristic rule when the model abstains, and never takes its low-confidence supersession", async () => {
+    const low = await make(() => ({
+      answers: { kind: answer("rule", 0.32), contradicts: answer("R1", 0.32) },
+    }));
+    assert.deepEqual(await low.classifier(input()), {
+      kind: "rule",
+      by: "heuristic",
+    });
+    const split = await make(() => ({
+      answers: { kind: answer("objective", 0.4), contradicts: answer("R1") },
+    }));
+    assert.deepEqual(await split.classifier(input()), {
+      kind: "rule",
+      by: "heuristic",
+    });
+  });
+
+  it("falls back to the heuristic verdict for a missing, non-choice or unknown kind answer", async () => {
+    for (const answers of [
+      {},
+      { kind: { type: "text", text: "rule" } },
+      { kind: answer("banana") },
+    ]) {
+      const { classifier } = await make(() => ({
+        answers: answers as ClassifierResult["answers"],
+      }));
+      assert.deepEqual(await classifier(input()), {
+        kind: "rule",
+        by: "heuristic",
+      });
+      assert.deepEqual(
+        await classifier(input({ text: "Please tidy the formatting here." })),
+        { kind: "ephemeral", by: "classifier" },
+      );
+    }
+  });
+
+  it("returns the heuristic excerpts of a long message the model abstains on", async () => {
+    const rule = "From now on always use tabs for indentation.";
+    const filler =
+      "The importer reads the CSV export and maps every column to the schema. ";
+    const text = `${filler.repeat(10)}${rule} ${filler.repeat(10)}`;
+    assert.ok(text.length > 400);
+    const abstain = await make(() => ({
+      answers: { kind: answer("sub-goal", 0.4) },
+    }));
+    assert.deepEqual(await abstain.classifier(input({ text })), {
+      kind: "ephemeral",
+      by: "heuristic",
+      excerpts: [{ kind: "rule", text: rule }],
+    });
+    const plain = await abstain.classifier(input({ text: filler.repeat(20) }));
+    assert.deepEqual(plain, { kind: "ephemeral", by: "classifier" });
+  });
+
+  it("a confident ephemeral answer is not an abstention and is kept", async () => {
+    const { classifier } = await make(() => ({
+      answers: { kind: answer("ephemeral", 0.99) },
     }));
     assert.deepEqual(await classifier(input()), {
       kind: "ephemeral",
       by: "classifier",
     });
+  });
+
+  it("captures an explicit rule and a long message's rule sentence verbatim when the model abstains, without superseding", async () => {
+    const { classifier } = await make(() => ({
+      answers: { kind: answer("rule", 0.4), contradicts: answer("R1", 0.32) },
+    }));
+    const rule = "From now on use spaces, not tabs.";
+    const long = `${"The importer reads the CSV export and maps every column. ".repeat(10)}${rule} ${"Then it writes the report. ".repeat(10)}`;
+    assert.ok(long.length > 400);
+    const existing = apply(createLedger(), [
+      {
+        op: { op: "add", kind: "rule", text: "Use tabs", quote: "Use tabs" },
+        ctx: { origin: "user", entryId: "u0" },
+      },
+    ]).ledger;
+    for (const text of [rule, long]) {
+      const result = await captureIntent(
+        [user("u1", text)],
+        undefined,
+        existing,
+        classifier,
+      );
+      assert.deepEqual(
+        result.ops.map(({ op }) => op),
+        [{ op: "add", kind: "rule", text: rule, quote: rule }],
+      );
+    }
   });
 
   it("honors a custom minConfidence", async () => {
