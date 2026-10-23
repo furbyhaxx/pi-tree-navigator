@@ -71,6 +71,13 @@ Safe points:
 - **E11** (user) Recovery is on by default; milestone-driven automatic folding stays
   opt-in until the benchmark shows a reliable controller.
 - **E12** (user) A fold requested while the agent works runs at the next turn boundary.
+- **E13** (user) Continuity capture ships heuristics-only by default. The benchmarked
+  'Split + chain' policy (microsoft decision-1 for kind and supersession, gpt-6-luna
+  escalation when supersession abstains) is a tunable preset: stages can be disabled,
+  swapped or given instruction overrides.
+- **E14** (user) Opt-in milestone auto-fold starts from conservative confirm (status:
+  jev-1.14 and gpt-6-luna-decisions agree; boundary: gpt-6-luna chat), pending spikes
+  on instructions, granular chained questions and tree context, and an expanded holdout.
 
 ## Units
 
@@ -78,10 +85,10 @@ Safe points:
 |---|---|---|
 | U1 | `fold-summarizer.ts` | merged |
 | U5 | unified admission estimate | merged |
-| U2 | extract `commitFold` from `completeRewind`, behavior unchanged | in progress |
+| U2 | extract `commitFold` from `completeRewind`, behavior unchanged | merged (fold-point boundary fixed in 38916ac) |
 | U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | merged |
 | U4a | rewind tool on the engine; delete the in-band summary turn | next |
-| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI module in progress; wiring with U4a |
+| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI module merged; wiring with U4a |
 | U4c | auto controller executes through the engine | later |
 | U4d | overflow and guard-abort recovery through the engine | later |
 | U6 | live acceptance: refused full window, pre-compaction anchor, auto fold, TUI | later |
