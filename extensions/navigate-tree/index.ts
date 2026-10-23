@@ -466,22 +466,32 @@ function findOwningSession(sm: SessionManager): AgentSession | null {
  * `sessionEntryToContextMessages` are public); `ctx.sessionManager` at the
  * event site is `ReadonlySessionManager`.
  */
-export function buildContextMessages(sm: {
-  buildContextEntries(): SessionEntry[];
-  getBranch?(): SessionEntry[];
-  buildSessionProjection?(): {
-    entries?: Array<{ sourceEntry: SessionEntry; messages: AgentMessage[] }>;
-    messages: AgentMessage[];
-    model?: { provider: string; modelId: string } | null;
-  };
-  getLabel?(id: string): string | undefined;
-}): ReturnType<typeof sessionEntryToContextMessages> {
+export function buildContextMessages(
+  sm: {
+    buildContextEntries(): SessionEntry[];
+    getBranch?(): SessionEntry[];
+    getEntries?(): SessionEntry[];
+    buildSessionProjection?(): {
+      entries?: Array<{ sourceEntry: SessionEntry; messages: AgentMessage[] }>;
+      messages: AgentMessage[];
+      model?: { provider: string; modelId: string } | null;
+    };
+    getLabel?(id: string): string | undefined;
+  },
+  throughId?: string,
+): ReturnType<typeof sessionEntryToContextMessages> {
   let entries:
     | Array<{ sourceEntry: SessionEntry | null; messages: AgentMessage[] }>
     | undefined;
   let model: { provider: string; modelId: string } | null | undefined;
   try {
-    if (typeof sm.buildSessionProjection === "function") {
+    if (throughId && typeof sm.getEntries === "function") {
+      const projection = buildSessionProjection(sm.getEntries(), throughId);
+      model = projection.model;
+      entries = Array.isArray(projection.entries)
+        ? projection.entries
+        : [{ sourceEntry: null, messages: projection.messages }];
+    } else if (typeof sm.buildSessionProjection === "function") {
       const projection = sm.buildSessionProjection();
       model = projection.model;
       entries = Array.isArray(projection.entries)
@@ -1387,6 +1397,87 @@ export type LateEntry =
       details: unknown;
     };
 
+function isPreservedLateEntry(entry: SessionEntry): boolean {
+  if (entry.type === "message" && entry.message.role === "user") return true;
+  return (
+    entry.type === "custom_message" &&
+    entry.customType !== REWIND_CUSTOM_TYPE &&
+    entry.customType !== REWIND_HINT_CUSTOM_TYPE
+  );
+}
+
+function toolEnvelopeIds(entry: SessionEntry): {
+  calls: string[];
+  result?: string;
+} {
+  if (entry.type !== "message") return { calls: [] };
+  if (entry.message.role === "toolResult") {
+    const id = entry.message.toolCallId;
+    return { calls: [], ...(typeof id === "string" ? { result: id } : {}) };
+  }
+  if (
+    entry.message.role !== "assistant" ||
+    !Array.isArray(entry.message.content)
+  )
+    return { calls: [] };
+  const calls: string[] = [];
+  for (const block of entry.message.content) {
+    if (
+      block &&
+      typeof block === "object" &&
+      "type" in block &&
+      block.type === "toolCall" &&
+      "id" in block &&
+      typeof block.id === "string"
+    ) {
+      calls.push(block.id);
+    }
+  }
+  return { calls };
+}
+
+/** Fold point that keeps trailing unanswered input, or why that cut is unsafe. */
+function recoveryCutOf(
+  branch: readonly SessionEntry[],
+): { ok: true; foldPointId: string } | { ok: false; detail: string } {
+  if (branch.length === 0) {
+    return { ok: false, detail: "no session entries yet, nothing to fold" };
+  }
+  let end = branch.length;
+  while (end > 0 && isPreservedLateEntry(branch[end - 1])) end--;
+  if (end === 0) {
+    return {
+      ok: false,
+      detail:
+        "the active branch is only unanswered input, so there is no span to fold",
+    };
+  }
+  const calls = new Set<string>();
+  const results = new Set<string>();
+  for (const entry of branch.slice(0, end)) {
+    const envelope = toolEnvelopeIds(entry);
+    for (const id of envelope.calls) calls.add(id);
+    if (envelope.result) results.add(envelope.result);
+  }
+  for (const id of calls) {
+    if (!results.has(id)) {
+      return {
+        ok: false,
+        detail: "folding here would leave a tool call without its result",
+      };
+    }
+  }
+  for (const id of results) {
+    if (!calls.has(id)) {
+      return {
+        ok: false,
+        detail: "folding here would leave a tool result without its call",
+      };
+    }
+  }
+  return { ok: true, foldPointId: branch[end - 1].id };
+}
+
 function collectLateEntries(
   sm: SessionManager,
   afterEntryId: string,
@@ -1401,13 +1492,10 @@ function collectLateEntries(
   if (start < 0) return [];
   const late: LateEntry[] = [];
   for (const entry of branch.slice(start + 1)) {
+    if (!isPreservedLateEntry(entry)) continue;
     if (entry.type === "message" && entry.message.role === "user") {
       late.push({ kind: "user", message: entry.message });
-    } else if (
-      entry.type === "custom_message" &&
-      entry.customType !== REWIND_CUSTOM_TYPE &&
-      entry.customType !== REWIND_HINT_CUSTOM_TYPE
-    ) {
+    } else if (entry.type === "custom_message") {
       late.push({
         kind: "custom",
         customType: entry.customType,
@@ -1981,7 +2069,7 @@ export interface FoldCandidatePrice extends FoldPlanCandidate {
 function preparedInContext(
   sm: SessionManager,
   targetId: string,
-  leafId: string,
+  throughId: string,
   captured: { modelKey: string; messages: Message[] } | undefined,
   model: { provider: string; id: string } | undefined,
 ): SummarizeFoldOptions["inContext"] | undefined {
@@ -1992,13 +2080,17 @@ function preparedInContext(
   )
     return undefined;
   const allEntries = sm.getEntries();
+  const projectedMessages =
+    throughId === sm.getLeafId()
+      ? buildContextMessages(sm)
+      : buildContextMessages(sm, throughId);
   return buildInContextMessages(
     captured.messages,
-    buildContextMessages(sm),
+    projectedMessages,
     anchorMessageIndex(
       {
         entries: projectHandoffs(
-          buildSessionProjection(allEntries, leafId),
+          buildSessionProjection(allEntries, throughId),
           allEntries,
         ).entries.map((entry) => ({
           ...entry,
@@ -2120,13 +2212,15 @@ export function priceFoldCandidates(
     captured?: { modelKey: string; messages: Message[] };
     focus: string;
     suggestLabel(anchorName: string): string;
+    /** Last folded entry. Later user and custom input is priced as late, not subtracted. */
+    foldPointId?: string;
   },
 ): FoldCandidatePrice[] {
   const contextWindow = input.model?.contextWindow ?? 0;
   const beforeTokens = estimateAdmissionTokens(sm);
   const reduceOut = summarizerReduceTokens(input.model);
   const placeholder = foldPlaceholderSummary(reduceOut);
-  const leafId = sm.getLeafId();
+  const leafId = input.foldPointId ?? sm.getLeafId();
   return collectActiveAnchors(sm).map((anchor) => {
     const suggestedLabel = input.suggestLabel(anchor.name);
     const targetId = findLabeledEntry(sm, LABEL_PREFIX + anchor.name) ?? "";
@@ -2468,15 +2562,25 @@ export default function (pi: ExtensionAPI) {
   >();
   const requestBudgetFailures = new Map<
     string,
-    { inputEstimate: number; contextWindow: number; receiptId: string }
+    {
+      inputEstimate: number;
+      contextWindow: number;
+      receiptId: string;
+      detail?: string;
+    }
   >();
+  // One preflight recovery per agent run. Native overflow retry owns the next request.
+  const preflightAttempted = new Set<string>();
+  const nativeRetryOwned = new Set<string>();
+  const recoveryCuts = new Map<string, string>();
   const requestBudgetFailureDraft = (failure: {
     inputEstimate: number;
     contextWindow: number;
     receiptId: string;
+    detail?: string;
   }) =>
     rewindMessageDraft(
-      `[${TOOL_NAME}] Request stopped before generation: estimated input ${failure.inputEstimate} tokens leaves fewer than ${RECOVERY_MIN_OUTPUT_TOKENS} output tokens plus ${RECOVERY_HEADROOM_TOKENS} headroom in the ${failure.contextWindow}-token operating window. No tool results were withheld. Reduce context with /tree or /compact, or select a larger operating window.`,
+      `[${TOOL_NAME}] Request stopped before generation: estimated input ${failure.inputEstimate} tokens leaves fewer than ${RECOVERY_MIN_OUTPUT_TOKENS} output tokens plus ${RECOVERY_HEADROOM_TOKENS} headroom in the ${failure.contextWindow}-token operating window. No tool results were withheld.${failure.detail ? ` ${failure.detail}` : ""} Reduce context with /tree or /compact, or select a larger operating window.`,
       {
         status: "failed",
         reason: "insufficient request headroom",
@@ -2484,6 +2588,7 @@ export default function (pi: ExtensionAPI) {
         contextWindow: failure.contextWindow,
         appliedWithheld: 0,
         receiptId: failure.receiptId,
+        ...(failure.detail ? { detail: failure.detail } : {}),
       },
     );
 
@@ -2873,8 +2978,16 @@ export default function (pi: ExtensionAPI) {
   ): FoldPrepared | { error: string } {
     const { sm } = host;
     const { rewindTo, newLabel } = request;
-    const leafId = sm.getLeafId();
-    if (!leafId) return { error: "no session entries yet, nothing to fold" };
+    const sessionLeaf = sm.getLeafId();
+    if (!sessionLeaf)
+      return { error: "no session entries yet, nothing to fold" };
+    const foldPointId =
+      request.origin === "recovery"
+        ? recoveryCuts.get(request.sessionId)
+        : sessionLeaf;
+    if (!foldPointId) {
+      return { error: "the recovery boundary was not snapshotted" };
+    }
     if (!isValidName(rewindTo) || !isValidName(newLabel)) {
       return {
         error: `anchor and label names are kebab-case, at most ${MAX_NAME_LENGTH} characters`,
@@ -2888,9 +3001,13 @@ export default function (pi: ExtensionAPI) {
     const targetId = findLabeledEntry(sm, LABEL_PREFIX + rewindTo);
     if (!targetId)
       return { error: `no label '${rewindTo}' on the active branch` };
-    if (targetId === leafId)
+    if (targetId === foldPointId)
       return { error: `already at '${rewindTo}', nothing to summarize` };
-    const { entries } = collectEntriesForBranchSummary(sm, leafId, targetId);
+    const { entries } = collectEntriesForBranchSummary(
+      sm,
+      foldPointId,
+      targetId,
+    );
     if (entries.length === 0) {
       return {
         error: `no entries between the leaf and '${rewindTo}', nothing to summarize`,
@@ -2920,14 +3037,14 @@ export default function (pi: ExtensionAPI) {
     const inContext = preparedInContext(
       sm,
       targetId,
-      leafId,
+      foldPointId,
       capturedSystems.get(request.sessionId),
       host.model,
     );
     return {
-      leafId,
+      leafId: foldPointId,
       targetId,
-      segment: buildFoldSegment(allEntries, leafId, targetId),
+      segment: buildFoldSegment(allEntries, foldPointId, targetId),
       inContext,
       parent: {
         mode: parentModes.get(request.sessionId) ?? "full",
@@ -3819,6 +3936,8 @@ export default function (pi: ExtensionAPI) {
     } catch {
       return;
     }
+    preflightAttempted.delete(sessionId);
+    nativeRetryOwned.delete(sessionId);
     // A rewind the run never reached a boundary for would fold at an
     // unrelated later turn, and block every rewind until then.
     if (queuedFolds.get(sessionId)?.origin === "agent")
@@ -3885,10 +4004,33 @@ export default function (pi: ExtensionAPI) {
       outputBudgets.delete(sessionId);
       requestBudgetFailures.delete(sessionId);
       capturedSystems.delete(sessionId);
+      preflightAttempted.delete(sessionId);
+      nativeRetryOwned.delete(sessionId);
+      recoveryCuts.delete(sessionId);
       queuedFolds.delete(sessionId);
       autoNavigateStateBySession.delete(sessionId);
     } catch {
       // Fail-open: session_start clears it too.
+    }
+  });
+
+  pi.on("session_before_compact", (event, ctx) => {
+    try {
+      if (event.reason === "overflow" && event.willRetry) {
+        nativeRetryOwned.add(ctx.sessionManager.getSessionId());
+      }
+    } catch {
+      // Stale ctx: preflight may still run on the retry.
+    }
+  });
+
+  pi.on("session_compact_failed", (event, ctx) => {
+    try {
+      if (event.reason === "overflow") {
+        nativeRetryOwned.delete(ctx.sessionManager.getSessionId());
+      }
+    } catch {
+      // Stale ctx: settlement clears the flag.
     }
   });
 
@@ -4111,6 +4253,9 @@ export default function (pi: ExtensionAPI) {
     outputBudgets.delete(sessionId);
     requestBudgetFailures.delete(sessionId);
     capturedSystems.delete(sessionId);
+    preflightAttempted.delete(sessionId);
+    nativeRetryOwned.delete(sessionId);
+    recoveryCuts.delete(sessionId);
     queuedFolds.delete(sessionId);
     rewindHintReserveTokens = null;
     hintByModel = new Map();
@@ -4223,26 +4368,138 @@ export default function (pi: ExtensionAPI) {
     messages: buildContextMessages(ctx.sessionManager as SessionManager),
   }));
 
-  pi.on("context_with_system", (event, ctx) => {
-    const sm = ctx.sessionManager as SessionManager;
-    const sessionId = sm.getSessionId();
-    // Before the guard's early returns: every request refreshes the head a
-    // later fold replays.
-    captureSystemHead(sm, sessionId, ctx.model, event.messages);
-    const at = rewindCompactionTarget(sm, sessionId, ctx.model);
-    if (!at || !ctx.signal || ctx.signal.aborted) return;
-    const inputEstimate = requestAccounting(sm, event.messages).tokens;
-    if (
-      inputEstimate + RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS <=
-      at.contextWindow
-    )
+  pi.on("context_with_system", async (event, ctx) => {
+    let sm: SessionManager;
+    let sessionId: string;
+    let model: OverflowModel | undefined;
+    let signal: AbortSignal | undefined;
+    let host: FoldHost;
+    try {
+      sm = ctx.sessionManager as SessionManager;
+      sessionId = sm.getSessionId();
+      model = ctx.model;
+      signal = ctx.signal;
+      host = foldHostOf(ctx);
+    } catch {
       return;
-    requestBudgetFailures.set(sessionId, {
-      inputEstimate,
-      contextWindow: at.contextWindow,
-      receiptId: randomUUID(),
+    }
+    // Captured before any await: Strategy A and the returned request share it.
+    const systemHead = effectiveRequestMessages(sm, event.messages).filter(
+      (message) => message.role === "system",
+    );
+    captureSystemHead(sm, sessionId, model, event.messages);
+    if (signal?.aborted) return;
+    if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
+    if (nativeRetryOwned.has(sessionId)) {
+      nativeRetryOwned.delete(sessionId);
+      return;
+    }
+    if (!model?.contextWindow || model.contextWindow <= 0) return;
+    const contextWindow = model.contextWindow;
+    const inputEstimate = requestAccounting(sm, event.messages).tokens;
+    const reserve = RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS;
+    if (inputEstimate + reserve <= contextWindow) return;
+    const refuse = (detail?: string) => {
+      requestBudgetFailures.set(sessionId, {
+        inputEstimate,
+        contextWindow,
+        receiptId: randomUUID(),
+        ...(detail ? { detail } : {}),
+      });
+      try {
+        ctx.abort();
+      } catch {
+        // Stale ctx: settlement still persists the receipt.
+      }
+    };
+    if (preflightAttempted.has(sessionId)) {
+      refuse("a recovery was already attempted for this request");
+      return;
+    }
+    preflightAttempted.add(sessionId);
+    if (accountRequest(systemHead).tokens + reserve > contextWindow) {
+      refuse("the system prompt alone leaves no room for a recovered request");
+      return;
+    }
+    let branch: SessionEntry[];
+    try {
+      branch = sm.getBranch();
+    } catch {
+      refuse("the active branch could not be read");
+      return;
+    }
+    const cut = recoveryCutOf(branch);
+    if (!cut.ok) {
+      refuse(cut.detail);
+      return;
+    }
+    const focus = defaultFoldFocus(sm);
+    const candidates = priceFoldCandidates(sm, {
+      model,
+      handoffMode: parentModes.get(sessionId) ?? "full",
+      captured: capturedSystems.get(sessionId),
+      focus,
+      suggestLabel: (name) => suggestFoldLabel(sm, name),
+      foldPointId: cut.foldPointId,
     });
-    ctx.abort();
+    const selected = selectFoldTarget(
+      candidates,
+      foldRecommendationBudget(
+        contextWindow,
+        resolveRewindHintReserve(
+          {
+            rewindHintReserveTokens,
+            rewindHintModelReserveTokens: hintByModel,
+          },
+          `${model.provider}/${model.id}`,
+        ),
+      ),
+    );
+    if (!selected.ok) {
+      refuse(selected.reasons.join("; "));
+      return;
+    }
+    const request: FoldRequest = {
+      sessionId,
+      origin: "recovery",
+      rewindTo: selected.candidate.name,
+      newLabel: selected.candidate.suggestedLabel,
+      focus,
+    };
+    recoveryCuts.set(sessionId, cut.foldPointId);
+    let outcome: FoldResult;
+    try {
+      outcome = await runFold(host, request, { signal });
+    } finally {
+      recoveryCuts.delete(sessionId);
+    }
+    if (signal?.aborted || outcome.status === "cancelled") return;
+    if (outcome.status !== "done") {
+      refuse(
+        outcome.status === "failed"
+          ? `${outcome.reason}: ${outcome.detail}`
+          : outcome.status,
+      );
+      return;
+    }
+    const draft = foldDoneDraft(request, outcome);
+    try {
+      sm.appendCustomMessageEntry(
+        draft.customType,
+        draft.content,
+        draft.display,
+        draft.details,
+      );
+    } catch {
+      // The fold landed; the returned projection still carries the request.
+    }
+    refreshAgentMessages(sm);
+    try {
+      return { messages: [...systemHead, ...buildContextMessages(sm)] };
+    } catch {
+      refuse("the recovered projection could not be built");
+      return;
+    }
   });
 
   // Anchor mandate (#31): a before_agent_start append lands at the END of
@@ -4262,6 +4519,8 @@ export default function (pi: ExtensionAPI) {
       const sessionId = ctx.sessionManager.getSessionId();
       outputBudgets.delete(sessionId);
       requestBudgetFailures.delete(sessionId);
+      preflightAttempted.delete(sessionId);
+      nativeRetryOwned.delete(sessionId);
       toolActiveBySession.set(sessionId, toolActive);
     } catch {
       // Fail-open: the per-session gate stays absent.
