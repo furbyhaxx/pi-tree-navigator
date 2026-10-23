@@ -7,14 +7,21 @@
  * the ledger keeps the full hold.
  */
 
+import { readFileSync } from "node:fs";
 import type { ModelCost } from "@earendil-works/pi-ai";
 import type { CostSource } from "./types.ts";
 
 /** Bytes added to the request body before pricing it, for provider-side framing. */
 export const PROMPT_MARGIN_BYTES = 16_000;
 
-/** Multiplier covering route price differences and rounding. */
+/** Multiplier covering rounding and prompt-token overshoot on top of the price ceiling. */
 export const WORST_CASE_FACTOR = 2;
+
+/** No request reserves less, so a free model still trips the ledger on any charge. */
+export const MIN_RESERVATION_USD = 1e-4;
+
+/** The committed table of the highest known OpenRouter route price per model. */
+export const ROUTE_PRICES_URL = new URL("./route-prices.json", import.meta.url);
 
 /** Delays before each generation lookup; they add up to roughly 30 s. */
 export const SETTLEMENT_DELAYS_MS: readonly number[] = [
@@ -77,12 +84,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isUsd = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
 
-function checkedRate(value: number, name: string): number {
-  if (!isUsd(value))
-    throw new Error(`${name} must be a finite non-negative number`);
-  return value;
-}
-
 /**
  * Highest prompt and completion price across the base rate and every context
  * tier; cache writes count as prompt tokens because they bill above input.
@@ -90,20 +91,145 @@ function checkedRate(value: number, name: string): number {
 export function ratesOf(cost: ModelCost): ModelRates {
   const rows = [cost, ...(cost.tiers ?? [])];
   return {
-    promptUsdPerM: checkedRate(
-      Math.max(...rows.flatMap((row) => [row.input, row.cacheWrite])),
-      "prompt price",
+    promptUsdPerM: Math.max(
+      ...rows.flatMap((row) => [row.input, row.cacheWrite]),
     ),
-    completionUsdPerM: checkedRate(
-      Math.max(...rows.map((row) => row.output)),
-      "completion price",
+    completionUsdPerM: Math.max(...rows.map((row) => row.output)),
+  };
+}
+
+/** One model's highest known route rate, from research of the OpenRouter routes. */
+export interface RouteEntry {
+  kind: "decisions" | "chat";
+  promptUsdPerM: number;
+  completionUsdPerM: number;
+  /** Smallest positive route context; null when no route reports one. */
+  contextTokens: number | null;
+  /** A `:free` variant whose every route lists 0/0. */
+  free?: true;
+}
+
+export interface RouteTable {
+  retrievedAt: string;
+  source: string[];
+  models: Record<string, RouteEntry>;
+}
+
+/** Validates a route table read from JSON; `where` names the file in errors. */
+export function parseRouteTable(value: unknown, where: string): RouteTable {
+  const fail = (what: string): never => {
+    throw new Error(`${where}: ${what}`);
+  };
+  if (!isRecord(value)) return fail("not an object");
+  const { retrievedAt, source, models } = value;
+  if (typeof retrievedAt !== "string") fail("retrievedAt must be a string");
+  if (
+    !Array.isArray(source) ||
+    !source.every((item) => typeof item === "string")
+  )
+    fail("source must list file names");
+  if (!isRecord(models)) return fail("models must be an object");
+  for (const [id, entry] of Object.entries(models)) {
+    if (
+      !isRecord(entry) ||
+      (entry.kind !== "decisions" && entry.kind !== "chat") ||
+      !isUsd(entry.promptUsdPerM) ||
+      !isUsd(entry.completionUsdPerM) ||
+      !(
+        entry.contextTokens === null ||
+        (Number.isInteger(entry.contextTokens) &&
+          (entry.contextTokens as number) > 0)
+      ) ||
+      (entry.free !== undefined && entry.free !== true)
+    )
+      fail(`models.${id} is not a valid route entry`);
+  }
+  return value as unknown as RouteTable;
+}
+
+export function loadRouteTable(path: string | URL): RouteTable {
+  return parseRouteTable(JSON.parse(readFileSync(path, "utf8")), String(path));
+}
+
+/** Entries of `override` replace those of `base`; the catalog still sets the floor. */
+export function mergeRouteTables(
+  base: RouteTable,
+  override: RouteTable,
+): RouteTable {
+  return {
+    retrievedAt: override.retrievedAt,
+    source: [...base.source, ...override.source],
+    models: { ...base.models, ...override.models },
+  };
+}
+
+/** The price a model is held to: reserved against and sent as the route ceiling. */
+export interface Pricing {
+  rates: ModelRates;
+  /** A verified free variant: the only model that may price at 0. */
+  free: boolean;
+  /** Whether the route table lists this model. */
+  routeData: boolean;
+  /** Set when no safe reservation exists; the model must not be called. */
+  refusal?: string;
+}
+
+/**
+ * Effective rates are the higher of the catalog price and the highest known
+ * route price. Zero, negative or non-finite rates are refused unless the id is
+ * a `:free` variant verified free in the route table. Chat models also need a
+ * positive completion price; decision models legitimately have none.
+ */
+export function pricingFor(
+  model: { id: string; cost: ModelCost },
+  table: RouteTable,
+  kind: RouteEntry["kind"],
+): Pricing {
+  const catalog = ratesOf(model.cost);
+  const entry = table.models[model.id];
+  const rates = {
+    promptUsdPerM: Math.max(catalog.promptUsdPerM, entry?.promptUsdPerM ?? 0),
+    completionUsdPerM: Math.max(
+      catalog.completionUsdPerM,
+      entry?.completionUsdPerM ?? 0,
     ),
+  };
+  const routeData = entry !== undefined;
+  const refuse = (why: string): Pricing => ({
+    rates,
+    free: false,
+    routeData,
+    refusal: `${why} (catalog ${catalog.promptUsdPerM}/${catalog.completionUsdPerM}, route table ${entry ? `${entry.promptUsdPerM}/${entry.completionUsdPerM}` : "none"} USD per million); only a ':free' id verified in the route table may price at 0`,
+  });
+  if (!isUsd(rates.promptUsdPerM) || !isUsd(rates.completionUsdPerM))
+    return refuse("price is not a finite non-negative number");
+  const free =
+    model.id.endsWith(":free") &&
+    entry?.free === true &&
+    rates.promptUsdPerM === 0 &&
+    rates.completionUsdPerM === 0;
+  if (free) return { rates, free, routeData };
+  if (rates.promptUsdPerM <= 0) return refuse("no positive prompt price");
+  if (kind === "chat" && rates.completionUsdPerM <= 0)
+    return refuse("no positive completion price");
+  return { rates, free: false, routeData };
+}
+
+/** OpenRouter `provider.max_price`: USD per million tokens, as strings per its OpenAPI schema. */
+export function maxPriceOf(rates: ModelRates): {
+  prompt: string;
+  completion: string;
+} {
+  return {
+    prompt: String(rates.promptUsdPerM),
+    completion: String(rates.completionUsdPerM),
   };
 }
 
 /**
  * Reservation for one call: every request byte counts as a prompt token, the
- * full output allowance is billed, and the sum is doubled.
+ * full output allowance is billed, and the sum is doubled. Never below
+ * `MIN_RESERVATION_USD`.
  */
 export function worstCaseUsd(
   bodyBytes: number,
@@ -113,7 +239,10 @@ export function worstCaseUsd(
   const prompt =
     ((bodyBytes + PROMPT_MARGIN_BYTES) * rates.promptUsdPerM) / PER_MILLION;
   const completion = (maxOutputTokens * rates.completionUsdPerM) / PER_MILLION;
-  return WORST_CASE_FACTOR * (prompt + completion);
+  return Math.max(
+    MIN_RESERVATION_USD,
+    WORST_CASE_FACTOR * (prompt + completion),
+  );
 }
 
 const abortError = () => new Error("aborted");
@@ -196,6 +325,7 @@ export function createBilling(options: BillingOptions): Billing {
         return { costUsd: evidence.responseCostUsd, costSource: "response" };
       }
       const rejected =
+        evidence.generationId === undefined &&
         evidence.httpStatus !== undefined &&
         evidence.httpStatus >= 400 &&
         evidence.httpStatus < 500;

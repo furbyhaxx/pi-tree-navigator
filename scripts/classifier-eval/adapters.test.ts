@@ -15,11 +15,14 @@ import {
   HEURISTIC,
   parseChatAnswers,
   planRequest,
+  safeMessage,
 } from "./adapters.ts";
+import { loadRouteTable, ROUTE_PRICES_URL } from "./billing.ts";
 import { prepareCase } from "./prepare.ts";
 import type { EvalCase } from "./types.ts";
 
 const KEY = "sk-or-test-SECRET-0000000000";
+const TABLE = loadRouteTable(ROUTE_PRICES_URL);
 
 const intentCase: EvalCase = {
   id: "rule-1",
@@ -96,7 +99,7 @@ const jev = () => {
     "typesafe/jev-1.14",
   );
   assert.ok(model);
-  return decisionsCandidate(model);
+  return decisionsCandidate(model, TABLE);
 };
 const gemini = () => {
   const model = registry.getModelOfType(
@@ -105,7 +108,7 @@ const gemini = () => {
     "google/gemini-2.5-flash-lite",
   );
   assert.ok(model);
-  return chatCandidate(model);
+  return chatCandidate(model, TABLE);
 };
 
 interface Sent {
@@ -244,6 +247,47 @@ describe("decisions adapter", () => {
     );
   });
 
+  it("caps the route price at the effective rate, above the catalog price", async () => {
+    const api = fakeFetch(decisionReply({ error: "x" }, 400));
+    const model = registry.getModelOfType(
+      "classifier",
+      "openrouter",
+      "cloudflare/clef",
+    );
+    assert.ok(model);
+    assert.equal(model.cost.input, 0.042);
+    const candidate = decisionsCandidate(model, TABLE);
+    assert.equal(
+      candidate.adapter === "decisions" &&
+        candidate.pricing.rates.promptUsdPerM,
+      0.24,
+    );
+    await answer(intent, candidate, options(api.fetch));
+    assert.deepEqual(JSON.parse(api.sent[0]?.body ?? "{}").provider, {
+      max_price: { prompt: "0.24", completion: "0" },
+    });
+  });
+
+  it("refuses a model with no positive price before any request", async () => {
+    const api = fakeFetch(decisionReply({}));
+    const model = registry.getModelOfType(
+      "classifier",
+      "openrouter",
+      "respan/span-01-lite",
+    );
+    assert.ok(model);
+    const candidate = decisionsCandidate(model, TABLE);
+    const plan = planRequest(intent, candidate);
+    assert.equal(plan.kind, "unsupported");
+    assert.match(
+      plan.kind === "unsupported" ? plan.reason : "",
+      /refused before dispatch: no positive prompt price/u,
+    );
+    const result = await answer(intent, candidate, options(api.fetch));
+    assert.equal(result.observation.status, "unsupported");
+    assert.equal(api.sent.length, 0);
+  });
+
   it("reports an HTTP rejection as an error with its status and no key", async () => {
     const api = fakeFetch(
       decisionReply({ error: { message: `bad Bearer ${KEY}` } }, 400),
@@ -264,7 +308,7 @@ describe("decisions adapter", () => {
       "typesafe/jev-1.14",
     );
     assert.ok(model);
-    const small = decisionsCandidate({ ...model, contextWindow: 50 });
+    const small = decisionsCandidate({ ...model, contextWindow: 50 }, TABLE);
     const result = await answer(intent, small, options(api.fetch));
     assert.equal(result.observation.status, "unsupported");
     assert.match(result.observation.error ?? "", /model context is 50/u);
@@ -334,6 +378,9 @@ describe("chat adapter", () => {
       Object.keys(intent.questions.kind?.choices ?? {}),
     );
     assert.equal(body.max_completion_tokens, 1_024);
+    assert.deepEqual(body.provider, {
+      max_price: { prompt: "0.18", completion: "0.72" },
+    });
     assert.equal("tool_choice" in body, false);
     assert.equal("tools" in body, false);
     assert.equal(
@@ -426,11 +473,32 @@ describe("uncatalogued decision models", () => {
         cost: { input: 0.01, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 131_072,
       },
+      TABLE,
       true,
     );
     const api = fakeFetch(decisionReply({ error: "x" }, 400));
     await answer(intent, candidate, options(api.fetch));
     assert.equal(JSON.parse(api.sent[0]?.body ?? "{}").model, "respan/span-02");
     assert.equal(candidate.label, "decisions:respan/span-02");
+  });
+});
+
+describe("error text", () => {
+  it("removes the credential literal as well as key-shaped text", async () => {
+    const literal = "plain-credential-0123456789";
+    assert.equal(
+      safeMessage(new Error(`bad ${literal} and Bearer abc.def`), [literal]),
+      "bad [redacted] and [redacted]",
+    );
+    const api = fakeFetch(decisionReply({ error: `rejected ${literal}` }, 400));
+    const leaked = await answer(intent, jev(), options(api.fetch));
+    assert.match(leaked.observation.error ?? "", /rejected plain-credential/u);
+    const clean = await answer(
+      intent,
+      jev(),
+      options(api.fetch, { secrets: [literal] }),
+    );
+    assert.equal(clean.observation.error?.includes(literal), false);
+    assert.match(clean.observation.error ?? "", /rejected \[redacted\]/u);
   });
 });

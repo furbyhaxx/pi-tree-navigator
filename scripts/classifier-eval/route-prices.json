@@ -1,0 +1,188 @@
+{
+  "retrievedAt": "2026-10-23",
+  "source": [
+    ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+    ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+  ],
+  "note": "Highest listed route rate per model in USD per million tokens, across every route in the research snapshot; contextTokens is the smallest positive route context. free marks a ':free' variant whose every route lists 0/0.",
+  "models": {
+    "baseten/elephant-1:free": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.0,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 16384,
+      "free": true
+    },
+    "baseten/mammoth-1:free": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.0,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 16384,
+      "free": true
+    },
+    "cloudflare/clef": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.24,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 16384
+    },
+    "cloudflare/clef-flash": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.038,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 16384
+    },
+    "cloudflare/clef-omni": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.15,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 65536
+    },
+    "google/gemini-2.5-flash-lite": {
+      "kind": "chat",
+      "promptUsdPerM": 0.18,
+      "completionUsdPerM": 0.72,
+      "contextTokens": 1048576
+    },
+    "inception/mercury-decide": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 65536
+    },
+    "inception/mercury-decide:free": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.0,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 65536,
+      "free": true
+    },
+    "jaredpalmer/kev-4b": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 8192
+    },
+    "liquid/d1": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 65536
+    },
+    "liquid/d1-ultra": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 32768
+    },
+    "microsoft/microsoft-decision-1": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 32768
+    },
+    "nace-ai/drex-max": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.06,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 262144
+    },
+    "nace-ai/drex-v1.5": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.04,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 131072
+    },
+    "nace-ai/drex-v2.0": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.06,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 131072
+    },
+    "openai/gpt-6-luna": {
+      "kind": "chat",
+      "promptUsdPerM": 0.2,
+      "completionUsdPerM": 1.0,
+      "contextTokens": 1050000
+    },
+    "openai/gpt-6-luna-decisions": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 1050000
+    },
+    "perplexity/pplx-decider-flash-v1.2": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.01,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 262144
+    },
+    "perplexity/pplx-decider-v1.2": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 262144
+    },
+    "respan/span-01": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0.0,
+      "contextTokens": null
+    },
+    "respan/span-01-lite": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.0,
+      "completionUsdPerM": 0.0,
+      "contextTokens": null
+    },
+    "respan/span-01-lite:free": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.0,
+      "completionUsdPerM": 0.0,
+      "contextTokens": null,
+      "free": true
+    },
+    "respan/span-02": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.01,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 131072
+    },
+    "scaledown/classify-1": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.04,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 1000000
+    },
+    "togethercomputer/tev1-4b-experimental": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 32768
+    },
+    "typesafe/jev-1.13": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 262144
+    },
+    "typesafe/jev-1.14": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 262144
+    },
+    "upstage/solar-decide": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.05,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 524288
+    },
+    "upstage/solar-decide-flash": {
+      "kind": "decisions",
+      "promptUsdPerM": 0.05,
+      "completionUsdPerM": 0.0,
+      "contextTokens": 524288
+    }
+  }
+}

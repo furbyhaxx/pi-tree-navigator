@@ -48,6 +48,10 @@ import {
   type Billing,
   createBilling,
   type KeyUsage,
+  loadRouteTable,
+  mergeRouteTables,
+  ROUTE_PRICES_URL,
+  type RouteTable,
   type Settlement,
   worstCaseUsd,
 } from "./billing.ts";
@@ -82,6 +86,7 @@ export interface Deps {
     storePath: string;
     offline: boolean;
   }): Promise<RunRegistry>;
+  loadRoutePrices(): RouteTable;
   fetch: typeof globalThis.fetch;
   git(): { sha: string; dirty: boolean };
   stdout(text: string): void;
@@ -106,16 +111,23 @@ interface Options {
   out?: string;
   resume?: string;
   cases?: string;
+  rates?: string;
 }
 
 class UsageError extends Error {}
 
 const USAGE = `usage: node scripts/classifier-eval/run.ts --models <spec,...> (--out <dir> | --resume <dir> | --dry-run) [options]
 
-  --models <a,b>          decisions:<id> | chat:<id> | heuristic (ids are OpenRouter ids)
+  --models <a,b>          required, no default set. Each entry is one of:
+                            decisions:<id> | chat:<id> | heuristic   (ids are OpenRouter ids)
+                            all-decisions        every catalogued decision model with a positive price,
+                                                 plus researched ones missing from the catalog
+                            shortlist:<file>     one entry per line, # starts a comment
   --uncatalogued <id:promptUsdPerM:contextTokens>
-                          decision model missing from the catalog; repeatable, implies --models entry
-  --split <s>             development | holdout | all (default all)
+                          decision model missing from the catalog; repeatable, implies a --models entry
+  --rates <file>          route price table (same format as route-prices.json) whose entries replace
+                          the committed ones; the catalog price still sets the floor
+  --split <s>             development (or dev) | holdout | all (default all)
   --tasks <t,...>         ${TASKS.join(" | ")} (default all)
   --repetitions <n>       default 1
   --concurrency <n>       default 4
@@ -156,6 +168,7 @@ function parseOptions(argv: readonly string[]): Options | "help" {
         resume: { type: "string" },
         "dry-run": { type: "boolean", default: false },
         cases: { type: "string" },
+        rates: { type: "string" },
         help: { type: "boolean", default: false },
       },
     }).values;
@@ -165,7 +178,7 @@ function parseOptions(argv: readonly string[]): Options | "help" {
     );
   }
   if (parsed.help) return "help";
-  const split = String(parsed.split);
+  const split = parsed.split === "dev" ? "development" : String(parsed.split);
   if (split !== "development" && split !== "holdout" && split !== "all")
     throw new UsageError("--split must be development, holdout or all");
   const tasks =
@@ -206,6 +219,7 @@ function parseOptions(argv: readonly string[]): Options | "help" {
     ...(out !== undefined && { out }),
     ...(resume !== undefined && { resume }),
     ...(parsed.cases !== undefined && { cases: String(parsed.cases) }),
+    ...(parsed.rates !== undefined && { rates: String(parsed.rates) }),
   };
 }
 
@@ -215,16 +229,72 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 
 const UNCATALOGUED =
   /^(.+\/[^:\s]+(?::[^:\s]+)*):(\d+(?:\.\d+)?(?:e[+-]?\d+)?):(\d+)$/iu;
+const ALL_DECISIONS = "all-decisions";
+const SHORTLIST = "shortlist:";
 
-function uncataloguedModels(
+/** A model left out of the run, and whether the user named it. */
+interface Exclusion {
+  label: string;
+  reason: string;
+  explicit: boolean;
+}
+
+interface Resolution {
+  candidates: Candidate[];
+  excluded: Exclusion[];
+}
+
+/** Replaces each `shortlist:<file>` with the specs listed in the file. */
+function expandSpecs(specs: readonly string[]): string[] {
+  return specs.flatMap((spec) => {
+    if (!spec.startsWith(SHORTLIST)) return [spec];
+    const path = spec.slice(SHORTLIST.length);
+    let text: string;
+    try {
+      text = readFileSync(path, "utf8");
+    } catch {
+      throw new UsageError(`cannot read shortlist ${path}`);
+    }
+    const listed = text
+      .split("\n")
+      .map((line) => line.replace(/#.*/u, "").trim())
+      .filter(Boolean);
+    if (listed.some((entry) => entry.startsWith(SHORTLIST)))
+      throw new UsageError(`${path}: a shortlist cannot include another`);
+    return listed;
+  });
+}
+
+/** A decision model absent from the catalog, cloned from a catalogued template. */
+function uncataloguedModel(
+  template: ClassifierModel<ClassifierApi>,
+  id: string,
+  rates: { input: number; output: number },
+  contextWindow: number,
+): ClassifierModel<ClassifierApi> {
+  return {
+    ...template,
+    id,
+    name: id,
+    cost: { ...rates, cacheRead: 0, cacheWrite: 0 },
+    contextWindow,
+  };
+}
+
+function resolveCandidates(
   specs: readonly string[],
+  options: Options,
   registry: RunRegistry,
-): Map<string, ClassifierModel<ClassifierApi>> {
+  table: RouteTable,
+): Resolution {
   const template = registry
     .getModelsOfType("classifier", "openrouter")
     .find((model) => model.api === "typesafe-system-one");
-  const models = new Map<string, ClassifierModel<ClassifierApi>>();
-  for (const spec of specs) {
+  const catalog = new Map(
+    registry.getModelsOfType("classifier", "openrouter").map((m) => [m.id, m]),
+  );
+  const flagged = new Map<string, ClassifierModel<ClassifierApi>>();
+  for (const spec of options.uncatalogued) {
     const match = UNCATALOGUED.exec(spec);
     if (!match)
       throw new UsageError(
@@ -233,59 +303,107 @@ function uncataloguedModels(
     const [, id = "", price = "", context = ""] = match;
     if (!template)
       throw new UsageError("no OpenRouter decision model to use as a template");
-    if (registry.getModelOfType("classifier", "openrouter", id))
+    if (catalog.has(id))
       throw new UsageError(`${id} is in the catalog; drop --uncatalogued`);
-    models.set(id, {
-      ...template,
+    flagged.set(
       id,
-      name: id,
-      cost: { input: Number(price), output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: Number(context),
-    });
+      uncataloguedModel(
+        template,
+        id,
+        { input: Number(price), output: 0 },
+        Number(context),
+      ),
+    );
   }
-  return models;
-}
 
-function resolveCandidates(
-  options: Options,
-  registry: RunRegistry,
-): Candidate[] {
-  const extra = uncataloguedModels(options.uncatalogued, registry);
-  const specs = [
-    ...options.models,
-    ...[...extra.keys()].map((id) => `decisions:${id}`),
-  ];
+  /** The route table's researched model for `id`, when its context is known. */
+  const researched = (id: string) => {
+    const entry = table.models[id];
+    return template && entry?.kind === "decisions" && entry.contextTokens
+      ? uncataloguedModel(
+          template,
+          id,
+          { input: entry.promptUsdPerM, output: entry.completionUsdPerM },
+          entry.contextTokens,
+        )
+      : undefined;
+  };
+
   const seen = new Set<string>();
   const candidates: Candidate[] = [];
-  for (const spec of specs) {
+  const excluded: Exclusion[] = [];
+  const add = (candidate: Candidate, explicit: boolean, listAll = false) => {
+    if (seen.has(candidate.label)) return;
+    seen.add(candidate.label);
+    if (candidate.adapter === "heuristic") {
+      candidates.push(candidate);
+      return;
+    }
+    const { refusal, free } = candidate.pricing;
+    const reason =
+      refusal ??
+      (listAll && free
+        ? "free variant; name it explicitly to include it"
+        : undefined);
+    if (reason === undefined) candidates.push(candidate);
+    else excluded.push({ label: candidate.label, reason, explicit });
+  };
+
+  for (const spec of [
+    ...specs,
+    ...[...flagged.keys()].map((id) => `decisions:${id}`),
+  ]) {
     const match = /^(decisions|chat):(?:openrouter\/)?(.+)$/u.exec(spec);
-    let candidate: Candidate | undefined;
-    if (spec === "heuristic") candidate = HEURISTIC;
-    else if (match?.[1] === "decisions") {
+    if (spec === "heuristic") {
+      add(HEURISTIC, true);
+    } else if (spec === ALL_DECISIONS) {
+      for (const model of [...catalog.values()].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      )) {
+        if (model.id.startsWith("~"))
+          excluded.push({
+            label: `decisions:${model.id}`,
+            reason: "dynamic alias of a listed model with no route data",
+            explicit: false,
+          });
+        else add(decisionsCandidate(model, table), false, true);
+      }
+      for (const [id, entry] of Object.entries(table.models)) {
+        if (entry.kind !== "decisions" || catalog.has(id) || flagged.has(id))
+          continue;
+        const model = researched(id);
+        if (model) add(decisionsCandidate(model, table, true), false, true);
+        else
+          excluded.push({
+            label: `decisions:${id}`,
+            reason: "researched route lists no context limit",
+            explicit: false,
+          });
+      }
+    } else if (match?.[1] === "decisions") {
       const id = match[2] ?? "";
-      const model =
-        extra.get(id) ??
-        registry.getModelOfType("classifier", "openrouter", id);
-      if (model) candidate = decisionsCandidate(model, extra.has(id));
+      const model = flagged.get(id) ?? catalog.get(id) ?? researched(id);
+      if (!model)
+        throw new UsageError(
+          `model ${spec} is not in the catalog or the route table with a known context; pass --uncatalogued ${id}:<promptUsdPerM>:<contextTokens>`,
+        );
+      add(decisionsCandidate(model, table, !catalog.has(id)), true);
     } else if (match?.[1] === "chat") {
       const model = registry.getModelOfType(
         "chat",
         "openrouter",
         match[2] ?? "",
       );
-      if (model) candidate = chatCandidate(model);
+      if (!model)
+        throw new UsageError(`model ${spec} is not in the OpenRouter catalog`);
+      add(chatCandidate(model, table), true);
     } else {
       throw new UsageError(
-        `model ${spec} must be decisions:<id>, chat:<id> or heuristic`,
+        `model ${spec} must be decisions:<id>, chat:<id>, heuristic, ${ALL_DECISIONS} or ${SHORTLIST}<file>`,
       );
     }
-    if (!candidate)
-      throw new UsageError(`model ${spec} is not in the OpenRouter catalog`);
-    if (seen.has(candidate.label)) continue;
-    seen.add(candidate.label);
-    candidates.push(candidate);
   }
-  return candidates;
+  return { candidates, excluded };
 }
 
 // ---------------------------------------------------------------------------
@@ -320,20 +438,19 @@ function planCalls(
           continue;
         }
         const plan = planRequest(prepared, candidate);
-        calls.push({
-          prepared,
-          candidate,
-          repetition,
-          plan,
-          reservationUsd:
-            plan.kind === "request" && candidate.adapter !== "heuristic"
-              ? worstCaseUsd(
-                  plan.bodyBytes,
-                  plan.maxOutputTokens,
-                  candidate.rates,
-                )
-              : 0,
-        });
+        const reservationUsd =
+          plan.kind === "request" && candidate.adapter !== "heuristic"
+            ? worstCaseUsd(
+                plan.bodyBytes,
+                plan.maxOutputTokens,
+                candidate.pricing.rates,
+              )
+            : 0;
+        if (plan.kind === "request" && !(reservationUsd > 0))
+          throw new Error(
+            `${candidate.label} on ${prepared.id} planned a request without a positive reservation`,
+          );
+        calls.push({ prepared, candidate, repetition, plan, reservationUsd });
       }
   return { calls, skipped };
 }
@@ -343,10 +460,14 @@ function dryRunReport(
   skipped: number,
   budget: BudgetSnapshot,
   options: Options,
-  candidates: readonly Candidate[],
-): { text: string; total: number } {
-  const rows = candidates.map((candidate) => {
+  resolution: Resolution,
+): { text: string; total: number; refused: boolean } {
+  const rows = resolution.candidates.map((candidate) => {
     const own = calls.filter((call) => call.candidate === candidate);
+    const rates =
+      candidate.adapter === "heuristic"
+        ? ""
+        : `, rates ${candidate.pricing.rates.promptUsdPerM}/${candidate.pricing.rates.completionUsdPerM} USD/M${candidate.pricing.routeData ? "" : " (catalog only)"}`;
     return {
       label: candidate.label,
       live: own.filter((call) => call.plan.kind === "request").length,
@@ -354,23 +475,31 @@ function dryRunReport(
       unsupported: own.filter((call) => call.plan.kind === "unsupported")
         .length,
       usd: own.reduce((sum, call) => sum + call.reservationUsd, 0),
+      rates,
     };
   });
   const total = rows.reduce((sum, row) => sum + row.usd, 0);
+  const refused = resolution.excluded.some((entry) => entry.explicit);
   const lines = [
     `dry run: ${options.repetitions} repetition(s), split ${options.split}, tasks ${options.tasks.join(",")}`,
     ...rows.map(
       (row) =>
-        `  ${row.label}: ${row.live} live, ${row.local} local, ${row.unsupported} unsupported, reserve ${row.usd.toFixed(6)} USD`,
+        `  ${row.label}: ${row.live} live, ${row.local} local, ${row.unsupported} unsupported${row.rates}, reserve ${row.usd.toFixed(6)} USD`,
+    ),
+    ...resolution.excluded.map(
+      (entry) =>
+        `  ${entry.explicit ? "REFUSED" : "excluded"} ${entry.label}: ${entry.reason}`,
     ),
     `planned live calls: ${rows.reduce((sum, row) => sum + row.live, 0)} (already finished: ${skipped})`,
     `summed reservations: ${total.toFixed(6)} USD`,
     `ledger ${options.ledger}: cap ${budget.limitUsd}, spent ${budget.spentUsd}, held ${budget.heldUsd}, remaining ${budget.remainingUsd}`,
-    total > budget.remainingUsd
-      ? "REFUSED: summed reservations exceed the remaining budget"
-      : "OK: summed reservations fit the remaining budget",
+    refused
+      ? "REFUSED: a named model has no safe price; a live run would not start"
+      : total > budget.remainingUsd
+        ? "REFUSED: summed reservations exceed the remaining budget"
+        : "OK: summed reservations fit the remaining budget",
   ];
-  return { text: `${lines.join("\n")}\n`, total };
+  return { text: `${lines.join("\n")}\n`, total, refused };
 }
 
 function ledgerSnapshot(path: string, cap: number): BudgetSnapshot {
@@ -398,6 +527,7 @@ interface Execution {
   concurrency: number;
   signal: AbortSignal;
   sessionId: string;
+  secrets: readonly string[];
   write(observation: EvalObservation): void;
 }
 
@@ -458,6 +588,7 @@ async function execute(run: Execution): Promise<Outcome> {
         timeoutMs: run.timeoutMs,
         signal: run.signal,
         fetch: run.fetch,
+        secrets: run.secrets,
       };
       if (call.plan.kind !== "request") {
         const local = await answer(call.prepared, call.candidate, options);
@@ -504,8 +635,12 @@ interface ModelMeta {
   label: string;
   adapter: Candidate["adapter"];
   uncatalogued?: true;
+  /** The effective rates: the higher of the catalog and the route table. */
   promptUsdPerM?: number;
   completionUsdPerM?: number;
+  /** Whether the route table lists the model; false means the catalog price alone. */
+  routeData?: boolean;
+  free?: true;
   contextWindow?: number;
 }
 
@@ -514,6 +649,7 @@ interface SessionMeta {
   startedAt: string;
   endedAt?: string;
   models: ModelMeta[];
+  excluded: Array<Pick<Exclusion, "label" | "reason">>;
   split: Options["split"];
   tasks: readonly EvalTask[];
   repetitions: number;
@@ -535,6 +671,7 @@ interface RunMeta {
   caseCount: number;
   ledgerPath: string;
   capUsd: number;
+  routePrices: Pick<RouteTable, "retrievedAt" | "source">;
   models: ModelMeta[];
   sessions: SessionMeta[];
 }
@@ -547,8 +684,10 @@ function modelMeta(candidate: Candidate): ModelMeta {
     adapter: candidate.adapter,
     ...(candidate.adapter === "decisions" &&
       candidate.uncatalogued && { uncatalogued: true as const }),
-    promptUsdPerM: candidate.rates.promptUsdPerM,
-    completionUsdPerM: candidate.rates.completionUsdPerM,
+    promptUsdPerM: candidate.pricing.rates.promptUsdPerM,
+    completionUsdPerM: candidate.pricing.rates.completionUsdPerM,
+    routeData: candidate.pricing.routeData,
+    ...(candidate.pricing.free && { free: true as const }),
     contextWindow: candidate.model.contextWindow,
   };
 }
@@ -594,8 +733,14 @@ function openLog(path: string) {
 // Entry point
 // ---------------------------------------------------------------------------
 
-const usageOf = async (billing: Billing, signal?: AbortSignal) =>
-  billing.keyUsage(signal).catch((error) => ({ error: safeMessage(error) }));
+const usageOf = async (
+  billing: Billing,
+  secrets: readonly string[],
+  signal?: AbortSignal,
+) =>
+  billing
+    .keyUsage(signal)
+    .catch((error) => ({ error: safeMessage(error, secrets) }));
 
 /** Runs the CLI against `deps` and resolves to the process exit code. */
 export async function main(
@@ -634,11 +779,26 @@ async function runBenchmark(options: Options, deps: Deps): Promise<number> {
   const outDir = resolve(options.resume ?? options.out ?? ".");
   const scratch = mkdtempSync(join(tmpdir(), "classifier-eval-"));
   try {
+    let table = deps.loadRoutePrices();
+    if (options.rates) {
+      try {
+        table = mergeRouteTables(table, loadRouteTable(options.rates));
+      } catch (error) {
+        throw new UsageError(
+          `--rates: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
     const registry = await deps.createRegistry({
       storePath: join(scratch, "models-store.json"),
       offline: options.dryRun,
     });
-    const candidates = resolveCandidates(options, registry);
+    const resolution = resolveCandidates(
+      expandSpecs(options.models),
+      options,
+      registry,
+      table,
+    );
     const completed = finishedKeys(
       options.resume || (options.dryRun && options.out)
         ? readObservations(join(outDir, "observations.jsonl"))
@@ -646,16 +806,23 @@ async function runBenchmark(options: Options, deps: Deps): Promise<number> {
     );
     const { calls, skipped } = planCalls(
       prepared,
-      candidates,
+      resolution.candidates,
       options.repetitions,
       completed,
     );
     if (options.dryRun) {
       const budget = ledgerSnapshot(options.ledger, options.cap);
-      const report = dryRunReport(calls, skipped, budget, options, candidates);
+      const report = dryRunReport(calls, skipped, budget, options, resolution);
       deps.stdout(report.text);
-      return report.total > budget.remainingUsd ? 3 : 0;
+      return report.refused || report.total > budget.remainingUsd ? 3 : 0;
     }
+    const refused = resolution.excluded.filter((entry) => entry.explicit);
+    if (refused.length > 0)
+      throw new UsageError(
+        `refused before any request: ${refused.map((entry) => `${entry.label} (${entry.reason})`).join("; ")}`,
+      );
+    if (resolution.candidates.length === 0)
+      throw new UsageError("no model is left to run");
     if (options.resume) {
       if (!existsSync(join(outDir, "run.json")))
         throw new UsageError(`${outDir} has no run.json to resume`);
@@ -671,7 +838,8 @@ async function runBenchmark(options: Options, deps: Deps): Promise<number> {
       options,
       deps,
       registry,
-      candidates,
+      resolution,
+      table,
       calls,
       outDir,
       casesSha256: createHash("sha256")
@@ -688,7 +856,8 @@ interface LiveRun {
   options: Options;
   deps: Deps;
   registry: RunRegistry;
-  candidates: readonly Candidate[];
+  resolution: Resolution;
+  table: RouteTable;
   calls: readonly PlannedCall[];
   outDir: string;
   casesSha256: string;
@@ -709,24 +878,27 @@ function newRunMeta(
     caseCount: live.caseCount,
     ledgerPath: live.options.ledger,
     capUsd: live.options.cap,
+    routePrices: {
+      retrievedAt: live.table.retrievedAt,
+      source: live.table.source,
+    },
     models: [],
     sessions: [],
   };
 }
 
 async function runLive(live: LiveRun): Promise<number> {
-  const { options, deps, registry, candidates, calls, outDir } = live;
+  const { options, deps, registry, resolution, calls, outDir } = live;
   const runMetaPath = join(outDir, "run.json");
   const billing = createBilling({
     getApiKey: () => registry.getApiKeyForProvider("openrouter"),
     fetch: deps.fetch,
     ...(deps.billingDelaysMs && { delaysMs: deps.billingDelaysMs }),
   });
-  if (
-    calls.some((call) => call.plan.kind === "request") &&
-    !(await registry.getApiKeyForProvider("openrouter"))
-  )
+  const apiKey = await registry.getApiKeyForProvider("openrouter");
+  if (calls.some((call) => call.plan.kind === "request") && !apiKey)
     throw new Error("no OpenRouter API key is configured");
+  const secrets = apiKey ? [apiKey] : [];
 
   const meta: RunMeta = options.resume
     ? (JSON.parse(readFileSync(runMetaPath, "utf8")) as RunMeta)
@@ -738,7 +910,11 @@ async function runLive(live: LiveRun): Promise<number> {
   const session: SessionMeta = {
     id: `${meta.runId}.s${meta.sessions.length + 1}`,
     startedAt: new Date().toISOString(),
-    models: candidates.map(modelMeta),
+    models: resolution.candidates.map(modelMeta),
+    excluded: resolution.excluded.map(({ label, reason }) => ({
+      label,
+      reason,
+    })),
     split: options.split,
     tasks: options.tasks,
     repetitions: options.repetitions,
@@ -770,7 +946,7 @@ async function runLive(live: LiveRun): Promise<number> {
   deps.interrupt?.addEventListener("abort", onSignal, { once: true });
   try {
     writeJson(runMetaPath, meta);
-    session.keyUsageBefore = await usageOf(billing, controller.signal);
+    session.keyUsageBefore = await usageOf(billing, secrets, controller.signal);
     writeJson(runMetaPath, meta);
     const outcome = await execute({
       calls,
@@ -782,9 +958,10 @@ async function runLive(live: LiveRun): Promise<number> {
       concurrency: options.concurrency,
       signal: controller.signal,
       sessionId: session.id,
+      secrets,
       write: log.write,
     });
-    session.keyUsageAfter = await usageOf(billing);
+    session.keyUsageAfter = await usageOf(billing, secrets);
     session.endedAt = new Date().toISOString();
     session.counts = outcome.counts;
     session.interrupted = outcome.interrupted;
@@ -795,6 +972,10 @@ async function runLive(live: LiveRun): Promise<number> {
     if (outcome.failure) throw outcome.failure;
     if (outcome.stopped === "interrupted") return 130;
     return outcome.stopped ? 3 : 0;
+  } catch (error) {
+    throw error instanceof UsageError
+      ? error
+      : new Error(safeMessage(error, secrets));
   } finally {
     if (deps.handleSignals) {
       process.off("SIGINT", onSignal);
@@ -884,6 +1065,7 @@ const defaultDeps: Deps = {
     return CASES;
   },
   createRegistry,
+  loadRoutePrices: () => loadRouteTable(ROUTE_PRICES_URL),
   fetch: (...args) => globalThis.fetch(...args),
   git: () => ({
     sha: gitOutput("rev-parse", "HEAD"),

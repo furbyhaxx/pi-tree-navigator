@@ -5,18 +5,19 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, before, beforeEach, describe, it } from "node:test";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { decisionsCandidate, planRequest } from "./adapters.ts";
-import { worstCaseUsd } from "./billing.ts";
+import { loadRouteTable, ROUTE_PRICES_URL, worstCaseUsd } from "./billing.ts";
 import { prepareCase } from "./prepare.ts";
 import { type Deps, main } from "./run.ts";
 import type { EvalCase, EvalObservation } from "./types.ts";
 
-const KEY = "sk-or-test-SECRET-0000000000";
+const KEY = "credential-0123456789abcdef";
 
 const intentCase = (id: string, split: EvalCase["split"]): EvalCase => ({
   id,
@@ -185,6 +186,7 @@ function environment(world: World = {}) {
   const deps: Deps = {
     loadCases: async () => CASES,
     createRegistry: async () => registry,
+    loadRoutePrices: () => loadRouteTable(ROUTE_PRICES_URL),
     fetch,
     git: () => ({ sha: "deadbeef", dirty: false }),
     stdout: (text) => out.push(text),
@@ -320,13 +322,16 @@ describe("budget control", () => {
       "typesafe/jev-1.14",
     );
     assert.ok(model);
-    const candidate = decisionsCandidate(model);
+    const candidate = decisionsCandidate(
+      model,
+      loadRouteTable(ROUTE_PRICES_URL),
+    );
     const plan = planRequest(prepared, candidate);
     assert.ok(plan.kind === "request" && candidate.adapter === "decisions");
     const one = worstCaseUsd(
       plan.bodyBytes,
       plan.maxOutputTokens,
-      candidate.rates,
+      candidate.pricing.rates,
     );
     const world = environment({
       generation: () => new Response("{}", { status: 404 }),
@@ -584,10 +589,15 @@ describe("run directory", () => {
     assert.equal(meta.sessions[0].keyUsageAfter.usage, 3);
     for (const file of readdirSync(runDir())) {
       const text = readFileSync(join(runDir(), file), "utf8");
-      assert.equal(/SECRET|bearer|authorization/iu.test(text), false, file);
+      assert.equal(
+        text.includes(KEY) || /bearer|authorization/iu.test(text),
+        false,
+        file,
+      );
     }
+    const ledgerText = readFileSync(ledgerPath(), "utf8");
     assert.equal(
-      /SECRET|bearer|authorization/iu.test(readFileSync(ledgerPath(), "utf8")),
+      ledgerText.includes(KEY) || /bearer|authorization/iu.test(ledgerText),
       false,
     );
   });
@@ -607,5 +617,174 @@ describe("usage errors", () => {
     assert.equal(await main(["--models", JEV, ...flags()], world.deps), 0);
     assert.equal(await main(["--models", JEV, ...flags()], world.deps), 2);
     assert.match(world.err.join(""), /already exists/u);
+  });
+});
+
+describe("prices", () => {
+  const dry = (...argv: string[]) => {
+    const world = environment();
+    return main(
+      ["--dry-run", "--ledger", ledgerPath(), ...argv],
+      world.deps,
+    ).then((code) => ({ code, world, text: world.out.join("") }));
+  };
+
+  it("reserves above zero for every live call, clef at its route price", async () => {
+    const { code, text } = await dry(
+      "--models",
+      "decisions:cloudflare/clef",
+      "--split",
+      "dev",
+    );
+    assert.equal(code, 0);
+    assert.match(text, /rates 0\.24\/0 USD\/M/u);
+    for (const row of text.matchAll(/(\d+) live.* reserve ([\d.]+) USD/gu))
+      assert.ok(Number(row[1]) === 0 || Number(row[2]) > 0, row[0]);
+  });
+
+  it("refuses a named model without a positive price, live and in a dry run", async () => {
+    const { code, text } = await dry(
+      "--models",
+      "decisions:respan/span-01-lite",
+    );
+    assert.equal(code, 3);
+    assert.match(
+      text,
+      /REFUSED decisions:respan\/span-01-lite: no positive prompt price/u,
+    );
+    const world = environment();
+    for (const argv of [
+      ["--models", "decisions:respan/span-01-lite", ...flags()],
+      [
+        "--models",
+        "heuristic",
+        "--uncatalogued",
+        "acme/free-lunch:0:1000",
+        ...flags("zero"),
+      ],
+    ]) {
+      assert.equal(await main(argv, world.deps), 2, argv.join(" "));
+    }
+    assert.match(world.err.join(""), /refused before any request/u);
+    assert.deepEqual(world.requests, {
+      systemone: 0,
+      chat: 0,
+      generation: 0,
+      key: 0,
+      other: 0,
+    });
+    assert.equal(existsSync(runDir()), false);
+  });
+
+  it("accepts a verified free variant at the minimum reservation", async () => {
+    const { code, text } = await dry(
+      "--models",
+      "decisions:inception/mercury-decide:free",
+      "--tasks",
+      "intent",
+    );
+    assert.equal(code, 0);
+    assert.doesNotMatch(text, /reserve 0\.000000/u);
+  });
+
+  it("expands all-decisions to priced models and reports every exclusion", async () => {
+    const { code, text } = await dry(
+      "--models",
+      "all-decisions",
+      "--split",
+      "dev",
+    );
+    assert.equal(code, 0);
+    assert.match(text, /decisions:typesafe\/jev-1\.14: .*rates 0\.042\/0/u);
+    assert.match(text, /decisions:cloudflare\/clef: .*rates 0\.24\/0/u);
+    assert.match(text, /decisions:respan\/span-02: .*rates 0\.01\/0/u);
+    assert.match(
+      text,
+      /decisions:perplexity\/pplx-decider-v1\.1-27b: .*\(catalog only\)/u,
+    );
+    assert.match(
+      text,
+      /excluded decisions:respan\/span-01-lite: no positive prompt price/u,
+    );
+    assert.match(
+      text,
+      /excluded decisions:inception\/mercury-decide:free: free variant/u,
+    );
+    assert.match(
+      text,
+      /excluded decisions:~typesafe\/jev-latest: dynamic alias/u,
+    );
+    assert.doesNotMatch(text, /chat:/u);
+    assert.doesNotMatch(text, /[1-9]\d* live.*reserve 0\.000000/u);
+  });
+
+  it("reads a shortlist file and lets --rates raise but not lower a price", async () => {
+    const shortlist = join(directory, "shortlist.txt");
+    writeFileSync(shortlist, `# first picks\n${JEV}\n\nheuristic # baseline\n`);
+    const rates = join(directory, "rates.json");
+    writeFileSync(
+      rates,
+      JSON.stringify({
+        retrievedAt: "2026-10-24",
+        source: ["manual"],
+        models: {
+          "typesafe/jev-1.14": {
+            kind: "decisions",
+            promptUsdPerM: 0.5,
+            completionUsdPerM: 0,
+            contextTokens: 262144,
+          },
+          "scaledown/classify-1": {
+            kind: "decisions",
+            promptUsdPerM: 0.001,
+            completionUsdPerM: 0,
+            contextTokens: 1000000,
+          },
+        },
+      }),
+    );
+    const { code, text } = await dry(
+      "--models",
+      `shortlist:${shortlist},decisions:scaledown/classify-1`,
+      "--rates",
+      rates,
+      "--tasks",
+      "intent",
+    );
+    assert.equal(code, 0, text);
+    assert.match(text, /decisions:typesafe\/jev-1\.14: .*rates 0\.5\/0/u);
+    assert.match(text, /decisions:scaledown\/classify-1: .*rates 0\.04\/0/u);
+    assert.match(text, /heuristic: 0 live/u);
+  });
+
+  it("sends the route price ceiling with every live request and redacts the key from errors", async () => {
+    const bodies: string[] = [];
+    const world = environment({
+      systemone: ({ body }) => {
+        bodies.push(body);
+        return new Response(`{"error":"rejected ${KEY}"}`, { status: 400 });
+      },
+    });
+    const code = await main(
+      [
+        "--models",
+        "decisions:cloudflare/clef",
+        "--tasks",
+        "intent",
+        "--split",
+        "development",
+        ...flags(),
+      ],
+      world.deps,
+    );
+    assert.equal(code, 0, world.err.join(""));
+    assert.deepEqual(JSON.parse(bodies[0] ?? "{}").provider, {
+      max_price: { prompt: "0.24", completion: "0" },
+    });
+    const [observation] = observations();
+    assert.equal(observation?.status, "error");
+    assert.equal(observation?.error?.includes(KEY), false);
+    assert.match(observation?.error ?? "", /\[redacted\]/u);
+    assert.equal(observation?.costUsd, 0);
   });
 });

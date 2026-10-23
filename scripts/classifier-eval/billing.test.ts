@@ -1,11 +1,27 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   createBilling,
+  loadRouteTable,
+  MIN_RESERVATION_USD,
+  maxPriceOf,
+  mergeRouteTables,
   PROMPT_MARGIN_BYTES,
+  parseRouteTable,
+  pricingFor,
+  ROUTE_PRICES_URL,
   ratesOf,
   worstCaseUsd,
 } from "./billing.ts";
+
+const TABLE = loadRouteTable(ROUTE_PRICES_URL);
+const cost = (input: number, output = 0) => ({
+  input,
+  output,
+  cacheRead: 0,
+  cacheWrite: 0,
+});
 
 const KEY = "sk-or-test-key-0000000000";
 
@@ -77,6 +93,179 @@ describe("reservation", () => {
     assert.deepEqual(
       ratesOf({ input: 0.042, output: 0, cacheRead: 0, cacheWrite: 0 }),
       { promptUsdPerM: 0.042, completionUsdPerM: 0 },
+    );
+  });
+});
+
+describe("effective price", () => {
+  it("lifts the catalog price to the highest known route, as for clef", () => {
+    const clef = { id: "cloudflare/clef", cost: cost(0.042) };
+    const pricing = pricingFor(clef, TABLE, "decisions");
+    assert.deepEqual(pricing.rates, {
+      promptUsdPerM: 0.24,
+      completionUsdPerM: 0,
+    });
+    assert.equal(pricing.refusal, undefined);
+    assert.deepEqual(maxPriceOf(pricing.rates), {
+      prompt: "0.24",
+      completion: "0",
+    });
+    const bytes = 3_000;
+    const reserved = worstCaseUsd(bytes, 1_024, pricing.rates);
+    assert.equal(reserved, 2 * (((bytes + PROMPT_MARGIN_BYTES) * 0.24) / 1e6));
+    const atCatalog = worstCaseUsd(bytes, 1_024, ratesOf(clef.cost));
+    assert.ok(reserved > 5.7 * atCatalog);
+  });
+
+  it("prices chat at the priority route, above the catalog", () => {
+    const gemini = pricingFor(
+      { id: "google/gemini-2.5-flash-lite", cost: cost(0.1, 0.4) },
+      TABLE,
+      "chat",
+    );
+    assert.deepEqual(gemini.rates, {
+      promptUsdPerM: 0.18,
+      completionUsdPerM: 0.72,
+    });
+  });
+
+  it("never lowers a rate below the catalog", () => {
+    const lower = mergeRouteTables(TABLE, {
+      retrievedAt: "2026-10-24",
+      source: ["override.json"],
+      models: {
+        "typesafe/jev-1.14": {
+          kind: "decisions",
+          promptUsdPerM: 0.001,
+          completionUsdPerM: 0,
+          contextTokens: 1000,
+        },
+      },
+    });
+    const pricing = pricingFor(
+      { id: "typesafe/jev-1.14", cost: cost(0.042) },
+      lower,
+      "decisions",
+    );
+    assert.equal(pricing.rates.promptUsdPerM, 0.042);
+  });
+
+  it("refuses zero, unknown and non-finite prices", () => {
+    const refused = (
+      model: { id: string; cost: ReturnType<typeof cost> },
+      kind: "decisions" | "chat" = "decisions",
+    ) => pricingFor(model, TABLE, kind).refusal;
+    assert.match(
+      refused({ id: "respan/span-01-lite", cost: cost(0) }) ?? "",
+      /no positive prompt price/u,
+    );
+    assert.match(
+      refused({ id: "not/listed", cost: cost(0) }) ?? "",
+      /route table none/u,
+    );
+    assert.match(
+      refused({ id: "not/listed:free", cost: cost(0) }) ?? "",
+      /no positive prompt price/u,
+    );
+    assert.match(
+      refused({ id: "x/y", cost: cost(Number.NaN) }) ?? "",
+      /finite non-negative/u,
+    );
+    assert.match(
+      refused({ id: "x/y", cost: cost(0.1, 0) }, "chat") ?? "",
+      /no positive completion price/u,
+    );
+    assert.equal(refused({ id: "x/y", cost: cost(0.1, 0) }), undefined);
+  });
+
+  it("allows zero only for a :free id verified in the route table", () => {
+    const pricing = pricingFor(
+      { id: "inception/mercury-decide:free", cost: cost(0) },
+      TABLE,
+      "decisions",
+    );
+    assert.equal(pricing.free, true);
+    assert.equal(pricing.refusal, undefined);
+    assert.equal(
+      worstCaseUsd(5_000, 1_024, pricing.rates),
+      MIN_RESERVATION_USD,
+    );
+    assert.ok(MIN_RESERVATION_USD > 0);
+  });
+
+  it("validates a route table and keeps the committed one tied to its research", () => {
+    assert.throws(
+      () =>
+        parseRouteTable(
+          {
+            retrievedAt: "x",
+            source: [],
+            models: {
+              a: {
+                kind: "decisions",
+                promptUsdPerM: -1,
+                completionUsdPerM: 0,
+                contextTokens: null,
+              },
+            },
+          },
+          "t",
+        ),
+      /models\.a/u,
+    );
+    const csvRows = (name: string) => {
+      const [header = "", ...rows] = readFileSync(
+        new URL(
+          `../../.project/research/classifier-evaluation/${name}`,
+          import.meta.url,
+        ),
+        "utf8",
+      )
+        .trim()
+        .split("\n");
+      const columns = header.split(",");
+      return rows.map((row) =>
+        Object.fromEntries(
+          row
+            .split(",")
+            .map((cell, index) => [columns[index], cell.replaceAll('"', "")]),
+        ),
+      );
+    };
+    const highest = new Map<string, { prompt: number; completion: number }>();
+    for (const [file, id, prompt, completion] of [
+      [
+        "openrouter-decision-full-context-reserves.csv",
+        "model_id",
+        "prompt_usd_per_million",
+        "completion_usd_per_million",
+      ],
+      [
+        "openrouter-chat-alternatives.csv",
+        "model_id",
+        "prompt_usd_per_million",
+        "completion_usd_per_million",
+      ],
+    ] as const)
+      for (const row of csvRows(file)) {
+        if (row.provider_slug === "no_endpoint_row") continue;
+        const known = highest.get(row[id] ?? "") ?? {
+          prompt: 0,
+          completion: 0,
+        };
+        highest.set(row[id] ?? "", {
+          prompt: Math.max(known.prompt, Number(row[prompt])),
+          completion: Math.max(known.completion, Number(row[completion])),
+        });
+      }
+    assert.deepEqual(
+      Object.fromEntries(
+        Object.entries(TABLE.models).map(([id, entry]) => [
+          id,
+          { prompt: entry.promptUsdPerM, completion: entry.completionUsdPerM },
+        ]),
+      ),
+      Object.fromEntries(highest),
     );
   });
 });
@@ -159,6 +348,17 @@ describe("settlement", () => {
       { costUsd: null, costSource: "unknown" },
     );
     assert.equal(api.seen.length, 0);
+  });
+
+  it("holds a rejected request that was issued a generation id", async () => {
+    const settled = await billingFor(
+      fakeApi([json(404, {})]).fetch,
+    ).billing.settle({
+      dispatched: true,
+      httpStatus: 402,
+      generationId: "gen-5",
+    });
+    assert.deepEqual(settled, { costUsd: null, costSource: "unknown" });
   });
 
   it("stops waiting for a generation when aborted", async () => {

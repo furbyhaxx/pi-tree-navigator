@@ -21,9 +21,11 @@ import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { heuristicClassifier } from "../../extensions/navigate-tree/continuity-capture.ts";
 import {
   type CallEvidence,
-  type ModelRates,
+  maxPriceOf,
   PROMPT_MARGIN_BYTES,
-  ratesOf,
+  type Pricing,
+  pricingFor,
+  type RouteTable,
 } from "./billing.ts";
 import type { EvalAnswer, EvalObservation, PreparedCase } from "./types.ts";
 
@@ -46,10 +48,10 @@ export type Candidate =
       adapter: "decisions";
       label: string;
       model: ClassifierModel<ClassifierApi>;
-      rates: ModelRates;
+      pricing: Pricing;
       uncatalogued?: boolean;
     }
-  | { adapter: "chat"; label: string; model: Model<Api>; rates: ModelRates }
+  | { adapter: "chat"; label: string; model: Model<Api>; pricing: Pricing }
   | { adapter: "heuristic"; label: "heuristic" };
 
 export const HEURISTIC: Candidate = {
@@ -64,6 +66,7 @@ function requireOpenRouter(provider: string): void {
 
 export function decisionsCandidate(
   model: ClassifierModel<ClassifierApi>,
+  table: RouteTable,
   uncatalogued = false,
 ): Candidate {
   requireOpenRouter(model.provider);
@@ -71,25 +74,19 @@ export function decisionsCandidate(
     adapter: "decisions",
     label: `decisions:${model.id}`,
     model,
-    rates: ratesOf(model.cost),
+    pricing: pricingFor(model, table, "decisions"),
     ...(uncatalogued && { uncatalogued }),
   };
 }
 
-export function chatCandidate(model: Model<Api>): Candidate {
+export function chatCandidate(model: Model<Api>, table: RouteTable): Candidate {
   requireOpenRouter(model.provider);
   return {
     adapter: "chat",
     label: `chat:${model.id}`,
     model,
-    rates: ratesOf(model.cost),
+    pricing: pricingFor(model, table, "chat"),
   };
-}
-
-export function contextWindowOf(candidate: Candidate): number {
-  return candidate.adapter === "heuristic"
-    ? Number.POSITIVE_INFINITY
-    : candidate.model.contextWindow;
 }
 
 export type RequestPlan =
@@ -110,6 +107,8 @@ export interface AdapterResult {
 
 export interface AnswerOptions {
   registry: EvalRegistry;
+  /** Credential values to strip from recorded error text. */
+  secrets?: readonly string[];
   repetition: number;
   timeoutMs: number;
   signal?: AbortSignal;
@@ -127,27 +126,42 @@ const SECRET_PATTERNS = [
   /sk-[A-Za-z0-9_-]{8,}/gu,
 ];
 
-/** Error text for observations: bounded, with anything key-shaped removed. */
-export function safeMessage(error: unknown): string {
-  const text = error instanceof Error ? error.message : String(error);
-  return SECRET_PATTERNS.reduce(
-    (result, pattern) => result.replace(pattern, "[redacted]"),
-    text,
-  ).slice(0, 500);
+/** Error text for observations: bounded, with `secrets` and anything key-shaped removed. */
+export function safeMessage(
+  error: unknown,
+  secrets: readonly string[] = [],
+): string {
+  let text = error instanceof Error ? error.message : String(error);
+  for (const secret of secrets)
+    if (secret.length >= 8) text = text.replaceAll(secret, "[redacted]");
+  for (const pattern of SECRET_PATTERNS)
+    text = text.replace(pattern, "[redacted]");
+  return text.slice(0, 500);
 }
 
 // ---------------------------------------------------------------------------
 // Request construction
 // ---------------------------------------------------------------------------
 
+/**
+ * Route price ceiling (USD per million tokens) sent with every request so a
+ * pricier route cannot serve it. The decisions request schema takes `provider`
+ * like chat does; not yet observed against the live endpoint.
+ */
+const providerOf = (pricing: Pricing) => ({
+  max_price: maxPriceOf(pricing.rates),
+});
+
 function decisionBody(
   prepared: PreparedCase,
   model: ClassifierModel<ClassifierApi>,
+  pricing: Pricing,
 ) {
   return JSON.stringify({
     model: model.id,
     state: prepared.context.state,
     questions: prepared.context.questions,
+    provider: providerOf(pricing),
   });
 }
 
@@ -200,7 +214,11 @@ function answerSchema(questions: PreparedCase["questions"]) {
 const supportsStructuredOutputs = (model: Model<Api>) =>
   model.api === "openai-completions";
 
-function chatRequest(prepared: PreparedCase, model: Model<Api>) {
+function chatRequest(
+  prepared: PreparedCase,
+  model: Model<Api>,
+  pricing: Pricing,
+) {
   const userPrompt = chatPrompt(prepared);
   const responseFormat = supportsStructuredOutputs(model)
     ? {
@@ -220,6 +238,7 @@ function chatRequest(prepared: PreparedCase, model: Model<Api>) {
         { role: "user", content: userPrompt },
       ],
       response_format: responseFormat,
+      provider: providerOf(pricing),
     }),
   );
   return { userPrompt, responseFormat, bodyBytes };
@@ -242,10 +261,17 @@ export function planRequest(
           reason: "the heuristic classifier only judges intent messages",
         };
   }
+  if (candidate.pricing.refusal !== undefined)
+    return {
+      kind: "unsupported",
+      reason: `refused before dispatch: ${candidate.pricing.refusal}`,
+    };
   const decisions = candidate.adapter === "decisions";
   const bodyBytes = decisions
-    ? Buffer.byteLength(decisionBody(prepared, candidate.model))
-    : chatRequest(prepared, candidate.model).bodyBytes;
+    ? Buffer.byteLength(
+        decisionBody(prepared, candidate.model, candidate.pricing),
+      )
+    : chatRequest(prepared, candidate.model, candidate.pricing).bodyBytes;
   const maxOutputTokens = decisions
     ? DECISION_MAX_OUTPUT_TOKENS
     : CHAT_MAX_OUTPUT_TOKENS;
@@ -515,10 +541,14 @@ async function answerDecisions(
         timeoutMs: opts.timeoutMs,
         signal,
         fetch: recorder.fetch,
+        onPayload: (payload) =>
+          isRecord(payload)
+            ? { ...payload, provider: providerOf(candidate.pricing) }
+            : undefined,
       },
     );
   } catch (error) {
-    thrown = safeMessage(error);
+    thrown = safeMessage(error, opts.secrets);
   }
   const durationMs = performance.now() - started;
   const transport = await recorder.finish();
@@ -528,6 +558,7 @@ async function answerDecisions(
       thrown ||
       safeMessage(
         classified?.errorMessage ?? "classifier did not stop normally",
+        opts.secrets,
       );
     return result(base, transport, durationMs, {
       answers: {},
@@ -587,7 +618,11 @@ async function answerChat(
   opts: AnswerOptions,
   base: Base,
 ): Promise<AdapterResult> {
-  const { userPrompt, responseFormat } = chatRequest(prepared, candidate.model);
+  const { userPrompt, responseFormat } = chatRequest(
+    prepared,
+    candidate.model,
+    candidate.pricing,
+  );
   const context: Context = {
     systemPrompt: CHAT_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userPrompt, timestamp: Date.now() }],
@@ -616,12 +651,13 @@ async function answerChat(
           return {
             ...rest,
             ...(responseFormat && { response_format: responseFormat }),
+            provider: providerOf(candidate.pricing),
           };
         },
       })
       .result();
   } catch (error) {
-    thrown = safeMessage(error);
+    thrown = safeMessage(error, opts.secrets);
   }
   const durationMs = performance.now() - started;
   const transport = await recorder.finish();
@@ -633,7 +669,7 @@ async function answerChat(
     const error =
       wasInterrupted(opts, signal) ||
       thrown ||
-      safeMessage(message?.errorMessage ?? "chat request failed");
+      safeMessage(message?.errorMessage ?? "chat request failed", opts.secrets);
     return result(
       base,
       transport,
@@ -688,7 +724,7 @@ export async function answer(
       : await answerChat(prepared, candidate, plan, opts, base);
   } catch (error) {
     // An unexpected failure after dispatch could still have been billed.
-    return failure(base, "error", safeMessage(error), 0, {
+    return failure(base, "error", safeMessage(error, opts.secrets), 0, {
       dispatched: candidate.adapter !== "heuristic",
     });
   }
