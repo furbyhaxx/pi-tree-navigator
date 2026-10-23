@@ -112,6 +112,11 @@ const ANSWERS: Record<string, string> = {
   contradicts: "none",
   status: "milestone",
   boundary: "r2",
+  "asks-user": "no",
+  blocked: "no",
+  "open-work": "no",
+  finished: "yes",
+  "report:r2": "yes",
 };
 
 const decisionResponse = (
@@ -786,5 +791,208 @@ describe("prices", () => {
     assert.equal(observation?.error?.includes(KEY), false);
     assert.match(observation?.error ?? "", /\[redacted\]/u);
     assert.equal(observation?.costUsd, 0);
+  });
+});
+
+describe("milestone variants", () => {
+  const MILESTONE = ["--tasks", "milestone-status", "--split", "development"];
+  const structureReply = () => {
+    const chunk = (extra: object) =>
+      `data: ${JSON.stringify({ id: "gen-structure-1", ...extra })}\n\n`;
+    const text = JSON.stringify({
+      objective: "Add the export command",
+      goals: ["export command"],
+      anchors: [{ name: "export done", afterRecordId: "r2" }],
+    });
+    return new Response(
+      chunk({
+        choices: [{ index: 0, delta: { role: "assistant", content: text } }],
+      }) +
+        chunk({ choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }) +
+        chunk({
+          choices: [],
+          usage: { prompt_tokens: 80, completion_tokens: 40, cost: 0.00003 },
+        }) +
+        "data: [DONE]\n\n",
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    );
+  };
+  const structureLines = (name = "run") =>
+    readFileSync(join(runDir(name), "structures.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+  it("runs each model once per variant under its own key and combines granular answers in code", async () => {
+    const bodies: string[] = [];
+    const world = environment({
+      systemone: ({ body, count }) => {
+        bodies.push(body);
+        return decisionResponse(body, count);
+      },
+    });
+    const code = await main(
+      [
+        "--models",
+        JEV,
+        "--variants",
+        "base,granular",
+        ...MILESTONE,
+        ...flags(),
+      ],
+      world.deps,
+    );
+    assert.equal(code, 0, world.err.join(""));
+    const [base, granular] = observations();
+    assert.equal(base?.model, `${JEV}#base`);
+    assert.equal(granular?.model, `${JEV}#granular`);
+    assert.deepEqual(Object.keys(base?.answers ?? {}), ["status", "boundary"]);
+    assert.deepEqual(granular?.answers, {
+      status: { choice: "milestone", confidence: 0.9 },
+      boundary: { choice: "r2", confidence: 0.9 },
+    });
+    assert.deepEqual(Object.keys((granular as { raw?: object }).raw ?? {}), [
+      "asks-user",
+      "blocked",
+      "open-work",
+      "finished",
+      "report:r2",
+    ]);
+    assert.equal((granular as { variant?: string }).variant, "granular");
+    assert.deepEqual(Object.keys(JSON.parse(bodies[0] ?? "{}").questions), [
+      "status",
+      "boundary",
+    ]);
+    assert.equal("structure" in JSON.parse(bodies[0] ?? "{}").state, false);
+    const meta = JSON.parse(readFileSync(join(runDir(), "run.json"), "utf8"));
+    assert.deepEqual(meta.sessions[0].variants, ["base", "granular"]);
+    assert.deepEqual(
+      meta.models.map((model: { label: string }) => model.label),
+      [`${JEV}#base`, `${JEV}#granular`],
+    );
+  });
+
+  it("generates one structure per case before the calls that use it and carries its cost", async () => {
+    const bodies: string[] = [];
+    const world = environment({
+      systemone: ({ body, count }) => {
+        bodies.push(body);
+        return decisionResponse(body, count);
+      },
+      chat: structureReply,
+    });
+    const code = await main(
+      [
+        "--models",
+        `${JEV},decisions:microsoft/microsoft-decision-1`,
+        "--variants",
+        "tree-luna",
+        ...MILESTONE,
+        ...flags(),
+      ],
+      world.deps,
+    );
+    assert.equal(code, 0, world.err.join(""));
+    assert.equal(world.requests.chat, 1);
+    assert.equal(world.requests.systemone, 2);
+    const [structure] = structureLines();
+    assert.equal(structure?.model, "chat:openai/gpt-6-luna#structure");
+    assert.equal(structure?.status, "ok");
+    assert.equal(structure?.costUsd, 0.00003);
+    for (const body of bodies)
+      assert.equal(
+        JSON.parse(body).state.structure.objective,
+        "Add the export command",
+      );
+    for (const observation of observations()) {
+      assert.equal(observation.costUsd, 0.00006);
+      assert.equal(observation.costSource, "generation");
+      assert.ok(observation.durationMs >= Number(structure?.durationMs));
+      assert.ok(observation.costBoundUsd > Number(structure?.costBoundUsd));
+    }
+    const reservations = ledgerEvents()
+      .filter((event) => event.event === "reserve")
+      .map((event) => String(event.id));
+    assert.equal(reservations.length, 3);
+    assert.match(
+      reservations[0] ?? "",
+      /\/chat:openai\/gpt-6-luna#structure\/milestone-1\/0$/u,
+    );
+
+    const again = environment({ chat: structureReply });
+    assert.equal(
+      await main(
+        [
+          "--models",
+          `${JEV},decisions:microsoft/microsoft-decision-1`,
+          "--variants",
+          "tree-luna",
+          ...MILESTONE,
+          "--resume",
+          runDir(),
+          "--ledger",
+          ledgerPath(),
+        ],
+        again.deps,
+      ),
+      0,
+      again.err.join(""),
+    );
+    assert.equal(again.requests.chat + again.requests.systemone, 0);
+  });
+
+  it("records an error without a request when the structure call fails", async () => {
+    const world = environment({
+      chat: () => new Response("", { status: 500 }),
+    });
+    const code = await main(
+      ["--models", JEV, "--variants", "tree-luna", ...MILESTONE, ...flags()],
+      world.deps,
+    );
+    assert.equal(code, 0, world.err.join(""));
+    assert.equal(world.requests.systemone, 0);
+    assert.equal(structureLines()[0]?.status, "error");
+    const [observation] = observations();
+    assert.equal(observation?.status, "error");
+    assert.match(observation?.error ?? "", /structure generation failed/u);
+  });
+
+  it("lists the structure calls in a dry run without any request", async () => {
+    const world = environment();
+    const code = await main(
+      [
+        "--models",
+        JEV,
+        "--variants",
+        "base,tree-luna",
+        ...MILESTONE,
+        "--dry-run",
+        "--ledger",
+        ledgerPath(),
+      ],
+      world.deps,
+    );
+    assert.equal(code, 0, world.err.join(""));
+    const report = world.out.join("");
+    assert.match(report, /chat:openai\/gpt-6-luna#structure: 1 live/u);
+    assert.match(report, /decisions:typesafe\/jev-1\.14#base: 1 live/u);
+    assert.match(report, /decisions:typesafe\/jev-1\.14#tree-luna: 1 live/u);
+    assert.match(report, /planned live calls: 3 /u);
+    assert.equal(world.requests.chat + world.requests.systemone, 0);
+  });
+
+  it("refuses variants outside milestone tasks, unknown variants and the heuristic", async () => {
+    const world = environment();
+    for (const argv of [
+      ["--models", JEV, "--variants", "granular", "--tasks", "intent"],
+      ["--models", JEV, "--variants", "granular+instructions", ...MILESTONE],
+      ["--models", "heuristic", "--variants", "base", ...MILESTONE],
+    ])
+      assert.equal(
+        await main([...argv, ...flags("x")], world.deps),
+        2,
+        argv.join(" "),
+      );
+    assert.equal(existsSync(runDir("x")), false);
   });
 });

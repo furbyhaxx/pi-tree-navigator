@@ -1,6 +1,24 @@
+import type { ClassifierContext } from "@earendil-works/pi-ai";
 import { buildIntentClassifierContext } from "../../extensions/navigate-tree/continuity-capture.ts";
 import { buildMilestoneClassifierContext } from "../../extensions/navigate-tree/milestone-classifier.ts";
 import type { EvalCase, EvalQuestion, PreparedCase } from "./types.ts";
+
+/** The choice questions of a request; any other question type is a benchmark error. */
+export function choiceQuestions(
+  caseId: string,
+  context: ClassifierContext,
+): Record<string, EvalQuestion> {
+  const questions: Record<string, EvalQuestion> = {};
+  for (const [id, question] of Object.entries(context.questions)) {
+    if (question.type !== "choice")
+      throw new Error(`${caseId}: question ${id} is not a choice`);
+    questions[id] = {
+      instructions: question.instructions,
+      choices: { ...question.criteria },
+    };
+  }
+  return questions;
+}
 
 /** Build the production request for a case and check its references against it. */
 export function prepareCase(fixture: EvalCase): PreparedCase {
@@ -15,15 +33,7 @@ export function prepareCase(fixture: EvalCase): PreparedCase {
           activeItems: fixture.input.activeItems,
         })
       : buildMilestoneClassifierContext(fixture.input);
-  const questions: Record<string, EvalQuestion> = {};
-  for (const [id, question] of Object.entries(context.questions)) {
-    if (question.type !== "choice")
-      throw new Error(`${fixture.id}: question ${id} is not a choice`);
-    questions[id] = {
-      instructions: question.instructions,
-      choices: { ...question.criteria },
-    };
-  }
+  const questions = choiceQuestions(fixture.id, context);
   for (const [id, expected] of Object.entries(fixture.expected)) {
     const question = questions[id];
     if (!question)
