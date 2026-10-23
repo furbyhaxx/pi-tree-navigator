@@ -13,7 +13,10 @@ import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { estimateTokens } from "@earendil-works/pi-coding-agent";
-import { estimateContextTokens } from "./context-tokens.ts";
+import {
+  estimateContextTokens,
+  estimateRequestTokens,
+} from "./context-tokens.ts";
 
 // -----------------------------------------------------------------------------
 // Fixtures — chars/4 means every token value below is an exact multiple of 4
@@ -215,5 +218,33 @@ describe("estimateContextTokens", () => {
       userWithImage(400), // trailing 1300
     ];
     assert.equal(estimateContextTokens(chain), 500 + 1300);
+  });
+});
+
+describe("estimateRequestTokens", () => {
+  it("valid baseline: usage plus the SDK-scaled tail, even when a whole-content scan is larger", () => {
+    const chain = [
+      user(40_000), //                        10,000 host tokens, covered by the usage
+      assistant(4, { totalTokens: 1_000 }), // baseline 1000 < the 10,000-token scan
+      user(400), //                            tail 100 → 115 at 3.5 chars/token
+    ];
+    assert.equal(estimateRequestTokens(chain), 1_000 + 115);
+  });
+
+  it("no baseline: the whole content, scaled", () => {
+    const chain = [
+      user(400), //                              100
+      assistant(400, { totalTokens: 0 }), //      100, zero usage is no baseline
+      user(400), //                              100
+    ];
+    assert.equal(estimateRequestTokens(chain), Math.ceil((300 * 8) / 7));
+  });
+
+  it("an aborted or errored reply is no baseline", () => {
+    const chain = [
+      user(400),
+      assistant(400, { totalTokens: 9_000, stopReason: "aborted" }),
+    ];
+    assert.equal(estimateRequestTokens(chain), Math.ceil((200 * 8) / 7));
   });
 });

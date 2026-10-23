@@ -55,6 +55,7 @@ import {
 } from "./config.ts";
 import {
   estimateContentTokens,
+  estimateRequestTokens,
   splitContextEstimate,
 } from "./context-tokens.ts";
 import { renderBriefing } from "./continuity-briefing.ts";
@@ -81,6 +82,7 @@ import navigateTree, {
   buildSummaryFailedText,
   buildSummaryRequestRow,
   CONTINUE_NUDGE_TEXT,
+  estimateAdmissionTokens,
   extractSummaryText,
   MAX_HINT_WALK_DEPTH,
   MAX_SESSION_REFS,
@@ -100,6 +102,7 @@ import navigateTree, {
 import {
   buildForcedRewindText,
   buildNoAnchorText,
+  buildReserveGuardWarning,
   buildReserveOrderWarning,
   buildRewindCompactionFailedText,
   buildRewindHintText,
@@ -349,6 +352,20 @@ function makeCtx(
     getContextUsage: () => usage,
     setContextUsage(next: ContextUsage | undefined) {
       usage = next;
+      // pi derives its usage from the session: record the measurement the
+      // extension's own estimate reads.
+      if (next?.tokens) {
+        sm.appendMessage({
+          role: "assistant",
+          content: [{ type: "text", text: "measured" }],
+          api: "anthropic",
+          provider: "claude",
+          model: "claude-sonnet-4-5",
+          stopReason: "endTurn",
+          timestamp: Date.now(),
+          usage: usageOf(next.tokens),
+        } as never);
+      }
     },
     signal: undefined,
   };
@@ -6316,10 +6333,11 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
   });
 
   it("boundary: apparent savings just under the floor rejects; exactly at the floor accepts", async () => {
-    // Deterministic measurement math: with 'u*'/'a*' texts (2 chars → 1
-    // estimated trailing token each), a chain anchored at a1(T1) with leaf
-    // a3(T3) measures beforeTokens = T2 + 1 and tokensAtTarget = T1, i.e.
-    //   apparentSavings = T2 + 1 − T1.
+    // Deterministic measurement math: the leaf a3 sits on u3, whose 2 chars
+    // are 1 host token, 2 once scaled to the SDK's heuristic. A chain
+    // anchored at a1(T1) therefore measures beforeTokens = T2 + 2 + M and
+    // tokensAtTarget = T1 + M (M: the mandate the next prompt appends), i.e.
+    //   apparentSavings = T2 + 2 − T1.
     async function floorFixture(t2Total: number) {
       const { sm, pi, tool, ctx } = setup();
       const t1 = appendTurn(sm, "u1", "a1", 5_000);
@@ -6335,8 +6353,8 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
       summaryFocus: "Preserve user instructions and continue.",
     } as const;
 
-    // Just UNDER: T2 = 5000 + MIN − 999 → savings = MIN − 998.
-    const under = await floorFixture(5_000 + MIN_REWIND_SAVINGS_TOKENS - 999);
+    // Just UNDER: savings = MIN − 1.
+    const under = await floorFixture(5_000 + MIN_REWIND_SAVINGS_TOKENS - 3);
     const ru = await under.tool.execute(
       "tc-under",
       rewindArgs,
@@ -6346,14 +6364,12 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
     );
     assert.equal(ru.isError, true);
     assert.equal(ru.details.rejected, "min-savings");
-    assert.ok(
-      (ru.details.apparentSavings as number) < MIN_REWIND_SAVINGS_TOKENS,
-    );
+    assert.equal(ru.details.apparentSavings, MIN_REWIND_SAVINGS_TOKENS - 1);
     assert.equal(fireToolCall(under.pi, under.ctx), undefined);
 
-    // AT the floor: T2 = 5000 + MIN − 1 → savings = MIN exactly (the guard
-    // is strict `<`, so this accepts).
-    const at = await floorFixture(5_000 + MIN_REWIND_SAVINGS_TOKENS - 1);
+    // AT the floor: savings = MIN exactly (the guard is strict `<`, so this
+    // accepts).
+    const at = await floorFixture(5_000 + MIN_REWIND_SAVINGS_TOKENS - 2);
     const ra = await at.tool.execute(
       "tc-at",
       rewindArgs,
@@ -6362,14 +6378,6 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
       at.ctx,
     );
     assert.equal(ra.isError, undefined);
-    // Success details carry contextBefore (= T2 + 1); savings = that minus
-    // the anchor-time total (5_000).
-    const before = ra.details.contextBefore as number;
-    assert.equal(
-      before - 5_000,
-      MIN_REWIND_SAVINGS_TOKENS,
-      "savings exactly at the floor must be accepted (strict < comparison)",
-    );
     assert.ok(fireToolCall(at.pi, at.ctx), "the accepted rewind is pending");
   });
 
@@ -7152,9 +7160,9 @@ describe("rewind hint: turn_end handler (#44)", () => {
         Object.assign(target, originals);
       }
       assert.equal(pi.sendMessageCalls.length, 1);
-      // The start anchor's existence check may read the branch; the hint's
-      // walk (getEntries + per-anchor estimates) must not run at all.
-      assert.equal(calls.getEntries, 0);
+      // The hint's anchor walk reads every branch entry's label; the
+      // admission estimate that precedes it reads entries only.
+      assert.equal(calls.getLabel, 0);
     } finally {
       cleanupConfigFixture(fixture);
     }
@@ -7632,6 +7640,8 @@ describe("rewind hint: suppressed on turns a rewind owns (#80)", () => {
       assert.equal(hintCalls(f.pi).length, 0, "the completing turn");
 
       // The crossing stayed unspent: the next normal turn fires it once.
+      // The fold replaced the measured context, so pi measures it again.
+      f.ctx.setContextUsage(usageAt(95));
       const next = assistantMessage([{ type: "text", text: "next" }], "stop");
       f.sm.appendMessage(next as never);
       const boundary = await fireTurnEndAll(f.pi, f.ctx, next);
@@ -9249,7 +9259,7 @@ Active anchors (root → leaf, % of 100k):
   }
 
   it("aborts an infeasible complete request before sending a one-token continuation", async () => {
-    const f = await forcedSetup();
+    const f = await forcedSetup({ issuerTokens: 99_000 });
     try {
       const aborter = new AbortController();
       const ctx = {
@@ -9258,7 +9268,7 @@ Active anchors (root → leaf, % of 100k):
         abort: () => aborter.abort(),
       };
       const messages = [
-        { role: "system", content: "s".repeat(350_000), timestamp: 0 },
+        { role: "system", content: "rules", timestamp: 0 },
         ...fireContext(f.pi, f.ctx),
       ];
       const handlers = f.pi.onCalls.get("context_with_system") ?? [];
@@ -9354,6 +9364,250 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  describe("one admission estimate", () => {
+    /** Host-heuristic tokens (4 chars each) of filler text. */
+    const filler = (tokens: number) => "x".repeat(tokens * 4);
+    const userMessage = (text: string) =>
+      ({
+        role: "user",
+        content: [{ type: "text", text }],
+        timestamp: 0,
+      }) as never;
+
+    /** A session at `window` with a pre-baseline body, a measured turn and a short tail. */
+    async function admissionSetup(
+      window: number,
+      baseline: { bodyTokens: number; measured: number; tailTokens: number },
+    ) {
+      const fixture = makeConfigFixture();
+      writeGlobalConfig(
+        fixture,
+        JSON.stringify({ rewindHintReserveTokens: 20_000 }),
+      );
+      const f = setup({ contextWindow: window });
+      f.ctx.cwd = fixture.projectDir;
+      await runSessionStart(f.pi, f.ctx, fixture);
+      const turn = appendTurn(
+        f.sm,
+        filler(baseline.bodyTokens),
+        "a1",
+        baseline.measured,
+      );
+      f.pi.pi.setLabel(turn.assistantId, "anchor:start");
+      f.sm.appendMessage(userMessage(filler(baseline.tailTokens)));
+      return { fixture, ...f, userId: turn.userId };
+    }
+
+    /** Fire the request guard on `messages`; the aborter tells whether it refused. */
+    async function guard(
+      f: { pi: FakePi; ctx: FakeCtx },
+      messages: Array<Record<string, unknown>>,
+    ) {
+      const aborter = new AbortController();
+      const ctx = {
+        ...f.ctx,
+        signal: aborter.signal,
+        abort: () => aborter.abort(),
+      };
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? []) {
+        await handler(
+          { type: "context_with_system", messages } as never,
+          ctx as never,
+        );
+      }
+      return aborter.signal.aborted;
+    }
+
+    /** What a refused request leaves behind: the failure receipt's estimate. */
+    async function refusalEstimate(f: {
+      sm: SessionManager;
+      pi: FakePi;
+      ctx: FakeCtx;
+    }) {
+      const aborted = assistantMessage([], "aborted", 0);
+      f.sm.appendMessage(aborted as never);
+      const result = await fireTurnEndAll(f.pi, f.ctx, aborted, {
+        commit: true,
+      });
+      assert.equal(result.continue, false);
+      const failed = forcedDrafts(result).at(-1);
+      assert.equal(failed?.details.reason, "insufficient request headroom");
+      return Number(failed?.details.inputEstimate);
+    }
+
+    // The reported session: a 372k window, a valid 307,882-token usage
+    // baseline, a ~4.8k-token tail, and a whole-content scan (324.5k host
+    // tokens, 371k once scaled to the SDK's heuristic) that out-grows the
+    // measured baseline.
+    const REPORTED = {
+      bodyTokens: 319_700,
+      measured: 307_882,
+      tailTokens: 4_800,
+    };
+
+    it("admits a request whose recorded usage plus its tail fits, though a whole-content scan would not", async () => {
+      const f = await admissionSetup(372_000, REPORTED);
+      try {
+        const messages = [
+          { role: "system", content: "rules", timestamp: 0 },
+          ...fireContext(f.pi, f.ctx),
+        ];
+        const scan = estimateRequestTokens(
+          messages.map((m) => ({ ...m, usage: undefined })) as never,
+        );
+        assert.ok(scan + 5_120 > 372_000, "the whole-content scan refuses it");
+        assert.equal(await guard(f, messages), false);
+        const admission = estimateAdmissionTokens(f.sm);
+        assert.ok(admission + 5_120 <= 372_000);
+        assert.ok(admission > REPORTED.measured);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    });
+
+    it("still refuses when the baseline is stale: a model switch or a context edit", async () => {
+      for (const invalidate of ["model switch", "context edit"]) {
+        const f = await admissionSetup(372_000, REPORTED);
+        try {
+          if (invalidate === "model switch") {
+            f.sm.appendModelChange("other", "other-model");
+          } else {
+            f.sm.appendContextEdit(f.userId, {
+              content: [
+                { type: "text", text: filler(REPORTED.bodyTokens - 1_000) },
+              ],
+            } as never);
+          }
+          const messages = [
+            { role: "system", content: "rules", timestamp: 0 },
+            ...fireContext(f.pi, f.ctx),
+          ];
+          assert.equal(await guard(f, messages), true, invalidate);
+          assert.ok(
+            (await refusalEstimate(f)) + 5_120 > 372_000,
+            `${invalidate}: the receipt carries the whole-content estimate`,
+          );
+        } finally {
+          cleanupConfigFixture(f.fixture);
+        }
+      }
+    });
+
+    it("counts the anchor mandate once: not when the system message already carries it", async () => {
+      // 94,880 + the 5,120 the guard keeps free is exactly the 100k window.
+      const chars = 332_080;
+      const withMandate = {
+        role: "system",
+        content: "x".repeat(chars - ANCHOR_MANDATE.length) + ANCHOR_MANDATE,
+        timestamp: 0,
+      };
+      const without = { ...withMandate, content: "x".repeat(chars) };
+      assert.equal(estimateRequestTokens([withMandate] as never), 94_880);
+      assert.equal(estimateRequestTokens([without] as never), 94_880);
+
+      const carried = await admissionSetup(100_000, {
+        bodyTokens: 1,
+        measured: 0,
+        tailTokens: 1,
+      });
+      try {
+        assert.equal(await guard(carried, [withMandate]), false);
+      } finally {
+        cleanupConfigFixture(carried.fixture);
+      }
+      const bare = await admissionSetup(100_000, {
+        bodyTokens: 1,
+        measured: 0,
+        tailTokens: 1,
+      });
+      try {
+        assert.equal(await guard(bare, [without]), true);
+        assert.equal(
+          await refusalEstimate(bare),
+          94_880 + Math.ceil(ANCHOR_MANDATE.length / 3.5),
+        );
+      } finally {
+        cleanupConfigFixture(bare.fixture);
+      }
+    });
+
+    it("derives the hint, the anchor list and the request guard from one number", async () => {
+      const WINDOW_TOKENS = 100_000;
+      const f = await admissionSetup(WINDOW_TOKENS, {
+        bodyTokens: 100,
+        measured: 95_000,
+        tailTokens: 1_000,
+      });
+      try {
+        const mandate = Math.ceil(ANCHOR_MANDATE.length / 3.5);
+        const admission = estimateAdmissionTokens(f.sm);
+        assert.equal(admission, 95_000 + Math.ceil((1_000 * 8) / 7) + mandate);
+        // pi's own estimate disagrees on purpose.
+        f.ctx.getContextUsage = () => ({
+          tokens: 90_000,
+          contextWindow: WINDOW_TOKENS,
+          percent: 90,
+        });
+
+        const listed = await f.tool.execute(
+          "tc-list",
+          { action: "list" },
+          undefined,
+          undefined,
+          f.ctx,
+        );
+        assert.equal(listed.details.contextTokens, admission);
+        assert.match(
+          listed.content[0].text,
+          new RegExp(`ctx ${formatPct1(admission, WINDOW_TOKENS)} of 100k`),
+        );
+
+        const anchorCommand = f.pi.commands.get("anchor");
+        assert.ok(anchorCommand);
+        const command = makeCtx(f.sm, {
+          contextWindow: WINDOW_TOKENS,
+          hasUI: false,
+        });
+        await anchorCommand.handler(
+          "list",
+          command as unknown as ExtensionCommandContext,
+        );
+        // The anchor sits on the measured turn: its footprint is the usage and the mandate.
+        const savable = admission - (95_000 + mandate);
+        assert.ok(
+          command.notifyCalls[0][0].includes(
+            `−${(savable / 1000).toFixed(1)}k savable`,
+          ),
+          command.notifyCalls[0][0],
+        );
+
+        const messages = [
+          { role: "system", content: "rules", timestamp: 0 },
+          ...fireContext(f.pi, f.ctx),
+        ];
+        assert.equal(await guard(f, messages), true);
+
+        fireTurnEnd(f.pi, f.ctx);
+        const hint = (f.pi.sendMessageCalls[0][0] as { content: string })
+          .content;
+        assert.equal(
+          hint.split("\n")[0],
+          buildRewindHintText(
+            (admission / WINDOW_TOKENS) * 100,
+            WINDOW_TOKENS - admission,
+            20_000,
+            WINDOW_TOKENS,
+            "",
+          ).split("\n")[0],
+        );
+
+        assert.equal(await refusalEstimate(f), admission);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    });
+  });
+
   it("delivers a failure receipt if a later handler invalidates the boundary", async () => {
     const f = await forcedSetup();
     try {
@@ -9421,7 +9675,6 @@ Active anchors (root → leaf, % of 100k):
             content: oversized ? "old short prompt" : "s".repeat(350_000),
             timestamp: 0,
           },
-          ...fireContext(f.pi, f.ctx),
         ];
         for (const handler of f.pi.onCalls.get("context_with_system") ?? [])
           await handler(
@@ -9435,9 +9688,10 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
-  it("refuses withholding when the final forced prompt cannot fit", async () => {
+  it("refuses withholding when the final forced prompt cannot fit after a model switch", async () => {
     const f = await forcedSetup();
     try {
+      f.sm.appendModelChange("other", "other-model");
       __testHooks.captureSession({
         ...makeFakeSession(f.sm),
         _runSystemPromptOptions: { forceSystemPrompt: "s".repeat(350_000) },
@@ -9645,7 +9899,7 @@ Active anchors (root → leaf, % of 100k):
     try {
       assert.ok(f.ctx.model);
       f.ctx.model = { ...f.ctx.model, api: "openai-responses" };
-      await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+      await requestRewind(f, REWIND_ARGS, "tc-rewind", 99_000);
       const aborter = new AbortController();
       const ctx = {
         ...f.ctx,
@@ -9653,7 +9907,7 @@ Active anchors (root → leaf, % of 100k):
         abort: () => aborter.abort(),
       };
       const messages = [
-        { role: "system", content: "s".repeat(350_000), timestamp: 0 },
+        { role: "system", content: "rules", timestamp: 0 },
         ...fireContext(f.pi, f.ctx),
       ];
       for (const handler of f.pi.onCalls.get("context_with_system") ?? []) {
@@ -10325,6 +10579,12 @@ Active anchors (root → leaf, % of 100k):
         buildSessionContext(sm.getEntries(), entryId).messages,
       );
 
+    /** The same footprint as the request guard prices it: SDK-scaled, plus the mandate the prompt appends. */
+    const admissionAt = (sm: SessionManager, entryId: string) =>
+      estimateRequestTokens(
+        buildSessionContext(sm.getEntries(), entryId).messages,
+      ) + Math.ceil(ANCHOR_MANDATE.length / 3.5);
+
     const parentOf = (sm: SessionManager, entryId: string) => {
       const parentId = sm.getEntry(entryId)?.parentId;
       assert.ok(parentId);
@@ -10352,7 +10612,7 @@ Active anchors (root → leaf, % of 100k):
         ["before-cut", ids.cut],
         ["after-cut", ids.late],
       ]) {
-        const pct = formatPct1(footprintAt(sm, id), WINDOW).replace(".", "\\.");
+        const pct = formatPct1(admissionAt(sm, id), WINDOW).replace(".", "\\.");
         assert.match(text, new RegExp(`${pct}\\s+${name}\\b`), text);
       }
       assert.ok(
@@ -10389,8 +10649,8 @@ Active anchors (root → leaf, % of 100k):
       assert.match(result.content[0].text, /lies before the latest compaction/);
       assert.equal(
         result.details.apparentSavings,
-        footprintAt(f.sm, parentOf(f.sm, callId)) -
-          footprintAt(f.sm, f.ids.cut),
+        admissionAt(f.sm, parentOf(f.sm, callId)) -
+          admissionAt(f.sm, f.ids.cut),
       );
       assert.ok(Number(result.details.apparentSavings) < 0);
       assert.deepEqual(
@@ -10417,8 +10677,14 @@ Active anchors (root → leaf, % of 100k):
         assert.equal(result.isError, undefined);
         const priced = footprintAt(f.sm, f.ids[key]);
         const before = footprintAt(f.sm, parentOf(f.sm, callId));
-        assert.equal(result.details.tokensAtTarget, priced);
-        assert.equal(result.details.contextBefore, before);
+        assert.equal(
+          result.details.tokensAtTarget,
+          admissionAt(f.sm, f.ids[key]),
+        );
+        assert.equal(
+          result.details.contextBefore,
+          admissionAt(f.sm, parentOf(f.sm, callId)),
+        );
 
         await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
         const done = rewindMessages(f.pi).at(-1)?.message;
@@ -11523,6 +11789,54 @@ Active anchors (root → leaf, % of 100k):
     }
     const g = await forcedSetup({
       config: { rewindHintReserveTokens: 10_000 },
+      piSettings: {},
+    });
+    try {
+      assert.deepEqual(g.ctx.notifyCalls, [], "compaction on: D9's case");
+    } finally {
+      cleanupConfigFixture(g.fixture);
+    }
+  });
+
+  it("D10: warns when the hint reserve does not exceed what the request guard keeps free", async () => {
+    // The guard keeps 1,024 output + 4,096 headroom tokens free.
+    for (const [reserve, guarded] of [
+      [4_000, true],
+      [5_120, true],
+      [5_121, false],
+    ] as const) {
+      const f = await forcedSetup({
+        config: { rewindHintReserveTokens: reserve },
+      });
+      try {
+        assert.deepEqual(f.ctx.notifyCalls, [
+          [
+            buildReserveOrderWarning(
+              reserve,
+              16_384,
+              "claude/claude-sonnet-4-5",
+            ),
+            "warning",
+          ],
+          ...(guarded
+            ? [
+                [
+                  buildReserveGuardWarning(
+                    reserve,
+                    5_120,
+                    "claude/claude-sonnet-4-5",
+                  ),
+                  "warning",
+                ] as const,
+              ]
+            : []),
+        ]);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    }
+    const g = await forcedSetup({
+      config: { rewindHintReserveTokens: 4_000 },
       piSettings: {},
     });
     try {
