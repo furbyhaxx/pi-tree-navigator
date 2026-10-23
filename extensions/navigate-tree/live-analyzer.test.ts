@@ -12,7 +12,11 @@ const script = fileURLToPath(
 );
 const instruction = "[navigate_tree]\nSummarize only messages 1 onwards";
 
-function analyze(payload: Record<string, unknown>, requestPosition = "before") {
+function analyze(
+  payload: Record<string, unknown>,
+  requestPosition = "before",
+  wireMode = "normal",
+) {
   const root = mkdtempSync(join(tmpdir(), "navigator-analysis-"));
   try {
     const base = join(root, "agent-1");
@@ -24,6 +28,8 @@ function analyze(payload: Record<string, unknown>, requestPosition = "before") {
       const request = {
         type: "custom_message",
         id: `request-${i}`,
+        timestamp: new Date(i * 10_000 + 1_000).toISOString(),
+        content: instruction,
         customType: "navigate-tree-summary-request",
         details: { toolCallId: `call-${i}`, newLabel: `fold-${i}` },
       };
@@ -48,6 +54,7 @@ function analyze(payload: Record<string, unknown>, requestPosition = "before") {
       append({
         type: "branch_summary",
         id: `summary-${i}`,
+        timestamp: new Date(i * 10_000 + 3_000).toISOString(),
         summary: `hash-${i}`,
         details: {
           treeNavigator: { report: "Report" },
@@ -102,8 +109,14 @@ function analyze(payload: Record<string, unknown>, requestPosition = "before") {
     writeFileSync(
       join(base, "wire.jsonl.gz"),
       gzipSync(
-        Array.from({ length: 4 }, () =>
-          JSON.stringify({ type: "request", payload }),
+        Array.from({ length: 4 }, (_, i) =>
+          JSON.stringify({
+            type: "request",
+            at: new Date(
+              (wireMode === "first-only" ? 0 : i * 10_000) + 2_000,
+            ).toISOString(),
+            payload,
+          }),
         ).join("\n"),
       ),
     );
@@ -142,6 +155,22 @@ it("fails when request capture cannot establish a text-only request for every fo
   });
   assert.equal(enabled.status, 1, enabled.stdout + enabled.stderr);
   assert.match(enabled.stdout, /did not disable tools/);
+});
+
+it("requires matching wire evidence within each fold interval, not aggregate retries", () => {
+  const repeated = analyze(
+    { input: [{ content: instruction }], tool_choice: "none" },
+    "before",
+    "first-only",
+  );
+  assert.equal(repeated.status, 1, repeated.stdout + repeated.stderr);
+  assert.match(repeated.stdout, /fold-1: summary wire request missing/);
+  const mismatched = analyze({
+    input: [{ content: `${instruction} with a different focus` }],
+    tool_choice: "none",
+  });
+  assert.equal(mismatched.status, 1, mismatched.stdout + mismatched.stderr);
+  assert.match(mismatched.stdout, /summary wire request missing/);
 });
 
 it("does not correlate a later or aborted same-label request with a completed fold", () => {

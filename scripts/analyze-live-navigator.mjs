@@ -7,6 +7,11 @@ const root = path.resolve(process.argv[2] ?? ".project/analyses/live-acceptance/
 const parseLines = (text) => text.trim().split("\n").filter(Boolean).map(JSON.parse);
 const input = (message) => (message?.usage?.input ?? 0) + (message?.usage?.cacheRead ?? 0) + (message?.usage?.cacheWrite ?? 0);
 const textOnly = (payload) => payload.tool_choice === "none" || payload.tool_choice?.type === "none" || payload.config?.toolConfig?.functionCallingConfig?.mode === "NONE";
+const requestText = (payload) => {
+  const last = (payload.input ?? payload.messages ?? payload.contents ?? []).at(-1);
+  const content = last?.content ?? last?.parts;
+  return typeof content === "string" ? content : (content ?? []).map((block) => block.text ?? "").join("\n");
+};
 const results = [];
 for (const dir of (await readdir(root)).filter((p) => /^agent-\d+$/.test(p)).sort()) {
   const base = path.join(root, dir);
@@ -15,14 +20,7 @@ for (const dir of (await readdir(root)).filter((p) => /^agent-\d+$/.test(p)).sor
   const entries = parseLines(await readFile(path.join(base, file), "utf8"));
   const wire = parseLines(gunzipSync(await readFile(path.join(base, "wire.jsonl.gz"))).toString("utf8"));
   const requests = wire.filter((e) => e.type === "request");
-  const summaryRequests = requests.filter((e) => {
-    const last = (e.payload.input ?? e.payload.messages ?? e.payload.contents ?? []).at(-1);
-    const content = last?.content ?? last?.parts;
-    const text = typeof content === "string"
-      ? content
-      : (content ?? []).map((block) => block.text ?? "").join("\n");
-    return text.startsWith("[navigate_tree]\nSummarize only messages ");
-  });
+  const summaryRequests = requests.filter((e) => requestText(e.payload).startsWith("[navigate_tree]\nSummarize only messages "));
   const assistants = entries.filter((e) => e.type === "message" && e.message.role === "assistant");
   const folds = [];
   for (const e of entries.filter((e) => e.type === "custom_message" && e.customType === "navigate-tree-rewind" && e.details?.status === "done")) {
@@ -36,8 +34,9 @@ for (const dir of (await readdir(root)).filter((p) => /^agent-\d+$/.test(p)).sor
     const beforeSummary = entries.slice(0, summaryAt);
     const endedCalls = new Set(beforeSummary.filter((s) => s.type === "custom" && s.customType === "navigate-tree-rewind-outcome").map((s) => s.data?.toolCallId));
     const original = beforeSummary.findLast((s) => s.type === "custom_message" && s.customType === "navigate-tree-summary-request" && s.details?.newLabel === e.details.newLabel && !endedCalls.has(s.details?.toolCallId));
+    const wireSummaryRequests = original ? summaryRequests.filter((r) => requestText(r.payload) === original.content && Date.parse(r.at) >= Date.parse(original.timestamp) && Date.parse(r.at) <= Date.parse(summary.timestamp)) : [];
     const ledger = summary.details.continuity;
-    folds.push({ name: e.details.newLabel, summaryId: summary.id, summaryChars: summary.summary.length, reportChars: summary.details.treeNavigator.report.length, summaryInput: input(writer), summaryCacheRead: writer?.usage?.cacheRead, previousInput: input(previous), cacheRatio: input(previous) > 0 ? writer.usage.cacheRead / input(previous) : 0, nextInput: input(next?.message), reductionRatio: 1 - input(next?.message) / input(writer), sameRunContinuation: next?.message.role === "assistant", nextTools: next?.message.content?.filter((c) => c.type === "toolCall").map((c) => c.name) ?? [], summaryRequestFound: Boolean(original), protectedRuleRetained: ledger.items.some((item) => item.kind === "rule" && item.source?.origin === "user" && item.status === "active" && item.text.includes("never edit the source")), ledgerItems: ledger.items.length, continuation: e.details });
+    folds.push({ name: e.details.newLabel, summaryId: summary.id, summaryChars: summary.summary.length, reportChars: summary.details.treeNavigator.report.length, summaryInput: input(writer), summaryCacheRead: writer?.usage?.cacheRead, previousInput: input(previous), cacheRatio: input(previous) > 0 ? writer.usage.cacheRead / input(previous) : 0, nextInput: input(next?.message), reductionRatio: 1 - input(next?.message) / input(writer), sameRunContinuation: next?.message.role === "assistant", nextTools: next?.message.content?.filter((c) => c.type === "toolCall").map((c) => c.name) ?? [], summaryRequestFound: Boolean(original), wireSummaryRequests: wireSummaryRequests.length, textOnlyWireSummaryRequests: wireSummaryRequests.filter((r) => textOnly(r.payload)).length, protectedRuleRetained: ledger.items.some((item) => item.kind === "rule" && item.source?.origin === "user" && item.status === "active" && item.text.includes("never edit the source")), ledgerItems: ledger.items.length, continuation: e.details });
   }
   const finalBranch = new Map(entries.map((e) => [e.id, e]));
   const branch = [];
@@ -62,6 +61,10 @@ for (const dir of (await readdir(root)).filter((p) => /^agent-\d+$/.test(p)).sor
     if (fold.nextInput >= fold.summaryInput) failures.push(`${fold.name}: no observed input reduction`);
     if (fold.cacheRatio < 0.95) failures.push(`${fold.name}: cache gate below 95%`);
     if (!fold.summaryRequestFound) failures.push(`${fold.name}: summary request missing`);
+    if (process.argv.includes("--require-text-only")) {
+      if (!fold.wireSummaryRequests) failures.push(`${fold.name}: summary wire request missing`);
+      else if (fold.textOnlyWireSummaryRequests !== fold.wireSummaryRequests) failures.push(`${fold.name}: summary wire request did not disable tools`);
+    }
   }
   const result = { agent: dir, model: outcome.model, lens: outcome.lens, started: outcome.started, finished: outcome.finished, submitted: outcome.submitted, requests: requests.length, summaryRequests: summaryRequests.length, textOnlySummaryRequests: summaryRequests.filter((e) => textOnly(e.payload)).length, wireResponses: wire.filter((e) => e.type === "response").map((e) => e.status), rawStreamEvents: wire.filter((e) => e.type === "stream").length, requestBytes: requests.map((e) => Buffer.byteLength(JSON.stringify(e.payload))), peakInputTokens: outcome.peakInputTokens, inputTokensCumulative: outcome.inputTokensCumulative, cacheReadTokens: outcome.cacheReadTokens, outputTokens: outcome.outputTokens, userMessages: outcome.userMessages, hashesInActiveHandoffs, folds, errors, failures };
   results.push(result);
