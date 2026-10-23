@@ -1,0 +1,917 @@
+{
+  "runId": "run-2026-10-23T13-41-12.646Z-4c0c",
+  "createdAt": "2026-10-23T13:41:12.646Z",
+  "gitSha": "d0be5231c1b256f009afd98bcadb3932e2a1cbbe",
+  "gitDirty": true,
+  "casesSha256": "4ed8651ef95e6a255edb428e6dff22bc0dc6b8731fb2c25a2c4f5b37c1ccaa34",
+  "caseCount": 96,
+  "ledgerPath": ".project/analyses/classifier-eval/budget-ledger.jsonl",
+  "capUsd": 25,
+  "routePrices": {
+    "retrievedAt": "2026-10-23",
+    "source": [
+      ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+      ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+    ]
+  },
+  "models": [
+    {
+      "label": "decisions:typesafe/jev-1.14#base",
+      "adapter": "decisions",
+      "variant": "base",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#instructions",
+      "adapter": "decisions",
+      "variant": "instructions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#granular",
+      "adapter": "decisions",
+      "variant": "granular",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#tree-heuristic",
+      "adapter": "decisions",
+      "variant": "tree-heuristic",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#tree-luna",
+      "adapter": "decisions",
+      "variant": "tree-luna",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#base",
+      "adapter": "decisions",
+      "variant": "base",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#instructions",
+      "adapter": "decisions",
+      "variant": "instructions",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#granular",
+      "adapter": "decisions",
+      "variant": "granular",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#tree-heuristic",
+      "adapter": "decisions",
+      "variant": "tree-heuristic",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#tree-luna",
+      "adapter": "decisions",
+      "variant": "tree-luna",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#base",
+      "adapter": "decisions",
+      "variant": "base",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#instructions",
+      "adapter": "decisions",
+      "variant": "instructions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#granular",
+      "adapter": "decisions",
+      "variant": "granular",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#tree-heuristic",
+      "adapter": "decisions",
+      "variant": "tree-heuristic",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#tree-luna",
+      "adapter": "decisions",
+      "variant": "tree-luna",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#base",
+      "adapter": "chat",
+      "variant": "base",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#instructions",
+      "adapter": "chat",
+      "variant": "instructions",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#granular",
+      "adapter": "chat",
+      "variant": "granular",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#tree-heuristic",
+      "adapter": "chat",
+      "variant": "tree-heuristic",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#tree-luna",
+      "adapter": "chat",
+      "variant": "tree-luna",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#instructions+tree-heuristic",
+      "adapter": "decisions",
+      "variant": "instructions+tree-heuristic",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#granular+tree-heuristic",
+      "adapter": "decisions",
+      "variant": "granular+tree-heuristic",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#instructions+tree-luna",
+      "adapter": "decisions",
+      "variant": "instructions+tree-luna",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#granular+tree-luna",
+      "adapter": "decisions",
+      "variant": "granular+tree-luna",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#instructions+tree-heuristic",
+      "adapter": "decisions",
+      "variant": "instructions+tree-heuristic",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#granular+tree-heuristic",
+      "adapter": "decisions",
+      "variant": "granular+tree-heuristic",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#instructions+tree-luna",
+      "adapter": "decisions",
+      "variant": "instructions+tree-luna",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#granular+tree-luna",
+      "adapter": "decisions",
+      "variant": "granular+tree-luna",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#instructions+tree-heuristic",
+      "adapter": "decisions",
+      "variant": "instructions+tree-heuristic",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#granular+tree-heuristic",
+      "adapter": "decisions",
+      "variant": "granular+tree-heuristic",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#instructions+tree-luna",
+      "adapter": "decisions",
+      "variant": "instructions+tree-luna",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#granular+tree-luna",
+      "adapter": "decisions",
+      "variant": "granular+tree-luna",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#instructions+tree-heuristic",
+      "adapter": "chat",
+      "variant": "instructions+tree-heuristic",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#granular+tree-heuristic",
+      "adapter": "chat",
+      "variant": "granular+tree-heuristic",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#instructions+tree-luna",
+      "adapter": "chat",
+      "variant": "instructions+tree-luna",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#granular+tree-luna",
+      "adapter": "chat",
+      "variant": "granular+tree-luna",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    }
+  ],
+  "sessions": [
+    {
+      "id": "run-2026-10-23T13-41-12.646Z-4c0c.s1",
+      "startedAt": "2026-10-23T13:41:12.647Z",
+      "models": [
+        {
+          "label": "decisions:typesafe/jev-1.14#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#tree-heuristic",
+          "adapter": "decisions",
+          "variant": "tree-heuristic",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#tree-luna",
+          "adapter": "decisions",
+          "variant": "tree-luna",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#tree-heuristic",
+          "adapter": "decisions",
+          "variant": "tree-heuristic",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#tree-luna",
+          "adapter": "decisions",
+          "variant": "tree-luna",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#tree-heuristic",
+          "adapter": "decisions",
+          "variant": "tree-heuristic",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#tree-luna",
+          "adapter": "decisions",
+          "variant": "tree-luna",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#base",
+          "adapter": "chat",
+          "variant": "base",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#instructions",
+          "adapter": "chat",
+          "variant": "instructions",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#granular",
+          "adapter": "chat",
+          "variant": "granular",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#tree-heuristic",
+          "adapter": "chat",
+          "variant": "tree-heuristic",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#tree-luna",
+          "adapter": "chat",
+          "variant": "tree-luna",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "milestone-status",
+        "milestone-boundary"
+      ],
+      "variants": [
+        "base",
+        "instructions",
+        "granular",
+        "tree-heuristic",
+        "tree-luna"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 62.000470068,
+        "usageDaily": 19.889183136,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "structureCounts": {
+        "ok": 32,
+        "error": 0,
+        "unsupported": 0
+      },
+      "keyUsageAfter": {
+        "usage": 62.219991496,
+        "usageDaily": 20.108704564,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T13:44:49.167Z",
+      "counts": {
+        "ok": 640,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 25,
+        "spentUsd": 0.18783082,
+        "heldUsd": 0.054682903,
+        "remainingUsd": 24.757486277
+      }
+    },
+    {
+      "id": "run-2026-10-23T13-41-12.646Z-4c0c.s2",
+      "startedAt": "2026-10-23T13:45:43.343Z",
+      "models": [
+        {
+          "label": "decisions:typesafe/jev-1.14#instructions+tree-heuristic",
+          "adapter": "decisions",
+          "variant": "instructions+tree-heuristic",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#granular+tree-heuristic",
+          "adapter": "decisions",
+          "variant": "granular+tree-heuristic",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#instructions+tree-luna",
+          "adapter": "decisions",
+          "variant": "instructions+tree-luna",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#granular+tree-luna",
+          "adapter": "decisions",
+          "variant": "granular+tree-luna",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#instructions+tree-heuristic",
+          "adapter": "decisions",
+          "variant": "instructions+tree-heuristic",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#granular+tree-heuristic",
+          "adapter": "decisions",
+          "variant": "granular+tree-heuristic",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#instructions+tree-luna",
+          "adapter": "decisions",
+          "variant": "instructions+tree-luna",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#granular+tree-luna",
+          "adapter": "decisions",
+          "variant": "granular+tree-luna",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#instructions+tree-heuristic",
+          "adapter": "decisions",
+          "variant": "instructions+tree-heuristic",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#granular+tree-heuristic",
+          "adapter": "decisions",
+          "variant": "granular+tree-heuristic",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#instructions+tree-luna",
+          "adapter": "decisions",
+          "variant": "instructions+tree-luna",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#granular+tree-luna",
+          "adapter": "decisions",
+          "variant": "granular+tree-luna",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#instructions+tree-heuristic",
+          "adapter": "chat",
+          "variant": "instructions+tree-heuristic",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#granular+tree-heuristic",
+          "adapter": "chat",
+          "variant": "granular+tree-heuristic",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#instructions+tree-luna",
+          "adapter": "chat",
+          "variant": "instructions+tree-luna",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#granular+tree-luna",
+          "adapter": "chat",
+          "variant": "granular+tree-luna",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "milestone-status",
+        "milestone-boundary"
+      ],
+      "variants": [
+        "instructions+tree-heuristic",
+        "granular+tree-heuristic",
+        "instructions+tree-luna",
+        "granular+tree-luna"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 62.348452372,
+        "usageDaily": 20.23716544,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 62.635557006,
+        "usageDaily": 20.524270074,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T13:48:20.456Z",
+      "counts": {
+        "ok": 512,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 25,
+        "spentUsd": 0.27854557,
+        "heldUsd": 0.054682903,
+        "remainingUsd": 24.666771527
+      }
+    },
+    {
+      "id": "run-2026-10-23T13-41-12.646Z-4c0c.s3",
+      "startedAt": "2026-10-23T13:48:25.843Z",
+      "models": [
+        {
+          "label": "decisions:typesafe/jev-1.14#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#base",
+          "adapter": "chat",
+          "variant": "base",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#instructions",
+          "adapter": "chat",
+          "variant": "instructions",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#granular",
+          "adapter": "chat",
+          "variant": "granular",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "milestone-status",
+        "milestone-boundary"
+      ],
+      "variants": [
+        "base",
+        "instructions",
+        "granular"
+      ],
+      "repetitions": 3,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 62.638094373,
+        "usageDaily": 20.526807441,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 63.193880852,
+        "usageDaily": 21.08259392,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T13:51:54.435Z",
+      "counts": {
+        "ok": 768,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 25,
+        "spentUsd": 0.335682414,
+        "heldUsd": 0.054682903,
+        "remainingUsd": 24.609634683
+      }
+    }
+  ]
+}
