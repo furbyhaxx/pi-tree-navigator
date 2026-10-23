@@ -90,6 +90,7 @@ async function withSession(
     abort: () => Promise<void>;
     sideStarted: Promise<void>;
   }) => Promise<void>,
+  stopReason: "error" | "length" | "stop" = "error",
 ): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), "pi-provider-recovery-"));
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -154,15 +155,26 @@ async function withSession(
       reply =
         mode === "aborted"
           ? abortedReply()
-          : fauxAssistantMessage([], {
-              stopReason: "error",
-              errorMessage:
-                mode === "unrelated"
-                  ? "authentication failed"
-                  : "prompt is too long: 40000 tokens > 32000 maximum",
-            });
+          : fauxAssistantMessage(
+              stopReason === "stop" && mode !== "unrelated"
+                ? "Successful overflow evidence 8e19"
+                : [],
+              {
+                stopReason: mode === "unrelated" ? "error" : stopReason,
+                errorMessage:
+                  mode === "unrelated"
+                    ? "authentication failed"
+                    : "prompt is too long: 40000 tokens > 32000 maximum",
+              },
+            );
     }
     reply = { ...reply, provider: "mock", model: "mock-1", api };
+    if (!side && (mainCount === 1 || mode === "repeat-error")) {
+      reply = {
+        ...reply,
+        usage: { ...reply.usage, input: 40_000, totalTokens: 40_000 },
+      };
+    }
     queueMicrotask(() => stream.end(reply));
     return stream;
   };
@@ -204,8 +216,10 @@ async function withSession(
     extensionFactories: [
       navigateTree,
       (pi) => {
-        if (mode === "lost-receipt")
+        if (mode === "lost-receipt") {
+          pi.on("turn_end", () => ({ entries: [] }));
           pi.on("agent_before_settle", () => ({ entries: [] }));
+        }
       },
     ],
     noSkills: true,
@@ -328,127 +342,165 @@ function userText(entry: {
   return messageText(entry.message);
 }
 
-describe("production provider overflow recovery", () => {
-  it("recovers a genuine overflow in the same SDK prompt with the exact unanswered request", async () => {
-    await withSession("recover", async ({ sm, prompt, calls }) => {
-      const archived = structuredClone(sm.getEntries());
-      assert.equal(await prompt(REQUEST), undefined);
-      const main = calls.filter((call) => !call.side);
-      const side = calls.filter((call) => call.side);
-      assert.equal(
-        main.length,
-        2,
-        JSON.stringify(calls.map(({ side, tokens }) => ({ side, tokens }))),
-      );
-      assert.ok(side.length > 0 && side.length <= 16);
-      assert.ok(main[0].tokens + RESERVE < WINDOW);
-      assert.ok(main[1].tokens < main[0].tokens);
-      assert.ok(side.some((call) => call.text.includes(EVIDENCE)));
-      assert.ok(side.some((call) => call.text.includes(TOOL_EVIDENCE)));
-      assert.ok(main[0].text.includes(TOOL_EVIDENCE));
-      assert.equal(main[1].text.includes(TOOL_EVIDENCE), false);
-      assert.equal(main[1].text.includes(EVIDENCE), false);
-      assert.ok(main.every((call) => call.text.includes(REQUEST)));
-      assert.equal(
-        main.some((call) => /Rewind now|Output withheld/.test(call.text)),
-        false,
-      );
-      const branch = sm.getBranch();
-      const summaryAt = branch.findIndex(
-        (entry) => entry.type === "branch_summary",
-      );
-      assert.ok(summaryAt >= 0);
-      assert.deepEqual(
-        branch
-          .slice(summaryAt + 1)
-          .map(userText)
-          .filter((text) => text !== undefined),
-        [REQUEST],
-      );
-      for (const entry of archived)
-        assert.deepEqual(sm.getEntry(entry.id), entry);
-      assert.equal(
-        sm.getEntries().some((entry) => entry.type === "context_edit"),
-        false,
-      );
-    });
-  });
-
-  it("does not loop when the next main request also overflows", async () => {
-    await withSession("repeat-error", async ({ sm, prompt, calls }) => {
-      await prompt(REQUEST);
-      assert.equal(calls.filter((call) => !call.side).length, 2);
-      assert.equal(
-        sm.getBranch().filter((entry) => entry.type === "branch_summary")
-          .length,
-        1,
-      );
-      const failed = sm
-        .getBranch()
-        .filter(
-          (entry) =>
-            entry.type === "custom_message" &&
-            entry.customType === "navigate-tree-rewind" &&
-            JSON.stringify(entry.details).includes('"failed"'),
-        );
-      assert.equal(failed.length, 1);
-      assert.match(
-        JSON.stringify(failed),
-        /already attempted|already.*recovery/,
-      );
-    });
-  });
-
-  for (const mode of ["unrelated", "aborted"] as const) {
-    it(`does not recover ${mode} provider results`, async () => {
-      await withSession(mode, async ({ sm, prompt, calls }) => {
-        await prompt(REQUEST);
-        assert.equal(calls.length, 1);
+for (const stopReason of ["error", "length", "stop"] as const) {
+  describe(`production provider overflow recovery (${stopReason})`, () => {
+    const withRecoverySession = (...args: Parameters<typeof withSession>) =>
+      withSession(args[0], args[1], stopReason);
+    it("recovers a genuine overflow in the same SDK prompt with the exact unanswered request", async () => {
+      await withRecoverySession("recover", async ({ sm, prompt, calls }) => {
+        const archived = structuredClone(sm.getEntries());
+        assert.equal(await prompt(REQUEST), undefined);
+        const main = calls.filter((call) => !call.side);
+        const side = calls.filter((call) => call.side);
         assert.equal(
-          sm.getBranch().some((entry) => entry.type === "branch_summary"),
-          false,
+          main.length,
+          2,
+          JSON.stringify(calls.map(({ side, tokens }) => ({ side, tokens }))),
         );
-      });
-    });
-  }
-
-  it("honors Esc while the independent summarizer is running", async () => {
-    await withSession(
-      "cancel",
-      async ({ sm, prompt, calls, sideStarted, abort }) => {
-        const pending = prompt(REQUEST);
-        await sideStarted;
-        await abort();
-        await pending;
-        assert.equal(calls.filter((call) => !call.side).length, 1);
-        assert.equal(
-          sm.getBranch().some((entry) => entry.type === "branch_summary"),
-          false,
-        );
-      },
-    );
-  });
-
-  for (const mode of ["no-anchor", "side-failure", "lost-receipt"] as const) {
-    it(`persists an actionable receipt after ${mode}`, async () => {
-      await withSession(mode, async ({ sm, prompt, calls }) => {
-        await prompt(REQUEST);
-        assert.equal(calls.filter((call) => !call.side).length, 1);
-        assert.equal(
-          sm.getBranch().some((entry) => entry.type === "branch_summary"),
-          false,
-        );
-        const receipts = sm
-          .getBranch()
-          .filter(
-            (entry) =>
-              entry.type === "custom_message" &&
-              entry.customType === "navigate-tree-rewind",
+        assert.ok(side.length > 0 && side.length <= 16);
+        assert.ok(main[0].tokens + RESERVE < WINDOW);
+        assert.ok(main[1].tokens < main[0].tokens);
+        assert.ok(side.some((call) => call.text.includes(EVIDENCE)));
+        assert.ok(side.some((call) => call.text.includes(TOOL_EVIDENCE)));
+        assert.ok(main[0].text.includes(TOOL_EVIDENCE));
+        assert.equal(main[1].text.includes(TOOL_EVIDENCE), false);
+        assert.equal(main[1].text.includes(EVIDENCE), false);
+        assert.ok(main.every((call) => call.text.includes(REQUEST)));
+        if (stopReason === "stop") {
+          assert.ok(main[1].text.includes("Successful overflow evidence 8e19"));
+          const evidence = sm
+            .getEntries()
+            .filter(
+              (entry) =>
+                entry.type === "message" &&
+                entry.message.role === "assistant" &&
+                messageText(entry.message) ===
+                  "Successful overflow evidence 8e19",
+            );
+          assert.equal(evidence.length, 2);
+          assert.deepEqual(
+            evidence.map((entry) =>
+              entry.type === "message" && entry.message.role === "assistant"
+                ? entry.message.usage.input
+                : undefined,
+            ),
+            [40_000, 0],
           );
-        assert.equal(receipts.length, 1);
-        assert.match(JSON.stringify(receipts), /\/tree|\/compact/);
-        assert.match(JSON.stringify(receipts), /No tool results were withheld/);
+        }
+        assert.equal(
+          main.some((call) => /Rewind now|Output withheld/.test(call.text)),
+          false,
+        );
+        const branch = sm.getBranch();
+        const summaryAt = branch.findIndex(
+          (entry) => entry.type === "branch_summary",
+        );
+        assert.ok(summaryAt >= 0);
+        assert.deepEqual(
+          branch
+            .slice(summaryAt + 1)
+            .map(userText)
+            .filter((text) => text !== undefined),
+          [REQUEST],
+        );
+        for (const entry of archived)
+          assert.deepEqual(sm.getEntry(entry.id), entry);
+        assert.equal(
+          sm.getEntries().some((entry) => entry.type === "context_edit"),
+          stopReason === "length",
+        );
       });
     });
-  }
-});
+
+    it("does not loop when the next main request also overflows", async () => {
+      await withRecoverySession(
+        "repeat-error",
+        async ({ sm, prompt, calls }) => {
+          await prompt(REQUEST);
+          assert.equal(calls.filter((call) => !call.side).length, 2);
+          assert.equal(
+            sm.getBranch().filter((entry) => entry.type === "branch_summary")
+              .length,
+            1,
+          );
+          const failed = sm
+            .getBranch()
+            .filter(
+              (entry) =>
+                entry.type === "custom_message" &&
+                entry.customType === "navigate-tree-rewind" &&
+                JSON.stringify(entry.details).includes('"failed"'),
+            );
+          assert.equal(failed.length, 1);
+          assert.match(
+            JSON.stringify(failed),
+            /already attempted|already.*recovery/,
+          );
+        },
+      );
+    });
+
+    for (const mode of ["unrelated", "aborted"] as const) {
+      it(`does not recover ${mode} provider results`, async () => {
+        await withRecoverySession(mode, async ({ sm, prompt, calls }) => {
+          await prompt(REQUEST);
+          assert.equal(calls.length, 1);
+          assert.equal(
+            sm.getBranch().some((entry) => entry.type === "branch_summary"),
+            false,
+          );
+        });
+      });
+    }
+
+    it("honors Esc while the independent summarizer is running", async () => {
+      await withRecoverySession(
+        "cancel",
+        async ({ sm, prompt, calls, sideStarted, abort }) => {
+          const pending = prompt(REQUEST);
+          await sideStarted;
+          await abort();
+          await pending;
+          assert.equal(calls.filter((call) => !call.side).length, 1);
+          assert.equal(
+            sm.getBranch().some((entry) => entry.type === "branch_summary"),
+            false,
+          );
+        },
+      );
+    });
+
+    for (const mode of ["no-anchor", "side-failure", "lost-receipt"] as const) {
+      it(`persists an actionable receipt after ${mode}`, async () => {
+        await withRecoverySession(mode, async ({ sm, prompt, calls }) => {
+          await prompt(REQUEST);
+          assert.equal(calls.filter((call) => !call.side).length, 1);
+          assert.equal(
+            sm.getBranch().some((entry) => entry.type === "branch_summary"),
+            false,
+          );
+          const receipts = sm
+            .getBranch()
+            .filter(
+              (entry) =>
+                entry.type === "custom_message" &&
+                entry.customType === "navigate-tree-rewind",
+            );
+          assert.equal(receipts.length, 1);
+          assert.ok(calls.every((call) => call.text.includes(REQUEST)));
+          assert.equal(
+            sm
+              .getBranch()
+              .some((entry) => sm.getLabel(entry.id) === "anchor:start"),
+            mode === "side-failure",
+          );
+          assert.match(JSON.stringify(receipts), /\/tree|\/compact/);
+          assert.match(
+            JSON.stringify(receipts),
+            /No tool results were withheld/,
+          );
+        });
+      });
+    }
+  });
+}
