@@ -60,7 +60,7 @@ export interface FoldPlanCandidate {
   suggestedLabel: string;
 }
 
-/** What the user confirmed. `focus` is absent when the agent writes it. */
+/** What the user confirmed. An absent focus uses the latest request and open work. */
 export interface FoldPlan {
   anchor: string;
   label: string;
@@ -246,7 +246,7 @@ interface PlanState {
   selected: number;
   /** Labels the user typed, per anchor; every other anchor shows its suggestion. */
   labels: Map<string, string>;
-  /** Kept while switching anchors; absent when the agent writes the focus. */
+  /** Kept while switching anchors; absent when the host supplies the default. */
   focus?: string;
 }
 
@@ -689,7 +689,7 @@ class FoldPlanPanel implements Component, Focusable {
       focus =
         theme.fg("muted", "focus: ") +
         (state.focus === undefined
-          ? "agent writes it"
+          ? "latest request and open work"
           : `“${oneLine(state.focus)}”`);
     }
     const message = this.message();
@@ -747,7 +747,7 @@ async function editPlan(
   let text = state.focus ?? "";
   while (true) {
     const raw = await ctx.ui.editor(
-      "Summary focus: latest instruction, what is done, what remains (empty: the agent decides)",
+      "Summary focus: latest instruction, what is done, what remains (empty: use default)",
       text,
     );
     if (raw === undefined) return;
@@ -757,7 +757,7 @@ async function editPlan(
       return;
     }
     ctx.ui.notify(
-      `That focus has ${focus.length} characters; it needs at least ${deps.minFocusLength}. Add detail, or clear it to let the agent write the focus.`,
+      `That focus has ${focus.length} characters; it needs at least ${deps.minFocusLength}. Add detail, or clear it to use the latest request and open work.`,
       "warning",
     );
     text = raw;

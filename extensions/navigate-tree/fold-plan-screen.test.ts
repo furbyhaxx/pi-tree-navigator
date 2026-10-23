@@ -230,7 +230,7 @@ describe("fold plan screen", () => {
       assert.match(plan, /label impl-start-folded/);
       assert.match(plan, /~90\.0k → ~30\.0k tok of 372k \(8\.1%\)/);
       assert.match(plan, new RegExp(`in-context via ${MODEL}`));
-      assert.match(plan, /focus: agent writes it/);
+      assert.match(plan, /focus: latest request and open work/);
       const rows = plan.split("\n");
       assert.ok(
         rows.findIndex((line) => line.includes("→ ◆ impl-start")) >
@@ -430,7 +430,7 @@ describe("fold plan screen", () => {
     );
   });
 
-  it("refuses a label that is taken or not kebab-case, and an empty focus lets the agent write it", async () => {
+  it("refuses a label that is taken or not kebab-case, and an empty focus uses the default", async () => {
     const h = harness({
       answers: { inputs: ["start", "x".repeat(60), ""], editors: [""] },
     });
@@ -439,7 +439,7 @@ describe("fold plan screen", () => {
       async (screen) => screen.handleInput("e"),
       async (screen) => {
         assert.match(h.view(screen), /label impl-start-folded/);
-        assert.match(h.view(screen), /focus: agent writes it/);
+        assert.match(h.view(screen), /focus: latest request and open work/);
         screen.handleInput(ESC);
       },
     );

@@ -2124,10 +2124,8 @@ export function priceFoldCandidates(
 ): FoldCandidatePrice[] {
   const contextWindow = input.model?.contextWindow ?? 0;
   const beforeTokens = estimateAdmissionTokens(sm);
-  const placeholder = foldPlaceholderSummary(
-    foldSummaryPlaceholderTokens(input.model?.maxTokens),
-  );
   const reduceOut = summarizerReduceTokens(input.model);
+  const placeholder = foldPlaceholderSummary(reduceOut);
   const leafId = sm.getLeafId();
   return collectActiveAnchors(sm).map((anchor) => {
     const suggestedLabel = input.suggestLabel(anchor.name);
