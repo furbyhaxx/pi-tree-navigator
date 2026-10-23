@@ -154,7 +154,8 @@ type Request = Parameters<FoldSummaryRunner["complete"]>[0];
 
 const DEFAULT_MAX_CALLS = 16;
 const DEFAULT_MAP_OUTPUT_TOKENS = 3000;
-const DEFAULT_REDUCE_OUTPUT_TOKENS = 8000;
+/** Output allowance shared by the summarizer and prospective fold previews. */
+export const DEFAULT_REDUCE_OUTPUT_TOKENS = 8000;
 const DEFAULT_CHUNK_INPUT_TOKENS = 120_000;
 const HEADROOM_TOKENS = 4096;
 // Covers a note's or chunk's label line and the per-message role framing.
