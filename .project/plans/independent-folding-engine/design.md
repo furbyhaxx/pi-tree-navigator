@@ -77,11 +77,11 @@ Safe points:
 | Unit | Scope | Status |
 |---|---|---|
 | U1 | `fold-summarizer.ts` | merged |
-| U5 | unified admission estimate | in progress |
-| U2 | extract `commitFold` from `completeRewind`, behavior unchanged | next |
-| U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | next |
-| U4a | rewind tool on the engine; delete the in-band summary turn | later |
-| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | later |
+| U5 | unified admission estimate | merged |
+| U2 | extract `commitFold` from `completeRewind`, behavior unchanged | in progress |
+| U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | merged |
+| U4a | rewind tool on the engine; delete the in-band summary turn | next |
+| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI module in progress; wiring with U4a |
 | U4c | auto controller executes through the engine | later |
 | U4d | overflow and guard-abort recovery through the engine | later |
 | U6 | live acceptance: refused full window, pre-compaction anchor, auto fold, TUI | later |
