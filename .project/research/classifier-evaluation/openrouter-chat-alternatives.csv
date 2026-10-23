@@ -1,0 +1,11 @@
+model_id,provider,provider_slug,context_tokens,structured_outputs_supported_on_route,prompt_usd_per_million,completion_usd_per_million,request_price_field,latency_last_30m,throughput_last_30m
+"openai/gpt-6-luna","OpenAI","openai/flex",1050000,true,0.05,0.25,none,null,null
+"openai/gpt-6-luna","OpenAI","openai",1050000,true,0.1,0.5,none,null,null
+"openai/gpt-6-luna","Azure","azure",1050000,true,0.1,0.5,none,null,null
+"openai/gpt-6-luna","Azure","azure/us",1050000,true,0.11,0.55,none,null,null
+"openai/gpt-6-luna","Azure","azure/eu",1050000,true,0.11,0.55,none,null,null
+"openai/gpt-6-luna","Amazon Bedrock","amazon-bedrock/us-east-1",1050000,true,0.11,0.55,none,null,null
+"openai/gpt-6-luna","OpenAI","openai/fast",1050000,true,0.2,1.0,none,null,null
+"google/gemini-2.5-flash-lite","Google AI Studio","google-ai-studio/flex",1048576,true,0.05,0.2,none,null,null
+"google/gemini-2.5-flash-lite","Google AI Studio","google-ai-studio",1048576,true,0.1,0.4,none,null,null
+"google/gemini-2.5-flash-lite","Google AI Studio","google-ai-studio/priority",1048576,true,0.18,0.72,none,null,null
