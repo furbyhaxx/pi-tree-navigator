@@ -1341,7 +1341,7 @@ describe("continuity config", () => {
   const warnInvalidCapture = (which: "global" | "project", path: string) =>
     `navigate_tree: invalid continuity.capture in ${which} config at ${path} — expected true or false; falling back to the other layer's valid value, else the default true.`;
   const warnInvalidClassifier = (which: "global" | "project", path: string) =>
-    `navigate_tree: invalid continuity.intentClassifier in ${which} config at ${path} — expected "provider/id" of a classifier model or a disable sentinel (null, false, "off", "disabled"); falling back to the other layer's valid value, else off (heuristics only).`;
+    `navigate_tree: invalid continuity.intentClassifier in ${which} config at ${path} — expected "recommended", "provider/id" of a classifier model, an object policy or a disable sentinel (null, false, "off", "disabled"); falling back to the other layer's valid value, else off (heuristics only).`;
 
   async function load(
     global: unknown,
@@ -1406,6 +1406,100 @@ describe("continuity config", () => {
       continuity: { capture: true, intentClassifier: CLASSIFIER },
       warnings: [],
     });
+  });
+
+  for (const spelling of ["recommended", " Recommended ", "RECOMMENDED"]) {
+    it(`${JSON.stringify(spelling)} selects the recommended policy, in either key spelling`, async () => {
+      for (const key of ["intentClassifier", "intent_classifier"]) {
+        assert.deepEqual(await load({ continuity: { [key]: spelling } }), {
+          continuity: { capture: true, intentClassifier: "recommended" },
+          warnings: [],
+        });
+      }
+    });
+  }
+
+  it("the recommended policy layers like a model: project overrides global, off disables it", async () => {
+    assert.deepEqual(
+      await load(
+        { continuity: { intentClassifier: CLASSIFIER } },
+        { continuity: { intentClassifier: "recommended" } },
+      ),
+      {
+        continuity: { capture: true, intentClassifier: "recommended" },
+        warnings: [],
+      },
+    );
+    assert.deepEqual(
+      await load(
+        { continuity: { intentClassifier: "recommended" } },
+        { continuity: { intentClassifier: "off" } },
+      ),
+      {
+        continuity: { capture: true, intentClassifier: null },
+        warnings: [],
+      },
+    );
+  });
+
+  it("an object policy is validated and carried as canonical JSON text, in either key spelling", async () => {
+    const policy = {
+      supersession: { escalation: { model: null } },
+      preset: "recommended",
+      minConfidence: 0.8,
+    };
+    const canonical = JSON.stringify({
+      preset: "recommended",
+      minConfidence: 0.8,
+      supersession: { escalation: { model: null } },
+    });
+    for (const key of ["intentClassifier", "intent_classifier"]) {
+      assert.deepEqual(await load({ continuity: { [key]: policy } }), {
+        continuity: { capture: true, intentClassifier: canonical },
+        warnings: [],
+      });
+    }
+  });
+
+  it("a project object replaces the global value as a whole, never field by field", async () => {
+    const out = await load(
+      {
+        continuity: {
+          intentClassifier: { preset: "recommended", minConfidence: 0.9 },
+        },
+      },
+      { continuity: { intentClassifier: { kind: { model: "acme/judge" } } } },
+    );
+    assert.equal(
+      out.continuity.intentClassifier,
+      JSON.stringify({ kind: { model: "acme/judge" } }),
+    );
+  });
+
+  it("an invalid object warns once per layer with each field problem, and falls back like any invalid value", async () => {
+    const out = await load(
+      { continuity: { intentClassifier: CLASSIFIER } },
+      {
+        continuity: {
+          intentClassifier: {
+            minConfidence: 2,
+            kind: { model: "nope" },
+            surprise: true,
+          },
+        },
+      },
+    );
+    assert.deepEqual(out, {
+      continuity: { capture: true, intentClassifier: CLASSIFIER },
+      warnings: [
+        `navigate_tree: invalid continuity.intentClassifier in project config at ${PROJECT_PATH} — continuity.intentClassifier.surprise is not a field; continuity.intentClassifier.minConfidence must be a number above 0 up to 1; continuity.intentClassifier.kind.model must be "provider/id" or null; falling back to the other layer's valid value, else off (heuristics only).`,
+      ],
+    });
+    const alone = await load({
+      continuity: { intentClassifier: { heuristics: false } },
+    });
+    assert.equal(alone.continuity.intentClassifier, null);
+    assert.match(alone.warnings[0] ?? "", /has no source for the intent kind/);
   });
 
   for (const sentinel of [null, false, "off", " OFF ", "disabled"]) {

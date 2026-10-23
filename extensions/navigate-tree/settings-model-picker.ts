@@ -14,14 +14,18 @@ import {
   type ModelThinkingLevel,
 } from "@earendil-works/pi-ai";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { parseClassifierModel } from "./continuity-capture.ts";
 import { type FrameRow, sanitizeTerminalText, selectFrame } from "./frame.ts";
+import {
+  parseClassifierModel,
+  RECOMMENDED_INTENT_CLASSIFIER,
+  RECOMMENDED_POLICY,
+} from "./intent-policy.ts";
 import { parseProposalModel } from "./proposal-options.ts";
 
 /** What is being picked: a chat model with thinking, or a classifier model. */
 export interface SettingsModelPickerOptions {
   kind: "model" | "classifier";
-  /** The configured value: a selector, `current`, or null for a disabled classifier. */
+  /** The configured value: a selector, `current`, `recommended` (classifier), or null for a disabled classifier. */
   current: string | null;
 }
 
@@ -81,12 +85,18 @@ function classifierSelector(provider: string, id: string): string | undefined {
     : undefined;
 }
 
+/** An object policy arrives as its canonical JSON text. */
+const isObjectPolicy = (current: string | null): current is string =>
+  current?.startsWith("{") === true;
+
 function configuredModel(
   kind: SettingsModelPickerOptions["kind"],
   current: string | null,
 ): Configured | undefined {
   if (current === null || current === "current") return undefined;
-  if (kind === "classifier") return parseClassifierModel(current);
+  if (kind === "classifier") {
+    return isObjectPolicy(current) ? undefined : parseClassifierModel(current);
+  }
   try {
     return parseProposalModel(current);
   } catch {
@@ -236,6 +246,42 @@ function buildChoices(
           pick: async () => null,
         };
 
+  const recommended: Choice[] =
+    kind === "classifier"
+      ? [
+          {
+            row: {
+              label: RECOMMENDED_INTENT_CLASSIFIER,
+              labelHint: `${RECOMMENDED_POLICY.classifier}, then ${RECOMMENDED_POLICY.escalation} for replacements`,
+            },
+            selected: current === RECOMMENDED_INTENT_CLASSIFIER,
+            pick: async () => RECOMMENDED_INTENT_CLASSIFIER,
+          },
+        ]
+      : [];
+
+  const objectPolicy: Choice[] =
+    kind === "classifier" && isObjectPolicy(current)
+      ? [
+          {
+            row: {
+              label: "object policy",
+              labelHint: "configured; edit the settings file to change it",
+              value: SELECTED,
+              tone: "success",
+            },
+            selected: true,
+            pick: async () => {
+              ctx.ui.notify(
+                "continuity.intentClassifier is an object policy; edit it in the settings file.",
+                "warning",
+              );
+              return undefined;
+            },
+          },
+        ]
+      : [];
+
   const models = ordered.map((entry): Choice => {
     const selected = isConfigured(entry);
     return {
@@ -278,12 +324,20 @@ function buildChoices(
     selected: false,
     pick: () => promptCustom(ctx, kind),
   };
-  return [sentinel, ...unlisted, ...models, custom];
+  return [
+    sentinel,
+    ...recommended,
+    ...objectPolicy,
+    ...unlisted,
+    ...models,
+    custom,
+  ];
 }
 
 /**
  * Let the user choose a model for a setting. Resolves with `current` to follow
- * the session model, null for a disabled classifier, an exact
+ * the session model, null for a disabled classifier, `recommended` for the
+ * benchmarked classifier policy, an exact
  * `provider/id:thinking` selector (model) or `provider/id` (classifier), and
  * undefined when the user cancels. The session's model and thinking level are
  * never changed and no provider is called.
