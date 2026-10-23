@@ -8168,7 +8168,7 @@ describe("automatic start anchor (#55)", () => {
   });
 });
 
-describe("README: history-mirroring providers (#90)", () => {
+describe("README: history-mirroring providers", () => {
   const readme = readFileSync(
     new URL("../../README.md", import.meta.url),
     "utf8",
@@ -8178,53 +8178,32 @@ describe("README: history-mirroring providers (#90)", () => {
     assert.doesNotMatch(readme, /paused Claude Code query/);
   });
 
-  it("says the #90 flow is untested on history-mirroring providers", () => {
+  it("marks independent summary calls as untested on mirroring providers", () => {
     assert.match(
       readme,
-      /instruction message and its hidden re-sends \(#90\) are untested on history-mirroring providers/,
+      /Independent summary calls\.\*\* Registry side requests and chunked evidence are unverified on this history-mirroring provider/,
     );
   });
 });
 
-describe("README: rewind-driven compaction naming (#101)", () => {
+describe("README: independent overflow recovery", () => {
   const readme = readFileSync(
     new URL("../../README.md", import.meta.url),
     "utf8",
   );
 
-  it("says 'overflow recovery' only inside the quoted final error", () => {
-    const lines = readme
-      .split("\n")
-      .filter((line) => /overflow recovery/i.test(line));
-    assert.ok(lines.length > 0);
-    for (const line of lines) {
-      assert.ok(
-        line.startsWith(
-          "[navigate_tree] Context overflow recovery failed: <reason>.",
-        ),
-        line,
-      );
-    }
+  it("documents recovery without forced rewinds or withheld tool results", () => {
+    assert.match(readme, /### Independent overflow recovery/);
+    assert.doesNotMatch(readme, /rewind-driven compaction/);
+    assert.doesNotMatch(readme, /withheld notice/);
+    assert.doesNotMatch(readme, /only rewind is allowed until it lands/);
   });
 
-  it("documents the either-or error and the D8 text byte-exact", () => {
-    assert.ok(readme.includes(REWIND_COMPACTION_OFF_TEXT));
-    assert.ok(readme.includes(buildRewindCompactionFailedText("<reason>")));
+  it("documents the failure receipt instead of a forced-rewind gate", () => {
     assert.ok(
-      readme.includes(
-        buildReserveOrderWarning(10000, 16384, "anthropic/claude-haiku-5-5"),
-      ),
+      readme.includes("Request stopped before generation: estimated input"),
     );
-    assert.ok(readme.includes(buildWithheldNoticeText(19_000)));
-    assert.ok(
-      readme.includes(
-        buildForcedRewindText(
-          100_000,
-          2,
-          "Active anchors (root → leaf, % of 100k):\n   4.1%  start\n  12.0%  context-gathered",
-        ),
-      ),
-    );
+    assert.match(readme, /actionable receipt instead of an unbounded retry/);
   });
 });
 

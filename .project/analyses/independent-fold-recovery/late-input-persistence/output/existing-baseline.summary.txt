@@ -1,0 +1,87 @@
+# repo index.test.ts unchanged, scratch copy, baseline
+ℹ tests 368
+ℹ pass 329
+ℹ fail 39
+# failing tests (names)
+  ✖ a fold that landed under a forced rewind is marked forced and not nudged after a text-only turn
+✖ a fold that landed under a forced rewind is marked forced and not nudged after a text-only turn
+  ✖ a forced rewind whose fold fails ends with the failed receipt plus D8, the run ends
+✖ a forced rewind whose fold fails ends with the failed receipt plus D8, the run ends
+  ✖ a landed rewind lifts the gate (D7); the next overflow is a fresh one (D15)
+✖ a landed rewind lifts the gate (D7); the next overflow is a fresh one (D15)
+  ✖ attempts are hidden and re-sent; the third ends with D8 and lifts the gate
+✖ attempts are hidden and re-sent; the third ends with D8 and lifts the gate
+  ✖ codemode (#103): a forced rewind issued by a script lands like a direct one
+✖ codemode (#103): a forced rewind issued by a script lands like a direct one
+  ✖ codemode (#103): a script with no rewind is a failed forced attempt; the third ends with D8
+✖ codemode (#103): a script with no rewind is a failed forced attempt; the third ends with D8
+  ✖ codemode (#103, C): refused nested rewinds under forced are not failed attempts
+✖ codemode (#103, C): refused nested rewinds under forced are not failed attempts
+  ✖ codemode (#103): under a forced rewind a script's rewind lands after a blocked sibling nested call
+✖ codemode (#103): under a forced rewind a script's rewind lands after a blocked sibling nested call
+  ✖ codemode (#103): under a forced rewind the top-level codemode call passes; nested non-rewind calls are blocked
+✖ codemode (#103): under a forced rewind the top-level codemode call passes; nested non-rewind calls are blocked
+  ✖ D14: no anchor ends right away, and no start anchor lands on the overflow
+✖ D14: no anchor ends right away, and no start anchor lands on the overflow
+  ✖ D16: a run that settles mid-gate lifts it with one D8 row (aborted, or ended)
+✖ D16: a run that settles mid-gate lifts it with one D8 row (aborted, or ended)
+  ✖ D16: Esc between turns (agent_before_settle, aborted) ends a forced rewind with one D8 row (#101)
+✖ D16: Esc between turns (agent_before_settle, aborted) ends a forced rewind with one D8 row (#101)
+  ✖ D16: Esc during the turn of a queued forced rewind cancels its fold and adds one D8 row (#101)
+✖ D16: Esc during the turn of a queued forced rewind cancels its fold and adds one D8 row (#101)
+  ✖ D16: Esc on a forced attempt hides it and ends the gate with one D8 row (#101)
+✖ D16: Esc on a forced attempt hides it and ends the gate with one D8 row (#101)
+  ✖ D16 (fix 6): agent_settled reads Esc from the last reply, not only the event flag
+✖ D16 (fix 6): agent_settled reads Esc from the last reply, not only the event flag
+  ✖ D17: the hint stays quiet during the forced rewind
+✖ D17: the hint stays quiet during the forced rewind
+  ✖ documents the either-or error and the D8 text byte-exact
+✖ documents the either-or error and the D8 text byte-exact
+  ✖ does not retry an output-only request that the payload hook cannot safely cap
+✖ does not retry an output-only request that the payload hook cannot safely cap
+✖ failing tests:
+  ✖ gate: only a direct rewind passes; blocked calls terminate the batch
+✖ gate: only a direct rewind passes; blocked calls terminate the batch
+  ✖ keeps tiny results whose withholding notice would grow context
+✖ keeps tiny results whose withholding notice would grow context
+✖ README: history-mirroring providers (#90)
+✖ README: rewind-driven compaction naming (#101)
+  ✖ recovers through the real SDK adapter with an offline provider transport
+✖ recovers through the real SDK adapter with an offline provider transport
+  ✖ reduces an oversized output reservation before withholding tool results
+✖ reduces an oversized output reservation before withholding tool results
+  ✖ refuses withholding when the final forced prompt cannot fit after a model switch
+✖ refuses withholding when the final forced prompt cannot fit after a model switch
+  ✖ reports proposed removals without applying a partial infeasible plan
+✖ reports proposed removals without applying a partial infeasible plan
+  ✖ reprojects proposed withholding when an edit invalidates the usage baseline
+✖ reprojects proposed withholding when an edit invalidates the usage baseline
+  ✖ retries the reported output-reservation failure without hiding history or requiring anchors
+✖ retries the reported output-reservation failure without hiding history or requiring anchors
+✖ rewind-driven compaction (#101)
+  ✖ S4: a per-model compaction reserve sets the target (nothing withheld under it)
+✖ S4: a per-model compaction reserve sets the target (nothing withheld under it)
+  ✖ S6: a second overflow during the forced rewind ends it
+✖ S6: a second overflow during the forced rewind ends it
+  ✖ says 'overflow recovery' only inside the quoted final error
+✖ says 'overflow recovery' only inside the quoted final error
+  ✖ says the #90 flow is untested on history-mirroring providers
+✖ says the #90 flow is untested on history-mirroring providers
+  ✖ session_shutdown (fix 8): the forced rewind is dropped with the session
+✖ session_shutdown (fix 8): the forced rewind is dropped with the session
+  ✖ stops before a forced request when withholding cannot make the input fit
+✖ stops before a forced request when withholding cannot make the input fit
+  ✖ stops once the estimate fits: the older turn's second result is kept (#101)
+✖ stops once the estimate fits: the older turn's second result is kept (#101)
+  ✖ the live shape: the newest result, then the older turn's results, newest first (#101)
+✖ the live shape: the newest result, then the older turn's results, newest first (#101)
+  ✖ the run continuing after a D8 on a turn with tool calls never starts a second forced rewind
+✖ the run continuing after a D8 on a turn with tool calls never starts a second forced rewind
+  ✖ the walk stops at a compaction: nothing above it is withheld (#101)
+✖ the walk stops at a compaction: nothing above it is withheld (#101)
+  ✖ uses the provider input count when the estimated tail is empty
+✖ uses the provider input count when the estimated tail is empty
+  ✖ withholds pre-compaction results only when the canonical projection retains them
+✖ withholds pre-compaction results only when the canonical projection retains them
+  ✖ withholds retained results before a branch summary
+✖ withholds retained results before a branch summary

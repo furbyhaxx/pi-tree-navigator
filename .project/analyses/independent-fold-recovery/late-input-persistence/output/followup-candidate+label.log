@@ -1,0 +1,16 @@
+(node:942529) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.vdIRD4/extensions/navigate-tree/late-input.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.vdIRD4/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+OBS {"scenario":"S6 label retry","fired":true,"receiptStatus":"done","memoryBranchTypes":["message","message","branch_summary","label","custom_message"],"reload":{"branchLength":5,"reachesSummary":true,"contextRoles":["user","assistant","custom","custom"]}}
+▶ FOLLOW-UP label retry (analysis repro)
+  ✔ S6: the anchor label append fails once after its memory push, the host's retry succeeds (18.392004ms)
+✔ FOLLOW-UP label retry (analysis repro) (19.38866ms)
+ℹ tests 1
+ℹ suites 1
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 781.355641

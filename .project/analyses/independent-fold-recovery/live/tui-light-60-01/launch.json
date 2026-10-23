@@ -1,0 +1,86 @@
+{
+  "dryRun": false,
+  "bootstrapPrompt": "Reply READY only; do not fold or call tools",
+  "startedAt": "2026-10-23T18:45:31.389Z",
+  "sourceCommit": "c08d218a4b019ac261039ac8cb204acda32c24a4",
+  "dirtyPaths": [],
+  "scratch": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01/scratch",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01/scratch/workspace",
+  "command": [
+    "env",
+    "PI_CODING_AGENT_DIR=/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01/scratch/agent",
+    "PI_OFFLINE=1",
+    "PI_TELEMETRY=0",
+    "PI_TUI_WRITE_LOG=/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01/terminal.ansi",
+    "FOLD_TUI_OUT=/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01",
+    "FOLD_TUI_LEDGER=/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+    "FOLD_TUI_TARGET=fold-native-light",
+    "FOLD_TUI_MODEL=openai/gpt-6-luna",
+    "pi-bolt",
+    "--offline",
+    "--no-extensions",
+    "--no-context-files",
+    "--no-skills",
+    "--no-prompt-templates",
+    "--no-themes",
+    "-e",
+    "/mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/index.ts",
+    "-e",
+    "/mnt/Projects/furbyhaxx/pi-tree-navigator/scripts/fold-acceptance/tui-observer.ts",
+    "--model",
+    "openrouter/openai/gpt-6-luna",
+    "--thinking",
+    "off",
+    "--tools",
+    "navigate_tree",
+    "--session-dir",
+    "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01/sessions",
+    "--system-prompt",
+    "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Do not modify files. Only fold when explicitly requested by the user.",
+    "--tui-mode",
+    "regular"
+  ],
+  "settings": {
+    "compaction": {
+      "enabled": false
+    },
+    "retry": {
+      "enabled": false,
+      "maxRetries": 0,
+      "provider": {
+        "maxRetries": 0
+      }
+    },
+    "cacheWarming": "off",
+    "defaultThinkingLevel": "off",
+    "quietStartup": true,
+    "enableInstallTelemetry": false,
+    "enableAnalytics": false,
+    "theme": "light",
+    "tuiMode": "regular"
+  },
+  "navigator": {
+    "continuity": {
+      "capture": false,
+      "intentClassifier": null
+    },
+    "auto_navigate": {
+      "enabled": false
+    },
+    "rewindHintReserveTokens": false
+  },
+  "contextWindow": 96000,
+  "maxTokens": 8192,
+  "capUsd": 25,
+  "fixtureTokensWithOverhead": 74983,
+  "ledger": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+  "manual": [
+    "tmux attach -t fold-native-light",
+    "tmux send-keys -t fold-native-light -l '/anchor fold'",
+    "tmux send-keys -t fold-native-light Enter",
+    "Select audit-start, use a fresh label audit-folded and a focus preserving all five audit facts and remaining comparison work; confirm in the real panel.",
+    "tmux capture-pane -p -J -t fold-native-light > '/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01/fold-panel.txt'",
+    "Wait for summary completion, inspect progress captures and the persisted branch_summary, then send /acceptance-stop (Enter).",
+    "Wait for stopped.json and process exit before killing the tmux session. Keep evidence, including any failed run; remove only its scratch directory after shutdown."
+  ]
+}

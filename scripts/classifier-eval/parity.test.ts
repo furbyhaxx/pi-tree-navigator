@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { ClassifierContext } from "@earendil-works/pi-ai";
+import { RETIREMENT_YES } from "../../extensions/navigate-tree/retirement-check.ts";
 import { RECOMMENDED_POLICY } from "../../extensions/navigate-tree/intent-policy.ts";
 import type { Billing, RouteTable } from "./billing.ts";
 import { BudgetLedger } from "./budget.ts";
@@ -363,14 +364,20 @@ describe("comparison with the benchmark", () => {
           answers: { contradicts: { choice: "R1", confidence: 0.92 } },
         }),
       }),
+      // The shipped preset confirms an escalated retirement with a second model.
+      call({
+        answers: { retires: { choice: RETIREMENT_YES, confidence: 0.95 } },
+      }),
     ],
   });
 
-  it("replays the benchmark through the shipped policy and agrees when the live product does the same", async () => {
+  it("cannot replay a recorded retirement the shipped policy now verifies", async () => {
+    // The benchmark predates the retirement-verification stage: its recorded
+    // answers never ask `retires`, so replaying escalated retirements abstains.
     const result = await compareCase(prepared, live(["R1"]), benchmark);
     assert.deepEqual(result.benchmarkVerdicts, [
-      "rule|R1",
-      "rule|R1",
+      "rule|none",
+      "rule|none",
       "rule|none",
     ]);
     assert.deepEqual(result.agreement, {
@@ -378,15 +385,15 @@ describe("comparison with the benchmark", () => {
       microsoftKind: true,
       microsoftContradicts: true,
       lunaContradicts: true,
-      verdictModal: true,
-      verdictAnyRepetition: true,
+      verdictModal: false,
+      verdictAnyRepetition: false,
     });
     assert.equal(result.liveUnsafe, 0);
     assert.equal(result.liveUnsafeAccepted, 0);
     assert.equal(result.benchmarkUnsafeAccepted, 1);
     assert.equal(result.liveExact, true);
-    assert.equal(result.benchmarkUnsafe, 1);
-    assert.equal(result.benchmarkExactRepetitions, 2);
+    assert.equal(result.benchmarkUnsafe, 3);
+    assert.equal(result.benchmarkExactRepetitions, 0);
   });
 
   it("flags a different verdict, a different request and an unsafe live answer", async () => {
@@ -398,7 +405,9 @@ describe("comparison with the benchmark", () => {
       benchmark,
     );
     assert.equal(result.agreement.requestSha256, false);
-    assert.equal(result.agreement.verdictModal, false);
+    // Every recorded repetition abstains without the verification stage, so the
+    // unchecked verdict is the modal one here.
+    assert.equal(result.agreement.verdictModal, true);
     assert.equal(result.agreement.verdictAnyRepetition, true);
     assert.equal(result.agreement.lunaContradicts, null);
     assert.equal(result.liveUnsafe, 1);
@@ -437,8 +446,10 @@ describe("comparison with the benchmark", () => {
     assert.equal(row?.task, "supersession");
     assert.equal(row?.split, "holdout");
     assert.equal(row?.cases, 2);
+    // The recorded benchmark abstains everywhere without the verification stage.
     assert.equal(row?.verdictModal, "1/2");
-    assert.equal(row?.verdictAnyRepetition, "2/2");
+    // Only the live case without a supersession matches a recorded repetition.
+    assert.equal(row?.verdictAnyRepetition, "1/2");
     assert.equal(row?.liveUnsafe, 1);
   });
 });

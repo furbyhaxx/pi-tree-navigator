@@ -208,7 +208,7 @@ import {
   RewindHintTracker,
 } from "./rewind-hint.ts";
 import { clearRuntimeConfig, readRuntimeConfig } from "./runtime-config.ts";
-import { trySessionWrite } from "./session-write.ts";
+import { persistedOnDisk, trySessionWrite } from "./session-write.ts";
 import { createSettingsScreenDeps } from "./settings-screen.ts";
 import {
   appendContinuityBriefing,
@@ -1792,8 +1792,32 @@ export async function commitFold(
         );
       }
     });
-    if (!appended.ok)
-      return refuseWrite("late input could not be written", appended.error);
+    if (!appended.ok) {
+      // Another wrapper can throw after this append reached the file. Keep a
+      // write that is durably there; refuse one that only reached memory.
+      const matched = (appended.appended ?? []).filter((entry) =>
+        late.kind === "custom"
+          ? entry.type === "custom_message" &&
+            entry.customType === late.customType
+          : entry.type === "message" &&
+            entry.message.role === (late.message as { role?: string }).role,
+      );
+      const landed =
+        matched.length > 0 &&
+        persistedOnDisk(
+          sm,
+          matched.map((entry) => entry.id),
+        );
+      if (!landed)
+        return refuseWrite("late input could not be written", appended.error);
+      // Re-branch to the landed entry: the restored cursor would drop it.
+      const keep = appended.appended.at(-1)?.id;
+      try {
+        if (keep) sm.branch(keep);
+      } catch {
+        return refuseWrite("late input could not be kept", appended.error);
+      }
+    }
     reappended++;
   }
   // The branch has landed: every step below is guarded so the

@@ -828,6 +828,17 @@ function parseLayerRoot(where: string, root: unknown): LayerLoadResult {
       `navigate_tree: invalid treeProposal in ${where} — ${parsed.layer.proposal.error}; model proposals are blocked until this is corrected.`,
     );
   }
+  const autoRoot =
+    (root as Record<string, unknown>).auto_navigate ??
+    (root as Record<string, unknown>).autoNavigate;
+  if (
+    typeof autoRoot === "object" &&
+    autoRoot !== null &&
+    "controller_model" in (autoRoot as Record<string, unknown>)
+  )
+    warnings.push(
+      `navigate_tree: auto_navigate.controller_model in ${where} was removed and is ignored — set auto_navigate.milestone to "recommended" or explicit classifier/confirmer stages.`,
+    );
   if (parsed.layer.autoNavigate?.kind === "invalid") {
     warnings.push(
       `navigate_tree: invalid auto_navigate in ${where} — ${parsed.layer.autoNavigate.error}; auto_navigate is disabled for this session.`,

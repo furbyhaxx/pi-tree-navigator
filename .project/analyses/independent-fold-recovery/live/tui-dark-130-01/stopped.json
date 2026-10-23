@@ -1,0 +1,42 @@
+{
+  "reason": "acceptance-stop",
+  "session": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-dark-130-01/sessions/2026-10-23T18-28-13-490Z_01a16a05-4831-7572-a415-46f0e1701cdd.jsonl",
+  "calls": 2,
+  "sideCalls": 1,
+  "budget": {
+    "limitUsd": 25,
+    "spentUsd": 0.702751211,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 24.031170886
+  },
+  "branch": [
+    {
+      "id": "892a7145",
+      "type": "model_change"
+    },
+    {
+      "id": "5a587b84",
+      "type": "thinking_level_change"
+    },
+    {
+      "id": "93f0e02a",
+      "type": "message"
+    },
+    {
+      "id": "9551b6c1",
+      "type": "message"
+    },
+    {
+      "id": "489937bd",
+      "type": "branch_summary"
+    },
+    {
+      "id": "a166a55e",
+      "type": "label"
+    },
+    {
+      "id": "eb1bb954",
+      "type": "custom_message"
+    }
+  ]
+}

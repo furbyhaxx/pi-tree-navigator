@@ -1,0 +1,140 @@
+(node:943058) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+OBS {"scenario":{"fileBacked":false,"late":["user"]},"ok":true,"reappended":1,"lateExpected":1,"reason":null,"noteInContinuation":true,"receiptAppended":true,"memoryTail":["branch_summary","label","user:LATE(d38bf502)","custom:navigate-tree-rewind"],"originalLateOnActiveBranch":[false],"agentMessagesTail":["assistant:[{\"type\":\"text\",\"text\":\"a1\"}]","custom:\"# Work handoff: end\\n\\n## Goal\\nTest the rewind","user:[{\"type\":\"text\",\"text\":\"LATE REQUEST: also bump "]}
+OBS {"scenario":{"fileBacked":false,"mode":"pre-push","kind":"user","late":["user"]},"ok":true,"reappended":0,"lateExpected":1,"reason":null,"noteInContinuation":false,"receiptAppended":true,"memoryTail":["branch_summary","label","custom:navigate-tree-rewind"],"originalLateOnActiveBranch":[false],"agentMessagesTail":["user:[{\"type\":\"text\",\"text\":\"u1\"}]","assistant:[{\"type\":\"text\",\"text\":\"a1\"}]","custom:\"# Work handoff: end\\n\\n## Goal\\nTest the rewind"]}
+OBS {"scenario":{"fileBacked":false,"mode":"pre-push","kind":"user","late":["user","custom"]},"ok":true,"reappended":1,"lateExpected":2,"reason":null,"noteInContinuation":true,"receiptAppended":true,"memoryTail":["branch_summary","label","custom:subagent-result","custom:navigate-tree-rewind"],"originalLateOnActiveBranch":[false,false],"agentMessagesTail":["assistant:[{\"type\":\"text\",\"text\":\"a1\"}]","custom:\"# Work handoff: end\\n\\n## Goal\\nTest the rewind","custom:\"subagent finished\""]}
+OBS {"scenario":"S5 host path","status":"done","reappendedLateMessages":1,"continueFlag":true,"receiptSaysRetainedAreHistorical":true,"receiptTail":"nding instructions still apply.\n\nThe message between the branch_summary and this one arrived while the rewind was pending — it is new and still unanswered; handle it now.","activeBranchUserRequestPresent":false,"memoryTail":["branch_summary","label","custom:subagent-result","custom:navigate-tree-rewind"]}
+OBS {"scenario":{"fileBacked":true,"mode":"disk-persistent","kind":"user","late":["user"]},"ok":true,"reappended":0,"lateExpected":1,"reason":null,"noteInContinuation":false,"receiptAppended":false,"memoryTail":["branch_summary","label","user:LATE(d1464db7)","custom:navigate-tree-rewind"],"originalLateOnActiveBranch":[false],"agentMessagesTail":["assistant:[{\"type\":\"text\",\"text\":\"a1\"}]","custom:\"# Work handoff: end\\n\\n## Goal\\nTest the rewind","user:[{\"type\":\"text\",\"text\":\"LATE REQUEST: also bump "],"reload":{"branchLength":4,"reachesSummary":true,"reachesAnchor":true,"lateOnActiveBranch":[false],"lateCopyOnActiveBranch":false,"contextRoles":["user","assistant","custom"]}}
+OBS {"scenario":{"fileBacked":true,"mode":"disk-transient","kind":"user","late":["user","custom"]},"ok":true,"reappended":1,"lateExpected":2,"reason":null,"noteInContinuation":true,"receiptAppended":true,"memoryTail":["branch_summary","label","user:LATE(4ee5cf9b)","custom:subagent-result","custom:navigate-tree-rewind"],"originalLateOnActiveBranch":[false,false],"agentMessagesTail":["custom:\"# Work handoff: end\\n\\n## Goal\\nTest the rewind","user:[{\"type\":\"text\",\"text\":\"LATE REQUEST: also bump ","custom:\"subagent finished\""],"reload":{"branchLength":2,"reachesSummary":false,"reachesAnchor":false,"lateOnActiveBranch":[false,false],"lateCopyOnActiveBranch":false,"contextRoles":["custom","custom"]}}
+OBS {"scenario":{"fileBacked":true,"mode":"disk-persistent","kind":"custom","late":["user","custom"]},"ok":true,"reappended":1,"lateExpected":2,"reason":null,"noteInContinuation":true,"receiptAppended":false,"memoryTail":["branch_summary","label","user:LATE(bf646baf)","custom:subagent-result","custom:navigate-tree-rewind"],"originalLateOnActiveBranch":[false,false],"agentMessagesTail":["custom:\"# Work handoff: end\\n\\n## Goal\\nTest the rewind","user:[{\"type\":\"text\",\"text\":\"LATE REQUEST: also bump ","custom:\"subagent finished\""],"reload":{"branchLength":5,"reachesSummary":true,"reachesAnchor":true,"lateOnActiveBranch":[false,false],"lateCopyOnActiveBranch":true,"contextRoles":["user","assistant","custom","user"]}}
+▶ late-input persistence (analysis repro)
+  ✔ S0 control: no failure lands the fold and re-appends the request (7.946948ms)
+  ✖ S1 DECISIVE: one late user append throws before any memory change (existing test's injection) (1.878437ms)
+  ✖ S1b: the throw hits the user request, a later custom entry still lands (1.290186ms)
+  ✖ S5 host path: queued fold at turn_end; the late user steer append throws after the branch landed (11.048328ms)
+  ✖ S2: real SDK, disk fails (EACCES) on the late user append and stays failed (2.857513ms)
+  ✖ S3: real SDK, one late append fails (EACCES), later appends succeed (2.060344ms)
+  ✖ S4: real SDK, late custom entry append fails (EACCES) and stays failed (1.9829ms)
+✖ late-input persistence (analysis repro) (30.510859ms)
+ℹ tests 7
+ℹ suites 1
+ℹ pass 1
+ℹ fail 6
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1017.661911
+
+✖ failing tests:
+
+test at extensions/navigate-tree/late-input.test.ts:13232:3
+✖ S1 DECISIVE: one late user append throws before any memory change (existing test's injection) (1.878437ms)
+  AssertionError [ERR_ASSERTION]: ok:true but reappended=0 of 1 late entries
+  
+  0 !== 1
+  
+      at assertNoSilentLoss (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13169:14)
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13239:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at extensions/navigate-tree/late-input.test.ts:13242:3
+✖ S1b: the throw hits the user request, a later custom entry still lands (1.290186ms)
+  AssertionError [ERR_ASSERTION]: ok:true but reappended=1 of 2 late entries
+  
+  1 !== 2
+  
+      at assertNoSilentLoss (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13169:14)
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13249:5)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at extensions/navigate-tree/late-input.test.ts:13252:3
+✖ S5 host path: queued fold at turn_end; the late user steer append throws after the branch landed (11.048328ms)
+  AssertionError [ERR_ASSERTION]: receipt says done while the late user request is off the active branch
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13294:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'done',
+    expected: 'done',
+    operator: 'notStrictEqual',
+    diff: 'simple'
+  }
+
+test at extensions/navigate-tree/late-input.test.ts:13301:3
+✖ S2: real SDK, disk fails (EACCES) on the late user append and stays failed (2.857513ms)
+  AssertionError [ERR_ASSERTION]: ok:true but reappended=0 of 1 late entries
+  
+  0 !== 1
+  
+      at assertNoSilentLoss (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13169:14)
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13309:7)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at extensions/navigate-tree/late-input.test.ts:13315:3
+✖ S3: real SDK, one late append fails (EACCES), later appends succeed (2.060344ms)
+  AssertionError [ERR_ASSERTION]: ok:true but reappended=1 of 2 late entries
+  
+  1 !== 2
+  
+      at assertNoSilentLoss (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13169:14)
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13323:7)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at extensions/navigate-tree/late-input.test.ts:13329:3
+✖ S4: real SDK, late custom entry append fails (EACCES) and stays failed (1.9829ms)
+  AssertionError [ERR_ASSERTION]: ok:true but reappended=1 of 2 late entries
+  
+  1 !== 2
+  
+      at assertNoSilentLoss (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13169:14)
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/late-input-persistence/.scratch.4mXkwX/extensions/navigate-tree/late-input.test.ts:13337:7)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

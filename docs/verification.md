@@ -1,196 +1,177 @@
-# Verification — CI gates, independent review, offline gates, live proof
+# Verification
 
-This is the verification checklist `/impl` looks for: what CI proves on every PR, how independent review works in this repo, the offline gates every change runs, and what must be proven live for which change type. It composes the repo's authoritative sources — `.github/workflows/*`, README “Development” and “Live summary verification”, `scripts/` — into one file. If a needed signal is missing here, that is a docs gap: add it in the same PR that needed it.
+Verification follows the behavior changed. Unit tests establish deterministic contracts;
+SDK-loop tests establish lifecycle integration; real-provider calls establish observed
+transport and model behavior; terminal tests establish interactive behavior. None replaces
+the others.
 
-## 1. How to use this file
+## Offline gates
 
-1. Identify your change type in §5 and note its live-proof row.
-2. Run the offline gates (§4) locally in your worktree.
-3. Push and confirm CI is green (§2) on the exact head SHA.
-4. Get independent review (§3) — verdicts recorded on that SHA, fresh instances for fixes.
-5. Prove live (§5) whenever the change type has a live surface — real output, never a substitute.
-6. Close out (§6): evidence in the PR body, kanban + vault updated, PR left **draft** (merge is the owner's call).
+From a dependency-installed checkout:
 
-## 2. CI gates
-
-PR checks (`.github/workflows/ci.yml`, `validate-package-version.yml`, `validate-release-pr.yml`):
-
-| Check | What it proves |
-|---|---|
-| `test (ubuntu-latest)` | Matrix job: `biome check extensions/` (lint), `tsc --noEmit` (typecheck), `node --test extensions/**/*.test.ts` (full suite). Node 24 + pnpm 11, `pnpm install --frozen-lockfile`. Ubuntu-only since #57 — the package is platform-neutral (no native deps, no `process.platform` branches) and local development is macOS, so every local gate already covers that OS. |
-| `validate` (Validate Package Version) | `cad0p/semver-calver-release/validate-package-version` — feature PRs must **not** bump `package.json` version; release PRs (`release/from-v*`) own it. |
-| `validate` (Validate Release PR) | `cad0p/semver-calver-release/validate-release-pr` — release-PR shape only; green/skip on ordinary PRs. |
-
-How to read checks:
-
-```bash
-gh pr checks <pr>            # one line per check: pass / fail / pending / skipping
-gh pr checks <pr> --watch    # wait until all checks settle
-gh run view <run-id> --log   # full log when something is red
+```sh
+node_modules/.bin/tsc --noEmit
+node_modules/.bin/biome check extensions/ scripts/
+node --test extensions/navigate-tree/*.test.ts scripts/classifier-eval/*.test.ts scripts/fold-acceptance/*.test.ts
+node scripts/pi-upstream-probe.mjs
 ```
 
-Anything other than a pass (or a legitimate path-gated skip) is a blocker: fix on the branch and re-verify — a review verdict applies to the commit it reviewed, so a new push needs a fresh pass (§3).
+The npm scripts also support `pnpm test`, `pnpm run lint` and `pnpm run typecheck` when
+pnpm is available. Do not change the package version or changelog outside a release.
+Run focused tests during implementation, then the combined gate before delivery.
 
-**Not a PR gate:** `Pi Upstream Probe` (`.github/workflows/pi-upstream-probe.yml`) runs on a daily schedule / `workflow_dispatch` only. It daily-probes upstream `@earendil-works/pi-coding-agent` for the remaining reflection points the extension depends on (`AgentSession.prototype.prompt`, `agent.state.messages`, `AgentSession._extensionRunner` for the #79 `session_tree` emit) and the #80 turn-boundary ordering (the loop awaits `finishTurn` / the `turn_end` dispatch before draining steering messages); on failure it files an alarm per `scripts/alarm-body.md`. It also asserts the extension's **runtime import surface**: every runtime named import in the extension source files (excluding `*.test.ts`) from `@earendil-works/pi-coding-agent`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`, and `typebox` must exist on the package entry resolved under `PROBE_NODE_MODULES` (or, when that is unset, the repo's own `node_modules`) — so a removed export (e.g. pi 1.0.0 dropping `estimateContextTokens`) fails the probe instead of surfacing as a runtime error. Run `node scripts/pi-upstream-probe.mjs` locally when touching the reflection bootstrap or bumping the peer floor — a red probe is a real signal about upstream drift, not a PR blocker by itself.
+Tests must protect behavior, not obsolete implementation details. Historical in-band
+sessions remain readable, but new folds do not write a summary-request message, freeze
+the main request, withhold results or require a rewind-only tool turn.
 
-## 3. Independent review protocol
+## Independent review
 
-Every change gets an independent verdict from an agent that did **not** author it (orchestrator spawns the reviewer; implementation subagents never review their own work):
+Use a reviewer who did not author the changes. Cover:
 
-1. **Functional/correctness review** — does it do what the issue/plan says; are the tests real and meaningful; boundaries and failure paths.
-2. **Adversarial lens** — break it: mutation-test byte-exact string pins (reorder, single-char drift, added/removed period, changed length must fail), probe off-by-one ranges, invalid/absent config layers, `null`/`undefined` API returns, throw paths, tool-inactive gating, and copy drift against the issue's pinned strings.
-3. **Pi-api lens** — for code touching pi APIs: signatures typecheck against the locked `@earendil-works/*` devDependency **and** the semantics hold on the host runtime version (the repo is a pi extension; local types can lag the host `pi`). Check `dist` sources, not just `.d.ts`.
+- Correctness: source preservation, request preservation, budgets, state transitions,
+  failure and cancellation paths.
+- Adversarial cases: stale snapshots, late messages, reused tool IDs, malformed policies,
+  unavailable models, provider failures and partial persistence.
+- Pi integration: signatures against locked packages and lifecycle behavior against
+  installed SDK code, including real local-provider loop tests.
 
-Rules:
+Reproduce findings before accepting them. Recheck affected findings after fixes; record
+which commit was reviewed. A reviewer agreeing with a design is not runtime evidence.
 
-- Findings must be **reproduced** before reporting: a failing command, a mutated test, a quoted line, or a reverted-fix test.
-- Each reviewer records its own findings + verdict (e.g. `functional: FINDINGS @ <sha>`, `adversarial: CLEAN @ <sha>`) and the PR records all verdicts against the same SHA.
-- Any commit pushed after a verdict needs a fresh verify pass by every lens whose scope it touched, seeded with that lens's findings.
-- Triage every finding: fix-now / defer (with a tracked issue + vault note) / decline (with rationale). Blockers and majors are never deferred.
-- Trust but verify: an agent's summary is intent, not outcome — the orchestrator reads the actual diff before reporting work as done.
+## Independent fold contracts
 
-## 4. Offline gates
+- Manual, agent, automatic and recovery entrypoints use the same engine and commit
+  preview. Manual folding makes side calls without asking the main agent to initiate it.
+- A queued request runs after the current tool batch, including sibling and nested calls.
+  The retired sole-tool-call and first-nested-call restrictions must not return.
+- Strategy A reuses the effective system/tool messages and current projected context
+  only when the complete summary request fits. Strategy B covers the selected evidence
+  with bounded map/reduce calls; oversized records are split, not silently truncated.
+- Record coverage, per-call output limits, reduction bounds, cancellation and total call
+  limits are tested. A provider error must not create an unlimited fallback loop.
+- Both strategies use current context edits while excluding input after the fold cut.
+- The exact materialized handoff, full-mode child reports, continuity briefing, active
+  user request, late input and continuation are included in the projected budget.
+- Non-reducing or over-budget materialization refuses before branching. Pre-compaction
+  targets are priced honestly rather than clamped to the newer compacted baseline.
+- Still-open user requests survive even when the summarizer omits them. Tool calls and
+  notifications do not count as final answers. Completed requests are not resurrected;
+  preserved requests are not recursively duplicated in child handoffs.
+- Stale branch/model/configuration state is rejected after asynchronous work. No
+  incomplete tool envelopes or invented tool results are accepted. Native summaries
+  discharge tool calls only through real completion evidence in their archived ancestry.
+- A successful commit refreshes agent messages and emits the history-rewrite event.
+  Persistence failures must distinguish precommit refusal from an already-written fold.
 
-Run in the worktree (all must be green before push):
+## Recovery through the real SDK loop
 
-```bash
-pnpm install --frozen-lockfile
-pnpm test            # node --test extensions/**/*.test.ts (offline; DI stubs, no LLM calls)
-pnpm run lint        # biome check extensions/
-pnpm run typecheck   # tsc --noEmit
-node scripts/pi-upstream-probe.mjs   # extra: reflection-surface probe (not a CI gate)
+`preflight-recovery.test.ts` and `provider-recovery.test.ts` use the production extension
+with a local provider, not a stand-in fold. Exercise:
+
+1. A next request already over the operating budget: independent folding precedes main
+   dispatch and the original unanswered request is replayed verbatim.
+2. User/custom input separated from completed work by metadata and context edits.
+3. Refusal of interleaved unresolved tool envelopes, absent anchors and impossible
+   retained context, without dispatching the oversized request.
+4. Provider context overflow, including a second failure after recovery; unrelated
+   errors and intentional cancellation must not trigger recovery.
+5. Esc during the side call: no new branch and no unwanted restart.
+6. A later extension rejects a boundary draft: the failure receipt still appears once.
+7. Native compaction/retry ownership prevents competing navigator recovery.
+
+Preflight recovery awaits the engine in `context_with_system` and returns fresh messages.
+An aborted/error turn does not honor ordinary `turn_end` continuation. Explicit provider
+errors recover at `agent_before_settle`; do not reset private abort flags to force restart.
+Local SDK tests prove this lifecycle, not real-provider cache reuse or tokenization.
+
+## Budgeted live acceptance
+
+Live calls require authorization and a shared spending ceiling. The acceptance transport
+reserves a conservative request bound before dispatch, disables automatic retries, captures
+safe request/response bodies and reconciles per-generation billed costs. Unknown costs stay
+reserved. Account-level usage deltas can include unrelated sessions and are not run billing.
+Never copy credentials or submit private sessions. Use synthetic fixtures in isolated agent
+and workspace directories, and preserve unsuccessful runs.
+
+The repository runner exercises production manual, preflight and agent-triggered flows:
+
+```sh
+node scripts/fold-acceptance/run.ts --scenario manual --dry-run --out /path/to/new-dry-run
+node scripts/fold-acceptance/run.ts --scenario manual --out /path/to/new-manual-run --ledger /absolute/path/to/shared-budget-ledger.jsonl
+node scripts/fold-acceptance/run.ts --scenario preflight --out /path/to/new-preflight-run --ledger /absolute/path/to/shared-budget-ledger.jsonl
+node scripts/fold-acceptance/run.ts --scenario agent --out /path/to/new-agent-run --ledger /absolute/path/to/shared-budget-ledger.jsonl
 ```
 
-Notes:
+Use a fresh output directory. `--model` selects the OpenRouter model ID; `--window` controls
+the fixture operating window without exceeding the catalog limit. `--blocks` controls the
+varied source corpus. Authentication is referenced through `--auth-dir`, never copied.
 
-- Node ≥22.19 is required (pi 0.87+; native TS type-stripping for `node --test` on `.ts`). CI uses Node 24.
-- The suite is fully offline: the in-band summary turn is simulated by appending an assistant message and firing the `turn_end` handlers.
-- Output-reservation regressions also exercise the real OpenAI-compatible SDK
-  adapter with an injected local transport: an oversized reservation receives a
-  simulated 400, the payload hook lowers the retry cap, and the streamed retry
-  succeeds without withholding history. This proves request serialization and
-  bounded recovery, not real-provider tokenization, cache reuse or model quality.
-- Projection regressions invalidate stale usage after context edits, compaction
-  and runtime-state changes without mutating recorded billing. Include an edit
-  targeting the usage-bearing assistant itself and edits on abandoned branches.
-- Recovery regressions cross branch summaries and retained compaction ranges,
-  preserve tool-call/result envelopes, include effective system state, and prove
-  infeasible plans apply no partial removals. Failure receipts distinguish proposed
-  and applied changes. Reproject candidates that invalidate a usage baseline,
-  recalibrating against the same surviving baseline. Reject a boundary from a
-  later handler and prove its missing failure receipt is delivered at settlement;
-  a committed receipt must not be duplicated. The SDK transport test also proves
-  an aborted infeasible request makes zero transport calls; it is not live-provider evidence.
-- Fold regressions include full child reports, late input and continuation
-  overhead; non-reducing materializations preserve history without writing a new
-  summary branch or completion label.
-- Auto-navigation regressions cover complete serialized request budgets, evidence
-  omissions, existing labels, older rewind targets, cadence, ignored-steer
-  suppression, minimum savings and decisions invalidated by late input.
-- Scope discipline: a feature PR must not edit `CHANGELOG.md` or the `package.json` version (release policy); release PRs own them.
+For each real run, inspect the saved session and wire evidence:
 
-## 5. Live proof per change type
+- Actual provider/model identity, response statuses, summary call count and retry outcomes.
+- The refused-window case really starts over budget and summarizes before main dispatch.
+- Agent-triggered folding preserves and fulfills the still-open request without a driver
+  follow-up prompt. A committed handoff alone is not acceptance.
+- Subsequent main input is smaller, the handoff retains required facts and constraints,
+  and its remaining work matches the request. Structural summary checks are not complete
+  semantic verification.
+- Report provider-observed input/cache tokens separately from projection estimates and
+  cumulative traffic. Strategy A cache reuse is measured, not assumed; chunked Strategy B
+  does not promise the main conversation's prefix cache hit.
 
-Live proof means running the real flow against the real surface and capturing the authoritative signal — a green CI check is not live proof. Record the evidence (commands, output, session JSONL path, run URL) in the PR.
+Run `node scripts/summary-quality-check.mjs <session.jsonl> --all` for structural smoke.
+The older `scripts/live-navigator-acceptance.mjs` and analyzer retain historical in-band
+acceptance evidence; those captures do not prove independent-engine behavior.
 
-**Model/provider rule (all rows).** Prefer running the host `pi` without `--model`/`--provider` (it resolves `settings.json` defaults — the model the user actually runs). Two traps: (1) pi does **not** read `PI_MODEL`/`PI_PROVIDER`/`PI_REASONING_LEVEL` for model selection — it only sets them for spawned bash children (`dist/core/tools/bash.js`); (2) `--no-extensions` disables provider extension aliases (e.g. `opencode-go-2` in this fleet), so headless resolution can silently fall back to an arbitrary model. Where the session's provider is an extension alias, **load the alias extension alongside the subject** (`-e <alias-ext> -e <subject-ext>`) so the real account resolves; otherwise pin only the **base** provider id + the session's model slug (`--provider <base> --model <$PI_MODEL>`), never a different provider/model, and **assert from the run's session JSONL (assistant entry `provider`/`model`) that the intended model actually served the run**. Check readiness with `pi auth check --provider <p> --model <m>` (refreshes OAuth credentials — not a quota check; quota surfaces as a runtime 429). Pins rot (quota, rotation, renames). To keep an installed copy of this extension from registering `navigate_tree` a second time, run `--no-extensions -e <subject-ext>`; with `--no-extensions`, also re-add (`-e`) any local extension the provider needs. Example: on an Anthropic subscription, requests fail with `400 "Third-party apps now draw from your extra usage…"` unless the extension that shapes the system prompt is loaded.
+Automatic acceptance must invoke the real configured milestone policy, preserve disclosure
+filters, test an accepted latest boundary and a boundary before unfinished work, and confirm
+that the controller invokes the engine without writing a rewind steer. Keep classifier
+abstention visible rather than substituting a deterministic success in a live claim.
 
-| Change type | Live proof |
-|---|---|
-| **Rewind flow (`rewind` execute, `tool_call` gate, summary-turn `turn_end` completion, `summary-prompt.ts`)** | README “Live summary verification”, all three checks, in an **interactive** session (tmux) with the extension under test loaded (`-e <worktree>/extensions/navigate-tree/index.ts`, plus the provider extension when the provider is one): gather real context, rewind to an anchor (the automatic `start` works), then from the session JSONL assert (1) *cache gate* — the summary turn's `cacheRead` ≈ the previous turn's context with a small `cacheWrite`; (2) *same-run continuation* — the `navigate-tree-rewind` message (`status: "done"`) is followed by an assistant turn with no user message in between, whose usage reflects the rewound context (capture the TUI footer before/after with `tmux capture-pane -p -J`: it must drop without a new prompt — a drop that waits for the next user prompt is a regression); (3) *quality smoke* — `node scripts/summary-quality-check.mjs <jsonl>` passes and the summary is scope-clean. Since #90 also assert: (4) *instruction channel* — the rewind's tool result is the byte-exact accepted text and a `navigate-tree-summary-request` `custom_message` follows it (`[navigate_tree]` + r5d); (5) *re-send* — after a failed attempt (provoke one with a `summaryFocus` that invites a tool call, or a long segment that invites truncation), the attempt's assistant and tool results get `context_edit` `null` and the retry's `cacheRead` is ≥ 95% of the previous request's input; (6) *final failure* — three failures end with the cause-specific `Summarization failed: …` text on the tool result, a `navigate-tree-rewind-outcome` entry and nothing collapsed; (7) *done* — the summary turn carries `branch:<newLabel>` and the continuation runs in the same run; (8) *TUI* — tmux captures of the summarizing row, a blocked-call row and the outcome row, and their interactivity (Ctrl+O, fullscreen click; evidence standard below). Always load the extension path under test, never the installed copy. |
-| **Rewind-driven compaction (overflow detection, withholding, forced-rewind gate, final error, either-or with pi's compaction, reserve-ordering warning)** | Interactive session (tmux) with the extension under test, a project `.pi/tree-navigator.json` setting `rewindHintReserveTokens`, a project `.pi/settings.json` with `"compaction": { "enabled": false }`, and a small `contextWindow` override for the model in a scratch `models.json` (e.g. 100k), run under `codemode.mode: "only"` (required: under `only` the rewind is not a direct tool, so a forced rewind must land via a codemode script whose first nested call is `navigate_tree` `rewind`; a run under `on` does not prove this). Fixture: ~15 text files of 40–50 KB, then "read all of them in parallel". From the session JSONL assert: (1) *overflow* — a squeezed `length` reply, a silent overflow, or a provider context-length error (for the last, a model whose real window is exceeded, with a small `maxTokens` so input + `max_tokens` is not rejected first); (2) *withholding* — the failed reply gets `context_edit` `null` (not for a silent `stop`), the newest tool results get `context_edit` replacements with the byte-exact withheld notice, and a `navigate-tree-rewind` `custom_message` with `details.status: "forced"` and the byte-exact forced-rewind text follows, in the same run; (3) *gate* — the next assistant calls only `navigate_tree` `rewind` (under `only`: a `codemode` call whose script's first nested call is that rewind), or its other calls are blocked and hidden; (4) *landing* — the rewind flow's checks (summary request, `branch:<newLabel>`, `status: "done"` continuation with no user message in between) and the TUI footer drops; under `only` the landing rewind is issued from a codemode script (the JSONL shows that `codemode` call before the `navigate-tree-rewind` accepted result); (4b) *calibration* — the request right after the withholding (the summary turn) has real input (`input` + `cacheRead` + `cacheWrite` of its reply's usage) at or below `contextWindow − compaction.reserveTokens`, so the withholding fits by real usage, not only by the estimate; (5) *endings* — at least one `status: "failed"` message with the byte-exact final-error text (e.g. no anchor: `PI_NAVIGATE_TREE_START_ANCHOR=0` and an overflow on the first prompt → `no anchor to rewind to`; Esc during the forced rewind → `the forced rewind was aborted`), and the next tool call is not blocked; (6) *either-or* — with `compaction.enabled: true`, a crossing shows the TUI error and writes no hint message, a headless run stays silent; (7) *reserve ordering* — a hint reserve below pi's reserve shows the startup warning. Replay acceptance: no run ends on a raw overflow error; every overflow is followed by a forced rewind that lands or a final error. Back up and restore any global `models.json` / `settings.json` you touch (prefer project files). |
-| **`promptGuidelines` / `before_agent_start` mandate / tool description / config loader / custom messages (hint, refusal copy)** | Live session (`pi -e <worktree>/extensions/navigate-tree/index.ts`, or interactive TUI for rendering): confirm the exact rendered system prompt (pi-context-view or equivalent prompt dump; guidelines mid-prompt, mandate at the end) and the persisted session-JSONL entries (e.g. `custom_message` with the pinned `customType` + byte-exact copy; anchor/rewind/refusal result lines). `hasUI`-gated surfaces (`ui.notify` warnings, TUI-only copy) are unit-pinned when headless; **config-error warnings are proven live by the TUI warning** in a short tmux session, and any TUI-visible output the change ships gets an interactive check (evidence standard below). |
-| **Reflection bootstrap / pi version bump** | `node scripts/pi-upstream-probe.mjs` green against the version in play + a manual anchor → rewind → list session on the host pi (the two reflection points: session capture, post-rewind `agent.state.messages` refresh). The probe green state includes the runtime import-surface check — every runtime named import in the extension source files (excluding `*.test.ts`) exists on the host packages (see §2). |
-| **Docs only (README, this file)** | CI green on the head SHA; links/commands in the change actually exist (spot-check anything command-like). No live run required — state so explicitly in the PR. |
+## Terminal acceptance
 
-**TUI-only output (evidence standard).** Output that renders only in an interactive TUI (`ui.notify` warnings, custom-message rows, transcript lines) cannot be proven by a headless run — a headless run never reaches `hasUI`-gated surfaces, and a unit pin is not live proof. When the changeset ships such output and it is reachable on the current host version, trigger it in a short interactive session (tmux is fine) and capture the pane: `tmux capture-pane -p -J` (normalize trailing whitespace; `-J` joins soft-wrapped lines) showing presence + byte-exact copy against the builder/constant is sufficient. TUI content is text and styling is theme-driven, so a screenshot or attribute capture (`tmux capture-pane -e`) is needed only when layout, color, or truncation is itself the change subject. For deliberately unreachable defensive output — a path that cannot fire on the current host by construction — the unit pin plus an explicit unreachability statement in the PR is the evidence.
+Load the extension under test explicitly in an isolated Pi-Bolt session. Exercise 60 and
+130 columns, dark and light themes, fullscreen and regular mode. Capture both rendered
+states and interactions:
 
-**TUI interactivity (#100).** Every TUI component a change ships gets an interactivity check, not only a render capture: expand and collapse with Ctrl+O, and with a mouse click in fullscreen mode (`tuiMode: fullscreen`); capture the pane before and after each. A component that is not collapsible must show no change and no breakage. For rewind-driven compaction: the forced-rewind message (pi's default custom-message box; check that the anchor-table columns stay aligned), the final-error row, the either-or error and the reserve-ordering warning, plus a regression capture of the summary-request row (its click gap is #100's).
+- `/anchor fold` recommendation, alternate target, search, label/focus editing, confirmation,
+  progress, cancellation and busy-agent queuing.
+- Settings policy stage/model/instruction edits, invalid input, scope selection and cancel.
+- Handoff and outcome expansion/collapse with Ctrl+O and fullscreen mouse interaction.
+- Resize while a panel is open; stable geometry, clipped lines and keyboard-only operation.
+- Footer/context change after a fold without another user prompt where continuation applies.
 
-Live-run hygiene: back up any global extension config you must modify (`~/.pi/agent/tree-navigator.json`, etc.) and restore/remove it afterwards; never leave test thresholds or credentials behind.
+Stop disposable terminal sessions afterwards. Do not alter global configuration for tests;
+if an authorized migration changes user configuration, back it up and preserve unrelated
+keys, overrides and disclosure rules.
 
-### Parallel long-context acceptance
+## Classifier evaluation
 
-Run the live harness only with explicit provider-call authorization. It uses the existing
-credential store without copying credentials, isolated settings/workspaces, six concurrent
-sessions and four substantial real-source partitions per session:
+See `scripts/classifier-eval/` and `.project/analyses/classifier-eval/summary.md` for the
+reproducible dataset, runner, analysis and retained evidence. Use the production request
+builders. Select candidates on development data; label any selection made using holdout
+results as such. Report case counts separately from repeated observations, and account for
+correlated cases. Zero observed unsafe decisions does not establish a zero population rate.
 
-```bash
-node scripts/live-navigator-acceptance.mjs --sessions 6 --model provider/model --auth-dir /path/to/agent-dir --output /path/to/evidence
-node scripts/analyze-live-navigator.mjs /path/to/evidence --require-text-only
-```
+Test classification and production application separately: protected user authority stays
+in deterministic ledger rules; uncertain/failed retirement verification keeps the item.
+Capture remains heuristics-only by default. Model policies and instruction overrides are
+explicitly configurable, with disclosures before enabling external classification.
 
-The harness reports its reusable corpus snapshot path; `--corpus <snapshot.json>` keeps the
-same source workload for a rerun. Each session must submit all hashes and findings after
-four folds from one user prompt. Premature settlement fails; the driver never sends a
-continuation prompt. Capture raw payloads, safe response headers, parsed provider stream
-events, recorded usage and the unchanged session files. Report cumulative input separately
-from peak request input. The analyzer checks OpenAI, Anthropic and Google native no-tools
-fields and requires captured summary requests for every completed fold.
+## Retrospective clone acceptance
 
-Run `scripts/summary-quality-check.mjs <session.jsonl> --all` on every session. Modern
-handoffs validate the own report separately from child reports and the continuity ledger;
-parent reports have no fixed length cap. Legacy summaries retain their original preamble
-contract. A structural pass does not prove semantic completeness. Inspect hashes, retained
-rules, next actions, source-grounded findings and actual model-facing proposal reports.
-Keep unsuccessful runs and safety fallbacks visible in the report.
+Retrospective operations never mutate the source. Test source hashes, safe tool-batch cuts,
+context edits, native summaries, parent modes, runtime state and descendant remapping. Reopen
+created sessions with the real SessionManager; source bytes and accounting remain unchanged.
+Drive proposal/review/preview/create/cancel in the terminal and verify no implicit session
+switch. Model-created summaries remain untrusted semantic output even after graph validation.
 
-### Retrospective clone verification
+## Delivery checklist
 
-For changes to `retrospective*.ts` or `/anchor clone`, run the focused clone tests
-and the normal offline gates. Exercise the CLI's inspect, preview, stale-token
-refusal and create paths on a disposable fixture. Reopen the result through Pi's
-`SessionManager` and verify the source bytes are unchanged, the clone has a new
-ID/suffixed name, nested summaries are browsable, and the retained tail is active.
-Check refusal of crossed tool batches, context edits and compaction references.
-Check that a parent contains full child reports once, synthesized mode keeps its
-reviewed report only, and an open parent can contain a nested current tail. Verify
-native pre-request context estimates ignore historical assistant usage without
-changing recorded costs, while future assistant usage remains valid.
-
-For family cloning, compare every copied descendant body byte-for-byte and check
-all new parent links. Preview must bind family membership and source hashes.
-Recursive restructuring requires reviewed descendant plans; missing plans must
-fail rather than silently copying them.
-
-Drive `/anchor clone` in an interactive session: inspect/preview dialogs, cancel
-without writing, create with confirmation, and `/tree` navigation in the result.
-Exercise the rich native card in collapsed/expanded states with Ctrl+O and a
-fullscreen mouse click, at 60 and 130 columns. Verify nested single-child outline
-indentation, chronological order, `[current]` inside an open parent, search,
-real-ID navigation, F2 raw-graph fallback, switching sessions and `/reload`.
-No provider call is required for clone/UI validation: summary text is reviewed
-input. Use a disposable copy; do not resume a user's source for a test.
-Live rewind prompt changes still require provider/cache validation under §5;
-offline handler tests are not that evidence.
-
-For graph inputs, inspect a native rewind tree and preserve its archived context
-edits, labels, summary `fromId` targets and per-entry runtime state. Include a
-rewind to an assistant tool-call anchor whose real result is on the archived
-leg, repeated provider call IDs, and a genuinely unresolved occurrence. Inspect
-a long tool-heavy snapshot under a bounded heap to catch retained-state growth.
-
-For tree proposals, verify local heuristics make zero provider requests and every
-saved plan parses under the schema (including deep native trees). Exercise a
-local mock provider through the real model registry: assert provider-neutral
-thinking, source/plan binding, native shell and tool exclusions, usage capture,
-private exclusive plan creation, preview/create and clone reload. Fitting inputs
-should need one refinement request; oversized inputs must cover all permitted
-records or produce an explicit fallback without silent truncation. Confirm the
-consolidation-round/progress bounds stop low-value requests.
-
-Drive proposal review/save/cancel at 60/130 columns and cancel a delayed local
-provider from the native loader. Assert the request aborts, no plan/session is
-published, and the current model/thinking remains unchanged. A local mock proves
-the registry/UI transport flow, not the quality or availability of a paid model;
-state separately when real-provider semantic quality was not exercised.
-
-## 6. Closeout
-
-- [ ] CI green on the exact PR head SHA (all checks listed in §2).
-- [ ] Offline gates green locally on the head commit (§4).
-- [ ] Independent verdict(s) recorded on the same SHA (§3); fix commits re-verified.
-- [ ] Live proof for the change type captured with real output (§5) — or an explicit statement why it does not apply.
-- [ ] Scope check: `git diff --name-only <base>...HEAD` matches the plan; no `CHANGELOG.md` / `package.json` version edits; no stray artifacts.
-- [ ] PR body carries summary, verification evidence, release-note callouts (e.g. prompt-cache invalidation, behavior changes), and `Closes #N` lines.
-- [ ] PR left **draft**; kanban + vault notes updated; worktree/branch kept until the owner merges, then cleaned up.
+- Affected offline gates and integration tests passed, with actual output recorded.
+- Required provider and TUI acceptance ran; limitations and failed evidence are retained.
+- Independent review findings are fixed or explicitly resolved with evidence.
+- Documentation matches the implemented behavior and commands.
+- Only task-owned files are committed; credentials/private sessions remain excluded.
+- Repository-authorized integration/push is complete. Installation and configuration
+  migration are reported separately and performed only with authorization.

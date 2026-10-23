@@ -1,0 +1,42 @@
+       "attempts": 3,                                       
+       "backoffMs": 100                                     
+     },                                                     
+     "persistence": {                                       
+       "namespace": "audit-359",                            
+       "retentionDays": 16                                  
+     },                                                     
+     "validation": {                                        
+       "invalidInput": 422,                                 
+       "unavailable": 503,                                  
+       "duplicate": 409,                                    
+       "tests": [                                           
+         "service-359-invalid-input",                       
+         "service-359-retry-exhausted"                      
+       ]                                                    
+     },                                                     
+     "finding": "Service 359 validates input before         
+ persistence; verify retry exhaustion leaves namespace      
+ audit-359 unchanged."                                      
+   }                                                        
+ ]                                                          
+                                                            
+
+ Synthetic fixture conclusion for block 15: inspected,      
+ retain the audit constraints and remaining comparison      
+ work.                                                      
+
+                                                            
+ Reply READY only; do not fold or call tools                
+                                                            
+
+ Warning: tmux extended-keys is off. Modified Enter keys    
+ may not work. Add `set -g extended-keys on` to             
+ ~/.tmux.conf and restart tmux.                             
+
+ READY                                                      
+
+────────────────────────────────────────────────────────────
+                                                            
+────────────────────────────────────────────────────────────
+/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analys...
+↑3 ↓5 W73k CH0.0% $0.009 76.2%/96k  openai/gpt-6-luna • thin

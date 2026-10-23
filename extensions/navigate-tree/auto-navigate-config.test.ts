@@ -70,9 +70,10 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     });
     assert.throws(() => parseAutoNavigatePartial({ camelCaseKey: true }));
     assert.throws(() => parseAutoNavigatePartial({ check_every_turns: 0 }));
-    assert.throws(
-      () => parseAutoNavigatePartial({ controller_model: "test/old" }),
-      /controller_model was removed; configure auto_navigate\.milestone/,
+    // Removed in favour of `milestone`: ignored here, reported once by the loader.
+    assert.deepEqual(
+      parseAutoNavigatePartial({ controller_model: "test/old" }),
+      {},
     );
   });
 

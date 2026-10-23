@@ -3,7 +3,7 @@
 ## Code overview
 
 `extensions/navigate-tree/index.ts` registers the `navigate_tree` tool and owns
-live rewind lifecycle handling: in-band summary requests, overflow recovery,
+the shared independent fold host: manual and queued operations, overflow recovery,
 branch creation, agent-context refresh and history-rewrite notifications.
 
 - `helpers.ts`: label conventions, validation and formatting.
@@ -13,18 +13,23 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `context-tokens.ts`, `rewind-hint.ts`: the single admission estimate (newest
   valid usage plus the scaled tail, else the whole request) shared by the request
   guard, hints, anchor rows and controller; rewind hints and recovery diagnostics.
-- `output-budget.ts`: conservative wire-level output caps for overflow recovery;
-  request metadata is scoped to the session/model/run, never persisted.
-- `summary-prompt.ts`: summary instructions, stored-summary preamble and file lists.
-- `summary-request.ts`: immutable, adapter-specific text-only request constraints
-  for pending summaries; tool declarations and message arrays remain unchanged.
+- `fold-engine.ts`: per-session serialization, snapshot/summary/commit orchestration
+  and deterministic target selection.
+- `fold-inputs.ts`: current projected evidence restricted to the folded ancestry;
+  Strategy A request construction and Strategy B evidence records.
+- `fold-summarizer.ts`: independent registry calls, cache-prefix strategy and bounded
+  map-reduce strategy, explicit evidence coverage and call limits.
+- `summary-prompt.ts`: byte-pinned r5d instruction, stored-summary shape and file lists.
+- `legacy-rewind.ts`: read-only projection and rendering of historical in-band
+  instructions and failed outcomes; no legacy execution.
 - `retrospective-plan.ts`: strict graph snapshots, branch-local tool accounting,
   inspection and nested-plan parsing.
 - `retrospective.ts`: range validation, clone construction, state checks and publication.
 - `anchor-command.ts`, `frame.ts`: the unified `/anchor` command and the shared
   editor-replacing `FrameList` panel (breadcrumb rule, fuzzy search, frozen height).
-- `tree-screen.ts`, `fold-screen.ts`: real-entry navigation and the confirmed
-  anchor/label/focus fold request; neither screen generates a summary itself.
+- `tree-screen.ts`: real-entry navigation.
+- `fold-plan-screen.ts`: one-screen recommended fold plan, advanced label/focus,
+  fuzzy search, progress and cancellation; the engine executes confirmed plans.
 - `current-screen.ts`: branch-local ledger inspection and user-authorized edits.
 - `settings-screen.ts`, `settings-model-picker.ts`: staged scope-aware settings
   with parser validation, model/thinking selection and editable tool policies.
@@ -53,8 +58,11 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `proposal-model.ts`: registry-authenticated, provider-neutral side calls.
 - `proposal-command.ts`: disclosure confirmation, cancellable generation, readable
   plan review, optional advanced editing and exclusive private-plan saving.
-- `auto-navigate-config.ts`, `auto-navigate.ts`: wildcard `model_overrides`
-  matching and sidecar `auto_navigate` anchor/rewind extraction.
+- `auto-navigate-config.ts`: wildcard per-model settings and milestone policies.
+- `auto-milestone.ts`: projected, disclosure-filtered milestone evidence and stable
+  entry mapping.
+- `milestone-policy.ts`: tunable, benchmarked parallel confirmation of phase status
+  and boundary; failures and disagreement abstain.
 - `handoff.ts`: report metadata, full/synthesized materialization, unique recorded
   statistics and honest model-facing work context.
 - `handoff-renderer.ts`: guarded native summary-card and tree-row patches.
@@ -75,16 +83,16 @@ for the clone workflow and supported inputs.
 
 ## Invariants
 
-- Live rewinds preserve the abandoned branch. Their tool call must finish before
-  the in-band summary is collected and the new branch is created.
+- Folds preserve the abandoned branch and run independently of main-agent turns.
+  Queued folds wait for the current tool batch to finish; idle folds run directly.
 - `anchor:` labels identify rewind targets. `branch:` labels identify archived
   work. Neither namespace may silently overwrite an existing label.
 - Only the active ancestry supplies model context; raw history remains available.
   Compaction and context edits affect projection, not source message payloads.
   Recovery eligibility follows the canonical projection, not summary markers.
-- Infeasible recovery plans apply no partial tool-result replacements. Diagnostics
-  distinguish proposed changes from applied ones. The final complete-request
-  estimate must leave usable output and headroom when navigator recovery owns it.
+- Recovery does not withhold tool results. Infeasible plans refuse without a fold.
+  The final complete-request estimate includes system/tools, materialized children,
+  protected continuity, active requests, late input and continuation headroom.
 - Live folds preview materialized child reports, late input and continuation
   overhead before branching. Non-reducing or over-budget estimates fail while
   keeping the original history and preservation policy.

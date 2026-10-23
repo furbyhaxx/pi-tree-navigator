@@ -94,11 +94,11 @@ export function parseAutoNavigatePartial(
     throw new Error(`${where} must be an object or boolean`);
   }
   const record = raw as Record<string, unknown>;
-  if ("controller_model" in record)
-    throw new Error(
-      `${where}.controller_model was removed; configure ${where}.milestone with "recommended" or explicit classifier/confirmer stages instead.`,
-    );
+  // Removed in favour of `milestone`; ignored here so the rest of the layer survives.
+  // The config loader reports it once with its replacement.
+  const LEGACY_KEYS = new Set(["controller_model"]);
   for (const key of Object.keys(record)) {
+    if (LEGACY_KEYS.has(key)) continue;
     if (!KNOWN_KEYS.has(key)) {
       throw new Error(`Unknown ${where} field: ${key}`);
     }

@@ -1,0 +1,66 @@
+{
+  "passed": true,
+  "scenario": "manual",
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/manual-01/sessions/2026-10-23T17-05-27-634Z_01a169b9-8251-75bc-97da-4657c3bdfb0f.jsonl",
+  "initialTokens": 114473,
+  "afterTokens": 2214,
+  "calls": [
+    {
+      "side": true,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-23T17:05:27.646Z"
+    },
+    {
+      "side": true,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-23T17:05:33.381Z"
+    },
+    {
+      "side": true,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 3,
+      "startedAt": "2026-10-23T17:05:37.655Z"
+    },
+    {
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 6,
+      "startedAt": "2026-10-23T17:05:45.525Z"
+    },
+    {
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 8,
+      "startedAt": "2026-10-23T17:05:47.556Z"
+    },
+    {
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 10,
+      "startedAt": "2026-10-23T17:05:49.555Z"
+    },
+    {
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 12,
+      "startedAt": "2026-10-23T17:05:52.465Z"
+    }
+  ],
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 0.639614463,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 24.094307634
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 0.655601816,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 24.078320281
+  },
+  "completedAt": "2026-10-23T17:06:03.153Z",
+  "scratch": "/tmp/independent-fold-acceptance-vUczIS",
+  "isolatedAgentDir": "/tmp/independent-fold-acceptance-vUczIS/agent"
+}

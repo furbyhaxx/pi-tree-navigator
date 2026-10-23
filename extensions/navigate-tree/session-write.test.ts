@@ -67,6 +67,9 @@ test("reports inability to restore the cursor instead of masking it", () => {
     resetLeaf: () => {
       leaf = null;
     },
+    getBranch: () => {
+      throw new Error("branch unreadable");
+    },
   };
   const result = trySessionWrite(sm, () => {
     leaf = "unpersisted";
