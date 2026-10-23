@@ -26,6 +26,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { loadTreeNavigatorConfig } from "./config.ts";
+import { RECOMMENDED_POLICY, resolveIntentPolicy } from "./intent-policy.ts";
+import {
+  RECOMMENDED_MILESTONE_POLICY,
+  resolveMilestonePolicy,
+} from "./milestone-policy.ts";
 import {
   clearRuntimeConfig,
   readRuntimeConfig,
@@ -58,7 +63,7 @@ const ROW = {
   proposalTools: 6,
   autoEnabled: 7,
   autoMode: 8,
-  controller: 9,
+  milestone: 9,
   checkEvery: 10,
   minTokens: 11,
   rewindAt: 12,
@@ -104,6 +109,10 @@ interface Setup {
     globalPath: string;
     projectPath: string;
   }) => void)[];
+  /** How the next model picker leaves: off selects the first row. */
+  modelPicks?: ("off" | "custom" | "cancel")[];
+  /** Throw if the registry is used for anything but listing models. */
+  guardRegistry?: boolean;
   writeFails?: boolean;
   /** Use the screen's own atomic writer instead of the recording one. */
   realWriter?: boolean;
@@ -140,6 +149,8 @@ function harness(setup: Setup = {}) {
   const confirms = [...(setup.confirms ?? [])];
   const confirmEffects = [...(setup.confirmEffects ?? [])];
   const saveScopes = [...(setup.saveScopes ?? [])];
+  const modelPicks = [...(setup.modelPicks ?? [])];
+  const registryCalls: string[] = [];
   const rendered: string[][] = [];
   const saveScopeFrames: string[][] = [];
   const scripts: Script[] = [];
@@ -155,12 +166,31 @@ function harness(setup: Setup = {}) {
     cwd,
     isIdle: () => state.idle,
     sessionManager: { getSessionId: () => sessionId },
-    modelRegistry: {
-      getAvailable: () => [],
-      async getAvailableOfType() {
-        return [];
+    modelRegistry: new Proxy(
+      {
+        getAvailable() {
+          registryCalls.push("getAvailable");
+          return [];
+        },
+        async getAvailableOfType(type: string) {
+          registryCalls.push(`getAvailableOfType:${type}`);
+          return [];
+        },
       },
-    },
+      {
+        get(target, key) {
+          if (
+            setup.guardRegistry &&
+            typeof key === "string" &&
+            !(key in target)
+          ) {
+            registryCalls.push(key);
+            throw new Error(`unexpected registry call: ${key}`);
+          }
+          return Reflect.get(target, key);
+        },
+      },
+    ),
     async reload() {
       state.reloads++;
     },
@@ -213,9 +243,23 @@ function harness(setup: Setup = {}) {
             header.includes("Anchor/Settings/Classifier") ||
             header.includes("Anchor/Settings/Model")
           ) {
-            if (cancelPicker) {
+            const pick = modelPicks.shift();
+            if (pick === "cancel" || cancelPicker) {
               cancelPicker = false;
               screen.handleInput(ESC);
+            } else if (pick === "off") {
+              screen.handleInput(HOME);
+              screen.handleInput(ENTER);
+            } else if (pick === "custom") {
+              screen.handleInput(HOME);
+              for (let step = 0; step < 12; step++) {
+                const selected = screen
+                  .render(columns)
+                  .find((candidate) => candidate.includes(" → "));
+                if (selected?.includes("custom")) break;
+                screen.handleInput(DOWN);
+              }
+              screen.handleInput(ENTER);
             } else {
               screen.handleInput(HOME);
               screen.handleInput(DOWN);
@@ -262,6 +306,7 @@ function harness(setup: Setup = {}) {
     dialogs,
     rendered,
     saveScopeFrames,
+    registryCalls,
     globalPath,
     projectPath,
     readGlobal: () => read(globalPath),
@@ -727,32 +772,30 @@ describe("settings screen: saving", () => {
 describe("settings screen: refusals", () => {
   it("refuses invalid ranges and custom model selectors", async () => {
     const h = harness({
-      inputs: ["5m", "0", "abc", undefined, "foo", undefined, "101"],
+      inputs: ["5m", "0", "foo", undefined, "101"],
     });
     await h.run(
       edit(ROW.hint),
       edit(ROW.startAnchor),
-      edit(ROW.classifier),
-      edit(ROW.controller),
+      edit(ROW.proposalModel),
       edit(ROW.checkEvery),
       press(ESC),
     );
     const warnings = h.notifications
       .filter(({ type }) => type === "warning")
       .map(({ message }) => message);
-    assert.equal(warnings.length, 5);
+    assert.equal(warnings.length, 4);
     assert.match(
       warnings[0],
       /"5m" is not valid for rewindHintReserveTokens\. Use 1,000-1,000,000 tokens/,
     );
     assert.match(warnings[1], /"0".*anchorStartAfterTurns\. Use 1-50 turns/);
-    assert.match(warnings[2], /"abc" is not valid: expected provider\/id/);
     assert.match(
-      warnings[3],
+      warnings[2],
       /"foo" is not valid: Proposal model must be current or provider\/model\[:thinking\]/,
     );
     assert.match(
-      warnings[4],
+      warnings[3],
       /"101" is not valid for auto_navigate\.check_every_turns\. Use 1-100 turns/,
     );
     assert.ok(!text(h.rendered.at(-1) ?? []).includes("staged"));
@@ -941,8 +984,8 @@ describe("settings screen: rows", () => {
       /anchor-and-rewind · default/,
     );
     assert.match(
-      line(screen, "controller_model"),
-      /openai\/gpt-6:low · default/,
+      line(screen, "auto_navigate.milestone"),
+      /recommended · default/,
     );
     assert.match(line(screen, "check_every_turns"), /4 · project/);
     assert.match(line(screen, "rewind_at_tokens"), /120k · default/);
@@ -1351,5 +1394,209 @@ describe("settings screen: keyed maps", () => {
       /Invalid treeProposal\.tools\["bash"\]/,
     );
     assert.match(line(h.rendered[2], "bash"), /bash\s+invalid → omit/);
+  });
+});
+
+/** Move to the row whose selected line contains `label`, then press `key`. */
+const until =
+  (label: string, key = ENTER): Script =>
+  (screen) => {
+    screen.handleInput(HOME);
+    for (let step = 0; step < 24; step++) {
+      const selected = screen
+        .render(120)
+        .find((candidate) => candidate.includes(" → "));
+      if (selected?.includes(label)) break;
+      screen.handleInput(DOWN);
+    }
+    screen.handleInput(key);
+  };
+
+describe("settings screen: classifier policies", () => {
+  it("disables intent escalation in the editor and saves runtime only", async () => {
+    const original = json({
+      continuity: { intentClassifier: "recommended" },
+    });
+    const h = harness({
+      global: original,
+      modelPicks: ["off"],
+      saveScopes: ["runtime"],
+      confirms: [true],
+      guardRegistry: true,
+      columns: 120,
+    });
+    await h.run(
+      edit(ROW.classifier),
+      until("escalation model"),
+      press("a"),
+      (screen, lines) => {
+        assert.doesNotMatch(line(lines, "continuity.intentClassifier"), /\{/);
+        assert.match(
+          line(lines, "continuity.intentClassifier"),
+          /escalation off/,
+        );
+        screen.handleInput("s");
+      },
+      press(ESC),
+    );
+
+    assert.equal(h.readGlobal(), original);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.readRuntime(), {
+      continuity: {
+        intentClassifier: {
+          preset: "recommended",
+          supersession: { escalation: { model: null } },
+        },
+      },
+    });
+    assert.ok(h.registryCalls.length > 0);
+    assert.ok(h.registryCalls.every((call) => call.startsWith("getAvailable")));
+    const { config } = await loadTreeNavigatorConfig({
+      agentDir: dirname(h.globalPath),
+      projectPath: h.projectPath,
+      projectTrusted: false,
+      runtime: h.readRuntime(),
+    });
+    const policy = resolveIntentPolicy(
+      config.continuity.intentClassifier ?? "",
+    );
+    assert.equal(policy?.escalation.model, null);
+    assert.equal(
+      policy?.kind.model,
+      `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.classifier}`,
+    );
+    assert.equal(policy?.supersession.model, policy?.kind.model);
+    const [, message] = h.dialogs.confirm[0] ?? [];
+    assert.doesNotMatch(message ?? "", /\{/);
+    assert.match(message ?? "", /escalation off/);
+  });
+
+  it("changes the escalation model from the editor and saves runtime only", async () => {
+    const original = json({
+      continuity: { intentClassifier: "recommended" },
+    });
+    const h = harness({
+      global: original,
+      inputs: ["acme/judge"],
+      modelPicks: ["custom"],
+      saveScopes: ["runtime"],
+      confirms: [true],
+      guardRegistry: true,
+      columns: 120,
+    });
+    await h.run(
+      edit(ROW.classifier),
+      until("escalation model"),
+      press("a"),
+      press("s"),
+      press(ESC),
+    );
+
+    assert.equal(h.readGlobal(), original);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.readRuntime(), {
+      continuity: {
+        intentClassifier: {
+          preset: "recommended",
+          supersession: { escalation: { model: "acme/judge" } },
+        },
+      },
+    });
+    assert.ok(h.registryCalls.every((call) => call.startsWith("getAvailable")));
+    const { config } = await loadTreeNavigatorConfig({
+      agentDir: dirname(h.globalPath),
+      projectPath: h.projectPath,
+      projectTrusted: false,
+      runtime: h.readRuntime(),
+    });
+    const policy = resolveIntentPolicy(
+      config.continuity.intentClassifier ?? "",
+    );
+    assert.equal(policy?.escalation.model, "acme/judge");
+    assert.equal(
+      policy?.kind.model,
+      `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.classifier}`,
+    );
+    assert.equal(
+      JSON.stringify(h.readRuntime()).includes("verification"),
+      false,
+    );
+  });
+
+  it("discards a policy draft when the editor is cancelled", async () => {
+    const original = json({
+      continuity: { intentClassifier: "recommended" },
+    });
+    const h = harness({ global: original, inputs: ["0.4"], columns: 120 });
+    await h.run(edit(ROW.classifier), until("gate"), press(ESC), press(ESC));
+    assert.equal(h.readGlobal(), original);
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.readRuntime(), {});
+    assert.deepEqual(h.dialogs.confirm, []);
+    assert.ok(!text(h.rendered.at(-1) ?? []).includes("staged"));
+  });
+
+  it("refuses an invalid milestone confidence without staging", async () => {
+    const h = harness({ inputs: ["0"], columns: 120 });
+    await h.run(edit(ROW.milestone), until("gate"), press(ESC), press(ESC));
+    assert.match(
+      h.notifications.find(({ type }) => type === "warning")?.message ?? "",
+      /minConfidence must be a number above 0 up to 1/,
+    );
+    assert.ok(!existsSync(h.globalPath));
+    assert.deepEqual(h.writes, []);
+    assert.deepEqual(h.dialogs.confirm, []);
+  });
+
+  it("keeps unspecified milestone stages under a wildcard override", async () => {
+    const h = harness({
+      global: json({
+        model_overrides: {
+          "openrouter/*": { auto_navigate: { enabled: true } },
+        },
+      }),
+      inputs: ["0.85", "acme/judge"],
+      modelPicks: ["custom"],
+      confirms: [true],
+      columns: 120,
+      guardRegistry: true,
+    });
+    await h.run(
+      edit(ROW.overrides),
+      edit(0),
+      until("auto_navigate.milestone"),
+      until("gate"),
+      until("classifier model"),
+      press("a"),
+      press(ESC),
+      press(ESC),
+      press("s"),
+      press(ESC),
+    );
+
+    const saved = JSON.parse(h.readGlobal()) as {
+      model_overrides: {
+        "openrouter/*": {
+          auto_navigate: { enabled: boolean; milestone: unknown };
+        };
+      };
+    };
+    const milestone =
+      saved.model_overrides["openrouter/*"].auto_navigate.milestone;
+    assert.deepEqual(milestone, {
+      preset: "recommended",
+      minConfidence: 0.85,
+      classifier: { model: "acme/judge" },
+    });
+    const policy = resolveMilestonePolicy(JSON.stringify(milestone));
+    assert.equal(policy?.minConfidence, 0.85);
+    assert.equal(policy?.classifier, "acme/judge");
+    assert.equal(
+      policy?.confirmer,
+      `${RECOMMENDED_MILESTONE_POLICY.provider}/${RECOMMENDED_MILESTONE_POLICY.confirmer}`,
+    );
+    assert.equal(policy?.instructions.status, undefined);
+    assert.ok(h.registryCalls.every((call) => call.startsWith("getAvailable")));
   });
 });
