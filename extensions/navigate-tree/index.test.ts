@@ -9516,6 +9516,278 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  const summaryTools = [
+    { type: "function", name: "navigate_tree", parameters: {} },
+  ];
+  const summaryInput = [{ role: "user", content: "ctx" }];
+  const summaryPayload = <T extends object = Record<never, never>>(
+    model: unknown,
+    extra?: T,
+  ) => ({
+    model,
+    input: summaryInput,
+    tools: summaryTools,
+    ...(extra as T),
+  });
+
+  it("asks for text only while a voluntary summary is pending, even with rewind compaction off", async () => {
+    for (const opts of [{ config: {} }, { piSettings: {} }]) {
+      const f = await forcedSetup(opts);
+      try {
+        assert.ok(f.ctx.model);
+        f.ctx.model = { ...f.ctx.model, api: "openai-responses" };
+        const payload = summaryPayload(f.ctx.model.id, {
+          prompt_cache_key: "k",
+        });
+        assert.equal(await providerPayload(f, payload), payload);
+        await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+        assert.notEqual(
+          fireToolCall(f.pi, f.ctx),
+          undefined,
+          "summary pending",
+        );
+        const pending = (await providerPayload(f, payload)) as typeof payload;
+        assert.deepEqual(pending, { ...payload, tool_choice: "none" });
+        assert.equal(pending.tools, payload.tools);
+        assert.equal(pending.input, payload.input);
+        assert.equal("tool_choice" in payload, false);
+        assert.deepEqual(await providerPayload(f, payload), pending);
+        await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
+        assert.equal(fireToolCall(f.pi, f.ctx), undefined);
+        assert.equal(await providerPayload(f, payload), payload);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    }
+  });
+
+  it("keeps the tool choice and the output cap of a pending summary request together", async () => {
+    const f = await forcedSetup({
+      piSettings: { compaction: { enabled: false, reserveTokens: 2_000 } },
+    });
+    try {
+      assert.ok(f.ctx.model);
+      f.ctx.model = { ...f.ctx.model, api: "openai-responses" };
+      const id = f.ctx.model.id;
+      await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+      const both = summaryPayload(id, { max_output_tokens: 64_000 });
+      assert.deepEqual(await providerPayload(f, both), {
+        ...both,
+        max_output_tokens: 1_024,
+        tool_choice: "none",
+      });
+      assert.equal(both.max_output_tokens, 64_000);
+      const small = summaryPayload(id, { max_output_tokens: 512 });
+      assert.deepEqual(await providerPayload(f, small), {
+        ...small,
+        tool_choice: "none",
+      });
+      const noTools = {
+        model: id,
+        input: summaryInput,
+        max_output_tokens: 64_000,
+      };
+      assert.deepEqual(await providerPayload(f, noTools), {
+        ...noTools,
+        max_output_tokens: 1_024,
+      });
+      const already = summaryPayload(id, {
+        max_output_tokens: 64_000,
+        tool_choice: "none",
+      });
+      assert.deepEqual(await providerPayload(f, already), {
+        ...already,
+        max_output_tokens: 1_024,
+      });
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("lets a request budget failure cancel a pending summary request", async () => {
+    const f = await forcedSetup();
+    try {
+      assert.ok(f.ctx.model);
+      f.ctx.model = { ...f.ctx.model, api: "openai-responses" };
+      await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+      const aborter = new AbortController();
+      const ctx = {
+        ...f.ctx,
+        signal: aborter.signal,
+        abort: () => aborter.abort(),
+      };
+      const messages = [
+        { role: "system", content: "s".repeat(350_000), timestamp: 0 },
+        ...fireContext(f.pi, f.ctx),
+      ];
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? []) {
+        await handler(
+          { type: "context_with_system", messages } as never,
+          ctx as never,
+        );
+      }
+      assert.equal(aborter.signal.aborted, true);
+      assert.deepEqual(
+        await providerPayload(f, summaryPayload(f.ctx.model.id)),
+        {},
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("maps Azure deployment names for the summary only, not for the output budget", async () => {
+    const f = await forcedSetup();
+    try {
+      assert.ok(f.ctx.model);
+      const model = { ...f.ctx.model, api: "azure-openai-responses" };
+      f.ctx.model = model;
+      await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+      const deployment = summaryPayload("prod-deployment", {
+        max_output_tokens: 64_000,
+      });
+      assert.deepEqual(await providerPayload(f, deployment), {
+        ...deployment,
+        tool_choice: "none",
+      });
+      for (const name of ["", 5, null, undefined]) {
+        const payload = summaryPayload(name, { max_output_tokens: 64_000 });
+        assert.equal(await providerPayload(f, payload), payload);
+      }
+      const same = summaryPayload(model.id, { max_output_tokens: 64_000 });
+      const capped = (await providerPayload(f, same)) as typeof same & {
+        tool_choice?: string;
+      };
+      assert.equal(capped.tool_choice, "none");
+      assert.ok(capped.max_output_tokens < 64_000);
+      for (const api of [
+        "openai-responses",
+        "openai-completions",
+        "anthropic-messages",
+        "google-generative-ai",
+      ]) {
+        f.ctx.model = { ...model, api };
+        const other = summaryPayload("prod-deployment", {
+          max_output_tokens: 64_000,
+        });
+        assert.equal(await providerPayload(f, other), other, api);
+      }
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("uses each provider's native text-only shape and leaves other APIs alone", async () => {
+    const f = await forcedSetup({ config: {} });
+    try {
+      assert.ok(f.ctx.model);
+      const model = f.ctx.model;
+      await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+      f.ctx.model = { ...model, api: "anthropic-messages" };
+      const anthropic = summaryPayload(model.id, {
+        tool_choice: { type: "auto" },
+      });
+      assert.deepEqual(await providerPayload(f, anthropic), {
+        ...anthropic,
+        tool_choice: { type: "none" },
+      });
+      f.ctx.model = { ...model, api: "google-vertex" };
+      const google = {
+        model: model.id,
+        contents: summaryInput,
+        config: { systemInstruction: "rules", tools: [{}] },
+      };
+      assert.deepEqual(await providerPayload(f, google), {
+        ...google,
+        config: {
+          ...google.config,
+          toolConfig: { functionCallingConfig: { mode: "NONE" } },
+        },
+      });
+      for (const api of ["bedrock-converse-stream", "anthropic"]) {
+        f.ctx.model = { ...model, api };
+        const payload = summaryPayload(model.id, { toolConfig: {} });
+        assert.equal(await providerPayload(f, payload), payload, api);
+      }
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("produces a text-only request through the real SDK adapters", async () => {
+    const f = await forcedSetup({ config: {} });
+    const originalFetch = globalThis.fetch;
+    try {
+      const base = {
+        provider: "offline",
+        id: "summary-fixture",
+        name: "Summary fixture",
+        baseUrl: "https://offline.invalid/v1",
+        reasoning: false,
+        input: ["text" as const],
+        contextWindow: WINDOW,
+        maxTokens: 64_000,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      };
+      const context = normalizeContext({
+        messages: [{ role: "user", content: "test", timestamp: 1 }],
+        tools: [
+          {
+            name: "navigate_tree",
+            description: "navigate",
+            parameters: { type: "object", properties: {} } as never,
+          },
+        ],
+      });
+      const completions = { ...base, api: "openai-completions" as const };
+      const bodies: Array<Record<string, unknown>> = [];
+      const request = () =>
+        streamSimple(completions, context, {
+          apiKey: "offline-test-only",
+          maxRetries: 0,
+          onPayload: (payload) => providerPayload(f, payload),
+          fetch: async (_input, init) => {
+            bodies.push(JSON.parse(String(init?.body)));
+            throw new Error("offline");
+          },
+        }).result();
+      f.ctx.model = completions;
+      await request();
+      await requestRewind(f, REWIND_ARGS, "tc-rewind", 90_000);
+      await request();
+      assert.equal(bodies.length, 2);
+      assert.equal(bodies[0].tool_choice, undefined);
+      assert.equal(bodies[1].tool_choice, "none");
+      assert.ok(Array.isArray(bodies[1].tools) && bodies[1].tools.length === 1);
+      assert.deepEqual(bodies[1].tools, bodies[0].tools);
+      assert.deepEqual(bodies[1].messages, bodies[0].messages);
+
+      const google = { ...base, api: "google-generative-ai" as const };
+      f.ctx.model = google;
+      const sent: unknown[] = [];
+      globalThis.fetch = async () => {
+        throw new Error("offline");
+      };
+      await streamGoogle(google, context, {
+        apiKey: "offline-test-only",
+        maxRetries: 0,
+        onPayload: async (payload) => {
+          const next = await providerPayload(f, payload);
+          sent.push(next);
+          return next;
+        },
+      }).result();
+      const config = (sent[0] as { config: Record<string, unknown> }).config;
+      assert.deepEqual(config.toolConfig, {
+        functionCallingConfig: { mode: "NONE" },
+      });
+      assert.ok(Array.isArray(config.tools) && config.tools.length === 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("does not retry an output-only request that the payload hook cannot safely cap", async () => {
     for (const payload of [
       { messages: [] },
