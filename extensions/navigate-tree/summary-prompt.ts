@@ -107,6 +107,21 @@ export function buildSummaryRequestText(
 }
 
 /**
+ * The summary turn's text, from its `## Goal` heading on (r5d's first
+ * required heading), or `null` when the heading is missing — an
+ * acknowledgement or commentary turn is a failed attempt, never a stored
+ * summary. Any preamble before the heading is dropped.
+ */
+export function extractSummaryText(text: string): string | null {
+  const start = text.search(/^## Goal\b/m);
+  if (start < 0) return null;
+  const summary = text.slice(start).trim();
+  // A bare heading is not a summary: storing it would lose the collapsed work.
+  const body = summary.replace(/^## Goal\b[^\n]*/, "").trim();
+  return body.length > 0 ? summary : null;
+}
+
+/**
  * Byte-exact copy of upstream's (non-exported) `BRANCH_SUMMARY_PREAMBLE`
  * (`core/compaction/branch-summarization.js`), so a stored in-band summary
  * has the same shape as one produced by `generateBranchSummary`.
