@@ -5,7 +5,7 @@ title: "Independent folding engine: design and units"
 description: "Execution model, interfaces and delivery units for the shared fold engine used by manual, automatic, agent and recovery folds."
 type: "plan"
 created: "2026-10-23T13:42:45+02:00"
-updated: "2026-10-23T17:30:18+02:00"
+updated: "2026-10-23T19:58:23+02:00"
 createdBy: "coding-agent"
 updatedBy: "coding-agent"
 ---
@@ -104,6 +104,12 @@ Safe points:
   confirms that specific item is replaced. Verifier chosen by a pre-registered live
   spike (selected on development, reported on holdout).
 
+- **E19** Active user requests are retained outside generated narrative with source
+  IDs and verbatim text. Tool activity and custom notifications do not close them;
+  a successful text-only final response does. Shared preview includes the exact
+  preserved payload, and repeated folds carry typed details without recursively
+  embedding old continuations. A live agent-fold failure established this need.
+
 ## Units
 
 | Unit | Scope | Status |
@@ -113,20 +119,21 @@ Safe points:
 | U2 | extract `commitFold` from `completeRewind`, behavior unchanged | merged (fold-point boundary fixed in 38916ac) |
 | U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | merged |
 | U4a | rewind tool on the engine; delete the in-band summary turn | merged; historical projection/rendering restored in 0480db6 |
-| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | shared preview merged; manual wiring in progress |
+| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | merged; live manual execution passed, final-source TUI pending |
 | M1 | `milestone-policy.ts`: E17 confirm policy, tunable, production builders | policy and configuration merged; host wiring pending |
-| R1 | retirement-verification spike for E18, then preset integration | benchmark merged; Microsoft specific-item verification of escalated retirements being integrated |
+| R1 | retirement-verification spike for E18, then preset integration | merged with tunable policy settings |
 | U4c | auto controller executes through the engine | later |
-| U4d | overflow and guard-abort recovery through the engine | later |
-| U6 | live acceptance: refused full window, pre-compaction anchor, auto fold, TUI | later |
+| U4d | overflow and guard-abort recovery through the engine | preflight and explicit provider errors merged; length/silent recovery and legacy removal in progress |
+| U6 | live acceptance: refused full window, pre-compaction anchor, auto fold, TUI | manual/preflight passed; active-request fix merged after failed agent run; rerun and remaining scenarios pending |
 
 ## Integration notes
 
 - Recovery continuation must be proved through the real SDK loop. Local SDK source
   ignores `turn_end` continuation after an aborted/error assistant; session `abort()`
   also prevents post-run continuation. Saved real-loop/local-transport experiments
-  establish the awaited preflight and before-settlement seams; production-engine
-  and real-provider acceptance remain to run.
+  establish the awaited preflight and before-settlement seams. Production-engine
+  tests and live preflight acceptance passed; real provider-error and final-source
+  acceptance remain separate open checks.
 - The user's current global auto-navigation config has a legacy `controller_model`
   selector. Delivery must migrate that field to the explicitly chosen E17 policy,
   preserving enablement, thresholds, model overrides and disclosure filters. Back up
