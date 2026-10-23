@@ -63,7 +63,6 @@ import {
   buildSessionProjection,
   CONFIG_DIR_NAME,
   collectEntriesForBranchSummary,
-  convertToLlm,
   type ExtensionAPI,
   type ExtensionCommandContext,
   type ExtensionContext,
@@ -2888,11 +2887,17 @@ export default function (pi: ExtensionAPI) {
       sm: ctx.sessionManager as SessionManager,
       model: ctx.model,
       registry: ctx.modelRegistry,
-      thinking:
-        typeof pi.getThinkingLevel === "function"
-          ? pi.getThinkingLevel()
-          : "off",
+      thinking: summaryThinking(),
     };
+  }
+
+  /** Fold summaries are extraction and one write-up: reasoning above low adds latency and cost, not fidelity. */
+  function summaryThinking(): ThinkingLevel | "off" {
+    const level =
+      typeof pi.getThinkingLevel === "function" ? pi.getThinkingLevel() : "off";
+    return level === "off" || level === "minimal" || level === "low"
+      ? level
+      : "low";
   }
 
   const gateFailed = (reason: string, detail: string): FoldResult => ({
@@ -3029,11 +3034,7 @@ export default function (pi: ExtensionAPI) {
       summaryModel(commandCtx) {
         const model = commandCtx.model;
         if (!model) return "no model selected";
-        const thinking =
-          typeof pi.getThinkingLevel === "function"
-            ? pi.getThinkingLevel()
-            : "off";
-        return `${model.provider}/${model.id}:${thinking}`;
+        return `${model.provider}/${model.id}:${summaryThinking()}`;
       },
       minFocusLength: MIN_SUMMARY_FOCUS_LENGTH,
       async start(commandCtx, plan, options) {
@@ -4339,7 +4340,6 @@ export default function (pi: ExtensionAPI) {
     if (!host.model) return;
     host.model = structuredClone(host.model);
     const modelKey = `${host.model.provider}/${host.model.id}`;
-    const contextWindow = host.model.contextWindow;
     const modelSnapshot = JSON.stringify(host.model);
     const currentConfig = () =>
       resolveAutoNavigateConfig(
@@ -4486,75 +4486,70 @@ export default function (pi: ExtensionAPI) {
     };
     if (plan.action.kind === "anchor") {
       anchor(plan.action.entryId, plan.action.suggestedName);
-    } else if (plan.action.kind === "fold") {
-      const boundary = plan.action.boundaryEntryId;
-      const cut = recoveryCutOf(sm);
-      const projected = projectHandoffs(
-        buildSessionProjection(entries, leafId),
-        entries,
-      ).entries;
-      const at = projected.findIndex(
-        (entry) => entry.sourceEntry.id === boundary,
-      );
-      const completeTail =
-        at >= 0 &&
-        !projected
-          .slice(at + 1)
-          .some((entry) => convertToLlm(entry.messages).length > 0);
-      const fallback = () => anchor(boundary, "milestone");
-      if (!cut.ok || cut.foldPointId !== boundary || !completeTail) {
-        fallback();
-      } else {
-        const focus = defaultFoldFocus(sm);
-        const candidates = priceFoldCandidates(sm, {
-          model: host.model,
-          handoffMode,
-          captured,
-          focus,
-          suggestLabel: (name) => suggestFoldLabel(sm, name),
-          foldPointId: boundary,
-          thinking: host.thinking,
-        });
-        const selected = selectFoldTarget(
-          candidates,
-          foldRecommendationBudget(contextWindow, reserve),
-        );
-        if (!selected.ok) fallback();
-        else {
-          if (!isCurrent() || runningFolds.has(sessionId)) return;
-          const request: FoldRequest = {
-            sessionId,
-            origin: "auto",
-            rewindTo: selected.candidate.name,
-            newLabel: selected.candidate.suggestedLabel,
-            focus,
-          };
-          host.isIdle = isCurrent;
-          host.foldPointId = boundary;
-          rewindTurns.add(message);
-          let outcome: FoldResult;
-          try {
-            outcome = await runFold(host, request, { signal });
-          } catch (error) {
-            outcome = gateFailed(
-              "exception",
-              error instanceof Error ? error.message : String(error),
-            );
-          }
-          if (outcome.status === "done")
-            return deliver(foldDoneDraft(request, outcome), true);
-          const draft = foldFailedDraft(request, outcome);
-          if (unrestoredFoldCursors.has(sm)) {
-            try {
-              notify?.(String(draft.content));
-            } catch {
-              /* The cursor is quarantined. */
-            }
-            return { entries: [], continue: false };
-          }
-          return deliver(draft);
+    } else if (plan.action.kind === "pressure-fold") {
+      // Same rules as recovery: canonical cut, shared materialized preview,
+      // newest anchor whose result lands under the threshold, else the oldest valid one.
+      const skipped = (reason: string) => {
+        const text = `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}, but no fold ran: ${toOneLine(reason, 400) ?? "no target"}`;
+        try {
+          notify?.(text);
+        } catch {
+          /* A stale UI must not block the receipt. */
         }
+        drafts.push({
+          type: "custom_message",
+          customType: "navigate-tree-auto-warning",
+          content: text,
+          display: true,
+        });
+        return deliver();
+      };
+      const cut = recoveryCutOf(sm);
+      if (!cut.ok) return skipped(cut.detail);
+      const focus = defaultFoldFocus(sm);
+      const candidates = priceFoldCandidates(sm, {
+        model: host.model,
+        handoffMode,
+        captured,
+        focus,
+        suggestLabel: (name) => suggestFoldLabel(sm, name),
+        foldPointId: cut.foldPointId,
+        thinking: host.thinking,
+      });
+      const selected = selectFoldTarget(candidates, config.rewindAtTokens);
+      if (!selected.ok) return skipped(selected.reasons.join("; "));
+      if (!isCurrent() || runningFolds.has(sessionId)) return;
+      const request: FoldRequest = {
+        sessionId,
+        origin: "auto",
+        rewindTo: selected.candidate.name,
+        newLabel: selected.candidate.suggestedLabel,
+        focus,
+      };
+      host.isIdle = isCurrent;
+      host.foldPointId = cut.foldPointId;
+      rewindTurns.add(message);
+      let outcome: FoldResult;
+      try {
+        outcome = await runFold(host, request, { signal });
+      } catch (error) {
+        outcome = gateFailed(
+          "exception",
+          error instanceof Error ? error.message : String(error),
+        );
       }
+      if (outcome.status === "done")
+        return deliver(foldDoneDraft(request, outcome), true);
+      const draft = foldFailedDraft(request, outcome);
+      if (unrestoredFoldCursors.has(sm)) {
+        try {
+          notify?.(String(draft.content));
+        } catch {
+          /* The cursor is quarantined. */
+        }
+        return { entries: [], continue: false };
+      }
+      return deliver(draft);
     }
     return warnings.length ? deliver() : undefined;
   }

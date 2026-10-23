@@ -1,11 +1,6 @@
-import {
-  buildSessionProjection,
-  convertToLlm,
-  type SessionEntry,
-} from "@earendil-works/pi-coding-agent";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { buildAutoMilestoneEvidence } from "./auto-milestone.ts";
 import type { AutoNavigateConfig } from "./auto-navigate-config.ts";
-import { projectHandoffs } from "./handoff-projection.ts";
 import { LABEL_PREFIX } from "./helpers.ts";
 import type { PolicyRegistry } from "./intent-policy.ts";
 import {
@@ -24,13 +19,19 @@ export interface AutoFoldState {
   lastAnchorEntryId?: string;
   aboveRewindThreshold: boolean;
   lastActionTokens?: number;
+  /** Context at the last pressure fold; unlike `lastActionTokens`, the fold's own anchor does not reset it. */
+  lastPressureTokens?: number;
 }
 
-/** A semantic suggestion only; the parent owns labels, fold admission and execution. */
+/**
+ * What to do at this turn boundary; the parent owns labels, fold admission and
+ * execution. `pressure-fold` is deterministic: context crossed `rewindAtTokens`.
+ * Classifier decisions only place milestone anchors.
+ */
 export type AutoFoldAction =
   | { kind: "none" }
   | { kind: "anchor"; entryId: string; suggestedName: string }
-  | { kind: "fold"; boundaryEntryId: string };
+  | { kind: "pressure-fold" };
 
 /** Immutable turn-end inputs; isCurrent must cover session, leaf, model and config. */
 export interface AutoFoldOptions {
@@ -145,10 +146,11 @@ export async function planAutomaticFold(
   state.lastCheckTokens = Math.min(state.lastCheckTokens, activeTokens);
   if (state.lastActionTokens !== undefined)
     state.lastActionTokens = Math.min(state.lastActionTokens, activeTokens);
+  if (state.lastPressureTokens !== undefined)
+    state.lastPressureTokens = Math.min(state.lastPressureTokens, activeTokens);
   const above =
     config.mode === "anchor-and-rewind" &&
     activeTokens >= config.rewindAtTokens;
-  const crossed = above && !state.aboveRewindThreshold;
   state.aboveRewindThreshold = above;
   state.turnsSinceCheck++;
   if (options.calledNavigateTree) {
@@ -156,14 +158,30 @@ export async function planAutomaticFold(
     state.lastCheckTokens = activeTokens;
     return result;
   }
-  if (!config.enabled || !policy || policy.classifier === null) return result;
+  if (!config.enabled) return result;
+  // Pressure folds need no classifier: crossing the threshold is the decision.
+  // Requiring fresh tokens since the last one keeps a fold that cannot get
+  // below the threshold from repeating every turn.
+  if (
+    above &&
+    (state.lastPressureTokens === undefined ||
+      activeTokens - state.lastPressureTokens >= config.minTokensSinceAnchor)
+  ) {
+    state.turnsSinceCheck = 0;
+    state.lastCheckTokens = activeTokens;
+    if (current()) {
+      result.action = { kind: "pressure-fold" };
+      state.lastPressureTokens = activeTokens;
+    }
+    return result;
+  }
   if (
     state.lastActionTokens !== undefined &&
     activeTokens - state.lastActionTokens < config.minTokensSinceAnchor
   )
     return result;
+  if (!policy || policy.classifier === null) return result;
   if (
-    !crossed &&
     state.turnsSinceCheck < config.checkEveryTurns &&
     activeTokens - state.lastCheckTokens < config.minTokensSinceAnchor
   )
@@ -199,40 +217,25 @@ export async function planAutomaticFold(
     const boundaryEntryId = evidence.recordEntryIds.get(recordId);
     if (
       !boundaryEntryId ||
-      !entries.some((entry) => entry.id === boundaryEntryId)
+      !entries.some((entry) => entry.id === boundaryEntryId) ||
+      getLabel(boundaryEntryId) !== undefined
     )
       return result;
-    const projected = projectHandoffs(
-      buildSessionProjection(entries, leafId),
-      entries,
-    ).entries;
-    const at = projected.findIndex(
-      (entry) => entry.sourceEntry.id === boundaryEntryId,
+    const record = evidence.input.records.find(
+      (record) => record.id === recordId,
     );
-    if (at < 0) return result;
-    const completeTail = !projected
-      .slice(at + 1)
-      .some((entry) => convertToLlm(entry.messages).length > 0);
-    if (above && completeTail) {
-      result.action = { kind: "fold", boundaryEntryId };
-    } else {
-      if (getLabel(boundaryEntryId) !== undefined) return result;
-      const record = evidence.input.records.find(
-        (record) => record.id === recordId,
-      );
-      if (!record) return result;
-      const labels = new Set(
-        entries.flatMap((entry) => {
-          const label = getLabel(entry.id);
-          return label === undefined ? [] : [label];
-        }),
-      );
-      result.action = {
-        kind: "anchor",
-        entryId: boundaryEntryId,
-        suggestedName: anchorName(record.text, boundaryEntryId, labels),
-      };
-    }
+    if (!record) return result;
+    const labels = new Set(
+      entries.flatMap((entry) => {
+        const label = getLabel(entry.id);
+        return label === undefined ? [] : [label];
+      }),
+    );
+    result.action = {
+      kind: "anchor",
+      entryId: boundaryEntryId,
+      suggestedName: anchorName(record.text, boundaryEntryId, labels),
+    };
     if (!current()) result.action = { kind: "none" };
     else state.lastActionTokens = activeTokens;
   } catch (error) {
