@@ -41,6 +41,7 @@ import {
   TRUNCATION_MARKER,
 } from "./continuity-ledger.ts";
 import { CHAT_MAX_OUTPUT_TOKENS, RECOMMENDED_POLICY } from "./intent-policy.ts";
+import { buildRetirementCheckContext } from "./retirement-check.ts";
 
 const base = (id: string) => ({
   id,
@@ -1652,6 +1653,12 @@ describe("createModelClassifier: intent policy", () => {
     kind: choice("rule"),
     contradicts: choice("R1", 0.3),
   });
+  const confirmed =
+    (base: Answers | ((id: string, context: ClassifierContext) => Answers)) =>
+    (id: string, context: ClassifierContext): Answers => {
+      if (context.questions.retires) return { retires: choice("yes") };
+      return typeof base === "function" ? base(id, context) : base;
+    };
 
   describe("recommended preset", () => {
     it("sends the production request to the decisions model and never calls the chat model when it is confident", async () => {
@@ -1684,10 +1691,10 @@ describe("createModelClassifier: intent policy", () => {
         { id: "D2", kind: "decision", text: "Ship on Friday" },
       ];
       const { classify, classifyCalls, chatCalls } = await make("recommended", {
-        classify: () => ({
+        classify: confirmed(() => ({
           kind: choice("rule"),
           contradicts: choice("R1", 0.4),
-        }),
+        })),
         chat: reply("R1"),
       });
       const out = await classify?.(input({ text, activeItems: items }));
@@ -1696,7 +1703,7 @@ describe("createModelClassifier: intent policy", () => {
         supersedes: ["R1"],
         by: "classifier",
       });
-      assert.equal(classifyCalls.length, 1);
+      assert.equal(classifyCalls.length, 2);
       assert.equal(chatCalls.length, 1);
       const [call] = chatCalls;
       assert.equal(call?.id, CHAT_ID);
@@ -1737,8 +1744,9 @@ describe("createModelClassifier: intent policy", () => {
         { type: "bool", probability: 0.9 },
       ]) {
         const { classify, chatCalls } = await make("recommended", {
-          classify: () =>
-            ({ kind: choice("rule"), contradicts }) as unknown as Answers,
+          classify: confirmed(
+            () => ({ kind: choice("rule"), contradicts }) as unknown as Answers,
+          ),
           chat: reply("R1"),
         });
         assert.deepEqual(await classify?.(input()), {
@@ -1885,7 +1893,7 @@ describe("createModelClassifier: intent policy", () => {
 
     it("keeps the verbatim and supersession invariants: the stored text is the user's words and only an offered item is cited", async () => {
       const { classify } = await make("recommended", {
-        classify: doubtful,
+        classify: confirmed(doubtful),
         chat: reply("R1"),
       });
       assert.ok(classify);
@@ -1935,7 +1943,10 @@ describe("createModelClassifier: intent policy", () => {
     it("supersession.model null: the decisions model judges only the kind and the chat model is the only supersession stage", async () => {
       const { classify, classifyCalls, chatCalls } = await make(
         { preset: "recommended", supersession: { model: null } },
-        { classify: () => ({ kind: choice("rule") }), chat: reply("R1") },
+        {
+          classify: confirmed(() => ({ kind: choice("rule") })),
+          chat: reply("R1"),
+        },
       );
       assert.deepEqual(await classify?.(input()), {
         kind: "rule",
@@ -2111,6 +2122,271 @@ describe("createModelClassifier: intent policy", () => {
         warnings[0] ?? "",
         /"custom policy" is unavailable \(openrouter\/acme\/ghost not available/,
       );
+    });
+  });
+
+  describe("retirement verification", () => {
+    const items = [
+      { id: "R1", kind: "rule", text: "Use tabs" },
+      { id: "D2", kind: "decision", text: "Ship on Friday" },
+    ];
+    const text = "From now on use spaces, not tabs.";
+    const message = () => input({ text, activeItems: items });
+    const retirementCalls = <T extends { context: ClassifierContext }>(
+      calls: T[],
+    ) => calls.filter((call) => call.context.questions.retires);
+
+    it("does not ask the verifier for a primary retirement or an explicit none", async () => {
+      for (const contradicts of [choice("R1"), choice("none")]) {
+        const { classify, classifyCalls, chatCalls } = await make(
+          "recommended",
+          {
+            classify: (_id, context) => {
+              if (context.questions.retires) {
+                throw new Error("verifier must not run");
+              }
+              return { kind: choice("rule"), contradicts };
+            },
+            chat: reply("R1"),
+          },
+        );
+        const out = await classify?.(message());
+        assert.equal(out?.warning, undefined);
+        assert.equal(out?.kind, "rule");
+        assert.deepEqual(
+          out?.supersedes,
+          contradicts.choice === "R1" ? ["R1"] : undefined,
+        );
+        assert.equal(chatCalls.length, 0);
+        assert.equal(classifyCalls.length, 1);
+      }
+    });
+
+    it("does not ask the verifier when escalation says none", async () => {
+      const { classify, classifyCalls, chatCalls } = await make("recommended", {
+        classify: (_id, context) => {
+          if (context.questions.retires)
+            throw new Error("verifier must not run");
+          return doubtful();
+        },
+        chat: reply("none"),
+      });
+      assert.deepEqual(await classify?.(message()), {
+        kind: "rule",
+        by: "classifier",
+      });
+      assert.equal(chatCalls.length, 1);
+      assert.equal(retirementCalls(classifyCalls).length, 0);
+    });
+
+    it("confirms a true replacement and rejects a wrong one without dropping the new intent", async () => {
+      const yes = await make("recommended", {
+        classify: confirmed(doubtful),
+        chat: reply("R1"),
+      });
+      assert.deepEqual(await yes.classify?.(message()), {
+        kind: "rule",
+        supersedes: ["R1"],
+        by: "classifier",
+      });
+      const check = retirementCalls(yes.classifyCalls)[0];
+      assert.equal(check?.id, CLASSIFIER_ID);
+      assert.deepEqual(
+        check?.context,
+        buildRetirementCheckContext({
+          message: text,
+          item: { id: "R1", kind: "rule", text: "Use tabs" },
+          otherItems: [{ id: "D2", kind: "decision", text: "Ship on Friday" }],
+        }).context,
+      );
+
+      const no = await make("recommended", {
+        classify: (_id, context) =>
+          context.questions.retires ? { retires: choice("no") } : doubtful(),
+        chat: reply("R1"),
+      });
+      assert.deepEqual(await no.classify?.(message()), {
+        kind: "rule",
+        by: "classifier",
+      });
+      assert.ok(no.classify);
+      const existing = apply(createLedger(), [
+        {
+          op: { op: "add", kind: "rule", text: "Use tabs", quote: "Use tabs" },
+          ctx: { origin: "user", entryId: "u0" },
+        },
+      ]).ledger;
+      const result = await captureIntent(
+        [user("u1", text)],
+        undefined,
+        existing,
+        no.classify,
+      );
+      assert.deepEqual(
+        result.ops.map(({ op }) => op),
+        [{ op: "add", kind: "rule", text, quote: text }],
+      );
+    });
+
+    it("fails closed on a missing, malformed, low-confidence or unoffered verifier answer", async () => {
+      for (const retires of [
+        undefined,
+        { type: "bool", probability: 0.9 },
+        choice("yes", 0.69),
+        choice("maybe"),
+        choice("R1"),
+      ]) {
+        const { classify, classifyCalls } = await make("recommended", {
+          classify: () =>
+            ({
+              kind: choice("rule"),
+              contradicts: choice("R1", 0.3),
+              ...(retires && { retires }),
+            }) as unknown as Answers,
+          chat: reply("R1"),
+        });
+        assert.deepEqual(await classify?.(input()), {
+          kind: "rule",
+          by: "classifier",
+        });
+        assert.equal(retirementCalls(classifyCalls).length, 1);
+      }
+    });
+
+    it("a verifier error keeps the item, warns once and does not ask again", async () => {
+      const { classify, classifyCalls } = await make("recommended", {
+        classify: (_id, context) => {
+          if (context.questions.retires) throw new Error("verifier down");
+          return doubtful();
+        },
+        chat: reply("R1"),
+      });
+      const first = await classify?.(input());
+      assert.equal(first?.kind, "rule");
+      assert.equal(first?.supersedes, undefined);
+      assert.match(
+        first?.warning ?? "",
+        new RegExp(`${MICROSOFT} failed \\(verifier down\\)`),
+      );
+      const second = await classify?.(input());
+      assert.equal(second?.warning, undefined);
+      assert.equal(second?.kind, "rule");
+      assert.equal(second?.supersedes, undefined);
+      assert.equal(retirementCalls(classifyCalls).length, 1);
+      assert.equal(
+        classifyCalls.filter((call) => call.context.questions.kind).length,
+        2,
+      );
+    });
+
+    it("a cancelled verifier keeps the captured intent and does not warn", async () => {
+      const controller = new AbortController();
+      const { classify } = await make("recommended", {
+        classify: (_id, context) => {
+          if (context.questions.retires) {
+            controller.abort();
+            throw new Error("aborted");
+          }
+          return doubtful();
+        },
+        chat: reply("R1"),
+      });
+      assert.deepEqual(await classify?.(input(), controller.signal), {
+        kind: "rule",
+        by: "classifier",
+      });
+    });
+
+    it("respects a disabled, swapped or reworded verifier", async () => {
+      const off = await make(
+        {
+          preset: "recommended",
+          supersession: { verification: { model: null } },
+        },
+        {
+          classify: (_id, context) => {
+            if (context.questions.retires) {
+              throw new Error("verifier must not run");
+            }
+            return doubtful();
+          },
+          chat: reply("R1"),
+        },
+      );
+      assert.deepEqual(await off.classify?.(input()), {
+        kind: "rule",
+        supersedes: ["R1"],
+        by: "classifier",
+      });
+      assert.equal(retirementCalls(off.classifyCalls).length, 0);
+
+      const swapped = await make(
+        {
+          preset: "recommended",
+          supersession: {
+            verification: { model: PICKED, instructions: "RETIRE WORDING" },
+          },
+        },
+        {
+          classify: (id, context) => {
+            if (!context.questions.retires) return doubtful();
+            return id === "acme/judge"
+              ? { retires: choice("yes", 0.7) }
+              : { retires: choice("no") };
+          },
+          chat: reply("R1"),
+        },
+      );
+      assert.deepEqual(await swapped.classify?.(input()), {
+        kind: "rule",
+        supersedes: ["R1"],
+        by: "classifier",
+      });
+      const call = retirementCalls(swapped.classifyCalls)[0];
+      assert.equal(call?.id, "acme/judge");
+      assert.equal(
+        call?.context.questions.retires?.instructions,
+        "RETIRE WORDING",
+      );
+      assert.deepEqual(
+        call?.context.questions.retires?.criteria,
+        buildRetirementCheckContext({
+          message: input().text,
+          item: { id: "R1", kind: "rule", text: "Use tabs" },
+        }).context.questions.retires?.criteria,
+      );
+
+      const warnings: string[] = [];
+      const missing = await make(
+        {
+          preset: "recommended",
+          supersession: {
+            verification: { model: "openrouter/acme/ghost" },
+          },
+        },
+        {},
+        warnings,
+      );
+      assert.equal(missing.classify, undefined);
+      assert.match(warnings[0] ?? "", /openrouter\/acme\/ghost not available/);
+    });
+
+    it("uses the policy confidence gate for the confirmation", async () => {
+      const { classify } = await make(
+        { preset: "recommended", minConfidence: 0.5 },
+        {
+          classify: (_id, context) =>
+            context.questions.retires
+              ? { retires: choice("yes", 0.6) }
+              : doubtful(),
+          chat: reply("R1"),
+        },
+      );
+      assert.deepEqual(await classify?.(input()), {
+        kind: "rule",
+        supersedes: ["R1"],
+        by: "classifier",
+      });
     });
   });
 });

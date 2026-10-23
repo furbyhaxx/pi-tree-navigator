@@ -25,6 +25,7 @@ describe("parseIntentPolicyObject", () => {
     const out = parseIntentPolicyObject({
       supersession: {
         escalation: { instructions: " Second. ", model: ` ${LUNA} ` },
+        verification: { model: " acme/check ", instructions: " Check. " },
         model: null,
         instructions: "First.",
       },
@@ -45,6 +46,7 @@ describe("parseIntentPolicyObject", () => {
           model: null,
           instructions: "First.",
           escalation: { model: LUNA, instructions: "Second." },
+          verification: { model: "acme/check", instructions: "Check." },
         },
       }),
     );
@@ -96,6 +98,18 @@ describe("parseIntentPolicyObject", () => {
     assert.ok(parseIntentPolicyObject({ minConfidence: 1 }).ok);
   });
 
+  it("names a bad verification stage by its field path", () => {
+    assert.deepEqual(
+      problems({
+        supersession: { verification: { model: "no-slash", extra: true } },
+      }),
+      [
+        "continuity.intentClassifier.supersession.verification.extra is not a field",
+        'continuity.intentClassifier.supersession.verification.model must be "provider/id" or null',
+      ],
+    );
+  });
+
   it("rejects a policy with no source for the intent kind", () => {
     const expected = [
       "continuity.intentClassifier has no source for the intent kind: set kind.model or leave heuristics on",
@@ -122,6 +136,7 @@ describe("resolveIntentPolicy", () => {
       kind: { model: MICROSOFT },
       supersession: { model: MICROSOFT },
       escalation: { model: LUNA },
+      verification: { model: MICROSOFT },
     });
   });
 
@@ -142,13 +157,31 @@ describe("resolveIntentPolicy", () => {
         kind: { model: MICROSOFT, instructions: "Kind." },
         supersession: { model: null },
         escalation: { model: "acme/judge" },
+        verification: { model: MICROSOFT },
       },
+    );
+    assert.deepEqual(
+      object({
+        preset: "recommended",
+        supersession: {
+          verification: { model: null, instructions: "Check." },
+        },
+      })?.verification,
+      { model: null, instructions: "Check." },
+    );
+    assert.equal(
+      object({
+        preset: "recommended",
+        supersession: { verification: { model: "openrouter/acme/judge" } },
+      })?.verification.model,
+      "openrouter/acme/judge",
     );
     assert.deepEqual(object({ kind: { model: "acme/judge" } }), {
       heuristics: true,
       kind: { model: "acme/judge" },
       supersession: { model: null },
       escalation: { model: null },
+      verification: { model: null },
     });
   });
 
@@ -158,6 +191,7 @@ describe("resolveIntentPolicy", () => {
       kind: { model: "typesafe/jev-1.14" },
       supersession: { model: "typesafe/jev-1.14" },
       escalation: { model: null },
+      verification: { model: null },
     });
   });
 

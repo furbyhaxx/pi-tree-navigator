@@ -1,12 +1,13 @@
 /**
  * Policy of the intent classifier: which models judge a user message for the
- * continuity ledger and how a second model settles a doubtful supersession.
+ * continuity ledger, how a second model settles a doubtful supersession, and
+ * how a retirement named by that escalation is confirmed before it applies.
  *
  * `continuity.intentClassifier` is a `provider/id` model (one model, both
- * questions), the `"recommended"` preset, or an object that overrides the
- * preset field by field (see `IntentPolicySetting`). An object is validated
- * here and carried through the effective config as its canonical JSON text, so
- * a changed policy compares unequal as a plain string.
+ * questions, no verification), the `"recommended"` preset, or an object that
+ * overrides the preset field by field (see `IntentPolicySetting`). An object
+ * is validated here and carried through the effective config as its canonical
+ * JSON text, so a changed policy compares unequal as a plain string.
  *
  * No I/O of its own: requests go through the Pi model registry.
  */
@@ -31,28 +32,76 @@ export const RECOMMENDED_POLICY = {
   escalation: "openai/gpt-6-luna",
 } as const;
 
-/** Evidence the user chose the preset on ("Split + chain", decided 2026-10-23). */
+/**
+ * Evidence for the preset. Holdout v3 capture is 32 cases repeated 3 times
+ * (96 decisions). Retirement negatives are 134 cases repeated 3 times (402
+ * decisions); those repeats are not independent observations. Printed rates
+ * are observed fractions, not a bound or a guarantee.
+ */
 export const RECOMMENDED_POLICY_PROVENANCE = {
   decided: "2026-10-23",
-  report:
-    ".project/analyses/classifier-eval/reports/catalogued-2026-10-23/report.md",
+  reports: {
+    holdout:
+      ".project/analyses/classifier-eval/reports/holdout-v3-2026-10-23/summary.md",
+    retirement:
+      ".project/analyses/classifier-eval/reports/retirement-check-2026-10-23/summary.md",
+  },
   confidenceGate: 0.7,
   intentKind: {
     policy: "single(microsoft-decision-1)",
-    holdoutCases: 8,
+    holdoutCases: 32,
+    repetitions: 3,
+    holdoutDecisions: 96,
     holdoutUnsafeAccepted: 0,
-    holdoutAcceptedExact: 0.75,
-    developmentAcceptedExact: 0.8125,
-    rejected: "escalating the kind to gpt-6-luna chat: 2 unsafe on holdout",
+    holdoutAcceptedExact: 0.781,
+    developmentAcceptedExact: 0.813,
+    usdPer1000Decisions: 0.01,
+    rejected:
+      "escalating the kind to gpt-6-luna chat: 2 unsafe accepted in 96 holdout decisions",
   },
   supersession: {
     policy: "chain(microsoft-decision-1 > gpt-6-luna chat)",
-    holdoutCases: 8,
-    holdoutUnsafeAccepted: 0,
+    holdoutCases: 32,
+    repetitions: 3,
+    holdoutDecisions: 96,
+    holdoutUnsafeAccepted: 1,
     developmentUnsafeAccepted: 0,
-    holdoutAcceptedExact: 0.875,
-    developmentAcceptedExact: 0.9375,
-    usdPer1000Decisions: 0.0368,
+    holdoutAcceptedExact: 0.927,
+    developmentAcceptedExact: 0.938,
+    replayUsdPer1000Decisions: 0.0418,
+    summaryUsdPer1000Range: [0.022, 0.042],
+  },
+  retirementVerification: {
+    policy: "verify escalated retirements with microsoft-decision-1",
+    verifier: "openrouter/microsoft/microsoft-decision-1",
+    gate: 0.7,
+    holdoutCases: 152,
+    holdoutPositives: 13,
+    holdoutNegatives: 134,
+    holdoutAmbiguous: 5,
+    repetitions: 3,
+    repeatedNegativeDecisions: 402,
+    repeatedPositiveDecisions: 39,
+    repeatsAreIndependent: false,
+    holdoutUnsafeYes: 0,
+    holdoutPositivesAccepted: 39,
+    developmentNegatives: 120,
+    developmentUnsafeYes: 0,
+    developmentPositivesAccepted: 14,
+    replay: {
+      decisions: 96,
+      unsafeBefore: 1,
+      unsafeAfter: 0,
+      checked: 4,
+      confirmed: 0,
+      rejected: 4,
+      unsafeStopped: 1,
+      positivesBlocked: 0,
+      ambiguousRejected: 3,
+      acceptedExactIfRejectionKeepsItem: 0.938,
+      addedUsdPer1000Decisions: 0.0005,
+      addedP95Ms: 341,
+    },
   },
 } as const;
 
@@ -77,6 +126,8 @@ export interface IntentPolicySetting {
   supersession?: IntentStageSetting & {
     /** Asked only when `supersession` abstains (or is off). */
     escalation?: IntentStageSetting;
+    /** Confirms a retirement named by escalation. `model: null` skips the check. */
+    verification?: IntentStageSetting;
   };
 }
 
@@ -92,6 +143,8 @@ export interface IntentPolicy {
   kind: StagePolicy;
   supersession: StagePolicy;
   escalation: StagePolicy;
+  /** Asked only about a retirement the escalation stage named. */
+  verification: StagePolicy;
 }
 
 const selector = (id: string) => `${RECOMMENDED_POLICY.provider}/${id}`;
@@ -101,6 +154,7 @@ const NO_MODELS: IntentPolicy = {
   kind: { model: null },
   supersession: { model: null },
   escalation: { model: null },
+  verification: { model: null },
 };
 
 const RECOMMENDED: IntentPolicy = {
@@ -108,6 +162,7 @@ const RECOMMENDED: IntentPolicy = {
   kind: { model: selector(RECOMMENDED_POLICY.classifier) },
   supersession: { model: selector(RECOMMENDED_POLICY.classifier) },
   escalation: { model: selector(RECOMMENDED_POLICY.escalation) },
+  verification: { model: selector(RECOMMENDED_POLICY.classifier) },
 };
 
 const MAX_INSTRUCTIONS_CHARS = 1_000;
@@ -181,6 +236,24 @@ function stageOf(
   return out;
 }
 
+const SUPERSESSION_STAGES = ["escalation", "verification"] as const;
+
+function nestedStages(
+  where: string,
+  parent: unknown,
+  problems: Problems,
+): Partial<Record<(typeof SUPERSESSION_STAGES)[number], IntentStageSetting>> {
+  const record = isRecord(parent) ? parent : undefined;
+  const out: Partial<
+    Record<(typeof SUPERSESSION_STAGES)[number], IntentStageSetting>
+  > = {};
+  for (const key of SUPERSESSION_STAGES) {
+    const stage = stageOf(`${where}.${key}`, record?.[key], problems);
+    if (stage) out[key] = stage;
+  }
+  return out;
+}
+
 /** Overrides applied to `base`; absent fields keep the base value. */
 function overlay(base: StagePolicy, over: IntentStageSetting | undefined) {
   return {
@@ -203,6 +276,10 @@ function applySetting(
     kind: overlay(preset.kind, setting.kind),
     supersession: overlay(preset.supersession, setting.supersession),
     escalation: overlay(preset.escalation, setting.supersession?.escalation),
+    verification: overlay(
+      preset.verification,
+      setting.supersession?.verification,
+    ),
   };
 }
 
@@ -258,17 +335,12 @@ export function parseIntentPolicyObject(
     `${root}.supersession`,
     value.supersession,
     problems,
-    ["escalation"],
+    SUPERSESSION_STAGES,
   );
   if (supersession) {
-    const escalation = stageOf(
-      `${root}.supersession.escalation`,
-      isRecord(value.supersession) ? value.supersession.escalation : undefined,
-      problems,
-    );
     setting.supersession = {
       ...supersession,
-      ...(escalation && { escalation }),
+      ...nestedStages(`${root}.supersession`, value.supersession, problems),
     };
   }
   if (problems.length > 0) return { ok: false, problems };
