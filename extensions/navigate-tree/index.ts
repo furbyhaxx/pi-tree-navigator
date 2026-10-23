@@ -1657,6 +1657,7 @@ export { extractSummaryText };
 function rewindStaleReason(
   sm: SessionManager,
   afterEntryId: string,
+  point = "the rewind call",
 ): string | null {
   let branch: SessionEntry[];
   try {
@@ -1665,7 +1666,7 @@ function rewindStaleReason(
     return null;
   }
   const start = branch.findIndex((e) => e.id === afterEntryId);
-  if (start < 0) return "the rewind call is no longer on the active branch";
+  if (start < 0) return `${point} is no longer on the active branch`;
   return branch.slice(start + 1).some((e) => e.type === "compaction")
     ? "the context was compacted"
     : null;
@@ -1995,6 +1996,11 @@ export interface FoldCommitInput {
   contextWindow: number;
   /** Input after this entry is late: kept out of the fold and re-appended after it. */
   foldPointId: string;
+  /**
+   * True when `foldPointId` is the last folded entry (an independent fold);
+   * absent for an in-band rewind call, which the pre-fold estimate excludes.
+   */
+  foldPointFolded?: boolean;
   /** Gets the `branch:<newLabel>` completion marker before the branch is written. */
   branchLabelEntryId?: string;
   /** Entries whose tool calls never ran: left out of the file lists. */
@@ -2052,7 +2058,8 @@ export async function commitFold(
   if (findLabeledEntry(sm, LABEL_PREFIX + newLabel)) {
     return refuse(`a label '${newLabel}' now exists on the active branch`);
   }
-  const staleReason = rewindStaleReason(sm, foldPointId);
+  const point = input.foldPointFolded ? "the folded work" : "the rewind call";
+  const staleReason = rewindStaleReason(sm, foldPointId, point);
   if (staleReason) return refuse(staleReason);
   const oldLeafId = sm.getLeafId();
   // Input that arrived after the fold point (user steers drained at the
@@ -2186,10 +2193,10 @@ export async function commitFold(
       (entry) => entry.sourceEntry.id === foldPointId,
     );
     if (foldPointAt < 0)
-      return refuse("the rewind call is no longer in the projected context");
+      return refuse(`${point} is no longer in the projected context`);
     foldEstimateBefore = estimateContentTokens([
       ...currentEntries
-        .slice(0, foldPointAt)
+        .slice(0, foldPointAt + (input.foldPointFolded ? 1 : 0))
         .flatMap((entry) => entry.messages),
       ...lateMessages,
     ]);

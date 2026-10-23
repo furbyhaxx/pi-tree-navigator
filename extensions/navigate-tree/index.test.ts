@@ -5364,6 +5364,7 @@ describe("commitFold: engine shape", () => {
       handoffMode: "full",
       contextWindow: 200_000,
       foldPointId: leaf,
+      foldPointFolded: true,
       branchLabelEntryId: leaf,
       excludeFromFileLists: [],
       continuationText: (afterTokens) => {
@@ -5417,6 +5418,20 @@ describe("commitFold: engine shape", () => {
       `folded to ${outcome.afterTokens}\n\n${buildLateEntriesNote(1)}`,
     );
     assert.equal(run.lead.length, 2, "prospective estimate, then final");
+  });
+
+  it("counts the folded leaf in the pre-fold estimate when one large turn is folded", async () => {
+    const f = setup();
+    const { anchorId } = setupRewindable(f.sm, f.pi, {
+      capture: true,
+      turnsAfter: 0,
+    });
+    appendTurn(f.sm, "u2", "evidence ".repeat(20_000), 52_000);
+    const run = engineFold(f, anchorId);
+    const outcome = await commitFold(f.sm, run.input);
+    assert.ok(outcome.ok, outcome.ok ? "" : outcome.reason);
+    assert.ok(outcome.foldEstimateBefore > 45_000);
+    assert.ok(outcome.foldEstimateAfter < outcome.foldEstimateBefore);
   });
 
   it("refuses a non-reducing materialization and writes nothing", async () => {
