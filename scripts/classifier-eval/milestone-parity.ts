@@ -194,7 +194,6 @@ export interface CaseParity {
   acceptedExact: boolean;
   warnings: string[];
   ran: number;
-  spentUsd: number | null;
 }
 
 /** Compare one live evaluation with the recorded benchmark observations of the same two models. */
@@ -251,9 +250,6 @@ export function compareCase(
     acceptedExact: judged.acceptedExact,
     warnings: evaluation.warnings,
     ran: evaluation.ran.length,
-    spentUsd: calls.some((call) => call.costUsd === null)
-      ? null
-      : calls.reduce((sum, call) => sum + (call.costUsd ?? 0), 0),
   };
 }
 

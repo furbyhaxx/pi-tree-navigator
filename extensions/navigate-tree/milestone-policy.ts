@@ -83,8 +83,9 @@ export interface MilestonePolicySetting {
   /** `model: null` switches the whole policy off; nothing is asked. */
   classifier?: { model?: string | null };
   /**
-   * `model: null` drops the confirmation: the classifier then decides alone,
-   * which the benchmark found unsafe for chat models and unmeasured for this pair.
+   * `model: null` drops the confirmation: the classifier then decides alone.
+   * Single models were not safe on holdout: gpt-6-luna chat alone accepted 3
+   * unsafe status and 5 unsafe boundary answers in 96 decisions each.
    */
   confirmer?: { model?: string | null };
   /** Replaces the wording of the status question. */
