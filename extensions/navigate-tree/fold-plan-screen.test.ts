@@ -8,7 +8,11 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import {
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import {
   type FoldPlan,
   type FoldPlanCandidate,
@@ -51,8 +55,35 @@ const sampleCandidates = (): FoldPlanCandidate[] => [
   }),
 ];
 
+/** Root to leaf: searching "parser" finds two anchors and ranks the older one first. */
+const searchCandidates = (): FoldPlanCandidate[] => [
+  candidate("start", { auto: true }),
+  candidate("parser-fix", { afterPreview: "Fix the parser" }),
+  candidate("impl-start", { afterPreview: "Implement the parser" }),
+  candidate("recent", {
+    valid: false,
+    reason: "Would free only about 0.9k tok.",
+  }),
+];
+
+const mouse = (overrides: Partial<TuiMouseEvent>): TuiMouseEvent => ({
+  type: "click",
+  button: "left",
+  x: 5,
+  y: 3,
+  screenX: 5,
+  screenY: 3,
+  width: 60,
+  height: 20,
+  shift: false,
+  alt: false,
+  ctrl: false,
+  ...overrides,
+});
+
 interface Screen {
   handleInput(data: string): void;
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined;
   render(width: number): string[];
 }
 type Script = (screen: Screen) => Promise<void>;
@@ -419,6 +450,252 @@ describe("fold plan screen", () => {
         "'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
       ],
     );
+  });
+
+  it("filters anchors and previews; Esc clears the filter and keeps the chosen original anchor", async () => {
+    const h = harness({ candidates: searchCandidates(), recommended: 0 });
+    const exit = await h.run(async (screen) => {
+      assert.match(h.view(screen), /Press \/ to search anchors and previews/);
+      screen.handleInput("/");
+      assert.match(h.view(screen), /type to filter/);
+      assert.doesNotMatch(h.view(screen), /enter fold/);
+      screen.handleInput("parser");
+      const filtered = h.view(screen);
+      const lines = filtered.split("\n");
+      assert.ok(
+        lines.findIndex((line) => line.includes("◆ parser-fix")) <
+          lines.findIndex((line) => line.includes("◆ impl-start")),
+        "the better match comes first although it is older",
+      );
+      assert.doesNotMatch(filtered, /◆ start|◆ recent/);
+      assert.match(filtered, /→ ◆ parser-fix/);
+      assert.match(filtered, /rewind to parser-fix/);
+
+      screen.handleInput(ENTER);
+      assert.equal(h.calls.start.length + h.calls.queue.length, 0);
+      assert.match(
+        unwrapped(h.view(screen)),
+        /enter does not fold while searching/,
+      );
+
+      screen.handleInput(ESC);
+      const cleared = h.view(screen);
+      assert.doesNotMatch(cleared, /does not fold while searching/);
+      for (const name of ["recent", "impl-start", "parser-fix", "start"])
+        assert.match(cleared, new RegExp(`◆ ${name}`));
+      assert.match(
+        cleared,
+        /→ ◆ parser-fix/,
+        "not the first row of the full list",
+      );
+      assert.match(cleared, /enter fold/);
+
+      screen.handleInput(ENTER);
+      assert.deepEqual(
+        h.calls.start.map(({ plan }) => plan),
+        [{ anchor: "parser-fix", label: "parser-fix-folded" }],
+      );
+      h.release(done({ label: "parser-fix-folded" }));
+      await tick();
+      screen.handleInput(ENTER);
+    });
+    assert.equal(exit, "done");
+    assert.equal(h.calls.start.length, 1);
+  });
+
+  it("leaves on the second Esc after clearing the filter", async () => {
+    const h = harness({ candidates: searchCandidates() });
+    const exit = await h.run(async (screen) => {
+      screen.handleInput("/");
+      screen.handleInput("zzz");
+      assert.match(h.view(screen), /No matches for “zzz”/);
+      assert.match(h.view(screen), /No plan: no anchor matches “zzz”/);
+      screen.handleInput(ENTER);
+      screen.handleInput(ESC);
+      assert.doesNotMatch(h.view(screen), /No matches/);
+      screen.handleInput(ESC);
+    });
+    assert.equal(exit, "back");
+    assert.equal(h.calls.start.length + h.calls.queue.length, 0);
+  });
+
+  it("maps hover, the wheel and clicks onto the filtered rows below the plan rows and folds once", async () => {
+    const h = harness({
+      candidates: searchCandidates(),
+      recommended: 0,
+      onAbort: { status: "cancelled" },
+    });
+    const exit = await h.run(async (screen) => {
+      const rowY = (text: string): number => {
+        const y = h
+          .view(screen)
+          .split("\n")
+          .findIndex((line) => line.includes(text));
+        assert.ok(y > 0, `no row ${text}`);
+        return y;
+      };
+      const click = (y: number, claimed = true): void => {
+        for (const type of ["press", "release", "click"] as const) {
+          const result = screen.handleMouse(mouse({ type, y }));
+          if (type === "press") assert.equal(result?.handled ?? false, claimed);
+          h.view(screen);
+        }
+      };
+      screen.handleInput("/");
+      screen.handleInput("parser");
+      assert.ok(rowY("◆ impl-start") > 5, "the plan rows sit above the list");
+
+      assert.equal(
+        screen.handleMouse(
+          mouse({ type: "move", button: "none", y: rowY("◆ impl-start") }),
+        ),
+        undefined,
+      );
+      assert.match(h.view(screen), /→ ◆ parser-fix/, "hover does not select");
+
+      const wheel = (wheelDelta: number) =>
+        screen.handleMouse(
+          mouse({ type: "wheel", button: "none", wheelDelta, y: 3 }),
+        );
+      wheel(1);
+      assert.match(h.view(screen), /→ ◆ impl-start/);
+      wheel(-1);
+      assert.match(h.view(screen), /→ ◆ parser-fix/);
+
+      click(2, false);
+      click(h.view(screen).split("\n").length + 4, false);
+      assert.match(
+        h.view(screen),
+        /→ ◆ parser-fix/,
+        "plan rows and the outside do nothing",
+      );
+      assert.equal(h.calls.start.length, 0);
+
+      click(rowY("◆ impl-start"));
+      const picked = h.view(screen);
+      assert.match(picked, /→ ◆ impl-start/);
+      assert.match(picked, /rewind to impl-start/);
+      assert.equal(h.calls.start.length, 0, "the first click only selects");
+
+      click(1);
+      assert.match(h.view(screen), /type to filter/);
+      click(rowY("◆ impl-start"));
+      assert.deepEqual(
+        h.calls.start.map(({ plan }) => plan),
+        [{ anchor: "impl-start", label: "impl-start-folded" }],
+      );
+      click(rowY("◆ parser-fix"), false);
+      click(rowY("◆ impl-start"), false);
+      assert.equal(wheel(1), undefined);
+      screen.handleInput(ENTER);
+      assert.equal(
+        h.calls.start.length,
+        1,
+        "a running fold is not started twice",
+      );
+
+      screen.handleInput(ESC);
+      assert.equal(h.calls.start[0].signal.aborted, true);
+      await tick();
+      assert.match(h.view(screen), /cancelled — nothing was changed/);
+      assert.equal(screen.handleMouse(mouse({ y: 5 })), undefined);
+      screen.handleInput(ESC);
+    });
+    assert.equal(exit, "back");
+    assert.equal(h.calls.queue.length, 0);
+  });
+
+  it("does not queue twice after a click queued the fold", async () => {
+    const h = harness({
+      candidates: searchCandidates(),
+      recommended: 2,
+      running: true,
+    });
+    const exit = await h.run(async (screen) => {
+      const lines = h.view(screen).split("\n");
+      const y = lines.findIndex((line) => line.includes("→ ◆ impl-start"));
+      for (const type of ["press", "release", "click", "click"] as const)
+        screen.handleMouse(mouse({ type, y }));
+      assert.match(h.view(screen), /✓ queued/);
+      for (const type of ["press", "release", "click"] as const)
+        screen.handleMouse(mouse({ type, y }));
+      screen.handleInput(ENTER);
+    });
+    assert.equal(exit, "done");
+    assert.deepEqual(h.calls.queue, [
+      { anchor: "impl-start", label: "impl-start-folded" },
+    ]);
+  });
+
+  it("edits the anchor clicked in a filtered list and drops the filter", async () => {
+    const h = harness({
+      candidates: searchCandidates(),
+      recommended: 0,
+      answers: { inputs: ["Tidy Parser"], editors: [""] },
+    });
+    const exit = await h.run(
+      async (screen) => {
+        screen.handleInput("/");
+        screen.handleInput("parser");
+        const y = h
+          .view(screen)
+          .split("\n")
+          .findIndex((line) => line.includes("◆ impl-start"));
+        for (const type of ["press", "release", "click"] as const)
+          screen.handleMouse(mouse({ type, y }));
+        screen.handleInput("e");
+      },
+      async (screen) => {
+        const view = h.view(screen);
+        assert.match(view, /→ ◆ impl-start/);
+        assert.match(view, /◆ recent/);
+        assert.match(view, /label tidy-parser/);
+        screen.handleInput(ENTER);
+        h.release(done({ label: "tidy-parser" }));
+        await tick();
+        screen.handleInput(ENTER);
+      },
+    );
+    assert.equal(exit, "done");
+    assert.equal(h.dialogs.input[0][1], "impl-start-folded");
+    assert.deepEqual(
+      h.calls.start.map(({ plan }) => plan),
+      [{ anchor: "impl-start", label: "tidy-parser" }],
+    );
+  });
+
+  it("keeps the height and the width budget while filtering, clicking and folding", async () => {
+    for (const columns of [60, 130]) {
+      const h = harness({
+        columns,
+        candidates: searchCandidates(),
+        recommended: 2,
+      });
+      await h.run(async (screen) => {
+        h.view(screen);
+        screen.handleInput("/");
+        h.view(screen);
+        screen.handleInput("parser");
+        h.view(screen);
+        screen.handleInput("zzz");
+        h.view(screen);
+        for (let n = 0; n < 3; n++) screen.handleInput("\x7f");
+        h.view(screen);
+        screen.handleInput(ENTER);
+        h.view(screen);
+        screen.handleInput(ESC);
+        h.view(screen);
+        screen.handleInput(ENTER);
+        h.view(screen);
+        h.calls.start[0].onProgress({ phase: "map", call: 1, plannedCalls: 3 });
+        h.view(screen);
+        h.release(done());
+        await tick();
+        h.view(screen);
+        screen.handleInput(ENTER);
+      });
+      assert.equal(new Set(h.heights).size, 1, `frozen height at ${columns}`);
+    }
   });
 
   it("keeps every line within 60 and 130 columns, with long names, in every state", async () => {
