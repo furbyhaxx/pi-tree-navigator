@@ -46,6 +46,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { getHandoff } from "../extensions/navigate-tree/handoff.ts";
 
 /** pi's `BRANCH_SUMMARY_PREAMBLE`, prepended to every legacy stored summary. */
 const PREAMBLE =
@@ -70,17 +71,6 @@ const CHILD_HANDOFFS_MARK =
 const LEDGER_MARK =
   "\n\n## Continuity ledger\n\n[navigate_tree continuity ledger rev ";
 
-const STAT_KEYS = [
-  "messages",
-  "toolCalls",
-  "input",
-  "output",
-  "cacheRead",
-  "cacheWrite",
-  "cost",
-  "usageRecords",
-];
-
 function fail(message) {
   console.error(`FAIL  ${message}`);
   return false;
@@ -88,29 +78,6 @@ function fail(message) {
 
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-const isStringArray = (value) =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
-
-/** Why `value` is not a valid version-1 handoff record (`handoff.ts` `validHandoff`), or undefined. */
-function handoffProblem(value) {
-  if (!isRecord(value)) return "not an object";
-  if (value.version !== 1) return `version ${JSON.stringify(value.version)}`;
-  if (value.mode !== "full" && value.mode !== "synthesized") {
-    return `mode ${JSON.stringify(value.mode)}`;
-  }
-  for (const key of ["name", "title", "goal", "outcome", "report"]) {
-    if (typeof value[key] !== "string") return `${key} is not a string`;
-  }
-  for (const key of ["children", "sourceIds"]) {
-    if (!isStringArray(value[key])) return `${key} is not a string array`;
-  }
-  if (!isRecord(value.stats)) return "stats is not an object";
-  for (const key of STAT_KEYS) {
-    if (!Number.isFinite(value.stats[key])) return `stats.${key} is not a finite number`;
-  }
-  return undefined;
 }
 
 /**
@@ -246,12 +213,12 @@ function checkSummary(entry, knownIds, label) {
   if (!isRecord(entry.details) || !("treeNavigator" in entry.details)) {
     return checkLegacySummary(summary, label);
   }
-  const problem = handoffProblem(entry.details.treeNavigator);
-  if (problem) {
-    return fail(`${label}: malformed details.treeNavigator metadata (${problem})`);
+  const handoff = getHandoff(entry);
+  if (!handoff) {
+    return fail(`${label}: malformed details.treeNavigator metadata`);
   }
-  console.log(`ok    ${label}: work handoff metadata valid (mode ${entry.details.treeNavigator.mode})`);
-  return checkHandoff(summary, entry.details.treeNavigator, knownIds, label);
+  console.log(`ok    ${label}: work handoff metadata valid (mode ${handoff.mode})`);
+  return checkHandoff(summary, handoff, knownIds, label);
 }
 
 function main() {

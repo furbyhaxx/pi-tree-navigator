@@ -163,14 +163,11 @@ describe("summary-quality-check", () => {
   it("rejects malformed metadata and a summary that is not the materialized report", () => {
     const badMeta = check([withReport(report, { version: 2 })]);
     assert.equal(badMeta.status, 1);
-    assert.match(
-      badMeta.out,
-      /malformed details\.treeNavigator metadata \(version 2\)/,
-    );
+    assert.match(badMeta.out, /malformed details\.treeNavigator metadata/);
 
     const noChildren = check([withReport(report, { children: "none" })]);
     assert.equal(noChildren.status, 1);
-    assert.match(noChildren.out, /children is not a string array/);
+    assert.match(noChildren.out, /malformed details\.treeNavigator metadata/);
 
     const mismatch = check([
       { ...live, summary: live.summary.replace("## Goal", "## Goal\nextra") },
