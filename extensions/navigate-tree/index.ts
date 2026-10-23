@@ -3985,6 +3985,8 @@ export default function (pi: ExtensionAPI) {
       return;
     }
     if (!model?.contextWindow || model.contextWindow <= 0) return;
+    // Native auto-compaction owns recovery when it is enabled (single owner).
+    if (piCompaction(sm, model)?.enabled !== false) return;
     const contextWindow = model.contextWindow;
     const inputEstimate = requestAccounting(sm, event.messages).tokens;
     const reserve = RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS;
@@ -4010,15 +4012,22 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const { draft } = outcome;
-      try {
+      // Contain the receipt write: an unpersisted receipt must not become the
+      // parent of the next main-agent reply.
+      const receipt = trySessionWrite(sm, () =>
         sm.appendCustomMessageEntry(
           draft.customType,
           draft.content,
           draft.display,
           draft.details,
+        ),
+      );
+      if (!receipt.ok && !receipt.cursorRestored) {
+        unrestoredFoldCursors.add(sm);
+        refuse(
+          "the fold landed but its receipt could not be written, so persistence is uncertain",
         );
-      } catch {
-        // The fold landed; the returned projection still carries the request.
+        return;
       }
       refreshAgentMessages(sm);
       try {

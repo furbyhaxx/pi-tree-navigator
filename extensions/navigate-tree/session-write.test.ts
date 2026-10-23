@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { trySessionWrite } from "./session-write.ts";
+import { persistedOnDisk, trySessionWrite } from "./session-write.ts";
 
 test("a failed persisted append cannot become the parent of the next write", () => {
   const dir = mkdtempSync(join(tmpdir(), "navigator-write-"));
@@ -77,4 +77,34 @@ test("reports inability to restore the cursor instead of masking it", () => {
   });
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.cursorRestored, false);
+});
+
+test("a substring, a nested id or a truncated record is not a durable write", () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-write-"));
+  try {
+    const file = join(dir, "s.jsonl");
+    writeFileSync(
+      file,
+      [
+        JSON.stringify({ type: "message", id: "good" }),
+        JSON.stringify({
+          type: "custom",
+          id: "nested",
+          details: { id: "deep" },
+        }),
+        `{"type":"message","id":"truncated"`,
+      ].join("\n"),
+    );
+    const session = { getSessionFile: () => file };
+    assert.equal(persistedOnDisk(session, ["good"]), true);
+    assert.equal(persistedOnDisk(session, ["deep"]), false);
+    assert.equal(persistedOnDisk(session, ["nested"]), true);
+    assert.equal(persistedOnDisk(session, ["truncated"]), false);
+    assert.equal(
+      persistedOnDisk({ getSessionFile: () => undefined }, ["x"]),
+      true,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

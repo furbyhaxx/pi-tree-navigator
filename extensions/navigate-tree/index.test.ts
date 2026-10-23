@@ -111,13 +111,10 @@ import {
   LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
 } from "./legacy-rewind.ts";
 import {
-  buildForcedRewindText,
   buildNoAnchorText,
   buildReserveGuardWarning,
   buildReserveOrderWarning,
-  buildRewindCompactionFailedText,
   buildRewindHintText,
-  buildWithheldNoticeText,
   COMPACTION_FAILED_NO_ANCHOR,
   REWIND_COMPACTION_OFF_TEXT,
   REWIND_HINT_CUSTOM_TYPE,
@@ -10043,7 +10040,7 @@ describe("rewind-driven compaction (#101)", () => {
         ...a: unknown[]
       ) => { render(w: number): string[] } | undefined;
       assert.ok(renderer);
-      const text = buildRewindCompactionFailedText(COMPACTION_FAILED_NO_ANCHOR);
+      const text = "the forced rewind was aborted";
       const row = renderer(
         {
           role: "custom",
