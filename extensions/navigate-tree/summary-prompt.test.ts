@@ -98,7 +98,9 @@ const STANDING_AUTHORIZATION = `End the summary with one more section, after '##
 ## Standing authorization
 [The user's current authorization and scope, quoted verbatim from anywhere in the conversation above, background included (for example "work autonomously until done"), or "(none)". Say whether that scope is complete.]
 
-In '## Next Steps', name the next concrete work item of the authorized scope. Do not list a report, hand-off or wrap-up while authorized work remains: a completed milestone is not the end of the task.`;
+In '## Next Steps', name the next concrete work item of the authorized scope. Do not list a report, hand-off or wrap-up while authorized work remains: a completed milestone is not the end of the task.
+
+The no-tools restriction applies only to this summary turn; normal tools return after the fold. It is not a task blocker. Under '### Blocked', record only blockers established in the collapsed work, not this turn's temporary restrictions. Write the next work item assuming this requested fold succeeds; do not list repeating this rewind.`;
 
 describe("buildSummaryInstruction", () => {
   it("appends the standing-authorization section after r5d, then the focus like upstream's customInstructions shape, {first} substituted", () => {

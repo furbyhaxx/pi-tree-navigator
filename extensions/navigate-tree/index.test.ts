@@ -5682,6 +5682,38 @@ describe("dispatch: rewind newLabel uniqueness", () => {
     );
   });
 
+  it("identifies an already stored handoff without scheduling a redundant fold", async () => {
+    const { sm, pi, tool, ctx } = setup();
+    const first = appendTurn(sm, "review all partitions", "review one", 6_000);
+    pi.pi.setLabel(first.assistantId, "anchor:start");
+    appendTurn(sm, "review two", "reviewed two", 16_000);
+    const summaryId = sm.branchWithSummary(
+      first.assistantId,
+      "## Goal\nReview\n## Next Steps\nReview partition 3",
+    );
+    pi.pi.setLabel(summaryId, "anchor:reviewed-two");
+    const before = sm.getEntries();
+    const leaf = sm.getLeafId();
+    const result = await tool.execute(
+      "tc-repeat",
+      {
+        action: "rewind",
+        rewindTo: "start",
+        newLabel: "reviewed-two",
+        summaryFocus: "Continue the authorized review of all partitions.",
+      },
+      undefined,
+      undefined,
+      ctx,
+    );
+    assert.equal(result.isError, true);
+    assert.match(result.content[0].text, /already names a stored handoff/);
+    assert.match(result.content[0].text, /continue from the newest handoff/);
+    assert.deepEqual(sm.getEntries(), before);
+    assert.equal(sm.getLeafId(), leaf);
+    assert.equal(fireToolCall(pi, ctx), undefined);
+  });
+
   it("newLabel collision refusal copy is byte-exact", async () => {
     const { sm, pi, tool, ctx } = setup();
     const t1 = appendTurn(sm, "u1", "a1", 6_000);

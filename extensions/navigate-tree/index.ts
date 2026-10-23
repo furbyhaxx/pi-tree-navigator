@@ -5314,7 +5314,13 @@ Operations (set \`action\`):
       // rename-forward idiom is retired. The check sits with the
       // name/summaryFocus validations so no summary turn is wasted; the
       // existing label stays addressable via `rewindTo`.
-      if (findLabeledEntry(sm, LABEL_PREFIX + p.newLabel)) {
+      const existingLabel = findLabeledEntry(sm, LABEL_PREFIX + p.newLabel);
+      if (existingLabel) {
+        if (sm.getEntry(existingLabel)?.type === "branch_summary") {
+          return toolError(
+            `Label '${p.newLabel}' already names a stored handoff on the active branch. This request did not create another fold. If you intended that completed milestone, continue from the newest handoff's remaining work instead of repeating it. Use action='list' to inspect the active labels; choose a fresh newLabel only for different, uncollapsed work.`,
+          );
+        }
         return toolError(
           `A label '${p.newLabel}' already exists on the active branch — labels are unique and immutable once written, so rewind requires a fresh \`newLabel\`. The existing '${p.newLabel}' label stays addressable via \`rewindTo\`. Use action='list' to review the active labels, then pick a fresh newLabel.`,
         );
