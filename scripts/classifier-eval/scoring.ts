@@ -1,13 +1,13 @@
 import type {
   AnswerScore,
   CaseScore,
-  EvalCase,
   EvalObservation,
+  PreparedCase,
 } from "./types.ts";
 
 /** Score raw answers independently of the confidence gate used to accept them. */
 export function scoreObservation(
-  fixture: EvalCase,
+  fixture: PreparedCase,
   observation: EvalObservation,
   minConfidence = 0.7,
 ): CaseScore {

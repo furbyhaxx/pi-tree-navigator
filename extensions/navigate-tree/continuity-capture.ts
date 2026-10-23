@@ -288,6 +288,15 @@ function pickItems(
     .slice(0, MAX_CLASSIFIER_ITEMS);
 }
 
+/** The exact classifier request for one user message; items are the bounded active subset. */
+export function buildIntentClassifierContext(input: IntentInput): {
+  context: ClassifierContext;
+  items: IntentInput["activeItems"];
+} {
+  const items = pickItems(input.activeItems);
+  return { context: classifierContext(input, items), items };
+}
+
 function classifierContext(
   input: IntentInput,
   items: IntentInput["activeItems"],
@@ -404,13 +413,13 @@ export async function createModelClassifier(
   return async (input, signal) => {
     if (signal?.aborted) return ephemeral();
     if (failed) return heuristicClassifier(input, signal);
-    const items = pickItems(input.activeItems);
+    const { context, items } = buildIntentClassifierContext(input);
     let result: ClassifierResult | undefined;
     let reason: string | undefined;
     try {
       result = await registry.classify(
         classifierModel,
-        classifierContext(input, items),
+        context,
         signal ? { signal } : undefined,
       );
       if (result.stopReason !== "stop") {

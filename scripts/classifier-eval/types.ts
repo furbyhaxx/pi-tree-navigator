@@ -1,19 +1,12 @@
-/** JSON evidence supplied to a classifier, never the expected answer. */
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+import type { ClassifierContext } from "@earendil-works/pi-ai";
+import type { MilestoneRecord } from "../../extensions/navigate-tree/milestone-classifier.ts";
 
 /** The independent decisions measured by this benchmark. */
 export type EvalTask =
   | "intent"
   | "supersession"
-  | "milestone"
-  | "fold-readiness"
-  | "authority";
+  | "milestone-status"
+  | "milestone-boundary";
 
 /** Shared choice question, translated into the selected provider's contract. */
 export interface EvalQuestion {
@@ -28,15 +21,36 @@ export interface ExpectedAnswer {
   rationale: string;
 }
 
+/** Production-shaped classifier input; requests are built by the shipped builders. */
+export type EvalInput =
+  | {
+      type: "intent";
+      /** The user's raw message, exactly as typed; no annotator commentary. */
+      message: string;
+      activeAnchor?: string;
+      activeItems: { id: string; kind: string; text: string }[];
+    }
+  | {
+      type: "milestone";
+      lastAnchor?: string;
+      records: MilestoneRecord[];
+    };
+
 /** A synthetic evaluation case; expected answers must never enter a model request. */
 export interface EvalCase {
   id: string;
   split: "development" | "holdout";
   family: string;
+  /** The decision this case stresses; every expected question is still scored. */
   task: EvalTask;
-  state: JsonValue;
-  questions: Record<string, EvalQuestion>;
+  input: EvalInput;
   expected: Record<string, ExpectedAnswer>;
+}
+
+/** A case with the exact request the production builder sends. */
+export interface PreparedCase extends EvalCase {
+  context: ClassifierContext;
+  questions: Record<string, EvalQuestion>;
 }
 
 /** Normalized model answer; confidence may be absent and is not assumed calibrated. */
@@ -45,16 +59,34 @@ export interface EvalAnswer {
   confidence?: number;
 }
 
-/** A transport attempt with no credential/header fields. */
+/** How a candidate answers: a decision endpoint, a structured chat model, or local code. */
+export type EvalAdapter = "decisions" | "chat" | "heuristic";
+
+/** Where `costUsd` came from; catalog-computed usage is never billing evidence. */
+export type CostSource = "generation" | "response" | "local" | "unknown";
+
+/** A transport attempt with no credential/header fields; one JSONL line per attempt. */
 export interface EvalObservation {
   caseId: string;
+  /** `adapter:provider/model`, e.g. `decisions:typesafe/jev-1.14`. */
   model: string;
+  adapter: EvalAdapter;
   repetition: number;
   status: "ok" | "error" | "unsupported";
   answers: Record<string, EvalAnswer>;
   durationMs: number;
   costUsd: number | null;
+  costSource: CostSource;
+  /** The worst case reserved in the budget ledger before dispatch. */
   costBoundUsd: number;
+  /** Provider generation ID used for billing reconciliation. */
+  generationId?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  /** SHA-256 of the exact serialized request body. */
+  requestSha256?: string;
+  /** ISO timestamp at dispatch. */
+  startedAt: string;
   error?: string;
 }
 
