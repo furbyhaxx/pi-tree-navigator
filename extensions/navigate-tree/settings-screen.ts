@@ -46,6 +46,13 @@ import {
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
 import { type FrameRow, type FrameScreen, selectFrame } from "./frame.ts";
+import {
+  editPolicy,
+  type PolicyKind,
+  policyAccepted,
+  policyWarning,
+  summarizePolicy,
+} from "./policy-settings.ts";
 import type { ProposalToolMode } from "./proposal-options.ts";
 import { readRuntimeConfig, writeRuntimeConfig } from "./runtime-config.ts";
 import { pickSettingsModel } from "./settings-model-picker.ts";
@@ -125,6 +132,7 @@ type Kind =
   | "choice"
   | "model"
   | "classifier"
+  | "policy"
   | "map";
 
 /** What a staged edit addresses: a setting, or a whole map or entry. */
@@ -135,6 +143,8 @@ interface Target {
   kind: Kind;
   /** Part of a keyed map: edits refuse to replace a non-object on the way down. */
   structured?: boolean;
+  /** Classifier policy edited by the structured editor, not as raw JSON. */
+  policy?: PolicyKind;
 }
 
 interface SettingDef extends Target {
@@ -250,13 +260,13 @@ const SETTINGS: readonly SettingDef[] = [
   {
     key: "continuity.intentClassifier",
     path: [CONTINUITY, name("intentClassifier", "intent_classifier")],
-    kind: "classifier",
+    kind: "policy",
+    policy: "intent",
     off: true,
     onInvalid: "falls-through",
-    expects:
-      "recommended, provider/id of a model, off, or an object (edit the file)",
+    expects: "recommended, off, or a custom policy",
     description:
-      "Judges new messages for the ledger: recommended, provider/id or an object. off (default): heuristics only.",
+      "Judges new messages for the ledger. recommended is opt-in; off (default) uses heuristics only.",
     status: continuityStatus("intentClassifier"),
     read: (config) => config.continuity.intentClassifier,
   },
@@ -305,15 +315,17 @@ const SETTINGS: readonly SettingDef[] = [
     read: (config) => autoRead(config).mode,
   },
   {
-    key: "auto_navigate.controller_model",
-    path: [AUTO_NAVIGATE, name("controller_model")],
-    kind: "model",
+    key: "auto_navigate.milestone",
+    path: [AUTO_NAVIGATE, name("milestone")],
+    kind: "policy",
+    policy: "milestone",
+    off: true,
     onInvalid: "blocks",
-    expects: "current or provider/id[:thinking]",
+    expects: "recommended, off, or a custom policy",
     description:
-      "Model that runs the controller: current or provider/id[:thinking]. Defaults to treeProposal.model.",
-    status: autoStatus("controllerModel"),
-    read: (config) => autoRead(config).controllerModel ?? "current",
+      "Confirms a finished phase before an automatic fold. recommended (default), off, or a custom policy.",
+    status: autoStatus("milestonePolicy"),
+    read: (config) => autoRead(config).milestonePolicy,
   },
   {
     key: "auto_navigate.check_every_turns",
@@ -364,7 +376,7 @@ const quoted = (pattern: string): string =>
 const AUTO_FIELD: Record<string, keyof AutoNavigatePartial> = {
   enabled: "enabled",
   mode: "mode",
-  controller_model: "controllerModel",
+  milestone: "milestonePolicy",
   check_every_turns: "checkEveryTurns",
   min_tokens_since_anchor: "minTokensSinceAnchor",
   rewind_at_tokens: "rewindAtTokens",
@@ -1015,7 +1027,8 @@ const INVALID_TEXT: Record<SettingDef["onInvalid"], string> = {
 const brief = (text: string, max = 60): string =>
   text.length > max ? `${text.slice(0, max - 1)}…` : text;
 
-function show(def: Pick<Target, "kind">, value: unknown): string {
+function show(def: Pick<Target, "kind" | "policy">, value: unknown): string {
+  if (def.policy) return summarizePolicy(def.policy, value);
   if (value === undefined) return "invalid";
   if (value === null) return "off";
   if (typeof value === "object") return brief(JSON.stringify(value));
@@ -1097,12 +1110,13 @@ function settingRow(def: SettingDef, view: View): FrameRow {
   const beforeText = show(def, before.value);
   const stagedValue =
     plan && staged.has(def.key) ? rawOf(plan.next, def) : undefined;
-  const afterText = show(
-    def,
-    after.value === undefined && stagedValue?.present
+  const displayed =
+    def.policy && stagedValue?.present
       ? stagedValue.value
-      : after.value,
-  );
+      : after.value === undefined && stagedValue?.present
+        ? stagedValue.value
+        : after.value;
+  const afterText = show(def, displayed);
   const edit = staged.get(def.key)?.edit;
   const isStaged = plan
     ? plan.changes.some((change) => change.def.key === def.key)
@@ -1124,6 +1138,8 @@ function settingRow(def: SettingDef, view: View): FrameRow {
   }
   const inherited =
     after.inheritedFrom !== undefined && after.source !== "default";
+  const warning = def.policy ? policyWarning(def.policy, displayed) : undefined;
+  if (warning && !invalid && !shadowed) detail = warning;
 
   return {
     label: def.label ?? def.key,
@@ -1135,9 +1151,11 @@ function settingRow(def: SettingDef, view: View): FrameRow {
         ? "warning"
         : isStaged || changed
           ? "accent"
-          : after.source === "default"
-            ? "muted"
-            : "text",
+          : warning
+            ? "warning"
+            : after.source === "default"
+              ? "muted"
+              : "text",
     detail,
     description: def.description,
   };
@@ -1407,14 +1425,27 @@ function accepts(def: SettingDef, value: unknown): boolean {
 async function promptEdit(
   ctx: ExtensionCommandContext,
   def: SettingDef,
-  current: string,
+  current: unknown,
   target: Layer,
   direction?: -1 | 1,
 ): Promise<Edit | undefined> {
+  if (def.kind === "policy" && def.policy) {
+    const value = await editPolicy(ctx, def.policy, current);
+    if (value === undefined) return undefined;
+    if (!accepts(def, value) && !policyAccepted(def.policy, value)) {
+      ctx.ui.notify(
+        `Invalid policy for ${def.key}. Use ${def.expects}.`,
+        "warning",
+      );
+      return undefined;
+    }
+    return { kind: "set", value };
+  }
+  const shown = show(def, current);
   if (def.kind === "flag") {
     return {
       kind: "set",
-      value: direction === undefined ? current !== "true" : direction === 1,
+      value: direction === undefined ? shown !== "true" : direction === 1,
     };
   }
   if (
@@ -1422,7 +1453,7 @@ async function promptEdit(
     (def.kind === "tokens" || def.kind === "count")
   ) {
     const step = def.kind === "tokens" ? 1000 : 1;
-    const before = current === "off" ? 0 : parseCount(current);
+    const before = shown === "off" ? 0 : parseCount(shown);
     if (before === undefined) return undefined;
     const value =
       def.off && before + step * direction <= 0
@@ -1438,7 +1469,7 @@ async function promptEdit(
   if (def.kind === "choice" && def.choices) {
     const next =
       def.choices[
-        (def.choices.indexOf(current) + (direction ?? 1) + def.choices.length) %
+        (def.choices.indexOf(shown) + (direction ?? 1) + def.choices.length) %
           def.choices.length
       ];
     return { kind: "set", value: next };
@@ -1446,7 +1477,7 @@ async function promptEdit(
   if (def.kind === "model" || def.kind === "classifier") {
     const value = await pickSettingsModel(ctx, {
       kind: def.kind,
-      current: current === "off" ? null : current,
+      current: shown === "off" ? null : shown,
     });
     if (value === undefined) return undefined;
     if (!accepts(def, value)) {
@@ -1460,7 +1491,7 @@ async function promptEdit(
   }
   const input = await ctx.ui.input(
     `${def.key} (${target} scope)`,
-    `now ${current} · ${def.expects}`,
+    `now ${shown} · ${def.expects}`,
   );
   const text = input?.trim();
   if (!text) return undefined;
@@ -1779,16 +1810,12 @@ async function itemsScreen(
       const targetValue = plan
         ? rawOf(plan.next, item.def)
         : { present: false };
-      const current = show(
+      const edit = await promptEdit(
+        ctx,
         item.def,
         targetValue.present
           ? targetValue.value
           : resolveDef(item.def, view.preview).value,
-      );
-      const edit = await promptEdit(
-        ctx,
-        item.def,
-        current,
         target,
         choice.key === "left" ? -1 : choice.key === "right" ? 1 : undefined,
       );
