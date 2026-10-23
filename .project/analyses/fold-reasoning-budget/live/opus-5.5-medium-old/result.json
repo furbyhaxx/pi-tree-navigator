@@ -1,0 +1,12 @@
+{
+  "impl": "old",
+  "model": "openrouter/anthropic/claude-opus-5.5",
+  "thinking": "medium",
+  "blocks": 20,
+  "evidenceChars": 331028,
+  "ok": true,
+  "strategy": "chunked",
+  "calls": 2,
+  "chunks": 1,
+  "summaryChars": 3716
+}
