@@ -5,7 +5,7 @@ title: "Independent folding engine: design and units"
 description: "Execution model, interfaces and delivery units for the shared fold engine used by manual, automatic, agent and recovery folds."
 type: "plan"
 created: "2026-10-23T13:42:45+02:00"
-updated: "2026-10-23T13:42:45+02:00"
+updated: "2026-10-23T17:14:22+02:00"
 createdBy: "coding-agent"
 updatedBy: "coding-agent"
 ---
@@ -108,13 +108,29 @@ Safe points:
 | U5 | unified admission estimate | merged |
 | U2 | extract `commitFold` from `completeRewind`, behavior unchanged | merged (fold-point boundary fixed in 38916ac) |
 | U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | merged |
-| U4a | rewind tool on the engine; delete the in-band summary turn | U4a.1 host merged (a4e0182); U4a.2 in progress |
-| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI module merged; wiring with U4a |
-| M1 | `milestone-policy.ts`: E17 confirm policy, tunable, production builders | in progress |
+| U4a | rewind tool on the engine; delete the in-band summary turn | merged; historical projection/rendering restored in 0480db6 |
+| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI search/mouse merged; shared preview extraction in progress, wiring next |
+| M1 | `milestone-policy.ts`: E17 confirm policy, tunable, production builders | merged with recorded-answer replay and live parity; config/host wiring pending |
 | R1 | retirement-verification spike for E18, then preset integration | in progress |
 | U4c | auto controller executes through the engine | later |
 | U4d | overflow and guard-abort recovery through the engine | later |
 | U6 | live acceptance: refused full window, pre-compaction anchor, auto fold, TUI | later |
+
+## Integration notes
+
+- Recovery continuation must be proved through the real SDK loop. Local SDK source
+  ignores `turn_end` continuation after an aborted/error assistant; session `abort()`
+  also prevents post-run continuation. A lifecycle reproduction is checking the
+  safe pre-request and post-error seams before U4d implements them.
+- The user's current global auto-navigation config has a legacy `controller_model`
+  selector. Delivery must migrate that field to the explicitly chosen E17 policy,
+  preserving enablement, thresholds, model overrides and disclosure filters. Back up
+  the file alongside the authorized capture-preset change.
+- U4a.2 retains only read-side compatibility for historical summary instructions and
+  failed outcomes. No new in-band instruction, freeze or summary turn is written.
+- The milestone parity worker replaced its first full run after a script fix. Its
+  billed calls remain in the ledger; only the final run's raw observations are retained.
+  Do not describe the retained parity observations as all calls charged in this unit.
 
 ## Acceptance cases to keep
 
