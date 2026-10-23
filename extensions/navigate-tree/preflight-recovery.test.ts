@@ -334,6 +334,42 @@ describe("production preflight recovery", () => {
     });
   });
 
+  it("keeps unanswered input out of evidence when metadata follows it", async () => {
+    await withSession("recover", async ({ sm, prompt, calls }) => {
+      const append = sm.appendMessage.bind(sm);
+      let requestId = "";
+      sm.appendMessage = (message) => {
+        const id = append(message);
+        if (message.role === "user" && messageText(message) === REQUEST) {
+          requestId = id;
+          sm.appendLabelChange(id, "request-metadata");
+          sm.appendModelChange("mock", "mock-1");
+          sm.appendCustomEntry("navigate-tree-continuity-ops", {});
+        }
+        return id;
+      };
+      assert.equal(await prompt(REQUEST), undefined);
+      assert.ok(calls.some((call) => call.side));
+      assert.equal(
+        calls.some(
+          (call) => call.side && call.text.includes(`[${requestId}] user:`),
+        ),
+        false,
+        "the unanswered request must not become an evidence record",
+      );
+      const branch = sm.getBranch();
+      const summaryAt = branch.findIndex(
+        (entry) => entry.type === "branch_summary",
+      );
+      assert.ok(summaryAt >= 0);
+      assert.ok(
+        branch
+          .slice(summaryAt + 1)
+          .some((entry) => userText(entry) === REQUEST),
+      );
+    });
+  });
+
   it("cancels a waiting side call without committing or calling the main model", async () => {
     await withSession(
       "cancel",
