@@ -641,12 +641,54 @@ describe("budgeted fold transport", () => {
     );
   });
 
-  it("surfaces an overspend from drain instead of swallowing it", async () => {
+  it("rejects billable server tools and multiple completions before dispatch", async () => {
+    await withTransport(
+      25,
+      async () => jsonResponse(200, {}),
+      async ({ transport, calls, ledger }) => {
+        const base = JSON.parse(chatBody()) as Record<string, unknown>;
+        const extras = [
+          { n: 2 },
+          { best_of: 2 },
+          { tools: [{ type: "web_search" }] },
+          { web_search_options: {} },
+          { modalities: ["audio"] },
+          {
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {
+                    type: "image_url",
+                    image_url: { url: "https://example.invalid/image.png" },
+                  },
+                ],
+              },
+            ],
+          },
+        ];
+        for (const extra of extras)
+          await assert.rejects(() =>
+            transport.fetch(
+              CHAT_URL,
+              post(JSON.stringify({ ...base, ...extra })),
+            ),
+          );
+        assert.equal(calls.length, 0);
+        assert.equal(ledger.snapshot().heldUsd, 0);
+      },
+    );
+  });
+
+  it("surfaces an overspend even when settlement finishes before drain", async () => {
     await withTransport(
       25,
       async () => jsonResponse(200, { id: "gen-over-1", usage: { cost: 10 } }),
       async ({ transport, records }) => {
-        await transport.fetch(CHAT_URL, post(chatBody()));
+        const response = await transport.fetch(CHAT_URL, post(chatBody()));
+        await response.text();
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        assert.equal(records.length, 1);
         await assert.rejects(transport.drain(), (error: unknown) => {
           assert.ok(error instanceof BudgetError);
           assert.equal(error.code, "bound_breach");

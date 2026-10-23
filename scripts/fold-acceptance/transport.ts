@@ -253,9 +253,7 @@ function shapeBody(
   if (pricing.refusal !== undefined)
     fail(`refused unpriced model ${parsed.model}: ${pricing.refusal}`);
   if (kind === "chat") {
-    if (!Array.isArray(parsed.messages)) fail("refused an unsupported request");
-    if (hasImageModality(parsed.modalities))
-      fail("refused an unsupported request");
+    validateTextRequest(parsed, endpoint);
     const maxOutputTokens = chatOutputCap(parsed);
     const body = JSON.stringify(shapeProvider(parsed, pricing.rates));
     return { body, model: parsed.model, maxOutputTokens, rates: pricing.rates };
@@ -271,11 +269,68 @@ function shapeBody(
   };
 }
 
-function hasImageModality(value: unknown): boolean {
+function textContent(value: unknown): boolean {
+  if (value === undefined || value === null || typeof value === "string")
+    return true;
   return (
     Array.isArray(value) &&
-    value.some((item) => item === "image" || item === "image_url")
+    value.every((block) => {
+      if (!isRecord(block)) return false;
+      if (
+        block.type === "text" ||
+        block.type === "thinking" ||
+        block.type === "redacted_thinking" ||
+        block.type === "tool_use"
+      )
+        return true;
+      return block.type === "tool_result" && textContent(block.content);
+    })
   );
+}
+
+function validateTextRequest(
+  body: Record<string, unknown>,
+  endpoint: TransportEndpoint,
+): void {
+  const single = (value: unknown) => value === undefined || value === 1;
+  if (
+    !single(body.n) ||
+    !single(body.best_of) ||
+    body.web_search_options !== undefined ||
+    body.audio !== undefined
+  )
+    fail("refused unbudgeted generation options");
+  if (
+    body.modalities !== undefined &&
+    (!Array.isArray(body.modalities) ||
+      body.modalities.some((value) => value !== "text"))
+  )
+    fail("refused non-text generation");
+  if (
+    !textContent(body.system) ||
+    !Array.isArray(body.messages) ||
+    !body.messages.every(
+      (message) =>
+        isRecord(message) &&
+        message.audio === undefined &&
+        textContent(message.content),
+    )
+  )
+    fail("refused non-text input");
+  if (
+    body.tools !== undefined &&
+    (!Array.isArray(body.tools) ||
+      !body.tools.every(
+        (tool) =>
+          isRecord(tool) &&
+          (endpoint === "messages"
+            ? (tool.type === undefined || tool.type === "custom") &&
+              typeof tool.name === "string" &&
+              isRecord(tool.input_schema)
+            : tool.type === "function" && isRecord(tool.function)),
+      ))
+  )
+    fail("refused unbudgeted server tools");
 }
 
 function callerSignal(
@@ -300,7 +355,7 @@ function outboundInit(
     headers,
     body,
     signal,
-    redirect: request.redirect,
+    redirect: "error",
     credentials: request.credentials,
     integrity: request.integrity,
     keepalive: request.keepalive,
@@ -395,14 +450,11 @@ function forward(
   };
 }
 
-async function drainTasks(tasks: Set<Promise<Done>>): Promise<void> {
-  const failures: unknown[] = [];
-  while (tasks.size > 0) {
-    const batch = [...tasks];
-    const results = await Promise.all(batch);
-    for (const result of results)
-      if (result.error !== undefined) failures.push(result.error);
-  }
+async function drainTasks(
+  tasks: Set<Promise<Done>>,
+  failures: unknown[],
+): Promise<void> {
+  while (tasks.size > 0) await Promise.all([...tasks]);
   const breach = failures.find(
     (error): error is BudgetError =>
       error instanceof BudgetError && error.code === "bound_breach",
@@ -417,10 +469,14 @@ export function createBudgetedTransport(
 ): BudgetedTransport {
   const models = indexModels(options.models);
   const tasks = new Set<Promise<Done>>();
+  const failures: unknown[] = [];
   const track = (task: Promise<void>): void => {
     const done = task.then(
       (): Done => ({}),
-      (error: unknown): Done => ({ error }),
+      (error: unknown): Done => {
+        failures.push(error);
+        return { error };
+      },
     );
     tasks.add(done);
     void done.finally(() => {
@@ -580,6 +636,6 @@ export function createBudgetedTransport(
 
   return {
     fetch,
-    drain: () => drainTasks(tasks),
+    drain: () => drainTasks(tasks, failures),
   };
 }
