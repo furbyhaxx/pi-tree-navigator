@@ -5,7 +5,7 @@ title: "Independent fold live acceptance: running results"
 description: "Budgeted synthetic manual, preflight and agent scenarios; failed evidence retained. Acceptance remains incomplete."
 type: "analysis"
 created: "2026-10-23T19:21:08+02:00"
-updated: "2026-10-23T19:58:23+02:00"
+updated: "2026-10-23T21:46:00+02:00"
 createdBy: "coding-agent"
 updatedBy: "coding-agent"
 ---
@@ -39,3 +39,32 @@ After canonical boundary and current-evidence hardening, 25 targeted tests passe
 At the latest ledger read: $0.692649261 billed, $0.266077903 held, $24.041272836 remaining from the authorized $25 ceiling. Holds remain charged against available budget until reconciled.
 
 Agent-request preservation passed its targeted live rerun. Final-source recovery/automatic scenarios, late-input persistence hardening and interactive TUI acceptance remain open. The individual passing runs do not complete the full acceptance scope.
+
+## Final-source acceptance (2026-10-23, evening)
+
+Added after the snapshot above; all runs use the shared ledger and synthetic fixtures.
+
+| Run | Result |
+| --- | --- |
+| `tui-dark-130-01` | passed: plan at 60/130 cols, search, advanced-label cancel, Esc cancel, real fold 76.2% → 0.8%, redraw, summary card |
+| `tui-light-60-01` | passed: regular/light/60 cols, plan ~73.2k → ~9.7k, folded freed ~72.6k, footer 76.2% → 0.8%, one side call |
+| `automatic-01` | failed: the model navigated itself, so the check saw nothing since its own newest anchor |
+| `automatic-02` | failed: with `navigate_tree` inactive the controller correctly refuses to run |
+| `automatic-03` | policy ran (jev-1.14 decisions + gpt-6-luna confirmer), pair abstained, no fold |
+| `automatic-04` | recorded abstention: `abstained.json`, exit 0, no fold claimed |
+
+Budget after these runs: billed $0.7273 of the authorized $25.
+
+**Open limits.** Automatic milestone folding is wired and its classifier pair runs
+live, but no live automatic fold was observed: on the synthetic transcripts the
+recommended confirm policy abstained. That is a safe outcome, not a passing
+compression result. Abstention is currently silent in the TUI; a persisted
+warning is still missing.
+
+The parity suite now documents that the recorded supersession benchmark predates
+the retirement-verification stage, so replaying it through the shipped policy
+abstains instead of reproducing the recorded retirement.
+
+The installed build remains `229afe0`. Folding inside this working session is
+impossible until the engine build is installed and reloaded: its pre-request
+guard aborts at 367k/372k, which is the originally reported deadlock.
