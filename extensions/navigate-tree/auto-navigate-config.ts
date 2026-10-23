@@ -1,4 +1,8 @@
 import {
+  parseMilestonePolicyObject,
+  RECOMMENDED_MILESTONE_CLASSIFIER,
+} from "./milestone-policy.ts";
+import {
   mergeProposalOptions,
   type ProposalOptions,
   type ProposalToolMode,
@@ -24,6 +28,7 @@ export interface AutoNavigateConfig {
   readonly checkEveryTurns: number;
   readonly minTokensSinceAnchor: number;
   readonly rewindAtTokens: number;
+  readonly milestonePolicy: string | null;
   readonly tools: Readonly<Record<string, ProposalToolMode>>;
 }
 
@@ -35,6 +40,7 @@ export interface AutoNavigatePartial {
   readonly checkEveryTurns?: number;
   readonly minTokensSinceAnchor?: number;
   readonly rewindAtTokens?: number;
+  readonly milestonePolicy?: string | null;
   readonly tools?: Readonly<Record<string, ProposalToolMode>>;
 }
 
@@ -44,6 +50,7 @@ export const DEFAULT_AUTO_NAVIGATE_CONFIG: AutoNavigateConfig = {
   checkEveryTurns: AUTO_NAVIGATE_DEFAULT_TURNS,
   minTokensSinceAnchor: AUTO_NAVIGATE_DEFAULT_MIN_TOKENS,
   rewindAtTokens: AUTO_NAVIGATE_DEFAULT_REWIND_TOKENS,
+  milestonePolicy: RECOMMENDED_MILESTONE_CLASSIFIER,
   tools: {},
 };
 
@@ -54,6 +61,7 @@ const KNOWN_KEYS = new Set([
   "check_every_turns",
   "min_tokens_since_anchor",
   "rewind_at_tokens",
+  "milestone",
   "tools",
 ]);
 
@@ -151,6 +159,27 @@ export function parseAutoNavigatePartial(
           `${where}.rewind_at_tokens`,
         )
       : undefined;
+  let milestonePolicy: string | null | undefined;
+  if ("milestone" in record) {
+    const value = record.milestone;
+    if (value === null) {
+      milestonePolicy = null;
+    } else if (value === RECOMMENDED_MILESTONE_CLASSIFIER) {
+      milestonePolicy = RECOMMENDED_MILESTONE_CLASSIFIER;
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value)
+    ) {
+      const parsed = parseMilestonePolicyObject(value);
+      if (!parsed.ok) throw new Error(parsed.problems.join("; "));
+      milestonePolicy = parsed.canonical;
+    } else {
+      throw new Error(
+        `${where}.milestone must be null, "${RECOMMENDED_MILESTONE_CLASSIFIER}", or a policy object`,
+      );
+    }
+  }
   let tools: Readonly<Record<string, ProposalToolMode>> | undefined;
   if (record.tools !== undefined) {
     if (
@@ -188,6 +217,7 @@ export function parseAutoNavigatePartial(
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
+    ...(milestonePolicy !== undefined ? { milestonePolicy } : {}),
     ...(tools !== undefined ? { tools } : {}),
   };
 }
@@ -208,6 +238,8 @@ export function mergeAutoNavigatePartial(
   const checkEveryTurns = o.checkEveryTurns ?? b.checkEveryTurns;
   const minTokensSinceAnchor = o.minTokensSinceAnchor ?? b.minTokensSinceAnchor;
   const rewindAtTokens = o.rewindAtTokens ?? b.rewindAtTokens;
+  const milestonePolicy =
+    o.milestonePolicy !== undefined ? o.milestonePolicy : b.milestonePolicy;
   return {
     ...(enabled !== undefined ? { enabled } : {}),
     ...(mode !== undefined ? { mode } : {}),
@@ -215,6 +247,7 @@ export function mergeAutoNavigatePartial(
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
+    ...(milestonePolicy !== undefined ? { milestonePolicy } : {}),
     ...(mergedTools !== undefined ? { tools: mergedTools } : {}),
   };
 }
@@ -239,6 +272,10 @@ export function materializeAutoNavigateConfig(
       DEFAULT_AUTO_NAVIGATE_CONFIG.minTokensSinceAnchor,
     rewindAtTokens:
       partial?.rewindAtTokens ?? DEFAULT_AUTO_NAVIGATE_CONFIG.rewindAtTokens,
+    milestonePolicy:
+      partial?.milestonePolicy !== undefined
+        ? partial.milestonePolicy
+        : DEFAULT_AUTO_NAVIGATE_CONFIG.milestonePolicy,
     tools: mergedTools,
   };
 }
