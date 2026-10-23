@@ -147,3 +147,12 @@ export function buildReserveOrderWarning(
 ): string {
   return `rewindHintReserveTokens (${hintReserve}) is below pi's compaction.reserveTokens (${piReserve}) for ${modelKey}: rewind-driven compaction may fire before the hint, giving the model no time to prepare and persist what matters to files.`;
 }
+
+/** The guard-ordering warning: the hint reserve does not exceed what the request guard keeps free. */
+export function buildReserveGuardWarning(
+  hintReserve: number,
+  guardTokens: number,
+  modelKey: string,
+): string {
+  return `rewindHintReserveTokens (${hintReserve}) does not exceed the ${guardTokens} tokens the request guard keeps free for ${modelKey}: a request can be refused before generation without the hint having fired. Raise it above ${guardTokens}.`;
+}

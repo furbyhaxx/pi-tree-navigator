@@ -66,7 +66,13 @@ export function estimateContentTokens(messages: AgentMessage[]): number {
   );
 }
 
-/** Estimate request headroom conservatively against the SDK's denser text heuristic. */
+/**
+ * The admission estimate, shaped like the SDK's own pre-request estimate: the
+ * newest valid usage plus the estimated messages after it, or all messages when
+ * no baseline survives invalidation (a later compaction, context edit, system
+ * message or model change). Estimated text is scaled from the host's four
+ * chars/token to the SDK's 3.5.
+ */
 export function estimateRequestTokens(messages: AgentMessage[]): number {
   const converted = convertToLlm(messages);
   const anchor = newestUsageIndex(converted);
@@ -75,14 +81,8 @@ export function estimateRequestTokens(messages: AgentMessage[]): number {
   const tail = converted
     .slice(anchor + 1)
     .reduce((sum, message) => sum + estimateTokens(message), 0);
-  const content = converted.reduce(
-    (sum, message) => sum + estimateTokens(message),
-    0,
-  );
-  // Host estimates use four chars/token; the SDK's text heuristic uses 3.5.
-  return Math.max(
-    Math.ceil((content * 8) / 7),
-    (usage ? calculateContextTokens(usage) : 0) + Math.ceil((tail * 8) / 7),
+  return (
+    (usage ? calculateContextTokens(usage) : 0) + Math.ceil((tail * 8) / 7)
   );
 }
 

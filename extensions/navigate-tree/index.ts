@@ -52,6 +52,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
   type AssistantMessage,
   getCurrentSystemMessage,
+  getSystemMessageText,
   isContextOverflow,
   isRecoverableLength,
 } from "@earendil-works/pi-ai";
@@ -95,7 +96,6 @@ import {
 } from "./config.ts";
 import {
   estimateContentTokens,
-  estimateContextTokens,
   estimateRequestTokens,
   splitContextEstimate,
 } from "./context-tokens.ts";
@@ -167,6 +167,7 @@ import { sha256 } from "./retrospective-plan.ts";
 import {
   buildForcedRewindText,
   buildNoAnchorText,
+  buildReserveGuardWarning,
   buildReserveOrderWarning,
   buildRewindCompactionFailedText,
   buildRewindHintText,
@@ -697,10 +698,6 @@ function findLabeledEntry(
   return null;
 }
 
-function estimateActiveBranchTokens(sm: SessionManager): number {
-  return estimateContextTokens(sm.buildSessionContext().messages);
-}
-
 /**
  * The messages a branch rooted at `entryId` would carry: what a fold to that
  * entry leaves behind before its handoff is added. `completeRewind` projects
@@ -718,12 +715,14 @@ function projectAtEntry(
   ).messages;
 }
 
+/** The admission estimate (see `estimateAdmissionTokens`) for the branch a fold to `entryId` leaves. */
 function estimateAtEntry(
+  sm: SessionManager,
   entries: SessionEntry[],
   entryId: string,
   byId: Map<string, SessionEntry>,
 ): number {
-  return estimateContextTokens(projectAtEntry(entries, entryId, byId));
+  return requestAccounting(sm, projectAtEntry(entries, entryId, byId)).tokens;
 }
 
 /**
@@ -756,7 +755,7 @@ function collectActiveAnchors(sm: SessionManager): {
     if (!lbl?.startsWith(LABEL_PREFIX)) continue;
     anchors.push({
       name: lbl.slice(LABEL_PREFIX.length),
-      tokens: estimateAtEntry(allEntries, e.id, byId),
+      tokens: estimateAtEntry(sm, allEntries, e.id, byId),
       beforeCompaction: precedesLatestCompaction(path, e.id),
       hint: findLabelHint(sm, e.id, LIST_HINT_MAX_LENGTH),
     });
@@ -833,7 +832,7 @@ function suggestFoldLabel(sm: SessionManager, anchorName: string): string {
  * point the model at rewind targets.
  */
 function formatActiveAnchors(
-  sm: Pick<SessionManager, "getBranch" | "getLabel">,
+  sm: SessionManager,
   cw: number,
   allEntries: SessionEntry[],
   byId: Map<string, SessionEntry>,
@@ -848,7 +847,7 @@ function formatActiveAnchors(
     if (!isValidName(name)) continue;
     names.push(name);
     rows.push({
-      pct: formatPct1(estimateAtEntry(allEntries, e.id, byId), cw),
+      pct: formatPct1(estimateAtEntry(sm, allEntries, e.id, byId), cw),
       name,
     });
   }
@@ -1029,12 +1028,30 @@ function requestAccounting(sm: SessionManager, messages: AgentMessage[]) {
           },
           ...messages.filter((message) => message.role !== "system"),
         ];
+  const system = getCurrentSystemMessage(effective);
+  const mandated =
+    system !== undefined &&
+    getSystemMessageText(system).includes(ANCHOR_MANDATE);
   return {
     messages: effective,
     tokens:
       estimateRequestTokens(effective) +
-      (forcedPrompt === undefined ? Math.ceil(ANCHOR_MANDATE.length / 3.5) : 0),
+      (mandated ? 0 : Math.ceil(ANCHOR_MANDATE.length / 3.5)),
   };
+}
+
+/**
+ * The one number the extension gates and reports context on: what the next
+ * request on the active branch would cost, as the request guard estimates it.
+ * The branch is projected as `context` sends it, under the effective system
+ * state `requestAccounting` uses.
+ */
+export function estimateAdmissionTokens(sm: SessionManager): number {
+  const system = getCurrentSystemMessage(sm.buildSessionContext().messages);
+  return requestAccounting(sm, [
+    ...(system ? [system] : []),
+    ...buildContextMessages(sm),
+  ]).tokens;
 }
 
 /** What withholding tool results plans (#101, D3/D4). */
@@ -2059,7 +2076,7 @@ export default function (pi: ExtensionAPI) {
     listAnchors(ctx) {
       const sm = ctx.sessionManager as SessionManager;
       const cw = ctx.model?.contextWindow ?? 0;
-      const totalTokens = estimateActiveBranchTokens(sm);
+      const totalTokens = estimateAdmissionTokens(sm);
       return collectActiveAnchors(sm).map(
         ({ name, tokens, beforeCompaction, hint }) => ({
           name,
@@ -2114,7 +2131,7 @@ export default function (pi: ExtensionAPI) {
     },
     contextBadge(ctx) {
       const cw = ctx.model?.contextWindow ?? 0;
-      const tokens = estimateActiveBranchTokens(
+      const tokens = estimateAdmissionTokens(
         ctx.sessionManager as SessionManager,
       );
       return `ctx ${formatPct1(tokens, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}`;
@@ -3063,7 +3080,10 @@ export default function (pi: ExtensionAPI) {
         role: "custom" as const,
         customType: REWIND_CUSTOM_TYPE,
         content:
-          buildRewindDoneText(pending, estimateContextTokens(prospective)) +
+          buildRewindDoneText(
+            pending,
+            requestAccounting(sm, prospective).tokens,
+          ) +
           (continuity.notice ? `\n\n${continuity.notice}` : "") +
           (lateEntries.length
             ? `\n\n${buildLateEntriesNote(lateEntries.length)}`
@@ -3162,7 +3182,7 @@ export default function (pi: ExtensionAPI) {
     // continuation always reaches the model.
     let afterTokens = 0;
     try {
-      afterTokens = estimateActiveBranchTokens(sm);
+      afterTokens = estimateAdmissionTokens(sm);
     } catch {
       afterTokens = 0;
     }
@@ -4415,6 +4435,11 @@ export default function (pi: ExtensionAPI) {
           if (hint !== null && hint < piReserve) {
             warnings.push(buildReserveOrderWarning(hint, piReserve, key));
           }
+          const guardTokens =
+            RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS;
+          if (hint !== null && hint <= guardTokens) {
+            warnings.push(buildReserveGuardWarning(hint, guardTokens, key));
+          }
         } catch {
           // Invalid pi setting for this model: pi reports it itself.
         }
@@ -4637,7 +4662,18 @@ export default function (pi: ExtensionAPI) {
     ) {
       return;
     }
-    const tokensLeft = usage.contextWindow - usage.tokens;
+    // The hint measures the same admission estimate the request guard
+    // gates on, so a crossing and a refused request cannot disagree. pi's
+    // `usage` still supplies the window and the unknown-tokens state.
+    if (!sm) return;
+    let admission: number;
+    try {
+      admission = estimateAdmissionTokens(sm as SessionManager);
+    } catch {
+      return;
+    }
+    const tokensLeft = usage.contextWindow - admission;
+    const percent = (admission / usage.contextWindow) * 100;
     if (reserve === null || tokensLeft > reserve) {
       // Hint off for this model, or outside the reserve: re-arm only.
       hintTracker.observe(tokensLeft, reserve);
@@ -4651,13 +4687,17 @@ export default function (pi: ExtensionAPI) {
     // failed state read. The shared `sm` was captured before any
     // throw-capable call, so the fallback append never re-reads a lazy ctx
     // getter after a throw.
-    if (!sm) return;
     let anchors: { names: string[]; text: string };
     try {
       const allEntries = sm.getEntries();
       const byId = new Map<string, SessionEntry>();
       for (const e of allEntries) byId.set(e.id, e);
-      anchors = formatActiveAnchors(sm, usage.contextWindow, allEntries, byId);
+      anchors = formatActiveAnchors(
+        sm as SessionManager,
+        usage.contextWindow,
+        allEntries,
+        byId,
+      );
     } catch {
       return;
     }
@@ -4673,7 +4713,7 @@ export default function (pi: ExtensionAPI) {
     }
     if (anchors.names.length > 0) {
       const text = buildRewindHintText(
-        usage.percent,
+        percent,
         tokensLeft,
         reserve,
         usage.contextWindow,
@@ -4723,10 +4763,7 @@ export default function (pi: ExtensionAPI) {
         }
       }
     } else if (ctx.hasUI) {
-      ctx.ui.notify(
-        buildNoAnchorText(usage.percent, usage.contextWindow),
-        "warning",
-      );
+      ctx.ui.notify(buildNoAnchorText(percent, usage.contextWindow), "warning");
     }
   });
 
@@ -4787,7 +4824,7 @@ export default function (pi: ExtensionAPI) {
         : { modelKey, turnsSinceCheck: 0 };
     if (calledNavigateTree) {
       try {
-        state.lastCheckTokens = estimateActiveBranchTokens(sm);
+        state.lastCheckTokens = estimateAdmissionTokens(sm);
       } catch {
         return;
       }
@@ -4809,7 +4846,7 @@ export default function (pi: ExtensionAPI) {
     if (branch.length < 2) return;
     const byId = new Map<string, SessionEntry>();
     for (const e of allEntries) byId.set(e.id, e);
-    const activeTokens = estimateActiveBranchTokens(sm);
+    const activeTokens = estimateAdmissionTokens(sm);
     let newestAnchorId: string | undefined;
     for (let i = branch.length - 1; i >= 0; i--) {
       const lbl = sm.getLabel(branch[i].id);
@@ -4819,7 +4856,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
     const anchorTokens = newestAnchorId
-      ? estimateAtEntry(allEntries, newestAnchorId, byId)
+      ? estimateAtEntry(sm, allEntries, newestAnchorId, byId)
       : 0;
     const tokensSinceLastAnchor = Math.max(0, activeTokens - anchorTokens);
     if (state.lastAnchorEntryId !== newestAnchorId) {
@@ -4914,7 +4951,7 @@ export default function (pi: ExtensionAPI) {
         const target = findLabeledEntry(sm, LABEL_PREFIX + decision.rewindTo);
         if (!target || findLabeledEntry(sm, LABEL_PREFIX + decision.newLabel))
           return;
-        const targetTokens = estimateAtEntry(allEntries, target, byId);
+        const targetTokens = estimateAtEntry(sm, allEntries, target, byId);
         if (activeTokens - targetTokens < MIN_REWIND_SAVINGS_TOKENS) return;
         state.lastSteerTokens = activeTokens;
         const text = buildAutoNavigateRewindSteerText(decision);
@@ -5083,7 +5120,7 @@ Operations (set \`action\`):
       // --- list ---
       if (p.action === "list") {
         const cw = ctx.model?.contextWindow ?? 0;
-        const totalTokens = estimateActiveBranchTokens(sm);
+        const totalTokens = estimateAdmissionTokens(sm);
         const reflectionOk = !!findOwningSession(sm);
 
         const rows: AnchorTableRow[] = collectActiveAnchors(sm).map(
@@ -5140,7 +5177,7 @@ Operations (set \`action\`):
         // otherwise the agent sees an error yet a retry with the same
         // name is rejected as a duplicate.
         const cw = ctx.model?.contextWindow ?? 0;
-        const tokensHere = estimateActiveBranchTokens(sm);
+        const tokensHere = estimateAdmissionTokens(sm);
         const labelHint = findLabelHint(sm, leafId, ANCHOR_HINT_MAX_LENGTH);
         const positionLine = `${formatPct1(tokensHere, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}`;
         const hintLine = labelHint ? ` (after: “${labelHint}”)` : "";
@@ -5368,11 +5405,16 @@ Operations (set \`action\`):
         oldLeafEntry.message.role === "assistant" &&
         oldLeafEntry.parentId
       ) {
-        beforeTokens = estimateAtEntry(allEntries, oldLeafEntry.parentId, byId);
+        beforeTokens = estimateAtEntry(
+          sm,
+          allEntries,
+          oldLeafEntry.parentId,
+          byId,
+        );
       } else {
-        beforeTokens = estimateActiveBranchTokens(sm);
+        beforeTokens = estimateAdmissionTokens(sm);
       }
-      const tokensAtTarget = estimateAtEntry(allEntries, target, byId);
+      const tokensAtTarget = estimateAtEntry(sm, allEntries, target, byId);
       const contextWindow = ctx.model?.contextWindow ?? 0;
 
       const { entries } = collectEntriesForBranchSummary(sm, oldLeaf, target);
