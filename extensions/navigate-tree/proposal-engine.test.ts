@@ -107,6 +107,16 @@ it("refines a fitting full history in one request without an intermediate summar
     assert.match(requests[0], new RegExp(`RECORD_${index}_`));
 });
 
+it("supplies branch-parent-safe fold starts and a self-contained report contract", async () => {
+  const source = { ...snapshot(4), safeCuts: new Set([-1, 0, 2]) };
+  source.entries[3].parentId = "id-0";
+  const requests: string[] = [];
+  await proposeTree(source, { model: runner(source, requests) });
+  assert.match(requests[0], /"safeFoldStartIds":\["id-0","id-1","id-3"\]/);
+  assert.match(requests[0], /Only summary becomes model-facing handoff text/);
+  assert.match(requests[0], /goal and outcome are display metadata/);
+});
+
 it("covers every large record across bounded extraction calls before refinement", async () => {
   const source = snapshot(12, 5000);
   const requests: string[] = [];

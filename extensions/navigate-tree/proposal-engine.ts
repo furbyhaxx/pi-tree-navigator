@@ -142,7 +142,10 @@ export async function proposeTree(
         "Runner token budget cannot fit a proposal request",
       );
     const finalPrefix =
-      'Refine the heuristic outline using the evidence. Reply with exactly {"groups":[...]}, no other keys. Groups use name (unique kebab-case <=40), title, goal, outcome, state (open/folded), firstEntryId, lastEntryId, summary, children. Fold only proven completed work with a real report. All endpoints must come from the outline/source ID list. Keep the current tail open and use at most 32 nesting levels.\n';
+      'Refine the heuristic outline using the evidence. Reply with exactly {"groups":[...]}, no other keys. Groups use name (unique kebab-case <=40), title, goal, outcome, state (open/folded), firstEntryId, lastEntryId, summary, children. Fold only proven completed work with a real report. Only summary becomes model-facing handoff text; goal and outcome are display metadata. Make each summary self-contained: preserve relevant existing reports, exact hashes, findings, decisions, verification limits and remaining work in summary itself. All endpoints must come from the outline/source ID list. For folded groups, firstEntryId must be in safeFoldStartIds and lastEntryId in safeCutAfterIds; these are necessary tool-batch boundaries, not proof that every range between them is valid. Keep the current tail open and use at most 32 nesting levels.\n';
+    const entryIndices = new Map(
+      snapshot.entries.map((entry, index) => [entry.id, index]),
+    );
     const outline = JSON.stringify({
       groups: plan.groups,
       sourceIds: records.map((record) => record.id),
@@ -151,6 +154,15 @@ export async function proposeTree(
           ? [entry.label.replace(/^(anchor|branch):/, "")]
           : [],
       ),
+      safeFoldStartIds: snapshot.entries
+        .filter((entry) =>
+          snapshot.safeCuts.has(
+            entry.parentId === null
+              ? -1
+              : (entryIndices.get(entry.parentId) ?? -2),
+          ),
+        )
+        .map((entry) => entry.id),
       safeCutAfterIds: [...snapshot.safeCuts].flatMap((index) =>
         snapshot.entries[index] ? [snapshot.entries[index].id] : [],
       ),
