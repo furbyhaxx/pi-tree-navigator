@@ -79,6 +79,18 @@ Safe points:
   jev-1.14 and gpt-6-luna-decisions agree; boundary: gpt-6-luna chat), pending spikes
   on instructions, granular chained questions and tree context, and an expanded holdout.
 
+- **E15** (user, 2026-10-23) Drop both rewind call-shape rules: a `rewind` may share
+  its message with other calls and may appear anywhere in a codemode script. The fold
+  runs at `turn_end` after every sibling/nested call finished. Not documented in the
+  tool description because it no longer exists (applied in U4a.2).
+- **E16** Candidate projection (U4b/U4c/U4d share it): `projectedAfterTokens` must come
+  from the same materialization `commitFold` previews (full-mode child handoffs, the
+  continuity briefing, late input, continuation), with a placeholder summary sized at
+  the reduce output cap. An anchor estimate alone under-prices folds that re-attach
+  child handoffs (the 141.5k -> 218.4k refusal). Extract a pure preview from
+  `commitFold` and reuse it. Recommendation budget: window minus the resolved hint
+  reserve, or 25% of the window when the hint is off.
+
 ## Units
 
 | Unit | Scope | Status |
@@ -87,7 +99,7 @@ Safe points:
 | U5 | unified admission estimate | merged |
 | U2 | extract `commitFold` from `completeRewind`, behavior unchanged | merged (fold-point boundary fixed in 38916ac) |
 | U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | merged |
-| U4a | rewind tool on the engine; delete the in-band summary turn | next |
+| U4a | rewind tool on the engine; delete the in-band summary turn | U4a.1 host merged (a4e0182); U4a.2 in progress |
 | U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI module merged; wiring with U4a |
 | U4c | auto controller executes through the engine | later |
 | U4d | overflow and guard-abort recovery through the engine | later |

@@ -1,0 +1,116 @@
+{
+  "runId": "run-2026-10-23T14-12-24.423Z-1404",
+  "createdAt": "2026-10-23T14:12:24.423Z",
+  "gitSha": "aa9253044bd13cbfebf420bdf1eee3d2e98ae67d",
+  "gitDirty": true,
+  "casesSha256": "fa50541b3787fad15856fcff976ecf617682d6f8bc7ac73f15b06c86eb5a2e27",
+  "caseCount": 192,
+  "ledgerPath": ".project/analyses/classifier-eval/budget-ledger.jsonl",
+  "capUsd": 25,
+  "routePrices": {
+    "retrievedAt": "2026-10-23",
+    "source": [
+      ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+      ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+    ]
+  },
+  "models": [
+    {
+      "label": "decisions:microsoft/microsoft-decision-1",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "chat:openai/gpt-6-luna",
+      "adapter": "chat",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "heuristic",
+      "adapter": "heuristic"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "run-2026-10-23T14-12-24.423Z-1404.s1",
+      "startedAt": "2026-10-23T14:12:24.424Z",
+      "models": [
+        {
+          "label": "decisions:microsoft/microsoft-decision-1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "chat:openai/gpt-6-luna",
+          "adapter": "chat",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "heuristic",
+          "adapter": "heuristic"
+        }
+      ],
+      "excluded": [],
+      "split": "holdout",
+      "tasks": [
+        "intent",
+        "supersession"
+      ],
+      "repetitions": 3,
+      "concurrency": 6,
+      "keyUsageBefore": {
+        "usage": 63.812078435,
+        "usageDaily": 21.700791503,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 63.827939965,
+        "usageDaily": 21.716653033,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:14:35.886Z",
+      "counts": {
+        "ok": 768,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 25,
+        "spentUsd": 0.554046879,
+        "heldUsd": 0.054682903,
+        "remainingUsd": 24.391270218
+      }
+    }
+  ]
+}

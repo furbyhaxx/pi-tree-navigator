@@ -1,0 +1,281 @@
+{
+  "runId": "run-2026-10-23T14-01-09.775Z-312c",
+  "createdAt": "2026-10-23T14:01:09.775Z",
+  "gitSha": "aa9253044bd13cbfebf420bdf1eee3d2e98ae67d",
+  "gitDirty": true,
+  "casesSha256": "fa50541b3787fad15856fcff976ecf617682d6f8bc7ac73f15b06c86eb5a2e27",
+  "caseCount": 192,
+  "ledgerPath": ".project/analyses/classifier-eval/budget-ledger.jsonl",
+  "capUsd": 25,
+  "routePrices": {
+    "retrievedAt": "2026-10-23",
+    "source": [
+      ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+      ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+    ]
+  },
+  "models": [
+    {
+      "label": "chat:openai/gpt-6-luna#base",
+      "adapter": "chat",
+      "variant": "base",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#instructions",
+      "adapter": "chat",
+      "variant": "instructions",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:openai/gpt-6-luna#granular",
+      "adapter": "chat",
+      "variant": "granular",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#base",
+      "adapter": "decisions",
+      "variant": "base",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#instructions",
+      "adapter": "decisions",
+      "variant": "instructions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14#granular",
+      "adapter": "decisions",
+      "variant": "granular",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#base",
+      "adapter": "decisions",
+      "variant": "base",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#instructions",
+      "adapter": "decisions",
+      "variant": "instructions",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions#granular",
+      "adapter": "decisions",
+      "variant": "granular",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#base",
+      "adapter": "decisions",
+      "variant": "base",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#instructions",
+      "adapter": "decisions",
+      "variant": "instructions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1#granular",
+      "adapter": "decisions",
+      "variant": "granular",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    }
+  ],
+  "sessions": [
+    {
+      "id": "run-2026-10-23T14-01-09.775Z-312c.s1",
+      "startedAt": "2026-10-23T14:01:09.775Z",
+      "models": [
+        {
+          "label": "chat:openai/gpt-6-luna#base",
+          "adapter": "chat",
+          "variant": "base",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#instructions",
+          "adapter": "chat",
+          "variant": "instructions",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:openai/gpt-6-luna#granular",
+          "adapter": "chat",
+          "variant": "granular",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#base",
+          "adapter": "decisions",
+          "variant": "base",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#instructions",
+          "adapter": "decisions",
+          "variant": "instructions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1#granular",
+          "adapter": "decisions",
+          "variant": "granular",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        }
+      ],
+      "excluded": [],
+      "split": "holdout",
+      "tasks": [
+        "milestone-status",
+        "milestone-boundary"
+      ],
+      "variants": [
+        "base",
+        "instructions",
+        "granular"
+      ],
+      "repetitions": 3,
+      "concurrency": 6,
+      "keyUsageBefore": {
+        "usage": 63.618851207,
+        "usageDaily": 21.507564275,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 63.805664385,
+        "usageDaily": 21.694377453,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:12:23.944Z",
+      "counts": {
+        "ok": 2304,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 25,
+        "spentUsd": 0.532820487,
+        "heldUsd": 0.054682903,
+        "remainingUsd": 24.41249661
+      }
+    }
+  ]
+}
