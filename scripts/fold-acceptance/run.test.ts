@@ -8,7 +8,43 @@ import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { estimateAdmissionTokens } from "../../extensions/navigate-tree/index.ts";
 import { AUTOMATIC_CONFIG, AUTOMATIC_REQUEST, seedCorpus } from "./fixture.ts";
-import { interceptRuntime, parseOptions, runAcceptance } from "./run.ts";
+import {
+  interceptRuntime,
+  parseOptions,
+  runAcceptance,
+  verifyAutomaticContinuation,
+} from "./run.ts";
+
+it("automatic continuation need not repeat an already fulfilled finalization request", () => {
+  const sm = SessionManager.inMemory();
+  const anchor = sm.appendMessage({
+    role: "user",
+    content: "Finalize the audit",
+    timestamp: 1,
+  });
+  sm.appendMessage(
+    fauxAssistantMessage("ACCEPTANCE-CONTINUED: audit complete"),
+  );
+  sm.branchWithSummary(anchor, "Completed audit handoff");
+  assert.throws(
+    () => verifyAutomaticContinuation(sm.getBranch(), sm.getEntries()),
+    /continue/,
+  );
+  const afterFold = sm.appendMessage(
+    fauxAssistantMessage("Ready for the next supplied change."),
+  );
+  verifyAutomaticContinuation(sm.getBranch(), sm.getEntries());
+  const parentId = sm.getEntry(afterFold)?.parentId;
+  assert.ok(parentId);
+  sm.branch(parentId);
+  sm.appendMessage(
+    fauxAssistantMessage("failed partial reply", { stopReason: "error" }),
+  );
+  assert.throws(
+    () => verifyAutomaticContinuation(sm.getBranch(), sm.getEntries()),
+    /continue/,
+  );
+});
 
 it("dry run writes only synthetic evidence without opening a ledger or contacting providers", async () => {
   const root = mkdtempSync(join(tmpdir(), "fold-runner-test-"));

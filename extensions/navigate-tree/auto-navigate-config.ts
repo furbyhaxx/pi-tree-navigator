@@ -6,7 +6,6 @@ import {
   mergeProposalOptions,
   type ProposalOptions,
   type ProposalToolMode,
-  parseProposalModel,
 } from "./proposal-options.ts";
 
 /** Actions the sidecar auto-navigation controller may perform. */
@@ -24,7 +23,6 @@ export const AUTO_NAVIGATE_DEFAULT_REWIND_TOKENS = 120_000;
 export interface AutoNavigateConfig {
   readonly enabled: boolean;
   readonly mode: AutoNavigateMode;
-  readonly controllerModel?: string;
   readonly checkEveryTurns: number;
   readonly minTokensSinceAnchor: number;
   readonly rewindAtTokens: number;
@@ -36,7 +34,6 @@ export interface AutoNavigateConfig {
 export interface AutoNavigatePartial {
   readonly enabled?: boolean;
   readonly mode?: AutoNavigateMode;
-  readonly controllerModel?: string;
   readonly checkEveryTurns?: number;
   readonly minTokensSinceAnchor?: number;
   readonly rewindAtTokens?: number;
@@ -57,7 +54,6 @@ export const DEFAULT_AUTO_NAVIGATE_CONFIG: AutoNavigateConfig = {
 const KNOWN_KEYS = new Set([
   "enabled",
   "mode",
-  "controller_model",
   "check_every_turns",
   "min_tokens_since_anchor",
   "rewind_at_tokens",
@@ -98,6 +94,10 @@ export function parseAutoNavigatePartial(
     throw new Error(`${where} must be an object or boolean`);
   }
   const record = raw as Record<string, unknown>;
+  if ("controller_model" in record)
+    throw new Error(
+      `${where}.controller_model was removed; configure ${where}.milestone with "recommended" or explicit classifier/confirmer stages instead.`,
+    );
   for (const key of Object.keys(record)) {
     if (!KNOWN_KEYS.has(key)) {
       throw new Error(`Unknown ${where} field: ${key}`);
@@ -118,19 +118,6 @@ export function parseAutoNavigatePartial(
       );
     }
     mode = record.mode;
-  }
-  let controllerModel: string | undefined;
-  if (record.controller_model !== undefined) {
-    if (
-      typeof record.controller_model !== "string" ||
-      !record.controller_model.trim()
-    ) {
-      throw new Error(
-        `${where}.controller_model must be current or provider/model[:thinking]`,
-      );
-    }
-    parseProposalModel(record.controller_model);
-    controllerModel = record.controller_model;
   }
   const checkEveryTurns =
     record.check_every_turns !== undefined
@@ -213,7 +200,6 @@ export function parseAutoNavigatePartial(
   return {
     ...(enabled !== undefined ? { enabled } : {}),
     ...(mode !== undefined ? { mode } : {}),
-    ...(controllerModel !== undefined ? { controllerModel } : {}),
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
@@ -234,7 +220,6 @@ export function mergeAutoNavigatePartial(
     b.tools || o.tools ? { ...(b.tools ?? {}), ...(o.tools ?? {}) } : undefined;
   const enabled = o.enabled ?? b.enabled;
   const mode = o.mode ?? b.mode;
-  const controllerModel = o.controllerModel ?? b.controllerModel;
   const checkEveryTurns = o.checkEveryTurns ?? b.checkEveryTurns;
   const minTokensSinceAnchor = o.minTokensSinceAnchor ?? b.minTokensSinceAnchor;
   const rewindAtTokens = o.rewindAtTokens ?? b.rewindAtTokens;
@@ -243,7 +228,6 @@ export function mergeAutoNavigatePartial(
   return {
     ...(enabled !== undefined ? { enabled } : {}),
     ...(mode !== undefined ? { mode } : {}),
-    ...(controllerModel !== undefined ? { controllerModel } : {}),
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
@@ -260,11 +244,9 @@ export function materializeAutoNavigateConfig(
   const mergedTools = mergeProposalOptions(fallbackProposal ?? { tools: {} }, {
     tools: partial?.tools ?? {},
   }).tools;
-  const controllerModel = partial?.controllerModel ?? fallbackProposal?.model;
   return {
     enabled: partial?.enabled ?? DEFAULT_AUTO_NAVIGATE_CONFIG.enabled,
     mode: partial?.mode ?? DEFAULT_AUTO_NAVIGATE_CONFIG.mode,
-    ...(controllerModel !== undefined ? { controllerModel } : {}),
     checkEveryTurns:
       partial?.checkEveryTurns ?? DEFAULT_AUTO_NAVIGATE_CONFIG.checkEveryTurns,
     minTokensSinceAnchor:

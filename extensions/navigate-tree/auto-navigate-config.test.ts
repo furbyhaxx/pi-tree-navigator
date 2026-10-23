@@ -53,7 +53,7 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     const parsed = parseAutoNavigatePartial({
       enabled: true,
       mode: "anchor-and-rewind",
-      controller_model: "openai/gpt-6-luna:low",
+      milestone: "recommended",
       check_every_turns: 4,
       min_tokens_since_anchor: 20000,
       rewind_at_tokens: 90000,
@@ -62,7 +62,7 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     assert.deepEqual(parsed, {
       enabled: true,
       mode: "anchor-and-rewind",
-      controllerModel: "openai/gpt-6-luna:low",
+      milestonePolicy: "recommended",
       checkEveryTurns: 4,
       minTokensSinceAnchor: 20000,
       rewindAtTokens: 90000,
@@ -70,6 +70,10 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     });
     assert.throws(() => parseAutoNavigatePartial({ camelCaseKey: true }));
     assert.throws(() => parseAutoNavigatePartial({ check_every_turns: 0 }));
+    assert.throws(
+      () => parseAutoNavigatePartial({ controller_model: "test/old" }),
+      /controller_model was removed; configure auto_navigate\.milestone/,
+    );
   });
 
   it("defaults auto-navigation off with the recommended milestone policy", () => {
@@ -189,7 +193,7 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
       rewind_hint_reserve_tokens: 40000,
       auto_navigate: {
         enabled: false,
-        controller_model: "openai/gpt-6-luna:low",
+        milestone: "recommended",
         check_every_turns: 6,
         min_tokens_since_anchor: 25000,
         rewind_at_tokens: 120000,
@@ -238,7 +242,6 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     assert.deepEqual(openrouterAuto, {
       enabled: true,
       mode: "anchor-and-rewind",
-      controllerModel: "openai/gpt-6-luna:low",
       checkEveryTurns: 4,
       minTokensSinceAnchor: 25000,
       rewindAtTokens: 90000,

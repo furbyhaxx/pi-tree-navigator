@@ -20,6 +20,7 @@ import {
   getAgentDir,
   ModelRegistry,
   ModelRuntime,
+  type SessionEntry,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -71,6 +72,39 @@ const textOf = (message: { role?: string; content?: unknown }): string =>
           )
           .join("\n")
       : "";
+
+/** Require successful same-run work after folding and fulfillment of the authored request. */
+export function verifyAutomaticContinuation(
+  branch: readonly SessionEntry[],
+  entries: readonly SessionEntry[],
+): void {
+  const summaryAt = branch.findIndex(
+    (entry) => entry.type === "branch_summary",
+  );
+  assert.ok(summaryAt >= 0, "automatic engine must create a handoff");
+  assert.ok(
+    branch
+      .slice(summaryAt + 1)
+      .some(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "assistant" &&
+          entry.message.stopReason === "stop" &&
+          textOf(entry.message).trim().length > 0,
+      ),
+    "automatic fold must continue in the same prompt run after the handoff",
+  );
+  assert.ok(
+    entries.some(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "assistant" &&
+        entry.message.stopReason === "stop" &&
+        textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
+    ),
+    "main model must fulfill the authored finalization request",
+  );
+}
 
 /** Parse explicit run controls; no request is sent by parsing. */
 export function parseOptions(args: string[]): RunOptions {
@@ -482,25 +516,17 @@ export async function runAcceptance(
       (entry) => entry.type === "branch_summary",
     );
     assert.ok(summaryAt >= 0, "production engine must write a branch summary");
-    if (options.scenario === "automatic") {
-      assert.ok(
-        branch
-          .slice(summaryAt + 1)
-          .some(
-            (entry) =>
-              entry.type === "message" &&
-              entry.message.role === "assistant" &&
-              textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
-          ),
-        "automatic fold must continue the main request in the same prompt run after the handoff",
-      );
-    }
+    if (options.scenario === "automatic")
+      verifyAutomaticContinuation(branch, sm.getEntries());
     const final = branch.findLast(
       (entry) => entry.type === "message" && entry.message.role === "assistant",
     );
     assert.ok(
       final?.type === "message" &&
-        textOf(final.message).includes("ACCEPTANCE-CONTINUED"),
+        final.message.role === "assistant" &&
+        final.message.stopReason === "stop" &&
+        (options.scenario === "automatic" ||
+          textOf(final.message).includes("ACCEPTANCE-CONTINUED")),
       "main model must answer after the fold",
     );
     if (options.scenario === "preflight") {
