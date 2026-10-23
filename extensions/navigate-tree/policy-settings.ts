@@ -3,7 +3,7 @@
  *
  * Returns a value for the settings screen to stage. It writes nothing and
  * never calls a provider. Preset and off are the strings and null the files
- * already store; custom edits keep unspecified stages and unknown fields.
+ * already store; custom edits must pass the production policy parser.
  */
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { type FrameRow, selectFrame } from "./frame.ts";
@@ -349,55 +349,11 @@ function heuristicsOf(state: State): boolean {
   return true;
 }
 
-/** Drop keys the current parser rejects so known fields can still be checked. */
-function dropUnknown(
-  kind: PolicyKind,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const current = structuredClone(source);
-  const root = rootOf(kind);
-  const suffix = " is not a field";
-  for (let attempt = 0; attempt < 16; attempt++) {
-    const parsed = parsePolicy(kind, current);
-    if (parsed.ok) return current;
-    const unknown = parsed.problems.filter(
-      (problem) => problem.startsWith(`${root}.`) && problem.endsWith(suffix),
-    );
-    if (unknown.length === 0) return current;
-    let removed = false;
-    for (const problem of unknown) {
-      const path = problem.slice(root.length + 1, -suffix.length).split(".");
-      if (deletePath(current, path)) removed = true;
-    }
-    if (!removed) return current;
-  }
-  return current;
-}
-
-function mergeUnknown(
-  setting: object,
-  source: Record<string, unknown>,
-): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...setting };
-  for (const key of Object.keys(source)) {
-    const fromSource = source[key];
-    if (!(key in out)) {
-      out[key] = fromSource;
-      continue;
-    }
-    const fromSetting = out[key];
-    if (isRecord(fromSetting) && isRecord(fromSource)) {
-      out[key] = mergeUnknown(fromSetting, fromSource);
-    }
-  }
-  return out;
-}
-
 function knownProblems(
   kind: PolicyKind,
   value: Record<string, unknown>,
 ): string[] {
-  const parsed = parsePolicy(kind, dropUnknown(kind, value));
+  const parsed = parsePolicy(kind, value);
   return parsed.ok ? [] : [...parsed.problems];
 }
 
@@ -669,13 +625,12 @@ function commit(
   ) {
     return "recommended";
   }
-  const known = dropUnknown(kind, state.draft);
-  const parsed = parsePolicy(kind, known);
+  const parsed = parsePolicy(kind, state.draft);
   if (!parsed.ok) {
     ctx.ui.notify(parsed.problems.join("; "), "warning");
     return undefined;
   }
-  return mergeUnknown(parsed.setting, state.draft);
+  return { ...parsed.setting };
 }
 
 function overrideBits(
@@ -743,11 +698,7 @@ export function policyWarning(
   return singleModel(kind, state) ? SINGLE_MODEL_WARNING : undefined;
 }
 
-/**
- * True when the production parser accepts `value`, or accepts it once fields
- * the current parser does not know are set aside. Those fields stay in the
- * value the editor returns.
- */
+/** True only when the production parser accepts the complete value. */
 export function policyAccepted(kind: PolicyKind, value: unknown): boolean {
   if (value === null || value === RECOMMENDED_INTENT_CLASSIFIER) return true;
   if (
@@ -758,7 +709,7 @@ export function policyAccepted(kind: PolicyKind, value: unknown): boolean {
     return true;
   }
   if (!isRecord(value)) return false;
-  return parsePolicy(kind, dropUnknown(kind, value)).ok;
+  return parsePolicy(kind, value).ok;
 }
 
 /**

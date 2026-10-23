@@ -213,7 +213,7 @@ describe("policy editor", () => {
     assert.equal(h.pending(), 0);
   });
 
-  it("changes one stage and keeps unknown fields and the current object", async () => {
+  it("refuses an unknown policy field without changing the current object", async () => {
     const current = {
       preset: "recommended",
       future: { keep: true },
@@ -232,17 +232,11 @@ describe("policy editor", () => {
       until("kind model"),
       until("Acme Judge"),
       (screen) => screen.handleInput("a"),
+      (screen) => screen.handleInput(ESC),
     );
     assert.deepEqual(current, before);
-    assert.deepEqual(result, {
-      preset: "recommended",
-      kind: { model: "acme/judge" },
-      supersession: {
-        escalation: { model: "acme/old" },
-        verification: { model: "acme/verify", instructions: "Check." },
-      },
-      future: { keep: true },
-    });
+    assert.equal(result, undefined);
+    assert.match(JSON.stringify(h.notifications), /future is not a field/);
   });
 
   it("returns null for off and discards a cancelled draft", async () => {
