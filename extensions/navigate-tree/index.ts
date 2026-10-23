@@ -192,6 +192,7 @@ import {
   hasOpenWork,
   stripContinuityBriefing,
 } from "./summary-prompt.ts";
+import { constrainSummaryTools } from "./summary-request.ts";
 import {
   renderContinuityOps,
   renderToolCall,
@@ -2200,27 +2201,36 @@ export default function (pi: ExtensionAPI) {
       ?.get(`${model.provider}/${model.id}`);
     if (prior) prior.canClamp = false;
     const payload = event.payload;
-    if (
-      payload &&
-      typeof payload === "object" &&
-      "model" in payload &&
-      payload.model !== model.id
-    )
-      return;
+    const body =
+      payload !== null && typeof payload === "object"
+        ? (payload as { model?: unknown })
+        : undefined;
+    const otherModel =
+      body !== undefined && "model" in body && body.model !== model.id;
+    // The Azure adapter sends its deployment name as the payload model.
+    const azureDeployment =
+      model.api === "azure-openai-responses" &&
+      typeof body?.model === "string" &&
+      body.model !== "";
+    const textOnly =
+      (!otherModel || azureDeployment) && livePending(sm, sessionId)
+        ? constrainSummaryTools(payload, model.api)
+        : undefined;
+    if (otherModel) return textOnly;
     const at = rewindCompactionTarget(sm, sessionId, model);
-    if (!at) return;
+    if (!at) return textOnly;
     if (
       model.api !== "openai-completions" &&
       model.api !== "openai-responses" &&
       model.api !== "azure-openai-responses"
     )
-      return;
+      return textOnly;
     if (
       model.compat &&
       "thinkingTokenBudgetField" in model.compat &&
       model.compat.thinkingTokenBudgetField
     )
-      return;
+      return textOnly;
     let budgets = outputBudgets.get(sessionId);
     if (!budgets) {
       budgets = new Map();
@@ -2241,7 +2251,8 @@ export default function (pi: ExtensionAPI) {
       (forcedActive(sessionId) || livePending(sm, sessionId)
         ? recoveryCap
         : undefined);
-    if (cap !== undefined) return capRecoveryOutput(event.payload, cap);
+    if (cap === undefined) return textOnly;
+    return capRecoveryOutput(textOnly ?? payload, cap) ?? textOnly;
   });
 
   // Where pi's settings are read from (#101, S4): the session's cwd, agent
