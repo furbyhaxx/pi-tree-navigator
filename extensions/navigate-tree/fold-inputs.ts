@@ -84,9 +84,40 @@ function entryRecords(entry: ProjectedSessionEntry): FoldSegmentRecord[] {
   }));
 }
 
+/** Current canonical context restricted to the selected fold point ancestry. */
+export function buildFoldProjection(
+  entries: SessionEntry[],
+  leafId: string,
+  throughId = leafId,
+) {
+  const projection = projectHandoffs(
+    buildSessionProjection(entries, leafId),
+    entries,
+  );
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const ancestry = new Set<string>();
+  let id: string | null = throughId;
+  while (id !== null) {
+    if (ancestry.has(id)) throw new Error("cyclic fold ancestry");
+    ancestry.add(id);
+    const entry = byId.get(id);
+    if (!entry) throw new Error("missing fold ancestry");
+    id = entry.parentId;
+  }
+  const restricted = projection.entries.filter((entry) =>
+    ancestry.has(entry.sourceEntry.id),
+  );
+  return {
+    ...projection,
+    entries: restricted,
+    messages: restricted.flatMap((entry) => entry.messages),
+  };
+}
+
 /**
  * The collapsed segment as the model saw it: the anchor's descendants on the
  * branch to `leafId`, after context edits, compaction and handoff projection.
+ * `throughId` excludes later input without discarding later edits to the work.
  * Records keep their full text (images become a placeholder naming what was
  * omitted, thinking blocks are not evidence) and hidden custom messages are
  * skipped; summarizing splits oversized records. A `targetId` that the
@@ -101,11 +132,9 @@ export function buildFoldSegment(
   entries: SessionEntry[],
   leafId: string,
   targetId: string,
+  throughId = leafId,
 ): { background: string; records: FoldSegmentRecord[] } {
-  const projected = projectHandoffs(
-    buildSessionProjection(entries, leafId),
-    entries,
-  ).entries;
+  const projected = buildFoldProjection(entries, leafId, throughId).entries;
   const at = projected.findIndex((entry) => entry.sourceEntry.id === targetId);
   const handoff = projected
     .slice(0, at + 1)

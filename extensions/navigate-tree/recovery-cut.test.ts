@@ -57,11 +57,29 @@ describe("canonical recovery cuts", () => {
     call(sm);
     result(sm);
     call(sm);
+    const completed = result(sm);
+    assert.deepEqual(recoveryCutOf(sm), { ok: true, foldPointId: completed });
+    call(sm);
     request(sm);
     assert.equal(recoveryCutOf(sm).ok, false);
-    const completed = result(sm);
+    result(sm);
     request(sm);
-    assert.deepEqual(recoveryCutOf(sm), { ok: true, foldPointId: completed });
+    assert.equal(recoveryCutOf(sm).ok, false);
+  });
+
+  it("fails closed without writes when a result crosses unanswered user or custom input", () => {
+    for (const custom of [false, true]) {
+      const sm = SessionManager.inMemory();
+      sm.appendMessage(fauxAssistantMessage("completed work"));
+      call(sm);
+      if (custom)
+        sm.appendCustomMessageEntry("other", "keep exact custom", true);
+      else request(sm);
+      result(sm);
+      const before = JSON.stringify(sm.getEntries());
+      assert.equal(recoveryCutOf(sm).ok, false);
+      assert.equal(JSON.stringify(sm.getEntries()), before);
+    }
   });
 
   it("fails closed on overlapping IDs and orphan effective results", () => {
