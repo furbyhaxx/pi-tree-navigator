@@ -1,0 +1,80 @@
+{
+  "status": "done",
+  "text": "## Goal\nFinish the synthetic service audit, not a production rollout, by comparing the archived audit with the next supplied change.\n\n## Constraints & Preferences\n- “Acceptance objective: finish the synthetic service audit, not a production rollout.”\n- “Never deploy or delete service data during this audit.”\n- “Keep the existing public response codes unchanged.”\n- Public response codes are 422 (invalid input), 503 (unavailable), and 409 (duplicate).\n- “Completed: audited service configuration and retry boundaries.”\n- “Remaining: compare the archived audit with the next supplied change.”\n\n## Progress\n### Done\n- [x] Inspected synthetic service configurations across blocks 1–24 (configurations 432–575 in blocks 19–24); findings state input is validated before persistence.\n- [x] Configuration and retry boundaries are reported completed.\n\n### In Progress\n- [ ] Compare the archived audit with the next supplied change.\n- [ ] Verify retry exhaustion leaves each corresponding `audit-NNN` namespace unchanged; no verification result is supplied.\n\n### Blocked\n- No blockers are established in the supplied records.\n\n## Key Decisions\n- **Keep this a synthetic audit**: no production rollout, deployment, or service-data deletion is authorized.\n- **Preserve public response codes**: retain 422, 503, and 409.\n- **Treat retry-exhaustion checks as unverified**: the records describe tests and findings calling for verification, but do not report execution or results.\n\n## Next Steps\n1. Compare the archived audit with the next supplied change, preserving the stated scope and response codes; verify retry exhaustion leaves the relevant `audit-NNN` namespace unchanged.\n\n## Standing authorization\n“Acceptance objective: finish the synthetic service audit, not a production rollout.” “Never deploy or delete service data during this audit.” “Keep the existing public response codes unchanged.” “Completed: audited service configuration and retry boundaries.” “Remaining: compare the archived audit with the next supplied change.” The authorized audit remains incomplete.\n\n<continuity-delta>\n{\n  \"ratified\": [\n    {\n      \"kind\": \"rule\",\n      \"text\": \"Never deploy or delete service data during this audit.\",\n      \"quote\": \"Never deploy or delete service data during this audit.\"\n    },\n    {\n      \"kind\": \"rule\",\n      \"text\": \"Keep the existing public response codes unchanged.\",\n      \"quote\": \"Keep the existing public response codes unchanged.\"\n    },\n    {\n      \"kind\": \"fact\",\n      \"text\": \"Completed: audited service configuration and retry boundaries.\",\n      \"quote\": \"Completed: audited service configuration and retry boundaries.\"\n    },\n    {\n      \"kind\": \"goal\",\n      \"text\": \"Remaining: compare the archived audit with the next supplied change.\",\n      \"quote\": \"Remaining: compare the archived audit with the next supplied change.\"\n    }\n  ]\n}\n</continuity-delta>",
+  "strategy": "chunked",
+  "calls": 3,
+  "chunks": 2,
+  "usage": [
+    {
+      "input": 3,
+      "output": 608,
+      "cacheRead": 0,
+      "cacheWrite": 87158,
+      "reasoning": 0,
+      "totalTokens": 87769,
+      "cost": {
+        "input": 3.0000000000000004e-7,
+        "output": 0.00030399999999999996,
+        "cacheRead": 0,
+        "cacheWrite": 0.01089475,
+        "total": 0.01119905
+      }
+    },
+    {
+      "input": 3,
+      "output": 395,
+      "cacheRead": 0,
+      "cacheWrite": 29252,
+      "reasoning": 0,
+      "totalTokens": 29650,
+      "cost": {
+        "input": 3.0000000000000004e-7,
+        "output": 0.0001975,
+        "cacheRead": 0,
+        "cacheWrite": 0.0036565,
+        "total": 0.0038543
+      }
+    },
+    {
+      "input": 3,
+      "output": 596,
+      "cacheRead": 0,
+      "cacheWrite": 2858,
+      "reasoning": 0,
+      "totalTokens": 3457,
+      "cost": {
+        "input": 3.0000000000000004e-7,
+        "output": 0.000298,
+        "cacheRead": 0,
+        "cacheWrite": 0.00035725,
+        "total": 0.00065555
+      }
+    }
+  ],
+  "commit": {
+    "ok": true,
+    "summaryId": "e4b93588",
+    "oldLeafId": "86488e6a",
+    "collapsedEntries": 49,
+    "afterTokens": 748,
+    "foldEstimateBefore": 100123,
+    "foldEstimateAfter": 970,
+    "reappended": 0,
+    "refreshed": true,
+    "historyRewriteNotified": true,
+    "readFiles": [],
+    "modifiedFiles": [],
+    "continuation": "[rewind to 'audit-start' · collapsed as 'audit-folded'] · context 119.2% → 0.8% of 96k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.\n\nContinuity: delta ignored (delta.ratified[3].kind: expected one of objective, sub-goal, rule, decision, steering, fact, file).",
+    "continuityNotice": "Continuity: delta ignored (delta.ratified[3].kind: expected one of objective, sub-goal, rule, decision, steering, fact, file).",
+    "continuityReport": {
+      "rev": 0,
+      "applied": 0,
+      "rejected": [],
+      "evicted": [],
+      "deltaError": "delta.ratified[3].kind: expected one of objective, sub-goal, rule, decision, steering, fact, file"
+    },
+    "targetId": "2f85e495",
+    "contextBefore": 114473,
+    "contextWindow": 96000
+  }
+}

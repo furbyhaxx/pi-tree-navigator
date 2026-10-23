@@ -1,0 +1,20 @@
+--- S3h-off: fold committed at turn_end(error), continue:true, pi compaction disabled
+00 +  37ms prompt_start
+01 +  37ms before_agent_start
+02 +  37ms agent_start
+03 +  37ms turn_start
+04 +  37ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  38ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  38ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  38ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  38ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+09 +  38ms turn_end_returns_continue
+10 +  38ms finishTurn_decision {"action":"continue","stopReason":"error"}
+11 +  38ms turn_end {"stopReason":"error"}
+12 +  38ms agent_end {"willRetry":false}
+13 +  38ms ext_before_settle {"outcome":"error","continueIn":false,"signal":"undefined"}
+14 +  38ms agent_settled {"aborted":false}
+15 +  38ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S3h-off","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

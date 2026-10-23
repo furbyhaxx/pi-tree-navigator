@@ -1,0 +1,91 @@
+{
+  "runId": "run-2026-10-23T12-53-30.677Z-3fb1",
+  "createdAt": "2026-10-23T12:53:30.677Z",
+  "gitSha": "09610f54a6a33f3e5e592ee350d63ea003c7ce2a",
+  "gitDirty": true,
+  "casesSha256": "4ed8651ef95e6a255edb428e6dff22bc0dc6b8731fb2c25a2c4f5b37c1ccaa34",
+  "caseCount": 96,
+  "ledgerPath": ".project/analyses/classifier-eval/budget-ledger.jsonl",
+  "capUsd": 25,
+  "routePrices": {
+    "retrievedAt": "2026-10-23",
+    "source": [
+      ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+      ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+    ]
+  },
+  "models": [
+    {
+      "label": "decisions:typesafe/jev-1.14",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "chat:google/gemini-2.5-flash-lite",
+      "adapter": "chat",
+      "promptUsdPerM": 0.18,
+      "completionUsdPerM": 0.72,
+      "routeData": true,
+      "contextWindow": 1048576
+    }
+  ],
+  "sessions": [
+    {
+      "id": "run-2026-10-23T12-53-30.677Z-3fb1.s1",
+      "startedAt": "2026-10-23T12:53:30.678Z",
+      "models": [
+        {
+          "label": "decisions:typesafe/jev-1.14",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "chat:google/gemini-2.5-flash-lite",
+          "adapter": "chat",
+          "promptUsdPerM": 0.18,
+          "completionUsdPerM": 0.72,
+          "routeData": true,
+          "contextWindow": 1048576
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "intent"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 58.724477784,
+        "usageDaily": 16.613190852,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 58.924369971,
+        "usageDaily": 16.813083039,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T12:53:41.229Z",
+      "counts": {
+        "ok": 32,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 25,
+        "spentUsd": 0.001019775,
+        "heldUsd": 0,
+        "remainingUsd": 24.998980225
+      }
+    }
+  ]
+}

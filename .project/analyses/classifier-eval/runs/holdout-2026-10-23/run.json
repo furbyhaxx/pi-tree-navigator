@@ -1,0 +1,220 @@
+{
+  "runId": "run-2026-10-23T13-01-35.843Z-7b1a",
+  "createdAt": "2026-10-23T13:01:35.843Z",
+  "gitSha": "f1fb179387cdde06b8f155e9f2bb83a97b259c62",
+  "gitDirty": true,
+  "casesSha256": "4ed8651ef95e6a255edb428e6dff22bc0dc6b8731fb2c25a2c4f5b37c1ccaa34",
+  "caseCount": 96,
+  "ledgerPath": ".project/analyses/classifier-eval/budget-ledger.jsonl",
+  "capUsd": 25,
+  "routePrices": {
+    "retrievedAt": "2026-10-23",
+    "source": [
+      ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+      ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+    ]
+  },
+  "models": [
+    {
+      "label": "chat:openai/gpt-6-luna",
+      "adapter": "chat",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "chat:google/gemini-2.5-flash-lite",
+      "adapter": "chat",
+      "promptUsdPerM": 0.18,
+      "completionUsdPerM": 0.72,
+      "routeData": true,
+      "contextWindow": 1048576
+    },
+    {
+      "label": "decisions:inception/mercury-decide",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 65536
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:liquid/d1-ultra",
+      "adapter": "decisions",
+      "uncatalogued": true,
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:nace-ai/drex-max",
+      "adapter": "decisions",
+      "uncatalogued": true,
+      "promptUsdPerM": 0.06,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:perplexity/pplx-decider-v1.2",
+      "adapter": "decisions",
+      "uncatalogued": true,
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "heuristic",
+      "adapter": "heuristic"
+    }
+  ],
+  "sessions": [
+    {
+      "id": "run-2026-10-23T13-01-35.843Z-7b1a.s1",
+      "startedAt": "2026-10-23T13:01:35.843Z",
+      "models": [
+        {
+          "label": "chat:openai/gpt-6-luna",
+          "adapter": "chat",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "chat:google/gemini-2.5-flash-lite",
+          "adapter": "chat",
+          "promptUsdPerM": 0.18,
+          "completionUsdPerM": 0.72,
+          "routeData": true,
+          "contextWindow": 1048576
+        },
+        {
+          "label": "decisions:inception/mercury-decide",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:liquid/d1-ultra",
+          "adapter": "decisions",
+          "uncatalogued": true,
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:nace-ai/drex-max",
+          "adapter": "decisions",
+          "uncatalogued": true,
+          "promptUsdPerM": 0.06,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:perplexity/pplx-decider-v1.2",
+          "adapter": "decisions",
+          "uncatalogued": true,
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "heuristic",
+          "adapter": "heuristic"
+        }
+      ],
+      "excluded": [],
+      "split": "holdout",
+      "tasks": [
+        "intent",
+        "supersession",
+        "milestone-status",
+        "milestone-boundary"
+      ],
+      "repetitions": 3,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 60.264359557,
+        "usageDaily": 18.153072625,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 61.088448359,
+        "usageDaily": 18.977161427,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T13:06:06.007Z",
+      "counts": {
+        "ok": 883,
+        "error": 29,
+        "unsupported": 48
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 25,
+        "spentUsd": 0.102632355,
+        "heldUsd": 0.001430185,
+        "remainingUsd": 24.89593746
+      }
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "session": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-light-60-01/sessions/2026-10-23T18-45-31-446Z_01a16a15-1eb6-746b-b328-e42ea4f899ab.jsonl",
+  "calls": 1,
+  "sideCalls": 0,
+  "budget": {
+    "limitUsd": 25,
+    "spentUsd": 0.702751211,
+    "heldUsd": 0.432368904,
+    "remainingUsd": 23.864879885
+  },
+  "summaries": []
+}

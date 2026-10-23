@@ -1,0 +1,47 @@
+{
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 20,
+      "startedAt": "2026-10-23T19:37:59.716Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 22,
+      "startedAt": "2026-10-23T19:38:01.120Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 24,
+      "startedAt": "2026-10-23T19:38:02.117Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 26,
+      "startedAt": "2026-10-23T19:38:04.182Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-23T19:38:06.150Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-23T19:38:06.151Z"
+    }
+  ],
+  "receipts": []
+}

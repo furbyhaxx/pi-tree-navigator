@@ -1,0 +1,50 @@
+{"id":"S0","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"stop":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S1-fold","counts":{"providerCalls":0,"agentCalls":0,"sideCalls":0,"preAborted":0,"sentOnWire":0,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true},"queuedAfter":0}
+  runs=3 agree=yes
+{"id":"S1-hide","counts":{"providerCalls":0,"agentCalls":0,"sideCalls":0,"preAborted":0,"sentOnWire":0,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true},"queuedAfter":0}
+  runs=3 agree=yes
+{"id":"S1-followup","counts":{"providerCalls":0,"agentCalls":0,"sideCalls":0,"preAborted":0,"sentOnWire":0,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":1,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true},"queuedAfter":1}
+  runs=3 agree=yes
+{"id":"S1-newrun","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":1,"settled":2,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"queuedAfter":0}
+  runs=3 agree=yes
+{"id":"S1-newrun-custom","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":1,"settled":2,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"queuedAfter":0}
+  runs=3 agree=yes
+{"id":"S2a","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":2},"beforeSettle":2,"settled":2,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"afterFirst":{"agentStateMessages":5,"projection":5}}
+  runs=3 agree=yes
+{"id":"S2a-on","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":2},"beforeSettle":2,"settled":2,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"afterFirst":{"agentStateMessages":5,"projection":5}}
+  runs=3 agree=yes
+{"id":"S2b","counts":{"providerCalls":4,"agentCalls":4,"sideCalls":0,"preAborted":0,"sentOnWire":4,"agentEnd":1,"turnEnd":4,"turnEndByStop":{"stop":1,"toolUse":2},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"worstUnpaired":0}
+  runs=3 agree=yes
+{"id":"S2c","counts":{"providerCalls":0,"agentCalls":0,"sideCalls":0,"preAborted":0,"sentOnWire":0,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}
+  runs=3 agree=yes
+{"id":"S2d","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":1,"turnEnd":2,"turnEndByStop":{"stop":1,"toolUse":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3a","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3b","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":2,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3c","counts":{"providerCalls":3,"agentCalls":3,"sideCalls":0,"preAborted":0,"sentOnWire":3,"agentEnd":2,"turnEnd":3,"turnEndByStop":{"stop":2,"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3d","counts":{"providerCalls":3,"agentCalls":2,"sideCalls":1,"preAborted":0,"sentOnWire":3,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3e","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":2,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3f","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":1,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}
+  runs=3 agree=yes
+{"id":"S3g-tui","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3g-abort","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}
+  runs=3 agree=yes
+{"id":"S3h","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3h-off","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S3i","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}
+  runs=3 agree=yes
+{"id":"S3j","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":1,"turnEnd":2,"turnEndByStop":{"stop":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes
+{"id":"S4","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}
+  runs=3 agree=yes
+{"id":"S3k","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":2,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
+  runs=3 agree=yes

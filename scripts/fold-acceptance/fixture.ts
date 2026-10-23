@@ -1,0 +1,123 @@
+import { createHash } from "node:crypto";
+import type { SessionManager } from "@earendil-works/pi-coding-agent";
+
+/** Stable facts the synthetic handoff must retain. */
+export const FACTS = [
+  "Acceptance objective: finish the synthetic service audit, not a production rollout.",
+  "Never deploy or delete service data during this audit.",
+  "Keep the existing public response codes unchanged.",
+  "Completed: audited service configuration and retry boundaries.",
+  "Remaining: compare the archived audit with the next supplied change.",
+] as const;
+
+/** Opt-in policy in the isolated agent directory, never the user's configuration. */
+export const AUTOMATIC_CONFIG = {
+  auto_navigate: {
+    enabled: true,
+    mode: "anchor-and-rewind",
+    milestone: "recommended",
+    check_every_turns: 1,
+    min_tokens_since_anchor: 1000,
+    rewind_at_tokens: 8000,
+  },
+};
+
+/** A finalization request, without instructions to navigate or answers to the policy. */
+export const AUTOMATIC_REQUEST =
+  "The synthetic configuration and retry-boundary review phase is complete. Finalize that audit now: state the preserved response-code contract, the no-deployment constraint, and the remaining comparison against the next supplied change. Include ACCEPTANCE-CONTINUED in your final answer. Do not modify files.";
+
+/** Builds varied synthetic configuration evidence; no workspace or user files are read. */
+export function buildCorpus(blocks: number): string[] {
+  if (!Number.isInteger(blocks) || blocks < 1 || blocks > 256)
+    throw new Error("blocks must be an integer from 1 to 256");
+  return Array.from({ length: blocks }, (_, block) => {
+    const services = Array.from({ length: 24 }, (_, item) => {
+      const id = block * 24 + item;
+      return {
+        service: `synthetic-service-${id}`,
+        listener: { host: "127.0.0.1", port: 10000 + id },
+        request: {
+          timeoutMs: 1000 + (id % 9) * 250,
+          maxBytes: 65536 + id * 16,
+        },
+        retry: { attempts: 1 + (id % 3), backoffMs: 50 + (id % 7) * 25 },
+        persistence: { namespace: `audit-${id}`, retentionDays: 7 + (id % 14) },
+        validation: {
+          invalidInput: 422,
+          unavailable: 503,
+          duplicate: 409,
+          tests: [
+            `service-${id}-invalid-input`,
+            `service-${id}-retry-exhausted`,
+          ],
+        },
+        finding: `Service ${id} validates input before persistence; verify retry exhaustion leaves namespace audit-${id} unchanged.`,
+      };
+    });
+    return `Synthetic audit block ${block + 1}\n${FACTS.join("\n")}\n${JSON.stringify(services, null, 2)}`;
+  });
+}
+
+/** Records fixture provenance without treating synthetic messages as observed model output. */
+export function corpusManifest(corpus: readonly string[]) {
+  return corpus.map((text, index) => ({
+    index,
+    bytes: Buffer.byteLength(text),
+    sha256: createHash("sha256").update(text).digest("hex"),
+  }));
+}
+
+/** Seed an explicitly synthetic completed history and a real persisted anchor. */
+export function seedCorpus(
+  sm: SessionManager,
+  corpus: readonly string[],
+  completedReview = false,
+): void {
+  sm.appendMessage({ role: "user", content: FACTS.join("\n"), timestamp: 1 });
+  const anchor = sm.appendMessage({
+    role: "assistant",
+    content: [{ type: "text", text: "Synthetic fixture: audit begins." }],
+    api: "openai-completions",
+    provider: "fixture",
+    model: "synthetic",
+    stopReason: "stop",
+    timestamp: 2,
+    usage: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    },
+  });
+  sm.appendLabelChange(anchor, "anchor:audit-start");
+  for (const [index, text] of corpus.entries()) {
+    sm.appendMessage({ role: "user", content: text, timestamp: 3 + index * 2 });
+    sm.appendMessage({
+      role: "assistant",
+      content: [
+        {
+          type: "text",
+          text:
+            completedReview && index === corpus.length - 1
+              ? `Synthetic completed review phase: all ${corpus.length * 24} service configurations have been reviewed. Input validation precedes persistence; invalid input remains 422, unavailable remains 503, duplicate remains 409. Retry exhaustion must not mutate the audit namespace. No deployment or deletion was performed or authorized. Configuration and retry-boundary review is complete with no pending user decision. Remaining work is final reporting and comparison with the next supplied change, which has not been supplied. ${FACTS.join(" ")}`
+              : `Synthetic fixture conclusion for block ${index + 1}: inspected, retain the audit constraints and remaining comparison work.`,
+        },
+      ],
+      api: "openai-completions",
+      provider: "fixture",
+      model: "synthetic",
+      stopReason: "stop",
+      timestamp: 4 + index * 2,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    });
+  }
+}

@@ -1,0 +1,42 @@
+ to your context. It is the newest branch_summary, the      
+ current state; earlier branch_summary messages, if         
+ present, are older collapsed segments. Items under '###    
+ Done' are complete. Items under '### In Progress', '###    
+ Blocked', or '## Next Steps' are the resume point:         
+ continue the latest branch_summary's work without          
+ re-confirming with the user.                               
+                                                            
+ A branch_summary marks a milestone, not the end of the     
+ task. Your authority, highest first: the user's standing   
+ instruction retained above (including any authorization to 
+ work autonomously until the task is complete or a real     
+ blocker appears), the authorized plan or todo list, then   
+ this summary's open items. If the summary's only open item 
+ is a report, hand-off or wrap-up while an authorized       
+ instruction or plan item is still open, do that work first 
+ and report once, at the end of the authorized scope.       
+ Retained user messages already answered above are          
+ historical — do not re-answer them; their standing         
+ instructions still apply.                                  
+                                                            
+
+─ Anchor/Fold ──────────────────────────── 1 of 2 foldable ─
+ ❯ Press / to search anchors and previews…
+   rewind to audit-start · label audit-start-folded
+   ~73.2k → ~9.7k tok of 96k (10.1%)
+   in-context via openrouter/openai/gpt-6-luna:off
+
+   focus: latest request and open work
+   ✓ folded as 'audit-start-folded' · freed ~72.6k tok (now
+   ~597) · in-context · 1 call
+
+   ◆ start (auto)               not foldable
+ → ◆ audit-start (recommended)  −63.5k tok
+      ↳ after: “Synthetic fixture: audit begins.”
+
+
+
+ enter/esc close
+────────────────────────────────────────────────────────────
+/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analys...
+↑3 ↓5 W73k CH0.0% $0.009 0.8%/96k  openai/gpt-6-luna • think

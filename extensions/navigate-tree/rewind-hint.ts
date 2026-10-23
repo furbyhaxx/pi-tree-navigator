@@ -93,36 +93,6 @@ export function buildNoAnchorText(
 // Rewind-driven compaction (#101): the texts, byte-exact as decided.
 // -----------------------------------------------------------------------------
 
-/** `~Nk` for the withheld notice: thousands, at least `~1k`. */
-function formatWithheldTokens(tokens: number): string {
-  return `~${Math.max(1, Math.round(tokens / 1000))}k`;
-}
-
-/** The content that replaces a withheld tool result (D4). */
-export function buildWithheldNoticeText(tokens: number): string {
-  return `[${TOOL_NAME}] Output withheld: adding it overflowed the context window (${formatWithheldTokens(tokens)} tokens). The call ran; only its output was dropped. Rewind first, then re-run it if you still need the output.`;
-}
-
-/** The forced-rewind message (D5, owner wording of §12), then the anchor table. */
-export function buildForcedRewindText(
-  contextWindow: number,
-  withheld: number,
-  anchorTable: string,
-): string {
-  const count =
-    withheld === 0
-      ? "no tool results were withheld"
-      : withheld === 1
-        ? "1 tool result was withheld"
-        : `${withheld} tool results were withheld`;
-  return `[${TOOL_NAME}] Context overflowed the window (${formatWindow(contextWindow)}): ${count}. Rewind now — only ${TOOL_NAME} rewind is allowed until it lands.\n${anchorTable}`;
-}
-
-/** The final error of rewind-driven compaction (D8). */
-export function buildRewindCompactionFailedText(reason: string): string {
-  return `[${TOOL_NAME}] Context overflow recovery failed: ${reason}. The session is at the context limit; rewind manually with /tree, /compact, or start a new session.`;
-}
-
 /** D8 reasons (D8, D14, D16, §9.6). */
 export const COMPACTION_FAILED_OVERFLOWED_AGAIN =
   "the context overflowed again during the forced rewind";
@@ -146,4 +116,13 @@ export function buildReserveOrderWarning(
   modelKey: string,
 ): string {
   return `rewindHintReserveTokens (${hintReserve}) is below pi's compaction.reserveTokens (${piReserve}) for ${modelKey}: rewind-driven compaction may fire before the hint, giving the model no time to prepare and persist what matters to files.`;
+}
+
+/** The guard-ordering warning: the hint reserve does not exceed what the request guard keeps free. */
+export function buildReserveGuardWarning(
+  hintReserve: number,
+  guardTokens: number,
+  modelKey: string,
+): string {
+  return `rewindHintReserveTokens (${hintReserve}) does not exceed the ${guardTokens} tokens the request guard keeps free for ${modelKey}: a request can be refused before generation without the hint having fired. Raise it above ${guardTokens}.`;
 }

@@ -1,0 +1,23 @@
+--- S3g-tui: Esc during fold inside session_before_compact(overflow), via abortCompaction()
+00 +  37ms prompt_start
+01 +  37ms before_agent_start
+02 +  37ms agent_start
+03 +  37ms turn_start
+04 +  37ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  38ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  38ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  38ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  38ms finishTurn_decision {"action":"none","stopReason":"error"}
+09 +  38ms turn_end {"stopReason":"error"}
+10 +  38ms agent_end {"willRetry":false}
+11 +  39ms compaction_start {"reason":"overflow"}
+12 +  39ms ext_before_compact {"reason":"overflow","willRetry":true,"signal":"live"}
+13 +  99ms escape_compaction {"why":"user Esc during compaction"}
+14 +  99ms recovery_end {"sawAbort":true,"signal":"aborted"}
+15 +  99ms compaction_end {"reason":"overflow","aborted":true,"willRetry":false}
+16 +  99ms ext_before_settle {"outcome":"error","continueIn":false,"signal":"undefined"}
+17 + 100ms agent_settled {"aborted":false}
+18 + 100ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:question 2 lorem ipsum lorem | assistant/stop:answer 2 lorem ipsum lorem i | user:question 3 lorem ipsum lorem | assistant/stop:answer 3 lorem ipsum lorem i | user:what now? | assistant/error: | context_edit
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S3g-tui","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

@@ -16,7 +16,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { parseClassifierModel } from "./continuity-capture.ts";
+import { parseClassifierModel } from "./intent-policy.ts";
 import { parseProposalModel } from "./proposal-options.ts";
 import { pickSettingsModel } from "./settings-model-picker.ts";
 
@@ -171,7 +171,7 @@ function harness(setup: Setup = {}) {
     seen,
     pending: () => scripts.length,
     run(
-      kind: "model" | "classifier",
+      kind: "model" | "classifier" | "stage",
       current: string | null,
       ...screens: Script[]
     ) {
@@ -186,6 +186,30 @@ const selectedLine = (lines: readonly string[]): string =>
   lines.find((line) => line.includes(" → ")) ?? "";
 
 describe("settings model picker: results", () => {
+  it("offers chat and decision models for a policy stage without a thinking step", async () => {
+    const h = harness({ models: [plain], classifiers: [CLASSIFIERS[1]] });
+    const result = await h.run("stage", null, (screen) => {
+      const body = text(screen.render(80));
+      assert.match(body, /Plain Chat/);
+      assert.match(body, /Tiny Judge/);
+      assert.doesNotMatch(body, /recommended|heuristics only/);
+      for (const key of down(1)) screen.handleInput(key);
+      screen.handleInput(ENTER);
+    });
+    assert.equal(result, "acme/plain");
+    assert.equal(h.pending(), 0);
+    assert.equal(h.ctx.model, h.session);
+    assert.deepEqual(h.calls, [
+      "getAvailableOfType:classifier",
+      "getAvailable",
+    ]);
+  });
+
+  it("can disable a policy stage without changing other settings", async () => {
+    const h = harness();
+    assert.equal(await h.run("stage", null, press(ENTER)), null);
+    assert.match(text(h.seen[0]), /disable this stage/);
+  });
   it("returns a parser-valid provider/model:thinking and leaves the session model alone", async () => {
     const h = harness();
     // Rows: current, then models sorted by provider/name, then custom.
@@ -303,6 +327,56 @@ describe("settings model picker: results", () => {
     assert.equal(cancelledModel, undefined);
   });
 
+  it("offers the recommended policy after off, only for a classifier, and starts on it when configured", async () => {
+    const pick = await harness().run(
+      "classifier",
+      null,
+      press(HOME, DOWN, ENTER),
+    );
+    assert.equal(pick, "recommended");
+
+    const configured = await harness().run(
+      "classifier",
+      "recommended",
+      (screen) => {
+        const body = text(screen.render(80));
+        assert.match(body, /recommended/);
+        assert.match(body, /microsoft-decision-1/);
+        screen.handleInput(ENTER);
+      },
+    );
+    assert.equal(configured, "recommended");
+
+    await harness().run("model", "current", (screen) => {
+      assert.doesNotMatch(text(screen.render(80)), /recommended/);
+      screen.handleInput(ESC);
+    });
+  });
+
+  it("shows a configured object policy as one selected row that cannot be replaced by accident", async () => {
+    const h = harness();
+    const policy = JSON.stringify({
+      preset: "recommended",
+      minConfidence: 0.8,
+    });
+    const result = await h.run(
+      "classifier",
+      policy,
+      (screen) => {
+        const body = text(screen.render(100));
+        assert.match(body, /object policy/);
+        assert.doesNotMatch(body, /minConfidence/);
+        screen.handleInput(ENTER);
+      },
+      press(ESC),
+    );
+    assert.equal(result, undefined);
+    assert.match(
+      h.notifications[0]?.message ?? "",
+      /object policy; edit it in the settings file/,
+    );
+  });
+
   it("returns a classifier as provider/id from the classifier list, without a thinking step", async () => {
     const h = harness();
     const result = await h.run("classifier", null, (screen) => {
@@ -310,6 +384,7 @@ describe("settings model picker: results", () => {
       assert.match(body, /Anchor\/Settings\/Classifier/);
       assert.match(body, /Jev Latest/);
       assert.doesNotMatch(body, /GPT-5/);
+      screen.handleInput(DOWN);
       screen.handleInput(DOWN);
       screen.handleInput(DOWN);
       screen.handleInput(ENTER);
@@ -370,7 +445,7 @@ describe("settings model picker: custom string", () => {
 
   it("validates a classifier as provider/id and does not take off or a thinking suffix as special", async () => {
     const h = harness({ classifiers: [], inputs: ["off", "lab/judge-1"] });
-    const result = await h.run("classifier", null, customRow(1));
+    const result = await h.run("classifier", null, customRow(2));
     assert.equal(result, "lab/judge-1");
     assert.equal(h.notifications.length, 1);
     assert.deepEqual(h.asked[0], ["Custom classifier", "provider/id"]);
@@ -383,6 +458,7 @@ describe("settings model picker: custom string", () => {
       assert.match(body, /off/);
       assert.match(body, /custom/);
       assert.doesNotMatch(body, /Jev Latest/);
+      screen.handleInput(DOWN);
       screen.handleInput(DOWN);
       screen.handleInput(ENTER);
     });

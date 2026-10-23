@@ -96,6 +96,7 @@ function setup(options: Options = {}) {
   const commands: { name: string; options: Registered }[] = [];
   const calls = {
     folds: [] as string[],
+    plans: [] as (string | undefined)[],
     anchors: [] as string[],
     trees: 0,
     listed: 0,
@@ -124,6 +125,20 @@ function setup(options: Options = {}) {
     },
     requestFold(_ctx, anchorName) {
       calls.folds.push(anchorName);
+    },
+    openFoldPlan(ctx, preselect) {
+      calls.plans.push(preselect);
+      return (
+        ctx.ui.custom as (...args: unknown[]) => Promise<"back" | "done">
+      )((...args: unknown[]) => {
+        const done = args[3] as (value: "back" | "done") => void;
+        return {
+          render: () => ["Anchor/Fold"],
+          handleInput(data: string) {
+            if (data === ESC || data === ENTER) done("back");
+          },
+        };
+      });
     },
     contextBadge: () => "ctx 38.4% of 372k",
     readLedger: () => options.ledger,
@@ -435,8 +450,8 @@ describe("/anchor screens", () => {
     assert.ok(!treeRow?.includes("not available yet"));
   });
 
-  it("lists anchors with savings and asks the agent to fold with r", async () => {
-    const test = setup({ screens: [press(DOWN, "r")] });
+  it("lists anchors with savings and opens the fold plan for the chosen anchor with r", async () => {
+    const test = setup({ screens: [press(DOWN, "r"), press(ESC), press(ESC)] });
     await test.run("list");
     const text = test.rendered[0].join("\n");
     assert.ok(text.includes("◆ start (auto)"));
@@ -445,14 +460,51 @@ describe("/anchor screens", () => {
     assert.ok(text.includes("+ Set new anchor at current leaf…"));
     assert.ok(text.includes("↳ after: “Analyze our pi-tree-navigator”"));
     assert.ok(test.rendered[0][0].includes("2 anchors · ctx 38.4% of 372k"));
-    assert.deepEqual(test.calls.folds, ["context-gathered"]);
+    assert.deepEqual(test.calls.folds, []);
+    assert.deepEqual(test.calls.plans, ["context-gathered"]);
+    assert.ok(test.rendered[1][0].includes("Anchor/Fold"));
     assert.equal(test.remainingScreens(), 0);
+  });
+
+  it("explains in the list, the full line and the headless list why a pre-compaction anchor cannot be folded", async () => {
+    const note = "Before compaction: folding would restore compacted history.";
+    const anchors: AnchorRow[] = [
+      {
+        name: "planned",
+        percent: 48.1,
+        tokens: 179_000,
+        savableTokens: 0,
+        beforeCompaction: true,
+      },
+      { ...ANCHORS[1], beforeCompaction: true },
+    ];
+    const test = setup({
+      width: 60,
+      anchors,
+      screens: [press(ENTER), press(ESC)],
+    });
+    await test.run("list");
+    for (const line of test.rendered[0])
+      assert.ok(visibleWidth(line) <= 60, line);
+    assert.ok(
+      test.rendered[0].join("\n").includes("Before compaction: folding"),
+    );
+    assert.equal(
+      test.notifications[0].message,
+      `Anchor 'planned': 48.1% of the window (179.0k tok). ${note}`,
+    );
+    const headless = setup({ hasUI: false, anchors });
+    await headless.run("list");
+    const lines = headless.notifications[0].message.split("\n");
+    assert.match(lines[1], /planned .* −0 savable {2}\(before compaction\)$/);
+    assert.ok(!lines[2].includes("before compaction"));
   });
 
   it("ignores r on the new-anchor row", async () => {
     const test = setup({ screens: [press(DOWN, DOWN, "r", ESC)] });
     await test.run("list");
     assert.deepEqual(test.calls.folds, []);
+    assert.deepEqual(test.calls.plans, []);
     assert.equal(test.notifications.length, 0);
     assert.equal(test.rendered.length, 1);
   });

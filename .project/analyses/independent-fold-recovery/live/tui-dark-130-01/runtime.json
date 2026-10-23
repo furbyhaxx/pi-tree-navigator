@@ -1,0 +1,13 @@
+{
+  "model": "openrouter/openai/gpt-6-luna",
+  "contextWindow": 96000,
+  "maxTokens": 8192,
+  "initialTokens": 71525,
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 0.692649261,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 24.041272836
+  },
+  "session": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/tui-dark-130-01/sessions/2026-10-23T18-28-13-490Z_01a16a05-4831-7572-a415-46f0e1701cdd.jsonl"
+}

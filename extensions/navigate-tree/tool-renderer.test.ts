@@ -165,6 +165,10 @@ const results = {
       newLabel: "b",
     },
   },
+  queuedRewind: {
+    ...text("Rewind accepted; folding after this turn."),
+    details: { status: "queued", rewindTo: "a", newLabel: "b" },
+  },
 };
 
 test("result rows summarize each action in one line", () => {
@@ -175,6 +179,7 @@ test("result rows summarize each action in one line", () => {
   assert.equal(row(results.pin), "D4 decision recorded");
   assert.equal(row(results.duplicate), "already recorded as D4");
   assert.equal(row(results.rewind), "accepted · summarizing");
+  assert.equal(row(results.queuedRewind), "accepted · folding after this turn");
   assert.equal(
     row({ ...results.list, details: { count: 1, contextTokens: 5000 } }),
     "1 label · ctx 5.0k",

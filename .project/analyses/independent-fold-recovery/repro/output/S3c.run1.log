@@ -1,0 +1,39 @@
+--- S3c: provider overflow, fold at turn_end(error) + queued follow-up
+00 +  30ms prompt_start
+01 +  30ms before_agent_start
+02 +  30ms agent_start
+03 +  30ms turn_start
+04 +  30ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  30ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  31ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  31ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  31ms recovery_signal {"signal":"live"}
+09 +  31ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+10 +  31ms turn_end_queues_followup
+11 +  31ms queue_update {"steering":0,"followUp":1}
+12 +  31ms finishTurn_decision {"action":"none","stopReason":"error"}
+13 +  31ms turn_end {"stopReason":"error"}
+14 +  31ms agent_end {"willRetry":false}
+15 +  31ms agent_start
+16 +  31ms turn_start
+17 +  31ms cws {"messages":4,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+18 +  32ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":4}
+19 +  32ms assistant_end {"stopReason":"stop"}
+20 +  32ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":true,"signal":"live"}
+21 +  32ms finishTurn_decision {"action":"none","stopReason":"stop"}
+22 +  32ms turn_end {"stopReason":"stop"}
+23 +  32ms turn_start
+24 +  32ms queue_update {"steering":0,"followUp":0}
+25 +  32ms cws {"messages":6,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+26 +  32ms provider_call {"n":3,"callKind":"agent","preAborted":false,"messages":6}
+27 +  32ms assistant_end {"stopReason":"stop"}
+28 +  33ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+29 +  33ms finishTurn_decision {"action":"none","stopReason":"stop"}
+30 +  33ms turn_end {"stopReason":"stop"}
+31 +  33ms agent_end {"willRetry":false}
+32 +  33ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+33 +  33ms agent_settled {"aborted":false}
+34 +  33ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | assistant/stop:answer after fold | user:continue after fold | assistant/stop:answer to the follow-up
+provider calls: #1[agent,10 msgs] #2[agent,4 msgs] #3[agent,6 msgs]
+RESULT {"id":"S3c","counts":{"providerCalls":3,"agentCalls":3,"sideCalls":0,"preAborted":0,"sentOnWire":3,"agentEnd":2,"turnEnd":3,"turnEndByStop":{"stop":2,"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

@@ -1,0 +1,830 @@
+{
+  "runId": "run-2026-10-23T14-38-38.939Z-c05b",
+  "createdAt": "2026-10-23T14:38:38.939Z",
+  "gitSha": "68c42edd06d043c62eb3d09899b9fac4fd21f83f",
+  "gitDirty": true,
+  "casesSha256": "55d9c02b4327328c058d589acbae835732dd6cd7dfbae4ed32a819c66b943288",
+  "caseCount": 221,
+  "ledgerPath": "/tmp/ledger-scratch.jsonl",
+  "capUsd": 2.108729782,
+  "routePrices": {
+    "retrievedAt": "2026-10-23",
+    "source": [
+      ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+      ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+    ]
+  },
+  "models": [
+    {
+      "label": "decisions:cloudflare/clef-flash",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.038,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 16384
+    },
+    {
+      "label": "decisions:inception/mercury-decide",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 65536
+    },
+    {
+      "label": "decisions:liquid/d1",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 65536
+    },
+    {
+      "label": "decisions:perplexity/pplx-decider-v1.1-27b",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0,
+      "routeData": false,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:respan/span-01",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 4096
+    },
+    {
+      "label": "chat:openai/gpt-6-luna",
+      "adapter": "chat",
+      "promptUsdPerM": 0.25,
+      "completionUsdPerM": 1,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:cloudflare/clef",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.24,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 16384
+    },
+    {
+      "label": "decisions:cloudflare/clef-omni",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.15,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 65536
+    },
+    {
+      "label": "decisions:openai/gpt-6-luna-decisions",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.1,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1050000
+    },
+    {
+      "label": "decisions:nace-ai/drex-v2.0",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.06,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 131072
+    },
+    {
+      "label": "decisions:upstage/solar-decide",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.05,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 524288
+    },
+    {
+      "label": "decisions:upstage/solar-decide-flash",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.05,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 524288
+    },
+    {
+      "label": "decisions:nace-ai/drex-v1.5",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.04,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 131072
+    },
+    {
+      "label": "decisions:scaledown/classify-1",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.04,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 1000000
+    },
+    {
+      "label": "decisions:jaredpalmer/kev-4b",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 8192
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:togethercomputer/tev1-4b-experimental",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:typesafe/jev-1.13",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    },
+    {
+      "label": "decisions:typesafe/jev-1.14",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    }
+  ],
+  "sessions": [
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s1",
+      "startedAt": "2026-10-23T14:38:38.940Z",
+      "models": [
+        {
+          "label": "decisions:cloudflare/clef-flash",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.038,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 16384
+        },
+        {
+          "label": "decisions:inception/mercury-decide",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        },
+        {
+          "label": "decisions:liquid/d1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        },
+        {
+          "label": "decisions:perplexity/pplx-decider-v1.1-27b",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": false,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:respan/span-01",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 4096
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 64.807090932,
+        "usageDaily": 22.695804,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 64.809098184,
+        "usageDaily": 22.697811252,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:39:42.309Z",
+      "counts": {
+        "ok": 207,
+        "error": 138,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.555945737,
+        "heldUsd": 0.054682903,
+        "remainingUsd": 1.498101142
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s2",
+      "startedAt": "2026-10-23T14:40:08.724Z",
+      "models": [
+        {
+          "label": "chat:openai/gpt-6-luna",
+          "adapter": "chat",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "error": "fetch failed"
+      },
+      "keyUsageAfter": {
+        "usage": 64.809107684,
+        "usageDaily": 22.697820752,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:40:37.601Z",
+      "counts": {
+        "ok": 50,
+        "error": 19,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.558588443,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.284063436
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s3",
+      "startedAt": "2026-10-23T14:40:39.265Z",
+      "models": [
+        {
+          "label": "decisions:cloudflare/clef",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.24,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 16384
+        },
+        {
+          "label": "decisions:cloudflare/clef-omni",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.15,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 64.811024126,
+        "usageDaily": 22.699737194,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 64.82168543,
+        "usageDaily": 22.710398498,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:41:17.969Z",
+      "counts": {
+        "ok": 138,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.568523483,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.274128396
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s4",
+      "startedAt": "2026-10-23T14:43:14.249Z",
+      "models": [
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:nace-ai/drex-v2.0",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.06,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 131072
+        },
+        {
+          "label": "decisions:upstage/solar-decide",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.05,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 524288
+        },
+        {
+          "label": "decisions:upstage/solar-decide-flash",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.05,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 524288
+        },
+        {
+          "label": "decisions:nace-ai/drex-v1.5",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.04,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 131072
+        },
+        {
+          "label": "decisions:scaledown/classify-1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.04,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1000000
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 64.82168543,
+        "usageDaily": 22.710398498,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 64.83224245,
+        "usageDaily": 22.720955518,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:45:12.102Z",
+      "counts": {
+        "ok": 340,
+        "error": 74,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.576825143,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.265826736
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s5",
+      "startedAt": "2026-10-23T14:45:16.453Z",
+      "models": [
+        {
+          "label": "decisions:jaredpalmer/kev-4b",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 8192
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:togethercomputer/tev1-4b-experimental",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:typesafe/jev-1.13",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 1,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 64.83224245,
+        "usageDaily": 22.720955518,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 64.841108004,
+        "usageDaily": 22.729821072,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:46:56.621Z",
+      "counts": {
+        "ok": 345,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.583009853,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.259642026
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s6",
+      "startedAt": "2026-10-23T14:47:22.157Z",
+      "models": [
+        {
+          "label": "decisions:openai/gpt-6-luna-decisions",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.1,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 1050000
+        },
+        {
+          "label": "decisions:nace-ai/drex-v2.0",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.06,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 131072
+        },
+        {
+          "label": "decisions:upstage/solar-decide",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.05,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 524288
+        },
+        {
+          "label": "decisions:upstage/solar-decide-flash",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.05,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 524288
+        },
+        {
+          "label": "decisions:nace-ai/drex-v1.5",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.04,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 131072
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 2,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 64.841785986,
+        "usageDaily": 22.730499054,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 65.071781119,
+        "usageDaily": 22.960494187,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:49:29.218Z",
+      "counts": {
+        "ok": 336,
+        "error": 9,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.591248813,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.251403066
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s7",
+      "startedAt": "2026-10-23T14:49:30.935Z",
+      "models": [
+        {
+          "label": "decisions:jaredpalmer/kev-4b",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 8192
+        },
+        {
+          "label": "decisions:microsoft/microsoft-decision-1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:togethercomputer/tev1-4b-experimental",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        },
+        {
+          "label": "decisions:typesafe/jev-1.13",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        },
+        {
+          "label": "decisions:typesafe/jev-1.14",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 2,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 65.071781119,
+        "usageDaily": 22.960494187,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 65.439202197,
+        "usageDaily": 23.327915265,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:51:08.663Z",
+      "counts": {
+        "ok": 345,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.597433523,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.245218356
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s8",
+      "startedAt": "2026-10-23T14:51:10.386Z",
+      "models": [
+        {
+          "label": "decisions:cloudflare/clef-flash",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.038,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 16384
+        },
+        {
+          "label": "decisions:inception/mercury-decide",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        },
+        {
+          "label": "decisions:liquid/d1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 2,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 65.520389268,
+        "usageDaily": 23.409102336,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 65.715660858,
+        "usageDaily": 23.604373926,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:52:37.686Z",
+      "counts": {
+        "ok": 207,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.599332121,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.243319758
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s9",
+      "startedAt": "2026-10-23T14:52:39.347Z",
+      "models": [
+        {
+          "label": "decisions:cloudflare/clef",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.24,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 16384
+        },
+        {
+          "label": "decisions:cloudflare/clef-omni",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.15,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 2,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 65.715660858,
+        "usageDaily": 23.604373926,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 66.116363418,
+        "usageDaily": 24.005076486,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:53:49.742Z",
+      "counts": {
+        "ok": 138,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.609267161,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.233384718
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-38-38.939Z-c05b.s10",
+      "startedAt": "2026-10-23T14:53:51.889Z",
+      "models": [
+        {
+          "label": "chat:openai/gpt-6-luna",
+          "adapter": "chat",
+          "promptUsdPerM": 0.25,
+          "completionUsdPerM": 1,
+          "routeData": true,
+          "contextWindow": 1050000
+        }
+      ],
+      "excluded": [],
+      "split": "development",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 2,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 65.86762682,
+        "usageDaily": 23.756339888,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 66.322934689,
+        "usageDaily": 24.211647757,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:54:45.821Z",
+      "counts": {
+        "ok": 69,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.612911549,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.22974033
+      }
+    }
+  ]
+}

@@ -1,8 +1,11 @@
 import {
+  parseMilestonePolicyObject,
+  RECOMMENDED_MILESTONE_CLASSIFIER,
+} from "./milestone-policy.ts";
+import {
   mergeProposalOptions,
   type ProposalOptions,
   type ProposalToolMode,
-  parseProposalModel,
 } from "./proposal-options.ts";
 
 /** Actions the sidecar auto-navigation controller may perform. */
@@ -20,10 +23,10 @@ export const AUTO_NAVIGATE_DEFAULT_REWIND_TOKENS = 120_000;
 export interface AutoNavigateConfig {
   readonly enabled: boolean;
   readonly mode: AutoNavigateMode;
-  readonly controllerModel?: string;
   readonly checkEveryTurns: number;
   readonly minTokensSinceAnchor: number;
   readonly rewindAtTokens: number;
+  readonly milestonePolicy: string | null;
   readonly tools: Readonly<Record<string, ProposalToolMode>>;
 }
 
@@ -31,10 +34,10 @@ export interface AutoNavigateConfig {
 export interface AutoNavigatePartial {
   readonly enabled?: boolean;
   readonly mode?: AutoNavigateMode;
-  readonly controllerModel?: string;
   readonly checkEveryTurns?: number;
   readonly minTokensSinceAnchor?: number;
   readonly rewindAtTokens?: number;
+  readonly milestonePolicy?: string | null;
   readonly tools?: Readonly<Record<string, ProposalToolMode>>;
 }
 
@@ -44,16 +47,17 @@ export const DEFAULT_AUTO_NAVIGATE_CONFIG: AutoNavigateConfig = {
   checkEveryTurns: AUTO_NAVIGATE_DEFAULT_TURNS,
   minTokensSinceAnchor: AUTO_NAVIGATE_DEFAULT_MIN_TOKENS,
   rewindAtTokens: AUTO_NAVIGATE_DEFAULT_REWIND_TOKENS,
+  milestonePolicy: RECOMMENDED_MILESTONE_CLASSIFIER,
   tools: {},
 };
 
 const KNOWN_KEYS = new Set([
   "enabled",
   "mode",
-  "controller_model",
   "check_every_turns",
   "min_tokens_since_anchor",
   "rewind_at_tokens",
+  "milestone",
   "tools",
 ]);
 
@@ -90,7 +94,11 @@ export function parseAutoNavigatePartial(
     throw new Error(`${where} must be an object or boolean`);
   }
   const record = raw as Record<string, unknown>;
+  // Removed in favour of `milestone`; ignored here so the rest of the layer survives.
+  // The config loader reports it once with its replacement.
+  const LEGACY_KEYS = new Set(["controller_model"]);
   for (const key of Object.keys(record)) {
+    if (LEGACY_KEYS.has(key)) continue;
     if (!KNOWN_KEYS.has(key)) {
       throw new Error(`Unknown ${where} field: ${key}`);
     }
@@ -110,19 +118,6 @@ export function parseAutoNavigatePartial(
       );
     }
     mode = record.mode;
-  }
-  let controllerModel: string | undefined;
-  if (record.controller_model !== undefined) {
-    if (
-      typeof record.controller_model !== "string" ||
-      !record.controller_model.trim()
-    ) {
-      throw new Error(
-        `${where}.controller_model must be current or provider/model[:thinking]`,
-      );
-    }
-    parseProposalModel(record.controller_model);
-    controllerModel = record.controller_model;
   }
   const checkEveryTurns =
     record.check_every_turns !== undefined
@@ -151,6 +146,27 @@ export function parseAutoNavigatePartial(
           `${where}.rewind_at_tokens`,
         )
       : undefined;
+  let milestonePolicy: string | null | undefined;
+  if ("milestone" in record) {
+    const value = record.milestone;
+    if (value === null) {
+      milestonePolicy = null;
+    } else if (value === RECOMMENDED_MILESTONE_CLASSIFIER) {
+      milestonePolicy = RECOMMENDED_MILESTONE_CLASSIFIER;
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value)
+    ) {
+      const parsed = parseMilestonePolicyObject(value);
+      if (!parsed.ok) throw new Error(parsed.problems.join("; "));
+      milestonePolicy = parsed.canonical;
+    } else {
+      throw new Error(
+        `${where}.milestone must be null, "${RECOMMENDED_MILESTONE_CLASSIFIER}", or a policy object`,
+      );
+    }
+  }
   let tools: Readonly<Record<string, ProposalToolMode>> | undefined;
   if (record.tools !== undefined) {
     if (
@@ -184,10 +200,10 @@ export function parseAutoNavigatePartial(
   return {
     ...(enabled !== undefined ? { enabled } : {}),
     ...(mode !== undefined ? { mode } : {}),
-    ...(controllerModel !== undefined ? { controllerModel } : {}),
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
+    ...(milestonePolicy !== undefined ? { milestonePolicy } : {}),
     ...(tools !== undefined ? { tools } : {}),
   };
 }
@@ -204,17 +220,18 @@ export function mergeAutoNavigatePartial(
     b.tools || o.tools ? { ...(b.tools ?? {}), ...(o.tools ?? {}) } : undefined;
   const enabled = o.enabled ?? b.enabled;
   const mode = o.mode ?? b.mode;
-  const controllerModel = o.controllerModel ?? b.controllerModel;
   const checkEveryTurns = o.checkEveryTurns ?? b.checkEveryTurns;
   const minTokensSinceAnchor = o.minTokensSinceAnchor ?? b.minTokensSinceAnchor;
   const rewindAtTokens = o.rewindAtTokens ?? b.rewindAtTokens;
+  const milestonePolicy =
+    o.milestonePolicy !== undefined ? o.milestonePolicy : b.milestonePolicy;
   return {
     ...(enabled !== undefined ? { enabled } : {}),
     ...(mode !== undefined ? { mode } : {}),
-    ...(controllerModel !== undefined ? { controllerModel } : {}),
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
+    ...(milestonePolicy !== undefined ? { milestonePolicy } : {}),
     ...(mergedTools !== undefined ? { tools: mergedTools } : {}),
   };
 }
@@ -227,11 +244,9 @@ export function materializeAutoNavigateConfig(
   const mergedTools = mergeProposalOptions(fallbackProposal ?? { tools: {} }, {
     tools: partial?.tools ?? {},
   }).tools;
-  const controllerModel = partial?.controllerModel ?? fallbackProposal?.model;
   return {
     enabled: partial?.enabled ?? DEFAULT_AUTO_NAVIGATE_CONFIG.enabled,
     mode: partial?.mode ?? DEFAULT_AUTO_NAVIGATE_CONFIG.mode,
-    ...(controllerModel !== undefined ? { controllerModel } : {}),
     checkEveryTurns:
       partial?.checkEveryTurns ?? DEFAULT_AUTO_NAVIGATE_CONFIG.checkEveryTurns,
     minTokensSinceAnchor:
@@ -239,6 +254,10 @@ export function materializeAutoNavigateConfig(
       DEFAULT_AUTO_NAVIGATE_CONFIG.minTokensSinceAnchor,
     rewindAtTokens:
       partial?.rewindAtTokens ?? DEFAULT_AUTO_NAVIGATE_CONFIG.rewindAtTokens,
+    milestonePolicy:
+      partial?.milestonePolicy !== undefined
+        ? partial.milestonePolicy
+        : DEFAULT_AUTO_NAVIGATE_CONFIG.milestonePolicy,
     tools: mergedTools,
   };
 }

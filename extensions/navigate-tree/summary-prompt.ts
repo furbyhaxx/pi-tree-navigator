@@ -1,13 +1,4 @@
-/**
- * summary-prompt — the in-band rewind summary instruction (#80, #90).
- *
- * `rewind` does not issue a separate summarization request. Its tool result
- * only reports that the rewind was accepted; the instruction below arrives
- * right after it as a `navigate_tree` custom message (#90), so the live model
- * writes the summary as the next turn of the live conversation — a plain
- * append, served from the provider's prompt cache. `index.ts` then branches
- * from the anchor with that text.
- */
+/** Shared instructions and stored handoff format for independent fold summaries. */
 
 /**
  * The eval-approved "r5d" branch-summary instruction, byte-exact from
@@ -92,11 +83,7 @@ export function buildSummaryInstruction(
     : `${instruction}\n\n${continuitySection}`;
 }
 
-/**
- * The content of the `navigate-tree-summary-request` custom message (#90):
- * a `[navigate_tree]` source line, then the instruction. The message reaches
- * the provider as a user message right after the rewind's tool result.
- */
+/** Build the user instruction appended to an independent summarization request. */
 export function buildSummaryRequestText(
   first: number,
   focus: string,
@@ -107,8 +94,23 @@ export function buildSummaryRequestText(
 }
 
 /**
+ * The summary turn's text, from its `## Goal` heading on (r5d's first
+ * required heading), or `null` when the heading is missing — an
+ * acknowledgement or commentary turn is a failed attempt, never a stored
+ * summary. Any preamble before the heading is dropped.
+ */
+export function extractSummaryText(text: string): string | null {
+  const start = text.search(/^## Goal\b/m);
+  if (start < 0) return null;
+  const summary = text.slice(start).trim();
+  // A bare heading is not a summary: storing it would lose the collapsed work.
+  const body = summary.replace(/^## Goal\b[^\n]*/, "").trim();
+  return body.length > 0 ? summary : null;
+}
+
+/**
  * Byte-exact copy of upstream's (non-exported) `BRANCH_SUMMARY_PREAMBLE`
- * (`core/compaction/branch-summarization.js`), so a stored in-band summary
+ * (`core/compaction/branch-summarization.js`), so a stored legacy summary
  * has the same shape as one produced by `generateBranchSummary`.
  */
 export const BRANCH_SUMMARY_PREAMBLE = `The user explored a different conversation branch before returning here.
@@ -152,7 +154,7 @@ export function computeFileLists(fileOps: {
   return { readFiles, modifiedFiles };
 }
 
-/** Compose the stored branch_summary text from the model's summary turn. */
+/** Compose a legacy stored branch_summary from generated text and file lists. */
 export function buildStoredSummary(
   summaryText: string,
   readFiles: string[],

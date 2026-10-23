@@ -1,0 +1,33 @@
+{
+  "abstained": true,
+  "reason": "the recommended classifier pair ran and did not accept a milestone",
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 20,
+      "startedAt": "2026-10-23T19:40:15.994Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-23T19:40:17.744Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openrouter/openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-23T19:40:17.744Z"
+    }
+  ],
+  "budget": {
+    "limitUsd": 25,
+    "spentUsd": 0.743677145,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 23.990244952
+  }
+}

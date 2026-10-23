@@ -530,6 +530,11 @@ export class FrameList implements Component, Focusable {
     return this.query;
   }
 
+  /** Whether keyboard input is editing the filter rather than selecting a row. */
+  get isSearching(): boolean {
+    return this.focus === "search";
+  }
+
   /** Propagates focus to the search input for hardware-cursor positioning. */
   get focused(): boolean {
     return this.hasFocus;

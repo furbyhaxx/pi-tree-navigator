@@ -1,0 +1,104 @@
+--- a/extensions/navigate-tree/index.ts
++++ b/extensions/navigate-tree/index.ts
+@@ -1668,7 +1668,11 @@
+       foldEstimateAfter: number;
+     } & FoldMaterialization);
+ 
+-/** `ok: false` writes nothing; the session is as the caller found it. */
++/**
++ * `ok: false` keeps the original history on the active branch. A fold rolled
++ * back after its branch landed leaves an unreachable summary in the session
++ * file.
++ */
+ export type FoldCommitOutcome =
+   | { ok: false; reason: string }
+   | {
+@@ -1907,8 +1911,8 @@
+ /**
+  * The commit stage of a fold: preview it (`previewFoldCommit`), then branch
+  * from the target, label, re-append late input, refresh the agent and emit
+- * `session_tree`. Throws only before anything is written; every step after the
+- * branch is guarded.
++ * `session_tree`. Throws only before anything is written. A failed branch or
++ * late-input write rolls the fold back (`ok: false`); later steps are guarded.
+  */
+ export async function commitFold(
+   sm: SessionManager,
+@@ -1938,6 +1942,22 @@
+   // The leaf right before the branch call (the label write above appended
+   // an entry, so it is not `oldLeafId`).
+   let leafBeforeBranch: string | null | undefined = oldLeafId;
++  // `sm.branch` moves the leaf in memory only: a reload opens at the last
++  // entry in the file. The marker undo is the first entry written from the
++  // restored leaf, so it is what makes the restore durable. False when the
++  // restore cannot be shown to be durable.
++  const restoreAbandonedBranch = (): boolean => {
++    let restored = Boolean(leafBeforeBranch);
++    try {
++      if (leafBeforeBranch && sm.getLeafId() !== leafBeforeBranch) {
++        sm.branch(leafBeforeBranch);
++      }
++    } catch {
++      restored = false;
++    }
++    if (!branchLabelWritten || !branchLabelEntryId) return false;
++    return input.writeLabel(branchLabelEntryId, undefined) && restored;
++  };
+   try {
+     if (branchLabelEntryId)
+       branchLabelWritten = input.writeLabel(branchLabelEntryId, branchLabel);
+@@ -1950,17 +1970,7 @@
+     // pi's branchWithSummary moves the leaf and appends in memory before
+     // the file append that may throw: put the leaf back, or the session
+     // stays collapsed while the model is told nothing was.
+-    try {
+-      if (leafBeforeBranch && sm.getLeafId() !== leafBeforeBranch) {
+-        sm.branch(leafBeforeBranch);
+-      }
+-    } catch {
+-      // Fail-open: the refusal below still reaches the model.
+-    }
+-    // Nothing branched: undo the completion marker, then report the refusal.
+-    if (branchLabelWritten && branchLabelEntryId) {
+-      input.writeLabel(branchLabelEntryId, undefined);
+-    }
++    restoreAbandonedBranch();
+     return {
+       ok: false,
+       reason: `the branch could not be written (${err instanceof Error ? err.message : String(err)})`,
+@@ -1973,6 +1983,7 @@
+   // extensions' input handlers, and anything still queued is delivered
+   // after these, keeping the original order.
+   let reappended = 0;
++  let lateFailure: { error: unknown } | undefined;
+   for (const late of lateEntries) {
+     try {
+       if (late.kind === "user") {
+@@ -1990,10 +2001,25 @@
+         );
+       }
+       reappended++;
+-    } catch {
+-      // Fail-open: the original stays on disk on the abandoned branch.
++    } catch (error) {
++      // pi appends in memory before the file write that may throw, and a
++      // later append would name the failed entry as its parent on disk: stop.
++      lateFailure = { error };
++      break;
+     }
+   }
++  if (lateFailure) {
++    // The input is only safe on the abandoned branch, so the fold cannot land.
++    const durable = restoreAbandonedBranch();
++    const why =
++      lateFailure.error instanceof Error
++        ? lateFailure.error.message
++        : String(lateFailure.error);
++    return {
++      ok: false,
++      reason: `the input that arrived during the fold could not be re-appended (${why}); the fold was rolled back and original history was kept${durable ? "" : "; the rollback was not written to the session file, so a reload may reopen the folded branch without that input"}`,
++    };
++  }
+   // The branch has landed: every step below is guarded so the
+   // continuation always reaches the model.
+   let afterTokens = 0;

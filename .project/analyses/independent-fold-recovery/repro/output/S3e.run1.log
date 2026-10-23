@@ -1,0 +1,33 @@
+--- S3e: compaction enabled: fold inside session_before_compact(overflow) + cancel, continue at agent_before_settle
+00 +  37ms prompt_start
+01 +  37ms before_agent_start
+02 +  37ms agent_start
+03 +  37ms turn_start
+04 +  37ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  38ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  38ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  38ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  38ms finishTurn_decision {"action":"none","stopReason":"error"}
+09 +  38ms turn_end {"stopReason":"error"}
+10 +  38ms agent_end {"willRetry":false}
+11 +  39ms compaction_start {"reason":"overflow"}
+12 +  39ms ext_before_compact {"reason":"overflow","willRetry":true,"signal":"live"}
+13 +  81ms recovery_fold_in_session_before_compact {"branchBefore":14,"branchAfter":6,"leafMoved":true,"refresh":false}
+14 +  81ms compaction_end {"reason":"overflow","aborted":true,"willRetry":false}
+15 +  81ms ext_before_settle {"outcome":"error","continueIn":false,"signal":"undefined"}
+16 +  81ms before_settle_returns_continue
+17 +  81ms agent_start
+18 +  81ms turn_start
+19 +  82ms cws {"messages":4,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+20 +  82ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":4}
+21 +  82ms assistant_end {"stopReason":"stop"}
+22 +  82ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+23 +  82ms finishTurn_decision {"action":"none","stopReason":"stop"}
+24 +  82ms turn_end {"stopReason":"stop"}
+25 +  82ms agent_end {"willRetry":false}
+26 +  82ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+27 +  82ms agent_settled {"aborted":false}
+28 +  82ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | assistant/stop:answer after recovery
+provider calls: #1[agent,10 msgs] #2[agent,4 msgs]
+RESULT {"id":"S3e","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":2,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

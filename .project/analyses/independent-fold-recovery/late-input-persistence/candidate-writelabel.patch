@@ -1,0 +1,20 @@
+--- a/extensions/navigate-tree/index.ts
++++ b/extensions/navigate-tree/index.ts
+@@ -3029,12 +3029,16 @@
+     entryId: string,
+     label: string | undefined,
+   ): boolean {
++    const leafBefore = sm.getLeafId();
+     try {
+       pi.setLabel(entryId, label);
+       return true;
+     } catch {
+-      // Stale runtime: the captured SessionManager still writes.
++      // Stale runtime: the captured SessionManager still writes. A write that
++      // failed after pi's in-memory append moved the leaf must not parent the
++      // retry to an entry that never reached the file.
+       try {
++        if (leafBefore && sm.getLeafId() !== leafBefore) sm.branch(leafBefore);
+         sm.appendLabelChange(entryId, label);
+         return true;
+       } catch {

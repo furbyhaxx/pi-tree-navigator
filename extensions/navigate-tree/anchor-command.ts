@@ -9,7 +9,11 @@ import {
   type CurrentScreenDeps,
   openCurrentScreen,
 } from "./current-screen.ts";
-import { type FoldScreenDeps, openFoldScreen } from "./fold-screen.ts";
+import {
+  BEFORE_COMPACTION_NOTE,
+  blockedByCompaction,
+  type FoldScreenDeps,
+} from "./fold-screen.ts";
 import { type FrameRow, selectFrame } from "./frame.ts";
 import { isValidName, MAX_NAME_LENGTH } from "./helpers.ts";
 import {
@@ -34,6 +38,8 @@ export interface AnchorRow {
   tokens: number;
   /** Tokens a fold back to this anchor would free. */
   savableTokens: number;
+  /** The anchor precedes the latest compaction: a fold there restores the compacted history. */
+  beforeCompaction?: boolean;
   afterPreview?: string;
   /** Written by the extension itself rather than by the agent or the user. */
   auto?: boolean;
@@ -43,6 +49,14 @@ export interface AnchorRow {
 export interface AnchorCommandDeps extends FoldScreenDeps, CurrentScreenDeps {
   settings?: SettingsScreenDeps;
   contextBadge?(ctx: ExtensionCommandContext): string | undefined;
+  /**
+   * Open the one-screen fold plan. `preselect` is the anchor list `r` chose;
+   * the host wraps its recommendation so that anchor is selected.
+   */
+  openFoldPlan(
+    ctx: ExtensionCommandContext,
+    preselect?: string,
+  ): Promise<"back" | "done">;
 }
 
 type SubcommandName =
@@ -97,7 +111,7 @@ const HUB: readonly {
     row: {
       label: "Active anchors",
       description:
-        "List the anchors on the active branch, set a new one or ask the agent to fold to one.",
+        "List the anchors on the active branch, set a new one or fold to one.",
     },
   },
   {
@@ -265,19 +279,24 @@ function formatPercent(percent: number): string {
   return percent > 0 ? `${percent.toFixed(1)}%` : "—";
 }
 
-function anchorRow(anchor: AnchorRow): FrameRow {
+function anchorRow(anchor: AnchorRow, deps: AnchorCommandDeps): FrameRow {
   return {
     label: `◆ ${anchor.name}`,
     labelHint: anchor.auto ? "(auto)" : undefined,
     value: `${formatPercent(anchor.percent)} · ${formatTokens(anchor.tokens)} · −${formatTokens(anchor.savableTokens)} savable`,
     detail: anchor.afterPreview ? `after: “${anchor.afterPreview}”` : undefined,
-    description: `Press r to ask the agent to fold the work since '${anchor.name}' into a branch summary. Enter shows the full line.`,
+    description: blockedByCompaction(anchor, deps)
+      ? `${BEFORE_COMPACTION_NOTE} Enter shows the full line.`
+      : `Press r to fold the work since '${anchor.name}'. Enter shows the full line.`,
   };
 }
 
-function anchorSummary(anchor: AnchorRow): string {
+function anchorSummary(anchor: AnchorRow, deps: AnchorCommandDeps): string {
   const after = anchor.afterPreview ? ` after “${anchor.afterPreview}”` : "";
-  return `Anchor '${anchor.name}'${after}: ${formatPercent(anchor.percent)} of the window (${formatTokens(anchor.tokens)} tok); folding to it would free about ${formatTokens(anchor.savableTokens)} tok.`;
+  const fold = blockedByCompaction(anchor, deps)
+    ? `. ${BEFORE_COMPACTION_NOTE}`
+    : `; folding to it would free about ${formatTokens(anchor.savableTokens)} tok.`;
+  return `Anchor '${anchor.name}'${after}: ${formatPercent(anchor.percent)} of the window (${formatTokens(anchor.tokens)} tok)${fold}`;
 }
 
 function listBadge(
@@ -337,7 +356,7 @@ async function openAnchorList(
       rightBadge: listBadge(ctx, deps, anchors),
       placeholder: "Filter anchors by name or preview…",
       rows: [
-        ...anchors.map(anchorRow),
+        ...anchors.map((anchor) => anchorRow(anchor, deps)),
         {
           label: "+ Set new anchor at current leaf…",
           description: `Label the current leaf as a milestone anchor (kebab-case, at most ${MAX_NAME_LENGTH} characters).`,
@@ -358,10 +377,9 @@ async function openAnchorList(
     if (!anchor) {
       await promptNewAnchor(ctx, deps, anchors);
     } else if (choice.key === "r") {
-      deps.requestFold(ctx, anchor.name);
-      return "done";
+      if ((await deps.openFoldPlan(ctx, anchor.name)) === "done") return "done";
     } else {
-      ctx.ui.notify(anchorSummary(anchor), "info");
+      ctx.ui.notify(anchorSummary(anchor, deps), "info");
     }
   }
 }
@@ -402,7 +420,7 @@ async function openView(
       await openCurrentScreen(ctx, deps);
       return "back";
     case "fold":
-      return openFoldScreen(ctx, deps);
+      return deps.openFoldPlan(ctx);
     case "settings":
       return openSettingsScreen(
         ctx,
@@ -460,11 +478,14 @@ async function openHub(
   }
 }
 
-function formatAnchorLines(anchors: readonly AnchorRow[]): string {
+function formatAnchorLines(
+  anchors: readonly AnchorRow[],
+  deps: AnchorCommandDeps,
+): string {
   if (!anchors.length) return "No anchors on the active branch.";
   const lines = anchors.map(
     (anchor) =>
-      `  ${formatPercent(anchor.percent)}  ${anchor.name}  ${formatTokens(anchor.tokens)} tok  −${formatTokens(anchor.savableTokens)} savable`,
+      `  ${formatPercent(anchor.percent)}  ${anchor.name}  ${formatTokens(anchor.tokens)} tok  −${formatTokens(anchor.savableTokens)} savable${blockedByCompaction(anchor, deps) ? "  (before compaction)" : ""}`,
   );
   return ["Active anchors (root → leaf):", ...lines].join("\n");
 }
@@ -505,7 +526,8 @@ export function registerAnchorCommand(
         else await runCloneSubcommand(rest, ctx, pi);
       } else if (subcommand === "list") {
         if (ctx.hasUI) await openAnchorList(ctx, deps);
-        else ctx.ui.notify(formatAnchorLines(deps.listAnchors(ctx)), "info");
+        else
+          ctx.ui.notify(formatAnchorLines(deps.listAnchors(ctx), deps), "info");
       } else if (subcommand === "tree" && !ctx.hasUI) {
         const items = treeItems(ctx.sessionManager, deps.listAnchors(ctx));
         ctx.ui.notify(

@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   matchesModelPattern,
+  materializeAutoNavigateConfig,
   parseAutoNavigatePartial,
 } from "./auto-navigate-config.ts";
 import {
@@ -9,6 +10,11 @@ import {
   resolveAutoNavigateConfig,
   resolveRewindHintReserve,
 } from "./config.ts";
+import {
+  parseMilestonePolicyObject,
+  RECOMMENDED_MILESTONE_CLASSIFIER,
+  resolveMilestonePolicy,
+} from "./milestone-policy.ts";
 
 describe("wildcard modelOverrides and snake_case auto_navigate", () => {
   it("matches *gemini-4-argon* and bare gemini-4-argon across providers", () => {
@@ -47,7 +53,7 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     const parsed = parseAutoNavigatePartial({
       enabled: true,
       mode: "anchor-and-rewind",
-      controller_model: "openai/gpt-6-luna:low",
+      milestone: "recommended",
       check_every_turns: 4,
       min_tokens_since_anchor: 20000,
       rewind_at_tokens: 90000,
@@ -56,7 +62,7 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     assert.deepEqual(parsed, {
       enabled: true,
       mode: "anchor-and-rewind",
-      controllerModel: "openai/gpt-6-luna:low",
+      milestonePolicy: "recommended",
       checkEveryTurns: 4,
       minTokensSinceAnchor: 20000,
       rewindAtTokens: 90000,
@@ -64,6 +70,123 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     });
     assert.throws(() => parseAutoNavigatePartial({ camelCaseKey: true }));
     assert.throws(() => parseAutoNavigatePartial({ check_every_turns: 0 }));
+    // Removed in favour of `milestone`: ignored here, reported once by the loader.
+    assert.deepEqual(
+      parseAutoNavigatePartial({ controller_model: "test/old" }),
+      {},
+    );
+  });
+
+  it("defaults auto-navigation off with the recommended milestone policy", () => {
+    const config = materializeAutoNavigateConfig(undefined);
+    assert.equal(config.enabled, false);
+    assert.equal(config.milestonePolicy, RECOMMENDED_MILESTONE_CLASSIFIER);
+  });
+
+  it("canonicalizes and resolves milestone object settings", async () => {
+    const policy = {
+      boundary: { instructions: "boundary from config" },
+      confirmer: { model: " acme/confirm " },
+      classifier: { model: "acme/classify" },
+      status: { instructions: "  status from config  " },
+      minConfidence: 0.82,
+      preset: "recommended",
+    };
+    const canonical = JSON.stringify({
+      preset: "recommended",
+      minConfidence: 0.82,
+      classifier: { model: "acme/classify" },
+      confirmer: { model: "acme/confirm" },
+      status: { instructions: "status from config" },
+      boundary: { instructions: "boundary from config" },
+    });
+    const parsed = parseMilestonePolicyObject(policy);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.ok ? parsed.canonical : undefined, canonical);
+    assert.equal(
+      parseAutoNavigatePartial({ milestone: policy }).milestonePolicy,
+      canonical,
+    );
+    assert.throws(
+      () =>
+        parseAutoNavigatePartial({
+          milestone: { classifier: { model: "acme/classify", stageKey: true } },
+        }),
+      /autoNavigate\.milestone\.classifier\.stageKey is not a field/,
+    );
+    assert.throws(
+      () => parseAutoNavigatePartial({ milestone: false }),
+      /auto_navigate\.milestone must be null/,
+    );
+
+    const loaded = await loadTreeNavigatorConfig({
+      agentDir: "/agent",
+      projectPath: "/project/.pi/tree-navigator.json",
+      projectTrusted: false,
+      readFile: async () =>
+        JSON.stringify({ auto_navigate: { milestone: policy } }),
+    });
+    assert.deepEqual(loaded.warnings, []);
+    assert.equal(loaded.config.autoNavigate?.milestonePolicy, canonical);
+    assert.deepEqual(resolveMilestonePolicy(canonical), {
+      minConfidence: 0.82,
+      classifier: "acme/classify",
+      confirmer: "acme/confirm",
+      instructions: {
+        status: "status from config",
+        boundary: "boundary from config",
+      },
+    });
+  });
+
+  it("lets wildcard null disable only the milestone policy", async () => {
+    const loaded = await loadTreeNavigatorConfig({
+      agentDir: "/agent",
+      projectPath: "/project/.pi/tree-navigator.json",
+      projectTrusted: false,
+      readFile: async () =>
+        JSON.stringify({
+          auto_navigate: {
+            enabled: true,
+            milestone: RECOMMENDED_MILESTONE_CLASSIFIER,
+            check_every_turns: 4,
+            min_tokens_since_anchor: 25000,
+            rewind_at_tokens: 120000,
+            tools: { read: "omit" },
+          },
+          model_overrides: {
+            "*gemini-4-argon*": {
+              auto_navigate: {
+                milestone: null,
+                tools: { bash: "calls-only" },
+              },
+            },
+          },
+        }),
+    });
+    assert.deepEqual(loaded.warnings, []);
+    const matching = resolveAutoNavigateConfig(
+      loaded.config,
+      "openrouter/google/gemini-4-argon",
+    );
+    assert.deepEqual(matching, {
+      enabled: true,
+      mode: "anchor-and-rewind",
+      checkEveryTurns: 4,
+      minTokensSinceAnchor: 25000,
+      rewindAtTokens: 120000,
+      milestonePolicy: null,
+      tools: { read: "omit", bash: "calls-only" },
+    });
+    const other = resolveAutoNavigateConfig(
+      loaded.config,
+      "claude/claude-opus-5-5",
+    );
+    assert.equal(other.enabled, true);
+    assert.equal(other.milestonePolicy, RECOMMENDED_MILESTONE_CLASSIFIER);
+    assert.equal(other.checkEveryTurns, 4);
+    assert.equal(other.minTokensSinceAnchor, 25000);
+    assert.equal(other.rewindAtTokens, 120000);
   });
 
   it("resolves wildcard reserve and auto_navigate with exact > specific > broad precedence", async () => {
@@ -71,7 +194,7 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
       rewind_hint_reserve_tokens: 40000,
       auto_navigate: {
         enabled: false,
-        controller_model: "openai/gpt-6-luna:low",
+        milestone: "recommended",
         check_every_turns: 6,
         min_tokens_since_anchor: 25000,
         rewind_at_tokens: 120000,
@@ -120,10 +243,10 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     assert.deepEqual(openrouterAuto, {
       enabled: true,
       mode: "anchor-and-rewind",
-      controllerModel: "openai/gpt-6-luna:low",
       checkEveryTurns: 4,
       minTokensSinceAnchor: 25000,
       rewindAtTokens: 90000,
+      milestonePolicy: RECOMMENDED_MILESTONE_CLASSIFIER,
       tools: { read: "omit", bash: "calls-only" },
     });
     const googleAuto = resolveAutoNavigateConfig(

@@ -1,0 +1,12 @@
+# Shortlisted on the development split only (dev-screen-2026-10-23).
+chat:openai/gpt-6-luna
+chat:google/gemini-2.5-flash-lite
+decisions:inception/mercury-decide
+decisions:typesafe/jev-1.14
+decisions:openai/gpt-6-luna-decisions
+decisions:microsoft/microsoft-decision-1
+decisions:liquid/d1-ultra
+# Not in the Pi catalog: benchmark evidence only, never shipped.
+decisions:nace-ai/drex-max
+decisions:perplexity/pplx-decider-v1.2
+heuristic

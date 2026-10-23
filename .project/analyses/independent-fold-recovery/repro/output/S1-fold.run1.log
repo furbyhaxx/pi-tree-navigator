@@ -1,0 +1,24 @@
+--- S1-fold: preflight ctx.abort() + turn_end recovery (fold)
+00 +  30ms prompt_start
+01 +  30ms before_agent_start
+02 +  30ms agent_start
+03 +  30ms turn_start
+04 +  30ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  30ms guard_calls_ctx_abort
+06 +  30ms ctx_abort
+07 +  30ms escape {"why":"ctx.abort()"}
+08 +  30ms queue_update {"steering":0,"followUp":0}
+09 +  31ms assistant_end {"stopReason":"error","errorMessage":"This operation was aborted"}
+10 +  31ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"aborted"}
+11 +  31ms turn_end_sees_guard_abort {"outcome":"error","signal":"aborted"}
+12 +  31ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+13 +  31ms turn_end_returns_continue
+14 +  31ms finishTurn_decision {"action":"continue","stopReason":"error"}
+15 +  31ms turn_end {"stopReason":"error"}
+16 +  31ms agent_end {"willRetry":false}
+17 +  31ms agent_settled {"aborted":true}
+18 +  31ms abort_resolved
+19 +  31ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation
+provider calls: 
+RESULT {"id":"S1-fold","counts":{"providerCalls":0,"agentCalls":0,"sideCalls":0,"preAborted":0,"sentOnWire":0,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true},"queuedAfter":0}

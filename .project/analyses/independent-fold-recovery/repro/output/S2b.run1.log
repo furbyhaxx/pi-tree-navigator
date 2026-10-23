@@ -1,0 +1,47 @@
+--- S2b: tool-batch safe point at context_with_system (parallel, sequential, truncated)
+00 +  30ms prompt_start
+01 +  30ms before_agent_start
+02 +  30ms agent_start
+03 +  30ms turn_start
+04 +  30ms cws {"messages":6,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  51ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":6}
+06 +  51ms assistant_end {"stopReason":"toolUse"}
+07 +  52ms tool_start {"id":"evux8k"}
+08 +  52ms tool_start {"id":"31kee9"}
+09 +  58ms tool_end {"id":"31kee9"}
+10 + 173ms tool_end {"id":"evux8k"}
+11 + 174ms ext_turn_end {"outcome":"completed","stopReason":"toolUse","continueIn":false,"canContinue":true,"signal":"live"}
+12 + 174ms finishTurn_decision {"action":"none","stopReason":"toolUse"}
+13 + 174ms turn_end {"stopReason":"toolUse"}
+14 + 174ms turn_start
+15 + 175ms cws {"messages":9,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+16 + 195ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":9}
+17 + 196ms assistant_end {"stopReason":"toolUse"}
+18 + 196ms tool_start {"id":"cp1cfa"}
+19 + 206ms tool_end {"id":"cp1cfa"}
+20 + 206ms ext_turn_end {"outcome":"completed","stopReason":"toolUse","continueIn":false,"canContinue":true,"signal":"live"}
+21 + 207ms finishTurn_decision {"action":"none","stopReason":"toolUse"}
+22 + 207ms turn_end {"stopReason":"toolUse"}
+23 + 207ms turn_start
+24 + 207ms cws {"messages":11,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+25 + 228ms provider_call {"n":3,"callKind":"agent","preAborted":false,"messages":11}
+26 + 228ms assistant_end {"stopReason":"length"}
+27 + 228ms tool_start {"id":"vynj4l"}
+28 + 228ms tool_end {"id":"vynj4l"}
+29 + 228ms ext_turn_end {"outcome":"completed","stopReason":"length","continueIn":false,"canContinue":true,"signal":"live"}
+30 + 228ms finishTurn_decision {"action":"none","stopReason":"length"}
+31 + 228ms turn_end {"stopReason":"length"}
+32 + 228ms turn_start
+33 + 229ms cws {"messages":13,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+34 + 249ms provider_call {"n":4,"callKind":"agent","preAborted":false,"messages":13}
+35 + 250ms assistant_end {"stopReason":"stop"}
+36 + 250ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+37 + 250ms finishTurn_decision {"action":"none","stopReason":"stop"}
+38 + 250ms turn_end {"stopReason":"stop"}
+39 + 250ms agent_end {"willRetry":false}
+40 + 250ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+41 + 250ms agent_settled {"aborted":false}
+42 + 250ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:use the tools | assistant/toolUse:<call probe_tool><call probe | toolResult:done slow | toolResult:done fast | assistant/toolUse:<call probe_tool> | toolResult:done second | assistant/length:<call probe_tool> | toolResult:Tool call "probe_tool" was n | assistant/stop:final answer
+provider calls: #1[agent,6 msgs] #2[agent,9 msgs] #3[agent,11 msgs] #4[agent,13 msgs]
+RESULT {"id":"S2b","counts":{"providerCalls":4,"agentCalls":4,"sideCalls":0,"preAborted":0,"sentOnWire":4,"agentEnd":1,"turnEnd":4,"turnEndByStop":{"stop":1,"toolUse":2},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"worstUnpaired":0}

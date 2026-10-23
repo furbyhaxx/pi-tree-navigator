@@ -1,0 +1,46 @@
+{
+  "runId": "milestone-parity-2026-10-23T14-46-22.419Z",
+  "startedAt": "2026-10-23T14:46:22.419Z",
+  "endedAt": "2026-10-23T14:47:21.708Z",
+  "gitSha": "991c122207c5ec7c9f8fcb66e277dd698ef52526",
+  "gitDirty": true,
+  "policy": "recommended",
+  "models": [
+    "decisions:typesafe/jev-1.14#instructions",
+    "chat:openai/gpt-6-luna#instructions"
+  ],
+  "confidenceGate": 0.7,
+  "cases": 16,
+  "casesPlanned": 16,
+  "ledger": ".project/analyses/classifier-eval/budget-ledger.jsonl",
+  "ledgerCapUsd": 25,
+  "ledgerBefore": {
+    "limitUsd": 25,
+    "spentUsd": 0.5580133,
+    "heldUsd": 0.054682903,
+    "remainingUsd": 24.387303797
+  },
+  "ledgerAfter": {
+    "limitUsd": 25,
+    "spentUsd": 0.559661065,
+    "heldUsd": 0.054682903,
+    "remainingUsd": 24.385656032
+  },
+  "ceilingUsd": 0.9126962030000001,
+  "addedToLedgerUsd": 0.0016477649999999677,
+  "maxRunUsd": 0.3,
+  "paidCalls": 32,
+  "settledSpendUsd": 0.0016477649999999998,
+  "callsWithUnknownCost": 0,
+  "stopped": null,
+  "benchmark": ".project/analyses/classifier-eval/runs/holdout-v3-2026-10-23/milestone",
+  "summary": {
+    "cases": 16,
+    "requestsMatching": "32/32",
+    "consistent": "16/16",
+    "matchesRecorded": "16/16",
+    "accepted": 24,
+    "unsafeAccepted": 0,
+    "acceptedExact": 8
+  }
+}

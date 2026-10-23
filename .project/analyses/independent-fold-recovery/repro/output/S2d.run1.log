@@ -1,0 +1,26 @@
+--- S2d: in-handler fold at request 1, tool turn, request 2 in the same run
+00 +  31ms prompt_start
+01 +  31ms before_agent_start
+02 +  31ms agent_start
+03 +  31ms turn_start
+04 +  31ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  62ms recovery_fold_in_context_with_system {"branchBefore":12,"branchAfter":6,"leafMoved":true,"refresh":true}
+06 +  62ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":4}
+07 +  63ms assistant_end {"stopReason":"toolUse"}
+08 +  75ms ext_turn_end {"outcome":"completed","stopReason":"toolUse","continueIn":false,"canContinue":true,"signal":"live"}
+09 +  75ms finishTurn_decision {"action":"none","stopReason":"toolUse"}
+10 +  75ms turn_end {"stopReason":"toolUse"}
+11 +  75ms turn_start
+12 +  76ms cws {"messages":6,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+13 +  76ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":6}
+14 +  76ms assistant_end {"stopReason":"stop"}
+15 +  76ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+16 +  76ms finishTurn_decision {"action":"none","stopReason":"stop"}
+17 +  76ms turn_end {"stopReason":"stop"}
+18 +  76ms agent_end {"willRetry":false}
+19 +  76ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+20 +  76ms agent_settled {"aborted":false}
+21 +  76ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:use the tool | custom:sim-fold-continuation | assistant/toolUse:<call probe_tool> | toolResult:done t1 | assistant/stop:final answer
+provider calls: #1[agent,4 msgs] #2[agent,6 msgs]
+RESULT {"id":"S2d","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":1,"turnEnd":2,"turnEndByStop":{"stop":1,"toolUse":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}
