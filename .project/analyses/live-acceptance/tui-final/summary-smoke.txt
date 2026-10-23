@@ -1,0 +1,56 @@
+summary turn usage {"input":1548,"cacheRead":113152,"cacheWrite":0,"output":393}
+continuation {"status":"continue-nudge","summaryId":"fc48d8fe"}
+ok    branch_summary fc48d8fe: work handoff metadata valid (mode full)
+ok    branch_summary fc48d8fe: own report 1503 chars (cap 4500)
+info  branch_summary fc48d8fe: total handoff 2355 chars = header+own report 1536 + child handoffs 0 + continuity ledger 819 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: review complete
+
+## Goal
+Review the supplied source for context continuity and identify two concrete, source-grounded observations.
+
+## Constraints & Preferences
+- Never change files or invent test results.
+- Cite exact file paths and symbols; preserve and pin the source SHA-256.
+- Complete the review, one fold, and `finish_review`.
+
+## Progress
+### Done
+- [x] Loaded and reviewed the source.
+- [x] Pinned SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e` and two observations:
+  - `extensions/navigate-tree/retrospective-plan.ts`, `readSessionSnapshot`: `branch_summary.fromId` is checked for existence, not ancestry.
+  - `extensions/navigate-tree/retrospective-plan.ts`, `readSessionSnapshot`: label targets must already be in `ids` during append-order validation, so forward/self targets are rejected.
+- [x] Listed anchors and folded to `review-complete`.
+
+### In Progress
+- [ ] Submit the pinned hash and two findings to `finish_review`.
+
+### Blocked
+- None established.
+
+## Key Decisions
+- **Treat source as evidence**: review observations are limited to what the supplied source demonstrates; no tests were run or results invented.
+
+## Next Steps
+1. Call `finish_review` with SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e` and the two pinned findings.
+
+## Standing authorization
+“Rule: never change files or invent test results. Work autonomously until the review, one fold and finish_review are complete.” This scope is not complete; `finish_review` remains.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 4]
+
+Binding rules:
+R1 Rule: never change files or invent test results.
+  > "Rule: never change files or invent test results."
+
+Facts:
+F2 Reviewed source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e1
+F3 Finding: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates branch_summary.fromId only for existence in ids, not ancestry; an unrelated existing entry can be accepted as fromId despite the summary's purported source range.
+F4 Finding: extensions/navigate-tree/retrospective-plan.ts validates labels by checking ids.has(entry.targetId) before adding current entry.id to ids; forward/self label targets are rejected, while earlier targets accepted. This is concretely enforced by append-order iteration.
+--- end ---
+(node:190421) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

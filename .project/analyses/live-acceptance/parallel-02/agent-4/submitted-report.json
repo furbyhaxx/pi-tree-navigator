@@ -1,0 +1,36 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Potential UX defect: extensions/navigate-tree/frame.ts, FrameList.handleInput invokes onCancel on Ctrl-C even when search is focused, while Escape clears search and returns to the list first; users may expect Ctrl-C to dismiss the filter rather than exit the screen.",
+        "Verified behavior: extensions/navigate-tree/index.ts, completeRewind validates anchor/label and, on success, reappends late input before continuing, preserving messages received during summary."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified behavior: extensions/navigate-tree/history-outline.ts, patchedInput clears search/query on cancellation before closing the list; extensions/navigate-tree/clone-screen.ts, LinesView.open preserves cursor/search across resize and resolves cancellation as undefined.",
+        "Potential UX concern: extensions/navigate-tree/index.ts pending rewind freezes context at its instruction; a steer without Esc does not cancel and is queued/reappended later, which may surprise users expecting new input to abort the pending operation."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified behavior: extensions/navigate-tree/index.ts, collectLateEntries gathers new user/custom messages after a rewind request for reappend on completion.",
+        "Verified behavior: extensions/navigate-tree/auto-navigate.ts, evaluateAutoNavigateTurn passes AbortSignal to runner.complete and falls back to action none on caught errors or invalid output; tool-level cancellation semantics were not established, so no defect is asserted."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified cancellation safety: extensions/navigate-tree/fold-screen.ts, openFoldScreen/foldTo dispatches a fold only after confirmation and fresh validation; backing out does not request a fold.",
+        "Verified navigation behavior: extensions/navigate-tree/tree-screen.ts, goTo checks busy state before and after confirmation and respects cancelled navigation without moving the leaf; openTreeScreen keeps the current row visible through filters."
+      ]
+    }
+  ]
+}

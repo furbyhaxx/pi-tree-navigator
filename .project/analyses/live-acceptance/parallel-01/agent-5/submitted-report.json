@@ -1,0 +1,40 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "README Configuration documents precedence across global, trusted-project, and runtime settings; runtime settings clear on session lifecycle events and untrusted project configuration is ignored.",
+        "config.test.ts distinguishes invalid-value behavior: rewindHintReserveTokens blocks fallback, whereas anchorStartAfterTurns and parentHandoffMode fall through. These are documented/test-specified behaviors, not executed tests.",
+        "Likely disclosure concern: proposal-engine.test.ts indicates calls-only includes tool arguments while omitting results/details; users may not infer that arguments are still disclosed."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "auto-navigate-config.ts strictly parses settings, bounds integer cadence/token values, and merges tool policies field-wise.",
+        "proposal-command.ts modelProposal confirms full textual history across branches is sent to the model; tool disclosure rules and binary omission are surfaced. Likely concern: confirmation does not explain calls-only payload sanitization.",
+        "The full-history remote disclosure is verified from source; no tests are claimed as run."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "README.md says retrospective proposals send full textual history by default and tool exclusions do not redact copies embedded in prose or summaries, a likely disclosure hazard given the default.",
+        "auto-navigate.ts builds a bounded structured payload using configured tool rules and explicitly omits older evidence when constrained; config.ts layers global, trusted-project, and runtime settings.",
+        "continuity-capture.ts supplies a capped user message and prioritized active items to a classifier, while captured text remains verbatim; continuity-briefing.ts prioritizes objectives/goals/rules/decisions over facts, file pointers, and steering under budget pressure."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "extensions/navigate-tree/config.ts merges configuration layers; invalid proposal settings block model proposals, while invalid hint settings disable the hint rather than falling back.",
+        "extensions/navigate-tree/proposal-options.ts defines per-tool disclosure modes full, calls-only, and omit; configuration validation rejects invalid disclosure rules.",
+        "Classifier workflows can receive user text: partition 3's continuity-capture.ts constructs bounded classifier context and retains captured text verbatim, a disclosure consideration rather than a confirmed defect."
+      ]
+    }
+  ]
+}

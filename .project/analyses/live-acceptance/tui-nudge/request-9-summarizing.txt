@@ -1,0 +1,42 @@
+                                                                                                                                  
+
+                                                                                                                                  
+ pin fact: Source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e                                       
+ F2 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e"
+
+                                                                                                                                  
+ pin fact: Finding: retrospective-plan.ts readSessionSnapshot validates ancestry and tool-call completion across the graph, but … 
+ F3 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Finding: retrospective-plan.ts readSessionSnapshot validates ancestry and tool-call completion across th…
+
+                                                                                                                                  
+ pin fact: Finding: frame.ts `FrameList.ensureVisible` computes row heights only for currently visible filtered indices and clam… 
+ F4 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Finding: frame.ts `FrameList.ensureVisible` computes row heights only for currently visible filtered ind…
+
+                                                                                                                                  
+ list                                                                                                                             
+ 2 labels · ctx 30.4% of 372k                                                                                                     
+                                                                                                                                  
+
+                                                                                                                                  
+ rewind context-gathered → review-complete                                                                                        
+ accepted · summarizing                                                                                                           
+                                                                                                                                  
+
+ [rewind to 'context-gathered' · collapse as 'review-complete'] · summarizing · context 30.5% → ~0.3% of 372k
+
+ The remaining step is to submit the recorded source hash and two findings with finish_review.                                    
+
+── ⠋ Working ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-quJ1YQ/workspace
+↑116k ↓589 R565k CH99.0% $0.018 (sub) 30.9%/372k                                                         (openai) gpt-6-luna • low

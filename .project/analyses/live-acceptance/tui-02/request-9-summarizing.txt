@@ -1,0 +1,42 @@
+                                                                                                                                  
+
+ ledger · +fact(agent) "Exact source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e."
+
+                                                                                                                                  
+ pin fact: Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates records/ancestry and detect… 
+ F3 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates records/ancest…
+
+                                                                                                                                  
+ pin fact: Observation: extensions/navigate-tree/index.ts completeRewind writes branch:<newLabel> on the summary entry before br… 
+ F4 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Observation: extensions/navigate-tree/index.ts completeRewind writes branch:<newLabel> on the summary en…
+
+                                                                                                                                  
+ list                                                                                                                             
+ 2 labels · ctx 30.4% of 372k                                                                                                     
+                                                                                                                                  
+
+                                                                                                                                  
+ rewind context-gathered → review-complete                                                                                        
+ accepted · summarizing                                                                                                           
+                                                                                                                                  
+
+ [rewind to 'context-gathered' · collapse as 'review-complete'] · summarizing · context 30.4% → ~0.3% of 372k
+
+ Only the final finish_review submission remains; the source hash and both findings are preserved for it.                         
+
+                                                                                                                                  
+ finish_review sha256="4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e" findings=["In extension...               
+ navigate_tree: blocked: the model tried to call a tool instead of summarizing.                                                   
+                                                                                                                                  
+
+── ⠴ Working ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-SCBfDo/workspace
+↑116k ↓699 R565k CH98.8% $0.018 (sub) 30.9%/372k                                                         (openai) gpt-6-luna • low

@@ -1,0 +1,431 @@
+{
+  "runs": [
+    {
+      "tag": "attempt2-run-1-full",
+      "finalCall": 2,
+      "finalUsage": {
+        "input": 77838,
+        "output": 943,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 78781,
+        "cost": {
+          "input": 0.0077838000000000004,
+          "output": 0.00047149999999999997,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0082553
+        }
+      },
+      "calls": 2,
+      "outputParseError": "Unterminated string in JSON at position 4499 (line 1 column 4500)",
+      "outputHead": "{\"evidence\":\"{\\\"source\\\":\\\"Record 3d38b573, README.md:1-341\\\",\\\"title\\\":\\\"pi-tree-navigator\\\",\\\"goal\\\":\\\"Provide agent-callable conversation-tree navigation and retrospective restructuring that preser",
+      "outputTail": "uite passed, or that a release was published. Some test/source ranges are partial and the final excerpt is truncated.\\\"}",
+      "outputBytes": 4499
+    },
+    {
+      "tag": "attempt2-run-2-calls-only",
+      "finalCall": 1,
+      "finalUsage": {
+        "input": 52981,
+        "output": 1295,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 330,
+        "totalTokens": 54276,
+        "cost": {
+          "input": 0.0052981,
+          "output": 0.0006475,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0059456
+        }
+      },
+      "modelGroups": 5,
+      "modelFolded": 3,
+      "adoptedEqualsModel": true,
+      "adoptedNames": [
+        "source-review",
+        "partition-one-review",
+        "partition-two-review",
+        "partition-three-review",
+        "partition-four-and-report"
+      ],
+      "modelNames": [
+        "source-review",
+        "partition-one-review",
+        "partition-two-review",
+        "partition-three-review",
+        "partition-four-and-report"
+      ],
+      "boundaries": [
+        {
+          "name": "source-review",
+          "depth": 0,
+          "state": "open",
+          "start": 0,
+          "end": 127,
+          "startType": "model_change",
+          "endType": "message/assistant",
+          "parentType": "missing",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": true,
+          "contextEditCrossings": 0,
+          "entryCount": 128
+        },
+        {
+          "name": "partition-one-review",
+          "depth": 1,
+          "state": "folded",
+          "start": 3,
+          "end": 28,
+          "startType": "message/user",
+          "endType": "branch_summary",
+          "parentType": "message/system",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 26
+        },
+        {
+          "name": "partition-two-review",
+          "depth": 1,
+          "state": "folded",
+          "start": 29,
+          "end": 52,
+          "startType": "label",
+          "endType": "branch_summary",
+          "parentType": "branch_summary",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 24
+        },
+        {
+          "name": "partition-three-review",
+          "depth": 1,
+          "state": "folded",
+          "start": 53,
+          "end": 89,
+          "startType": "label",
+          "endType": "branch_summary",
+          "parentType": "branch_summary",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 37
+        },
+        {
+          "name": "partition-four-and-report",
+          "depth": 1,
+          "state": "open",
+          "start": 92,
+          "end": 127,
+          "startType": "message/assistant(load_partition)",
+          "endType": "message/assistant",
+          "parentType": "custom_message",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 36
+        }
+      ],
+      "unsafeStarts": [],
+      "unsafeEnds": [],
+      "search": {
+        "attempts": [
+          {
+            "group": "partition-one-review",
+            "start": 3,
+            "startType": "message/user"
+          },
+          {
+            "group": "partition-two-review",
+            "start": 29,
+            "startType": "label"
+          },
+          {
+            "group": "partition-three-review",
+            "start": 53,
+            "startType": "label"
+          }
+        ],
+        "found": [
+          {
+            "group": "partition-one-review",
+            "start": 3
+          },
+          {
+            "group": "partition-two-review",
+            "start": 29
+          },
+          {
+            "group": "partition-three-review",
+            "start": 53
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "index": 0,
+          "id": "b4f55861",
+          "type": "model_change",
+          "safeCut": true
+        },
+        {
+          "index": 1,
+          "id": "f1d20cff",
+          "type": "thinking_level_change",
+          "safeCut": true
+        },
+        {
+          "index": 126,
+          "id": "57c0104e",
+          "type": "message/toolResult",
+          "tool": "submit_report",
+          "safeCut": true
+        },
+        {
+          "index": 127,
+          "id": "4711e61d",
+          "type": "message/assistant",
+          "safeCut": true
+        },
+        {
+          "index": 2,
+          "id": "9d33a8eb",
+          "type": "message/system",
+          "safeCut": true
+        },
+        {
+          "index": 3,
+          "id": "b0e1da71",
+          "type": "message/user",
+          "safeCut": true
+        },
+        {
+          "index": 4,
+          "id": "c379b111",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 27,
+          "id": "83eab807",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 28,
+          "id": "7dc36582",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 29,
+          "id": "5d713eba",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 28,
+          "id": "7dc36582",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 29,
+          "id": "5d713eba",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 30,
+          "id": "4ea906d1",
+          "type": "custom_message",
+          "safeCut": true
+        },
+        {
+          "index": 51,
+          "id": "90997aa7",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 52,
+          "id": "160dd9cb",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 53,
+          "id": "954ee8a8",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 52,
+          "id": "160dd9cb",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 53,
+          "id": "954ee8a8",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 54,
+          "id": "990e19ac",
+          "type": "custom_message",
+          "safeCut": true
+        },
+        {
+          "index": 88,
+          "id": "5b673766",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 89,
+          "id": "b1bfa130",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 90,
+          "id": "20986424",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 91,
+          "id": "bb8026c8",
+          "type": "custom_message",
+          "safeCut": true
+        },
+        {
+          "index": 92,
+          "id": "d65a60fb",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 93,
+          "id": "22e2387c",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 126,
+          "id": "57c0104e",
+          "type": "message/toolResult",
+          "tool": "submit_report",
+          "safeCut": true
+        },
+        {
+          "index": 127,
+          "id": "4711e61d",
+          "type": "message/assistant",
+          "safeCut": true
+        }
+      ],
+      "claimGrounding": [
+        {
+          "group": "partition-one-review",
+          "partition": 1,
+          "claims": 2,
+          "present": 2,
+          "missing": []
+        },
+        {
+          "group": "partition-two-review",
+          "partition": 2,
+          "claims": 2,
+          "present": 2,
+          "missing": []
+        },
+        {
+          "group": "partition-three-review",
+          "partition": 3,
+          "claims": 3,
+          "present": 3,
+          "missing": []
+        },
+        {
+          "group": "partition-four-and-report",
+          "partition": 4,
+          "claims": 4,
+          "present": 4,
+          "missing": []
+        }
+      ],
+      "repair": {
+        "adoptedNames": [
+          "source-review",
+          "partition-one-review",
+          "partition-two-review",
+          "partition-three-review",
+          "partition-four-and-report"
+        ],
+        "startsChanged": []
+      },
+      "claims": {
+        "total": 4,
+        "inSource": 4,
+        "matchesCorpusManifest": 4,
+        "values": [
+          "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+          "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+          "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+          "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322"
+        ]
+      },
+      "summaries": [
+        {
+          "name": "source-review",
+          "state": "open",
+          "title": "Review four source partitions for continuity and user authority",
+          "summary": "The review identified verified continuity and user-authority safeguards across the partitions, along with possible issues that remain unverified. No tests were run, and the source was not edited. The first three fold summaries landed; the fourth did not. Two report submissions were rejected, and no accepted report is evidenced.",
+          "outcome": "Partitions 1–4 were reviewed and their hashes and findings were submitted, but submit_report rejected the report because all four completed folds were required. The fourth fold did not land, so the authorized work remains incomplete."
+        },
+        {
+          "name": "partition-one-review",
+          "state": "folded",
+          "title": "Review partition 1",
+          "summary": "Partition 1 review and fold summary completed; the possible edit race was explicitly left unverified.",
+          "outcome": "Reviewed partition 1, SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. The handoff records exact user-rule capture and user-origin protection coverage in continuity-capture.test.ts, active-branch user-entry citation checks in continuity-store.test.ts, and a possible, unverified stale-item race in current-screen.ts edit. The reviewed-one fold summary landed."
+        },
+        {
+          "name": "partition-two-review",
+          "state": "folded",
+          "title": "Review partition 2",
+          "summary": "Partition 2 review and fold summary completed; the selector concern remained unverified.",
+          "outcome": "Reviewed partition 2, SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. The handoff records citation provenance and ordering checks in continuity-ledger.ts checkCitation, monotonic revision and ID counters in rewindLedger, and a possible, unverified slash-wildcard scope issue in matchesModelPattern. The reviewed-two fold summary landed."
+        },
+        {
+          "name": "partition-three-review",
+          "state": "folded",
+          "title": "Review partition 3",
+          "summary": "Partition 3 review and fold summary completed; an additional settings concern remained unverified.",
+          "outcome": "Reviewed partition 3, SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. The handoff records that continuity-briefing.ts retains binding durable items and distinguishes non-user authority, continuity-store.ts reconciles model deltas as agent-origin under ledger protections, and auto-navigate.ts validates exposed active anchors. The fold-three summary landed."
+        },
+        {
+          "name": "partition-four-and-report",
+          "state": "open",
+          "title": "Review partition 4 and submit report",
+          "summary": "The review and report attempts are evidenced, but the fourth fold and accepted report are not. Preserve this phase as open.",
+          "outcome": "Reviewed partition 4, SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322. Findings include fold-screen.ts askLabel rejecting active-branch collisions, foldTo revalidating after confirmation, current-screen.test.ts coverage of confirmation and write restrictions, and a possible, unverified config.ts mergeAutoNavigateField issue. The attempted fourth fold did not land: the available prior anchor was fold-three, while the tool history later reports the fourth fold as missing. Two submit_report attempts were rejected for lacking all four completed folds. The final message confirms the report was not accepted."
+        }
+      ]
+    }
+  ]
+}

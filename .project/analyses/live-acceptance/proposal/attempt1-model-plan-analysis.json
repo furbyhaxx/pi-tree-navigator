@@ -1,0 +1,1081 @@
+{
+  "runs": [
+    {
+      "tag": "attempt1-run-1-full",
+      "finalCall": 10,
+      "finalUsage": {
+        "input": 12844,
+        "output": 1222,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 14066,
+        "cost": {
+          "input": 0.0012844000000000002,
+          "output": 0.000611,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0018954000000000002
+        }
+      },
+      "modelGroups": 5,
+      "modelFolded": 3,
+      "adoptedEqualsModel": false,
+      "adoptedNames": [
+        "01a167f9-a2f0-7612-b26a-071008",
+        "goal-review-all-four-source-pa",
+        "work-handoff-reviewed-one",
+        "context-gathered-2",
+        "start-2",
+        "reviewed-one-2",
+        "work-handoff-reviewed-two",
+        "reviewed-one-3",
+        "reviewed-two-2",
+        "work-handoff-fold-three",
+        "reviewed-two-3",
+        "fold-three-2",
+        "fold-three-3"
+      ],
+      "modelNames": [
+        "four-partition-review",
+        "partition-one",
+        "partition-two",
+        "partition-three",
+        "partition-four-and-report"
+      ],
+      "validationError": "partition-one: boundary splits a tool call from its results; move it to a completed tool batch",
+      "boundaries": [
+        {
+          "name": "four-partition-review",
+          "depth": 0,
+          "state": "open",
+          "start": 0,
+          "end": 127,
+          "startType": "model_change",
+          "endType": "message/assistant",
+          "parentType": "missing",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": true,
+          "contextEditCrossings": 0,
+          "entryCount": 128
+        },
+        {
+          "name": "partition-one",
+          "depth": 1,
+          "state": "folded",
+          "start": 9,
+          "end": 28,
+          "startType": "message/toolResult(load_partition)",
+          "endType": "branch_summary",
+          "parentType": "message/assistant(load_partition)",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 20
+        },
+        {
+          "name": "partition-two",
+          "depth": 1,
+          "state": "folded",
+          "start": 41,
+          "end": 52,
+          "startType": "message/toolResult(load_partition)",
+          "endType": "branch_summary",
+          "parentType": "message/assistant(load_partition)",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 12
+        },
+        {
+          "name": "partition-three",
+          "depth": 1,
+          "state": "folded",
+          "start": 70,
+          "end": 89,
+          "startType": "message/toolResult(load_partition)",
+          "endType": "branch_summary",
+          "parentType": "message/assistant(load_partition)",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 20
+        },
+        {
+          "name": "partition-four-and-report",
+          "depth": 1,
+          "state": "open",
+          "start": 93,
+          "end": 127,
+          "startType": "message/toolResult(load_partition)",
+          "endType": "message/assistant",
+          "parentType": "message/assistant(load_partition)",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 35
+        }
+      ],
+      "unsafeStarts": [
+        "partition-one",
+        "partition-two",
+        "partition-three"
+      ],
+      "unsafeEnds": [],
+      "search": {
+        "attempts": [
+          {
+            "group": "partition-one",
+            "start": 9,
+            "startType": "message/toolResult(load_partition)",
+            "error": "partition-one: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-one",
+            "start": 8,
+            "startType": "message/assistant(load_partition)",
+            "error": "partition-one: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-one",
+            "start": 7,
+            "startType": "custom",
+            "error": "partition-one: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-one",
+            "start": 6,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-one: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-one",
+            "start": 5,
+            "startType": "label",
+            "error": "partition-one: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-one",
+            "start": 4,
+            "startType": "message/assistant(navigate_tree)"
+          },
+          {
+            "group": "partition-two",
+            "start": 41,
+            "startType": "message/toolResult(load_partition)",
+            "error": "partition-two: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-two",
+            "start": 40,
+            "startType": "message/assistant(load_partition)",
+            "error": "partition-two: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-two",
+            "start": 39,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-two: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-two",
+            "start": 38,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-two: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-two",
+            "start": 37,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-two: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-two",
+            "start": 36,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-two: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-two",
+            "start": 35,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-two: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-two",
+            "start": 34,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-two: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-two",
+            "start": 33,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-two: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-two",
+            "start": 32,
+            "startType": "custom",
+            "error": "partition-two: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-two",
+            "start": 31,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-two: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-two",
+            "start": 30,
+            "startType": "custom_message",
+            "error": "partition-two: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-two",
+            "start": 29,
+            "startType": "label"
+          },
+          {
+            "group": "partition-three",
+            "start": 70,
+            "startType": "message/toolResult(load_partition)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 69,
+            "startType": "message/assistant(load_partition)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 68,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 67,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 66,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 65,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 64,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 63,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 62,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 61,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 60,
+            "startType": "message/toolResult(load_partition)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 59,
+            "startType": "message/assistant(load_partition)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 58,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 57,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 56,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-three: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-three",
+            "start": 55,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 54,
+            "startType": "custom_message",
+            "error": "partition-three: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-three",
+            "start": 53,
+            "startType": "label"
+          }
+        ],
+        "found": [
+          {
+            "group": "partition-one",
+            "start": 4
+          },
+          {
+            "group": "partition-two",
+            "start": 29
+          },
+          {
+            "group": "partition-three",
+            "start": 53
+          }
+        ]
+      },
+      "timeline": [
+        {
+          "index": 0,
+          "id": "b4f55861",
+          "type": "model_change",
+          "safeCut": true
+        },
+        {
+          "index": 1,
+          "id": "f1d20cff",
+          "type": "thinking_level_change",
+          "safeCut": true
+        },
+        {
+          "index": 126,
+          "id": "57c0104e",
+          "type": "message/toolResult",
+          "tool": "submit_report",
+          "safeCut": true
+        },
+        {
+          "index": 127,
+          "id": "4711e61d",
+          "type": "message/assistant",
+          "safeCut": true
+        },
+        {
+          "index": 8,
+          "id": "3fa94cd9",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 9,
+          "id": "3d38b573",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 10,
+          "id": "3c1b14ef",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 27,
+          "id": "83eab807",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 28,
+          "id": "7dc36582",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 29,
+          "id": "5d713eba",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 40,
+          "id": "f86088dc",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 41,
+          "id": "a675aa9b",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 42,
+          "id": "e15fae69",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 51,
+          "id": "90997aa7",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 52,
+          "id": "160dd9cb",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 53,
+          "id": "954ee8a8",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 69,
+          "id": "a30540bf",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 70,
+          "id": "82ebaedc",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 71,
+          "id": "516d6744",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 88,
+          "id": "5b673766",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 89,
+          "id": "b1bfa130",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 90,
+          "id": "20986424",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 92,
+          "id": "d65a60fb",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 93,
+          "id": "22e2387c",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 94,
+          "id": "7977bd15",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 126,
+          "id": "57c0104e",
+          "type": "message/toolResult",
+          "tool": "submit_report",
+          "safeCut": true
+        },
+        {
+          "index": 127,
+          "id": "4711e61d",
+          "type": "message/assistant",
+          "safeCut": true
+        }
+      ],
+      "claimGrounding": [
+        {
+          "group": "partition-one",
+          "partition": 1,
+          "claims": 1,
+          "present": 1,
+          "missing": []
+        },
+        {
+          "group": "partition-two",
+          "partition": 2,
+          "claims": 1,
+          "present": 1,
+          "missing": []
+        },
+        {
+          "group": "partition-three",
+          "partition": 3,
+          "claims": 0,
+          "present": 0,
+          "missing": []
+        },
+        {
+          "group": "partition-four-and-report",
+          "partition": 4,
+          "claims": 1,
+          "present": 1,
+          "missing": []
+        }
+      ],
+      "repair": {
+        "error": "partition-one: unsafe graph cut has multiple external incoming parents",
+        "adoptedNames": [
+          "four-partition-review",
+          "partition-one",
+          "partition-two",
+          "partition-three",
+          "partition-four-and-report"
+        ],
+        "startsChanged": [
+          "partition-one",
+          "partition-two",
+          "partition-three"
+        ]
+      },
+      "claims": {
+        "total": 4,
+        "inSource": 4,
+        "matchesCorpusManifest": 4,
+        "values": [
+          "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+          "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+          "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+          "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322"
+        ]
+      },
+      "summaries": [
+        {
+          "name": "four-partition-review",
+          "state": "open",
+          "title": "Review four source partitions for continuity and user authority",
+          "summary": "The review was governed by the rule not to edit source, invent test results, or treat an individual partition review as completion. Partition 1 (SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e) was recorded as covering exact user-rule capture and active-branch supersession citations; a possible stale-item race in current-screen.ts remained unverified. Partition 2 (42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0) was recorded as covering citation role/order and monotonic rewind counters; possible wildcard matching overreach remained unverified. Partition 3 (1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da) was recorded as preserving durable items and validating exposed anchors; a settings concern remained unresolved. Partition 4 (22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322) had review notes, including a possible layered-config fallback concern in mergeAutoNavigateField. The first three folds landed. The attempted fourth fold failed after three summary attempts called tools instead of returning a summary. Report submissions were rejected for lacking all four completed folds, exact ordered hashes, and substantive findings. No tests were reported as run.",
+          "outcome": "Review notes and hashes were recorded for all four partitions. The first three folds landed; the fourth fold failed, and report submissions were rejected. No accepted report is evidenced, so the authorized work remains incomplete."
+        },
+        {
+          "name": "partition-one",
+          "state": "folded",
+          "title": "Review and fold partition 1",
+          "summary": "Recorded SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. The review noted tests for exact user-rule capture and protection, and supersession citations resolving to user entries on the active branch. A possible stale-item race after awaiting the editor in current-screen.ts was labeled unverified, not a confirmed defect.",
+          "outcome": "Partition 1 was reported reviewed and folded as reviewed-one; no tests were reported as run. The possible stale-item race was explicitly unverified."
+        },
+        {
+          "name": "partition-two",
+          "state": "folded",
+          "title": "Review and fold partition 2",
+          "summary": "Recorded SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. The review noted citation role/order validation and monotonic rev/nextId preservation on rewind. Possible slash-containing wildcard overreach in matchesModelPattern remained unverified.",
+          "outcome": "Partition 2 was reported reviewed and folded as reviewed-two; no tests were reported as run. The wildcard concern remained possible, not verified."
+        },
+        {
+          "name": "partition-three",
+          "state": "folded",
+          "title": "Review and fold partition 3",
+          "summary": "Recorded SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. The review noted that continuity briefing retains durable items and labels non-user-authored items, fold reconciliation treats model deltas as agent-origin under ledger protections, and auto-navigation validates names against existing labels and exposed active anchors. A settings concern was not resolved.",
+          "outcome": "Partition 3 was reported reviewed and folded as fold-three. A settings concern remained unresolved; no tests were reported as run."
+        },
+        {
+          "name": "partition-four-and-report",
+          "state": "open",
+          "title": "Review partition 4, complete its fold, and submit report",
+          "summary": "Partition 4 was associated with SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322; a possible layered-config fallback concern in mergeAutoNavigateField was recorded, not confirmed. The rewind targeting reviewed-four did not complete, so the fourth fold did not land. Submissions were rejected because all four completed folds, exact ordered hashes, and substantive findings were required. The final record says the process remains incomplete.",
+          "outcome": "Partition 4 review notes and its hash were recorded, but the attempted fold failed after three summary attempts called tools. Report submissions were rejected; acceptance is not evidenced."
+        }
+      ]
+    },
+    {
+      "tag": "attempt1-run-2-calls-only",
+      "finalCall": 1,
+      "finalUsage": {
+        "input": 52981,
+        "output": 1061,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 54042,
+        "cost": {
+          "input": 0.0052981,
+          "output": 0.0005304999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0058286
+        }
+      },
+      "modelGroups": 5,
+      "modelFolded": 3,
+      "adoptedEqualsModel": false,
+      "adoptedNames": [
+        "01a167f9-a2f0-7612-b26a-071008",
+        "goal-review-all-four-source-pa",
+        "work-handoff-reviewed-one",
+        "context-gathered-2",
+        "start-2",
+        "reviewed-one-2",
+        "work-handoff-reviewed-two",
+        "reviewed-one-3",
+        "reviewed-two-2",
+        "work-handoff-fold-three",
+        "reviewed-two-3",
+        "fold-three-2",
+        "fold-three-3"
+      ],
+      "modelNames": [
+        "review-task",
+        "partition-one",
+        "partition-two",
+        "partition-three",
+        "partition-four-and-report"
+      ],
+      "validationError": "partition-one: unsafe graph cut has multiple external incoming parents",
+      "boundaries": [
+        {
+          "name": "review-task",
+          "depth": 0,
+          "state": "open",
+          "start": 0,
+          "end": 127,
+          "startType": "model_change",
+          "endType": "message/assistant",
+          "parentType": "missing",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": true,
+          "contextEditCrossings": 0,
+          "entryCount": 128
+        },
+        {
+          "name": "partition-one",
+          "depth": 1,
+          "state": "folded",
+          "start": 8,
+          "end": 28,
+          "startType": "message/assistant(load_partition)",
+          "endType": "branch_summary",
+          "parentType": "custom",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 21
+        },
+        {
+          "name": "partition-two",
+          "depth": 1,
+          "state": "folded",
+          "start": 59,
+          "end": 52,
+          "startType": "message/assistant(load_partition)",
+          "endType": "branch_summary",
+          "parentType": "message/toolResult(navigate_tree)",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": -6
+        },
+        {
+          "name": "partition-three",
+          "depth": 1,
+          "state": "folded",
+          "start": 69,
+          "end": 89,
+          "startType": "message/assistant(load_partition)",
+          "endType": "branch_summary",
+          "parentType": "message/toolResult(navigate_tree)",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 21
+        },
+        {
+          "name": "partition-four-and-report",
+          "depth": 1,
+          "state": "open",
+          "start": 92,
+          "end": 127,
+          "startType": "message/assistant(load_partition)",
+          "endType": "message/assistant",
+          "parentType": "custom_message",
+          "cutBeforeStartSafe": true,
+          "cutAfterEndSafe": true,
+          "files": false,
+          "contextEditCrossings": 0,
+          "entryCount": 36
+        }
+      ],
+      "unsafeStarts": [],
+      "unsafeEnds": [],
+      "search": {
+        "attempts": [
+          {
+            "group": "partition-one",
+            "start": 8,
+            "startType": "message/assistant(load_partition)",
+            "error": "partition-one: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-one",
+            "start": 7,
+            "startType": "custom",
+            "error": "partition-one: unsafe graph cut has multiple external incoming parents"
+          },
+          {
+            "group": "partition-one",
+            "start": 6,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-one: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-one",
+            "start": 5,
+            "startType": "label",
+            "error": "partition-one: boundary splits a tool call from its results; move it to a completed tool batch"
+          },
+          {
+            "group": "partition-one",
+            "start": 4,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 59,
+            "startType": "message/assistant(load_partition)",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 58,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 57,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 56,
+            "startType": "message/toolResult(navigate_tree)",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 55,
+            "startType": "message/assistant(navigate_tree)",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 54,
+            "startType": "custom_message",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 53,
+            "startType": "label",
+            "error": "partition-two: range is outside its parent or reversed"
+          },
+          {
+            "group": "partition-two",
+            "start": 52,
+            "startType": "branch_summary"
+          },
+          {
+            "group": "partition-three",
+            "start": 69,
+            "startType": "message/assistant(load_partition)",
+            "error": "partition-two: range is outside its parent or reversed"
+          }
+        ],
+        "found": [
+          {
+            "group": "partition-one",
+            "start": 4
+          },
+          {
+            "group": "partition-two",
+            "start": 52
+          },
+          {
+            "group": "partition-three",
+            "start": 69
+          }
+        ],
+        "combinedError": "partition-three: unsafe graph cut has multiple external incoming parents"
+      },
+      "timeline": [
+        {
+          "index": 0,
+          "id": "b4f55861",
+          "type": "model_change",
+          "safeCut": true
+        },
+        {
+          "index": 1,
+          "id": "f1d20cff",
+          "type": "thinking_level_change",
+          "safeCut": true
+        },
+        {
+          "index": 126,
+          "id": "57c0104e",
+          "type": "message/toolResult",
+          "tool": "submit_report",
+          "safeCut": true
+        },
+        {
+          "index": 127,
+          "id": "4711e61d",
+          "type": "message/assistant",
+          "safeCut": true
+        },
+        {
+          "index": 7,
+          "id": "0822bd3b",
+          "type": "custom",
+          "safeCut": true
+        },
+        {
+          "index": 8,
+          "id": "3fa94cd9",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 9,
+          "id": "3d38b573",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 27,
+          "id": "83eab807",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 28,
+          "id": "7dc36582",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 29,
+          "id": "5d713eba",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 68,
+          "id": "aabf2e88",
+          "type": "message/toolResult",
+          "tool": "navigate_tree",
+          "safeCut": true
+        },
+        {
+          "index": 69,
+          "id": "a30540bf",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 70,
+          "id": "82ebaedc",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 88,
+          "id": "5b673766",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 89,
+          "id": "b1bfa130",
+          "type": "branch_summary",
+          "safeCut": true
+        },
+        {
+          "index": 90,
+          "id": "20986424",
+          "type": "label",
+          "safeCut": true
+        },
+        {
+          "index": 91,
+          "id": "bb8026c8",
+          "type": "custom_message",
+          "safeCut": true
+        },
+        {
+          "index": 92,
+          "id": "d65a60fb",
+          "type": "message/assistant",
+          "safeCut": false
+        },
+        {
+          "index": 93,
+          "id": "22e2387c",
+          "type": "message/toolResult",
+          "tool": "load_partition",
+          "safeCut": true
+        },
+        {
+          "index": 126,
+          "id": "57c0104e",
+          "type": "message/toolResult",
+          "tool": "submit_report",
+          "safeCut": true
+        },
+        {
+          "index": 127,
+          "id": "4711e61d",
+          "type": "message/assistant",
+          "safeCut": true
+        }
+      ],
+      "claimGrounding": [
+        {
+          "group": "partition-one",
+          "partition": 1,
+          "claims": 1,
+          "present": 1,
+          "missing": []
+        },
+        {
+          "group": "partition-two",
+          "partition": 2,
+          "claims": 2,
+          "present": 2,
+          "missing": []
+        },
+        {
+          "group": "partition-three",
+          "partition": 3,
+          "claims": 0,
+          "present": 0,
+          "missing": []
+        },
+        {
+          "group": "partition-four-and-report",
+          "partition": 4,
+          "claims": 4,
+          "present": 4,
+          "missing": []
+        }
+      ],
+      "repair": {
+        "error": "partition-one: unsafe graph cut has multiple external incoming parents",
+        "adoptedNames": [
+          "review-task",
+          "partition-one",
+          "partition-two",
+          "partition-three",
+          "partition-four-and-report"
+        ],
+        "startsChanged": []
+      },
+      "claims": {
+        "total": 4,
+        "inSource": 4,
+        "matchesCorpusManifest": 4,
+        "values": [
+          "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+          "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+          "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+          "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322"
+        ]
+      },
+      "summaries": [
+        {
+          "name": "review-task",
+          "state": "open",
+          "title": "Review four source partitions for continuity and user authority",
+          "summary": "Reviewed partitions 1–4 in order and recorded their hashes and observations. Partition 1: exact rule capture and user-origin protection in continuity-capture.test.ts; active-branch user-entry citation checks in continuity-store.test.ts; possible, unverified stale-item race in current-screen.ts edit. Partition 2: continuity-ledger.ts checkCitation validates citation role/order and rewindLedger preserves monotonic counters; possible, unverified slash-wildcard matching issue in matchesModelPattern. Partition 3: continuity-briefing.ts preserves binding durable items and marks non-user authority; continuity-store.ts reconciles model deltas under ledger protections; auto-navigate.ts validates exposed active anchors. Partition 4: fold-screen.ts askLabel rejects active-branch label collisions and foldTo revalidates after confirmation; current-screen.test.ts covers confirmations and restrictions; possible, unverified config.ts mergeAutoNavigateField fallback issue. The first three folds landed; the fourth did not. Both submit_report attempts were rejected, so completion is not established.",
+          "outcome": "All four partitions were reviewed, but submit_report rejected the submissions because four completed folds were required. The fourth fold did not land: the available anchor was fold-three, not reviewed-three. The report was not accepted; the authorized work remains incomplete."
+        },
+        {
+          "name": "partition-one",
+          "state": "folded",
+          "title": "Review partition 1",
+          "summary": "Loaded and reviewed partition 1. Recorded source-grounded test coverage and a possible, unverified race in current-screen.ts edit. Folded to reviewed-one.",
+          "outcome": "Reviewed. SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Exact rule capture and user-origin protection are covered; supersession citations must resolve to active-branch user entries. A possible stale-item edit race remains unverified."
+        },
+        {
+          "name": "partition-two",
+          "state": "folded",
+          "title": "Review partition 2",
+          "summary": "Reviewed partition 2 and preserved verified continuity-ledger.ts observations plus the possible, unverified matchesModelPattern concern. Folded to reviewed-two.",
+          "outcome": "Reviewed. SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. checkCitation validates supersession citation role and active-branch ordering; rewindLedger preserves monotonic revision and ID counters. A possible slash-wildcard selector issue remains unverified."
+        },
+        {
+          "name": "partition-three",
+          "state": "folded",
+          "title": "Review partition 3",
+          "summary": "Reviewed partition 3, recorded verified observations and an unresolved settings concern, then folded to fold-three.",
+          "outcome": "Reviewed. SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Briefing preserves binding durable items and labels non-user authority; fold continuity reconciliation treats model deltas as agent-origin under ledger protections; auto-navigation validates exposed active anchors."
+        },
+        {
+          "name": "partition-four-and-report",
+          "state": "open",
+          "title": "Review partition 4 and submit report",
+          "summary": "Verified fold-screen.ts label-collision rejection and post-confirmation revalidation, and current-screen.test.ts confirmation and restriction coverage. The config.ts mergeAutoNavigateField concern is only a possible, unverified issue. The attempted fold used unavailable anchor reviewed-three; the actual available anchor was fold-three. Consequently submit_report rejected both attempts for missing completed folds. The final assistant report confirms that no report was accepted.",
+          "outcome": "Partition 4 was reviewed (SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322), but its fold did not land. Both report submissions were rejected because all four completed folds were required. The task remains open."
+        }
+      ]
+    }
+  ]
+}

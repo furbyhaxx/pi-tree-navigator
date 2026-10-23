@@ -1,0 +1,203 @@
+{
+  "model": {
+    "provider": "openai",
+    "id": "gpt-6-luna",
+    "api": "openai-responses",
+    "contextWindow": 372000,
+    "maxTokens": 128000
+  },
+  "lens": "TUI navigation and cancellation",
+  "sourceCommit": "5abd2d5e7456d60fc99eaef6b55c7abf51e2d43c",
+  "session": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/parallel-01/agent-4/2026-10-23T08-56-15-860Z_01a167f9-a2f3-77c5-a725-4dc8b6e07d63.jsonl",
+  "agent": 3,
+  "started": "2026-10-23T08:56:16.755Z",
+  "finished": "2026-10-23T09:01:15.716Z",
+  "submitted": true,
+  "loaded": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "requests": 44,
+  "folds": [
+    {
+      "status": "done",
+      "rewindTo": "context-gathered",
+      "newLabel": "reviewed-one",
+      "targetId": "4bbf9a08",
+      "summaryId": "644d58fe",
+      "collapsedEntries": 44,
+      "contextBefore": 114356,
+      "contextAfter": 2148,
+      "contextWindow": 372000,
+      "summaryAttempts": 1,
+      "foldEstimateBefore": 114944,
+      "foldEstimateAfter": 2754,
+      "agentMessagesRefreshed": true,
+      "historyRewriteNotified": true,
+      "readFiles": [],
+      "modifiedFiles": [],
+      "reappendedLateMessages": 0,
+      "continuity": {
+        "rev": 5,
+        "applied": 0,
+        "rejected": [],
+        "evicted": []
+      },
+      "nextRole": "assistant",
+      "nextUsage": {
+        "input": 2326,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2344,
+        "cost": {
+          "input": 0.00023260000000000002,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00024160000000000002
+        }
+      },
+      "hashPreserved": true,
+      "ledgerItems": 5
+    },
+    {
+      "status": "done",
+      "rewindTo": "reviewed-one",
+      "newLabel": "reviewed-two",
+      "targetId": "644d58fe",
+      "summaryId": "ab31cf1b",
+      "collapsedEntries": 17,
+      "contextBefore": 115868,
+      "contextAfter": 3070,
+      "contextWindow": 372000,
+      "summaryAttempts": 2,
+      "foldEstimateBefore": 118872,
+      "foldEstimateAfter": 3675,
+      "agentMessagesRefreshed": true,
+      "historyRewriteNotified": true,
+      "readFiles": [],
+      "modifiedFiles": [],
+      "reappendedLateMessages": 0,
+      "continuity": {
+        "rev": 6,
+        "applied": 0,
+        "rejected": [],
+        "evicted": []
+      },
+      "nextRole": "assistant",
+      "nextUsage": {
+        "input": 1259,
+        "output": 18,
+        "cacheRead": 1920,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 3197,
+        "cost": {
+          "input": 0.00012590000000000002,
+          "output": 0.000009,
+          "cacheRead": 0.0000192,
+          "cacheWrite": 0,
+          "total": 0.00015410000000000003
+        }
+      },
+      "hashPreserved": true,
+      "ledgerItems": 6
+    },
+    {
+      "status": "done",
+      "rewindTo": "reviewed-two",
+      "newLabel": "reviewed-three",
+      "targetId": "ab31cf1b",
+      "summaryId": "04c8e7e0",
+      "collapsedEntries": 20,
+      "contextBefore": 115134,
+      "contextAfter": 4313,
+      "contextWindow": 372000,
+      "summaryAttempts": 1,
+      "foldEstimateBefore": 116394,
+      "foldEstimateAfter": 4919,
+      "agentMessagesRefreshed": true,
+      "historyRewriteNotified": true,
+      "readFiles": [],
+      "modifiedFiles": [],
+      "reappendedLateMessages": 0,
+      "continuity": {
+        "rev": 8,
+        "applied": 0,
+        "rejected": [],
+        "evicted": []
+      },
+      "nextRole": "assistant",
+      "nextUsage": {
+        "input": 1530,
+        "output": 18,
+        "cacheRead": 2816,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 4364,
+        "cost": {
+          "input": 0.000153,
+          "output": 0.000009,
+          "cacheRead": 0.00002816,
+          "cacheWrite": 0,
+          "total": 0.00019016
+        }
+      },
+      "hashPreserved": true,
+      "ledgerItems": 8
+    },
+    {
+      "status": "done",
+      "rewindTo": "reviewed-three",
+      "newLabel": "reviewed-four",
+      "targetId": "04c8e7e0",
+      "summaryId": "ee9b6ffc",
+      "collapsedEntries": 44,
+      "contextBefore": 119380,
+      "contextAfter": 5538,
+      "contextWindow": 372000,
+      "summaryAttempts": 1,
+      "foldEstimateBefore": 120781,
+      "foldEstimateAfter": 6144,
+      "agentMessagesRefreshed": true,
+      "historyRewriteNotified": true,
+      "readFiles": [],
+      "modifiedFiles": [],
+      "reappendedLateMessages": 0,
+      "continuity": {
+        "rev": 12,
+        "applied": 0,
+        "rejected": [],
+        "evicted": []
+      },
+      "nextRole": "assistant",
+      "nextUsage": {
+        "input": 1463,
+        "output": 573,
+        "cacheRead": 3968,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 6004,
+        "cost": {
+          "input": 0.0001463,
+          "output": 0.00028649999999999997,
+          "cacheRead": 0.00003968,
+          "cacheWrite": 0,
+          "total": 0.00047248
+        }
+      },
+      "hashPreserved": true,
+      "ledgerItems": 12
+    }
+  ],
+  "extensionErrors": [],
+  "inputTokensCumulative": 3986699,
+  "peakInputTokens": 121025,
+  "outputTokens": 8201,
+  "cacheReadTokens": 3504128,
+  "userMessages": 1
+}

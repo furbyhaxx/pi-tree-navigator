@@ -1,0 +1,1952 @@
+{
+  "generatedAt": "2026-10-23T08:56:35.088Z",
+  "configuredClassifier": {
+    "path": "/home/furbyhaxx/.pi/agent/tree-navigator.json",
+    "hasContinuityBlock": false,
+    "continuity": null
+  },
+  "diagnostics": [
+    {
+      "name": "objective-durable",
+      "route": "openrouter/typesafe/jev-1.14",
+      "minConfidence": 0.3,
+      "messageChars": 690,
+      "verdict": {
+        "kind": "objective",
+        "by": "classifier"
+      },
+      "answers": [
+        {
+          "kind": {
+            "type": "choice",
+            "choice": "objective",
+            "probabilities": {
+              "objective": 0.48,
+              "sub-goal": 0.4,
+              "rule": 0.04,
+              "decision": 0.01,
+              "steering": 0.06,
+              "ephemeral": 0.01
+            },
+            "confidence": 0.38
+          }
+        }
+      ],
+      "ops": [
+        "add:objective:[]"
+      ]
+    },
+    {
+      "name": "supersede-step2-newer-user",
+      "route": "openrouter/typesafe/jev-1.14",
+      "minConfidence": 0.3,
+      "messageChars": 516,
+      "verdict": {
+        "kind": "decision",
+        "by": "classifier",
+        "supersedes": [
+          "D1"
+        ]
+      },
+      "answers": [
+        {
+          "kind": {
+            "type": "choice",
+            "choice": "decision",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.01,
+              "rule": 0,
+              "decision": 0.85,
+              "steering": 0.08,
+              "ephemeral": 0.06
+            },
+            "confidence": 0.82
+          },
+          "contradicts": {
+            "type": "choice",
+            "choice": "D1",
+            "probabilities": {
+              "D1": 0.66,
+              "none": 0.34
+            },
+            "confidence": 0.32
+          }
+        }
+      ],
+      "ops": [
+        "supersede::[\"D1\"]"
+      ]
+    },
+    {
+      "name": "objective-durable",
+      "route": "openrouter/~typesafe/jev-latest",
+      "minConfidence": 0.7,
+      "messageChars": 690,
+      "verdict": {
+        "kind": "ephemeral",
+        "by": "classifier"
+      },
+      "answers": [
+        {
+          "kind": {
+            "type": "choice",
+            "choice": "objective",
+            "probabilities": {
+              "objective": 0.47,
+              "sub-goal": 0.43,
+              "rule": 0.03,
+              "decision": 0,
+              "steering": 0.06,
+              "ephemeral": 0.01
+            },
+            "confidence": 0.36
+          }
+        }
+      ],
+      "ops": []
+    },
+    {
+      "name": "supersede-step2-newer-user",
+      "route": "openrouter/~typesafe/jev-latest",
+      "minConfidence": 0.7,
+      "messageChars": 516,
+      "verdict": {
+        "kind": "decision",
+        "by": "classifier"
+      },
+      "answers": [
+        {
+          "kind": {
+            "type": "choice",
+            "choice": "decision",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.02,
+              "rule": 0,
+              "decision": 0.82,
+              "steering": 0.1,
+              "ephemeral": 0.06
+            },
+            "confidence": 0.78
+          },
+          "contradicts": {
+            "type": "choice",
+            "choice": "D1",
+            "probabilities": {
+              "D1": 0.62,
+              "none": 0.38
+            },
+            "confidence": 0.24
+          }
+        }
+      ],
+      "ops": [
+        "add:decision:[]"
+      ]
+    }
+  ],
+  "host": {
+    "node": "v26.11.1",
+    "platform": "linux"
+  },
+  "authPath": "/home/furbyhaxx/.pi/agent/auth.json",
+  "modelsPath": "/home/furbyhaxx/.pi/agent/models.json",
+  "route": "openrouter/typesafe/jev-1.14",
+  "historicalRoute": "openrouter/typesafe/jev-1.14",
+  "historicalRouteAvailable": true,
+  "availableClassifiers": [
+    {
+      "route": "openrouter/~perplexity/pplx-decider-flash-latest",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/~perplexity/pplx-decider-latest",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/~typesafe/jev-latest",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/cloudflare/clef",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/cloudflare/clef-flash",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/cloudflare/clef-omni",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/inception/mercury-decide",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/inception/mercury-decide:free",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/jaredpalmer/kev-4b",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/liquid/d1",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/liquid/d1-ultra",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/microsoft/microsoft-decision-1",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/nace-ai/drex-max",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/nace-ai/drex-v1.5",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/nace-ai/drex-v2.0",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/openai/gpt-6-luna-decisions",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/perplexity/pplx-decider-flash-v1.2",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/perplexity/pplx-decider-v1.2",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/respan/span-01",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/respan/span-01-lite",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/respan/span-01-lite:free",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/respan/span-02",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/scaledown/classify-1",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/togethercomputer/tev1-4b-experimental",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/typesafe/jev-1.13",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/upstage/solar-decide",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/upstage/solar-decide-flash",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/baseten/elephant-1:free",
+      "api": "typesafe-system-one"
+    },
+    {
+      "route": "openrouter/baseten/mammoth-1:free",
+      "api": "typesafe-system-one"
+    }
+  ],
+  "createModelClassifierWarnings": [],
+  "logicalCalls": [
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\n\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\n\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\n\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "objective",
+            "probabilities": {
+              "objective": 0.5,
+              "sub-goal": 0.38,
+              "rule": 0.04,
+              "decision": 0.01,
+              "steering": 0.06,
+              "ephemeral": 0.01
+            },
+            "confidence": 0.4
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745791411,
+        "usage": {
+          "input": 636,
+          "output": 65,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 701,
+          "cost": {
+            "input": 0.000026712000000000004,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000026712000000000004
+          }
+        }
+      },
+      "durationMs": 286
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "A few conventions I need you to follow across this repository, because two incidents came from skipping them.\n\nBefore any schema change lands, run the migration suite against a scratch database and paste the result. Keep the rollout commit separate from the code commit, so a reviewer can revert one without the other. If a test is flaky, fix or delete it in the same pull request instead of rerunning the pipeline until it goes green.\n\nThat last one matters more than it sounds: the rerun habit hid a broken index for six weeks, and I would rather see a red pipeline than a second version of that.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "rule",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0,
+              "rule": 1,
+              "decision": 0,
+              "steering": 0,
+              "ephemeral": 0
+            },
+            "confidence": 1
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745791696,
+        "usage": {
+          "input": 609,
+          "output": 65,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 674,
+          "cost": {
+            "input": 0.000025578000000000005,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000025578000000000005
+          }
+        }
+      },
+      "durationMs": 234
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "decision",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.01,
+              "rule": 0,
+              "decision": 0.99,
+              "steering": 0,
+              "ephemeral": 0
+            },
+            "confidence": 0.99
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745791931,
+        "usage": {
+          "input": 610,
+          "output": 65,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 675,
+          "cost": {
+            "input": 0.000025620000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000025620000000000002
+          }
+        }
+      },
+      "durationMs": 278
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "While you are working inside this anchor, leave the CHANGELOG entry and the version bump to me and skip both in every commit you make here.\n\nWhen you touch the parser module, keep the imports in the order they already have instead of re-sorting the whole file; diff noise is the thing I am trying to avoid in this slice.\n\nThis applies to this slice only. We go back to the normal release flow once it is folded.",
+          "activeAnchor": "ingest",
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "steering",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0,
+              "rule": 0.01,
+              "decision": 0,
+              "steering": 0.99,
+              "ephemeral": 0
+            },
+            "confidence": 0.99
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745792210,
+        "usage": {
+          "input": 579,
+          "output": 66,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 645,
+          "cost": {
+            "input": 0.000024318000000000003,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000024318000000000003
+          }
+        }
+      },
+      "durationMs": 268
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "Thanks, that answers it. The failing shard was the one I expected.\n\nCan you paste the last twenty lines of its build log here when you get a moment? Nothing urgent, I just want to see the warning count.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "ephemeral",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.04,
+              "rule": 0,
+              "decision": 0,
+              "steering": 0,
+              "ephemeral": 0.96
+            },
+            "confidence": 0.95
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745792479,
+        "usage": {
+          "input": 530,
+          "output": 68,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 598,
+          "cost": {
+            "input": 0.000022260000000000004,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000022260000000000004
+          }
+        }
+      },
+      "durationMs": 242
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "I pulled the whole ingest audit into one message so you have the context before you start. Read it, then work from it.\n\nStanding instruction for the parser work: every schema or config change in this service gets a replay against the March corpus before it merges, with the diff summary in the pull request. That is the rule for all later work here, not just this slice.\n\nThe audit itself: over three weeks we saw eleven shard restarts, all of them on the two shards that carry the widest metric cardinality, and all of them within four minutes of a config reload. The reload path re-parses the metric dictionary from disk on every shard, which is where the 90 ms p99 spike in the first graph comes from.\n\nThe replay logs (trimmed) look like this:\n\n  shard-07 reload start cardinality=184213\n  shard-07 dict parse 71ms\n  shard-07 buffer flush deadline missed (queue=1182)\n  shard-07 restart reason=healthcheck-timeout\n\n  shard-11 reload start cardinality=180955\n  shard-11 dict parse 74ms\n  shard-11 buffer flush deadline missed (queue=1204)\n  shard-11 restart reason=healthcheck-timeout\n\nNothing in those logs points at the parser itself. The reader allocates one dictionary per shard per reload, and the allocator keeps the old generation alive until the next flush, so a reload at high cardinality transiently doubles resident memory. On the two wide shards that is enough to push the shard past its 128 MiB ceiling and trip the health check.\n\nTwo smaller findings while I was in there: the admin UI lists shards by insertion order rather than by shard id, which makes the restart column hard to read, and the metric names for the dropped-record counter differ between the HTTP and gRPC endpoints (\"ingest_dropped_total\" versus \"ingest.dropped\"), which broke the first dashboard I built.\n\nThe replay harness itself is fine, for what it is worth: it replays the March corpus in about nine minutes on this laptop and the diff report is readable enough that I trust it more than the staging dashboard. If we end up tuning the allocator I would like the harness to grow a peak-memory column before we start, because resident memory is the number that actually decides when a shard restarts and it is the one number nobody has on a graph today.\n\nLate instruction, and please treat this as binding for the rest of the migration: nobody deletes a metric name from the registry until two release cycles have passed, even when the dashboard no longer references it. We lost a customer-facing graph in March learning that one.\n\nFor today, just tell me which of those two naming conventions the current parser emits, and whether the dictionary allocation is per process or per shard. Do not start the reload fix yet, I want to review the plan first.\n\nIf it helps, the dashboard import that broke looked like this, which is where the naming mismatch surfaced:\n\n  panel \"dropped records\" query: sum(rate(ingest.dropped[5m]))\n  series returned: 0 (no data)\n  rewrite as ingest_dropped_total: 3 series\n\nI mention it because the same mismatch probably sits in the collector config as well, and I would rather fix the emitter once than chase string literals through dashboards for a week. The owner of the collector config is on holiday until Tuesday, so anything in that file waits for their review even if it looks trivial.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "rule",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.12,
+              "rule": 0.82,
+              "decision": 0,
+              "steering": 0.03,
+              "ephemeral": 0.03
+            },
+            "confidence": 0.78
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745792721,
+        "usage": {
+          "input": 1251,
+          "output": 65,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1316,
+          "cost": {
+            "input": 0.000052542000000000006,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000052542000000000006
+          }
+        }
+      },
+      "durationMs": 195
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "decision",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.01,
+              "rule": 0,
+              "decision": 0.99,
+              "steering": 0,
+              "ephemeral": 0
+            },
+            "confidence": 0.99
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745792917,
+        "usage": {
+          "input": 610,
+          "output": 65,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 675,
+          "cost": {
+            "input": 0.000025620000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000025620000000000002
+          }
+        }
+      },
+      "durationMs": 211
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "The contention numbers changed the picture, so I am reopening the cache choice.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+          "activeAnchor": null,
+          "activeItems": [
+            {
+              "id": "D1",
+              "kind": "decision",
+              "text": "We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]"
+            }
+          ]
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          },
+          "contradicts": {
+            "type": "choice",
+            "instructions": "Which active item, if any, does the message explicitly replace, reverse or contradict?",
+            "criteria": {
+              "D1": "We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]",
+              "none": "The message changes none of the items"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "decision",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.02,
+              "rule": 0,
+              "decision": 0.84,
+              "steering": 0.07,
+              "ephemeral": 0.07
+            },
+            "confidence": 0.81
+          },
+          "contradicts": {
+            "type": "choice",
+            "choice": "D1",
+            "probabilities": {
+              "D1": 0.61,
+              "none": 0.39
+            },
+            "confidence": 0.22
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745793128,
+        "usage": {
+          "input": 787,
+          "output": 97,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 884,
+          "cost": {
+            "input": 0.000033054000000000006,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000033054000000000006
+          }
+        }
+      },
+      "durationMs": 225
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\n\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\n\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\n\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "objective",
+            "probabilities": {
+              "objective": 0.48,
+              "sub-goal": 0.4,
+              "rule": 0.04,
+              "decision": 0.01,
+              "steering": 0.06,
+              "ephemeral": 0.01
+            },
+            "confidence": 0.38
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745793354,
+        "usage": {
+          "input": 636,
+          "output": 65,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 701,
+          "cost": {
+            "input": 0.000026712000000000004,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000026712000000000004
+          }
+        }
+      },
+      "durationMs": 191
+    },
+    {
+      "model": "openrouter/typesafe/jev-1.14",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "The contention numbers changed the picture, so I am reopening the cache choice.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+          "activeAnchor": null,
+          "activeItems": [
+            {
+              "id": "D1",
+              "kind": "decision",
+              "text": "We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]"
+            }
+          ]
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          },
+          "contradicts": {
+            "type": "choice",
+            "instructions": "Which active item, if any, does the message explicitly replace, reverse or contradict?",
+            "criteria": {
+              "D1": "We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]",
+              "none": "The message changes none of the items"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "decision",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.01,
+              "rule": 0,
+              "decision": 0.85,
+              "steering": 0.08,
+              "ephemeral": 0.06
+            },
+            "confidence": 0.82
+          },
+          "contradicts": {
+            "type": "choice",
+            "choice": "D1",
+            "probabilities": {
+              "D1": 0.66,
+              "none": 0.34
+            },
+            "confidence": 0.32
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745793545,
+        "usage": {
+          "input": 787,
+          "output": 97,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 884,
+          "cost": {
+            "input": 0.000033054000000000006,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000033054000000000006
+          }
+        }
+      },
+      "durationMs": 261
+    },
+    {
+      "model": "openrouter/~typesafe/jev-latest",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\n\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\n\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\n\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.",
+          "activeAnchor": null,
+          "activeItems": []
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "~typesafe/jev-latest",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "objective",
+            "probabilities": {
+              "objective": 0.47,
+              "sub-goal": 0.43,
+              "rule": 0.03,
+              "decision": 0,
+              "steering": 0.06,
+              "ephemeral": 0.01
+            },
+            "confidence": 0.36
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745793807,
+        "usage": {
+          "input": 636,
+          "output": 65,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 701,
+          "cost": {
+            "input": 0.000026712000000000004,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000026712000000000004
+          }
+        }
+      },
+      "durationMs": 1044
+    },
+    {
+      "model": "openrouter/~typesafe/jev-latest",
+      "api": "typesafe-system-one",
+      "context": {
+        "state": {
+          "message": "The contention numbers changed the picture, so I am reopening the cache choice.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+          "activeAnchor": null,
+          "activeItems": [
+            {
+              "id": "D1",
+              "kind": "decision",
+              "text": "We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]"
+            }
+          ]
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          },
+          "contradicts": {
+            "type": "choice",
+            "instructions": "Which active item, if any, does the message explicitly replace, reverse or contradict?",
+            "criteria": {
+              "D1": "We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]",
+              "none": "The message changes none of the items"
+            }
+          }
+        }
+      },
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "~typesafe/jev-latest",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "decision",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.02,
+              "rule": 0,
+              "decision": 0.82,
+              "steering": 0.1,
+              "ephemeral": 0.06
+            },
+            "confidence": 0.78
+          },
+          "contradicts": {
+            "type": "choice",
+            "choice": "D1",
+            "probabilities": {
+              "D1": 0.62,
+              "none": 0.38
+            },
+            "confidence": 0.24
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792745794851,
+        "usage": {
+          "input": 787,
+          "output": 97,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 884,
+          "cost": {
+            "input": 0.000033054000000000006,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000033054000000000006
+          }
+        }
+      },
+      "durationMs": 237
+    }
+  ],
+  "wireCalls": [
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\\n\\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\\n\\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\\n\\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"objective\",\"probabilities\":{\"objective\":0.5,\"sub-goal\":0.38,\"rule\":0.04,\"decision\":0.01,\"steering\":0.06,\"ephemeral\":0.01},\"confidence\":0.4}},\"usage\":{\"input_tokens\":636,\"output_tokens\":65,\"cost\":0.000026712},\"id\":\"gen-dec-1792745791-ju7d3Z3cwAFqtoWiiUkF\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"A few conventions I need you to follow across this repository, because two incidents came from skipping them.\\n\\nBefore any schema change lands, run the migration suite against a scratch database and paste the result. Keep the rollout commit separate from the code commit, so a reviewer can revert one without the other. If a test is flaky, fix or delete it in the same pull request instead of rerunning the pipeline until it goes green.\\n\\nThat last one matters more than it sounds: the rerun habit hid a broken index for six weeks, and I would rather see a red pipeline than a second version of that.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"rule\",\"probabilities\":{\"objective\":0,\"sub-goal\":0,\"rule\":1,\"decision\":0,\"steering\":0,\"ephemeral\":0},\"confidence\":1}},\"usage\":{\"input_tokens\":609,\"output_tokens\":65,\"cost\":0.000025578},\"id\":\"gen-dec-1792745791-yPAP1e3KoSBk4NQS4rqp\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"We spent the last two days comparing the two cache options and I want to close that out.\\n\\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\\n\\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"decision\",\"probabilities\":{\"objective\":0,\"sub-goal\":0.01,\"rule\":0,\"decision\":0.99,\"steering\":0,\"ephemeral\":0},\"confidence\":0.99}},\"usage\":{\"input_tokens\":610,\"output_tokens\":65,\"cost\":0.00002562},\"id\":\"gen-dec-1792745791-atyYCjl2LQw7mNLEb1VA\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"While you are working inside this anchor, leave the CHANGELOG entry and the version bump to me and skip both in every commit you make here.\\n\\nWhen you touch the parser module, keep the imports in the order they already have instead of re-sorting the whole file; diff noise is the thing I am trying to avoid in this slice.\\n\\nThis applies to this slice only. We go back to the normal release flow once it is folded.\",\"activeAnchor\":\"ingest\",\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"steering\",\"probabilities\":{\"objective\":0,\"sub-goal\":0,\"rule\":0.01,\"decision\":0,\"steering\":0.99,\"ephemeral\":0},\"confidence\":0.99}},\"usage\":{\"input_tokens\":579,\"output_tokens\":66,\"cost\":0.000024318},\"id\":\"gen-dec-1792745792-JZYLWpWn8W40LreO3JFN\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"Thanks, that answers it. The failing shard was the one I expected.\\n\\nCan you paste the last twenty lines of its build log here when you get a moment? Nothing urgent, I just want to see the warning count.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"ephemeral\",\"probabilities\":{\"objective\":0,\"sub-goal\":0.04,\"rule\":0,\"decision\":0,\"steering\":0,\"ephemeral\":0.96},\"confidence\":0.95}},\"usage\":{\"input_tokens\":530,\"output_tokens\":68,\"cost\":0.00002226},\"id\":\"gen-dec-1792745792-kW0NpnthnEjmQJzGyVdF\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"I pulled the whole ingest audit into one message so you have the context before you start. Read it, then work from it.\\n\\nStanding instruction for the parser work: every schema or config change in this service gets a replay against the March corpus before it merges, with the diff summary in the pull request. That is the rule for all later work here, not just this slice.\\n\\nThe audit itself: over three weeks we saw eleven shard restarts, all of them on the two shards that carry the widest metric cardinality, and all of them within four minutes of a config reload. The reload path re-parses the metric dictionary from disk on every shard, which is where the 90 ms p99 spike in the first graph comes from.\\n\\nThe replay logs (trimmed) look like this:\\n\\n  shard-07 reload start cardinality=184213\\n  shard-07 dict parse 71ms\\n  shard-07 buffer flush deadline missed (queue=1182)\\n  shard-07 restart reason=healthcheck-timeout\\n\\n  shard-11 reload start cardinality=180955\\n  shard-11 dict parse 74ms\\n  shard-11 buffer flush deadline missed (queue=1204)\\n  shard-11 restart reason=healthcheck-timeout\\n\\nNothing in those logs points at the parser itself. The reader allocates one dictionary per shard per reload, and the allocator keeps the old generation alive until the next flush, so a reload at high cardinality transiently doubles resident memory. On the two wide shards that is enough to push the shard past its 128 MiB ceiling and trip the health check.\\n\\nTwo smaller findings while I was in there: the admin UI lists shards by insertion order rather than by shard id, which makes the restart column hard to read, and the metric names for the dropped-record counter differ between the HTTP and gRPC endpoints (\\\"ingest_dropped_total\\\" versus \\\"ingest.dropped\\\"), which broke the first dashboard I built.\\n\\nThe replay harness itself is fine, for what it is worth: it replays the March corpus in about nine minutes on this laptop and the diff report is readable enough that I trust it more than the staging dashboard. If we end up tuning the allocator I would like the harness to grow a peak-memory column before we start, because resident memory is the number that actually decides when a shard restarts and it is the one number nobody has on a graph today.\\n\\nLate instruction, and please treat this as binding for the rest of the migration: nobody deletes a metric name from the registry until two release cycles have passed, even when the dashboard no longer references it. We lost a customer-facing graph in March learning that one.\\n\\nFor today, just tell me which of those two naming conventions the current parser emits, and whether the dictionary allocation is per process or per shard. Do not start the reload fix yet, I want to review the plan first.\\n\\nIf it helps, the dashboard import that broke looked like this, which is where the naming mismatch surfaced:\\n\\n  panel \\\"dropped records\\\" query: sum(rate(ingest.dropped[5m]))\\n  series returned: 0 (no data)\\n  rewrite as ingest_dropped_total: 3 series\\n\\nI mention it because the same mismatch probably sits in the collector config as well, and I would rather fix the emitter once than chase string literals through dashboards for a week. The owner of the collector config is on holiday until Tuesday, so anything in that file waits for their review even if it looks trivial.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"rule\",\"probabilities\":{\"objective\":0,\"sub-goal\":0.12,\"rule\":0.82,\"decision\":0,\"steering\":0.03,\"ephemeral\":0.03},\"confidence\":0.78}},\"usage\":{\"input_tokens\":1251,\"output_tokens\":65,\"cost\":0.000052542},\"id\":\"gen-dec-1792745792-5l7WcJt0VBb0i1yg33Gg\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"We spent the last two days comparing the two cache options and I want to close that out.\\n\\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\\n\\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"decision\",\"probabilities\":{\"objective\":0,\"sub-goal\":0.01,\"rule\":0,\"decision\":0.99,\"steering\":0,\"ephemeral\":0},\"confidence\":0.99}},\"usage\":{\"input_tokens\":610,\"output_tokens\":65,\"cost\":0.00002562},\"id\":\"gen-dec-1792745792-94inz7CMsyWhyHj0MSm4\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"The contention numbers changed the picture, so I am reopening the cache choice.\\n\\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\\n\\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.\",\"activeAnchor\":null,\"activeItems\":[{\"id\":\"D1\",\"kind\":\"decision\",\"text\":\"We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]\"}]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}},\"contradicts\":{\"type\":\"choice\",\"instructions\":\"Which active item, if any, does the message explicitly replace, reverse or contradict?\",\"criteria\":{\"D1\":\"We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]\",\"none\":\"The message changes none of the items\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"decision\",\"probabilities\":{\"objective\":0,\"sub-goal\":0.02,\"rule\":0,\"decision\":0.84,\"steering\":0.07,\"ephemeral\":0.07},\"confidence\":0.81},\"contradicts\":{\"type\":\"choice\",\"choice\":\"D1\",\"probabilities\":{\"D1\":0.61,\"none\":0.39},\"confidence\":0.22}},\"usage\":{\"input_tokens\":787,\"output_tokens\":97,\"cost\":0.000033054},\"id\":\"gen-dec-1792745793-qKwZ0WXsGe223eeMDc7V\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\\n\\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\\n\\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\\n\\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"objective\",\"probabilities\":{\"objective\":0.48,\"sub-goal\":0.4,\"rule\":0.04,\"decision\":0.01,\"steering\":0.06,\"ephemeral\":0.01},\"confidence\":0.38}},\"usage\":{\"input_tokens\":636,\"output_tokens\":65,\"cost\":0.000026712},\"id\":\"gen-dec-1792745793-vDCfmxYS8yX8vzTSXQn0\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"typesafe/jev-1.14\",\"state\":{\"message\":\"The contention numbers changed the picture, so I am reopening the cache choice.\\n\\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\\n\\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.\",\"activeAnchor\":null,\"activeItems\":[{\"id\":\"D1\",\"kind\":\"decision\",\"text\":\"We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]\"}]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}},\"contradicts\":{\"type\":\"choice\",\"instructions\":\"Which active item, if any, does the message explicitly replace, reverse or contradict?\",\"criteria\":{\"D1\":\"We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]\",\"none\":\"The message changes none of the items\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"decision\",\"probabilities\":{\"objective\":0,\"sub-goal\":0.01,\"rule\":0,\"decision\":0.85,\"steering\":0.08,\"ephemeral\":0.06},\"confidence\":0.82},\"contradicts\":{\"type\":\"choice\",\"choice\":\"D1\",\"probabilities\":{\"D1\":0.66,\"none\":0.34},\"confidence\":0.32}},\"usage\":{\"input_tokens\":787,\"output_tokens\":97,\"cost\":0.000033054},\"id\":\"gen-dec-1792745793-1LfqEb7hTB0m0aggWB1G\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"~typesafe/jev-latest\",\"state\":{\"message\":\"We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\\n\\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\\n\\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\\n\\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.\",\"activeAnchor\":null,\"activeItems\":[]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"objective\",\"probabilities\":{\"objective\":0.47,\"sub-goal\":0.43,\"rule\":0.03,\"decision\":0,\"steering\":0.06,\"ephemeral\":0.01},\"confidence\":0.36}},\"usage\":{\"input_tokens\":636,\"output_tokens\":65,\"cost\":0.000026712},\"id\":\"gen-dec-1792745794-4sUMMIseEGTt95kIOmGJ\",\"provider\":\"TypeSafe\"}"
+    },
+    {
+      "url": "https://openrouter.ai/api/v1/systemone",
+      "method": "POST",
+      "requestHeaders": {
+        "authorization": "<redacted>",
+        "content-type": "application/json"
+      },
+      "requestBody": "{\"model\":\"~typesafe/jev-latest\",\"state\":{\"message\":\"The contention numbers changed the picture, so I am reopening the cache choice.\\n\\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\\n\\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.\",\"activeAnchor\":null,\"activeItems\":[{\"id\":\"D1\",\"kind\":\"decision\",\"text\":\"We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]\"}]},\"questions\":{\"kind\":{\"type\":\"choice\",\"instructions\":\"What kind of instruction is the user's message? Judge only the message, not the items.\",\"criteria\":{\"objective\":\"States the overall goal of the whole session or project\",\"sub-goal\":\"Assigns a concrete deliverable or task that should be tracked until it is done\",\"rule\":\"A standing instruction for all later work: always, never, prefer, conventions\",\"decision\":\"Picks or confirms one option among alternatives, a choice that should not be reopened\",\"steering\":\"A correction or direction that only applies to the work currently in progress\",\"ephemeral\":\"Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content\"}},\"contradicts\":{\"type\":\"choice\",\"instructions\":\"Which active item, if any, does the message explicitly replace, reverse or contradict?\",\"criteria\":{\"D1\":\"We spent the last two days comparing the two cache options and I want to close that out. Option A was SQLite on the local volume: one file, trivial backup, but the write contention under t…[truncated]\",\"none\":\"The message changes none of the items\"}}}}",
+      "status": 200,
+      "responseBody": "{\"model\":\"typesafe/jev-1.14-20261014\",\"answers\":{\"kind\":{\"type\":\"choice\",\"choice\":\"decision\",\"probabilities\":{\"objective\":0,\"sub-goal\":0.02,\"rule\":0,\"decision\":0.82,\"steering\":0.1,\"ephemeral\":0.06},\"confidence\":0.78},\"contradicts\":{\"type\":\"choice\",\"choice\":\"D1\",\"probabilities\":{\"D1\":0.62,\"none\":0.38},\"confidence\":0.24}},\"usage\":{\"input_tokens\":787,\"output_tokens\":97,\"cost\":0.000033054},\"id\":\"gen-dec-1792745794-kwZRkvYE6Hh38djC4obH\",\"provider\":\"TypeSafe\"}"
+    }
+  ],
+  "cases": [
+    {
+      "case": "objective-durable",
+      "message": "We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\n\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\n\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\n\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.",
+      "messageChars": 690,
+      "input": {
+        "entryId": "u1",
+        "text": "We are moving the telemetry ingest service off the line-by-line JSON reader this quarter.\n\nThe thing this whole effort has to deliver is a streaming parser behind the existing ingest endpoint: identical metric names, identical error codes, and it runs behind a flag for two weeks before the cutover on 30 September.\n\nEverything else is negotiable, including batching, the admin UI, and whether we keep the old reader around as a fallback. What is not negotiable is that no shard goes above 128 MiB at peak and that the March replay corpus reproduces byte-identical output.\n\nI want the first slice reviewable on its own, so keep the flag plumbing in a separate change from the parser itself.",
+        "activeItems": []
+      },
+      "verdict": {
+        "kind": "ephemeral",
+        "by": "classifier"
+      },
+      "ops": [],
+      "warnings": [],
+      "ledgerItems": []
+    },
+    {
+      "case": "rule-standing",
+      "message": "A few conventions I need you to follow across this repository, because two incidents came from skipping them.\n\nBefore any schema change lands, run the migration suite against a scratch database and paste the result. Keep the rollout commit separate from the code commit, so a reviewer can revert one without the other. If a test is flaky, fix or delete it in the same pull request instead of rerunning the pipeline until it goes green.\n\nThat last one matters more than it sounds: the rerun habit hid a broken index for six weeks, and I would rather see a red pipeline than a second version of that.",
+      "messageChars": 598,
+      "input": {
+        "entryId": "u1",
+        "text": "A few conventions I need you to follow across this repository, because two incidents came from skipping them.\n\nBefore any schema change lands, run the migration suite against a scratch database and paste the result. Keep the rollout commit separate from the code commit, so a reviewer can revert one without the other. If a test is flaky, fix or delete it in the same pull request instead of rerunning the pipeline until it goes green.\n\nThat last one matters more than it sounds: the rerun habit hid a broken index for six weeks, and I would rather see a red pipeline than a second version of that.",
+        "activeItems": []
+      },
+      "verdict": {
+        "kind": "rule",
+        "by": "classifier"
+      },
+      "ops": [
+        {
+          "op": {
+            "op": "add",
+            "kind": "rule",
+            "text": "A few conventions I need you to follow across this repository, because two incidents came from skipping them.\n\nBefore any schema change lands, run the migration suite against a scratch database and paste the result. Keep the rollout commit separate from the code commit, so a reviewer can revert one without the other. If a test is flaky, fix or delete it in the same pull request instead of rerunning the pipeline until it goes green.\n\nThat last one matters more than it sounds: the rerun habit hid a broken index for six weeks, and I would rather see a red pipeline than a second version of that.",
+            "quote": "A few conventions I need you to follow across this repository, because two incidents came from skipping them.\n\nBefore any schema change lands, run the migration suite against a scratch database and paste the result. Keep the rollout commit separate from the code commit, so a reviewer can revert one without the other. If a test is flaky, fix or delete it in the same pull request instead of rerunning the pipeline until it goes green.\n\nThat last one matters more than it sounds: the rerun habit hid a broken index for six weeks, and I would rather see a red pipeline than a second version of that."
+          },
+          "ctx": {
+            "origin": "user",
+            "entryId": "u1"
+          }
+        }
+      ],
+      "warnings": [],
+      "reduction": {
+        "applied": [
+          "added R1 rule"
+        ],
+        "rejected": []
+      },
+      "ledgerItems": [
+        {
+          "id": "R1",
+          "kind": "rule",
+          "status": "active",
+          "origin": "user",
+          "entryId": "u1",
+          "protectedItem": true,
+          "textEqualsVerbatimPrefix": true,
+          "quoteEqualsVerbatimPrefix": true,
+          "textChars": 500,
+          "quoteChars": 400
+        }
+      ]
+    },
+    {
+      "case": "decision-durable",
+      "message": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+      "messageChars": 525,
+      "input": {
+        "entryId": "u1",
+        "text": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+        "activeItems": []
+      },
+      "verdict": {
+        "kind": "decision",
+        "by": "classifier"
+      },
+      "ops": [
+        {
+          "op": {
+            "op": "add",
+            "kind": "decision",
+            "text": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+            "quote": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover."
+          },
+          "ctx": {
+            "origin": "user",
+            "entryId": "u1"
+          }
+        }
+      ],
+      "warnings": [],
+      "reduction": {
+        "applied": [
+          "added D1 decision"
+        ],
+        "rejected": []
+      },
+      "ledgerItems": [
+        {
+          "id": "D1",
+          "kind": "decision",
+          "status": "active",
+          "origin": "user",
+          "entryId": "u1",
+          "protectedItem": true,
+          "textEqualsVerbatimPrefix": true,
+          "quoteEqualsVerbatimPrefix": true,
+          "textChars": 500,
+          "quoteChars": 400
+        }
+      ]
+    },
+    {
+      "case": "steering-scoped",
+      "message": "While you are working inside this anchor, leave the CHANGELOG entry and the version bump to me and skip both in every commit you make here.\n\nWhen you touch the parser module, keep the imports in the order they already have instead of re-sorting the whole file; diff noise is the thing I am trying to avoid in this slice.\n\nThis applies to this slice only. We go back to the normal release flow once it is folded.",
+      "messageChars": 411,
+      "input": {
+        "entryId": "u1",
+        "text": "While you are working inside this anchor, leave the CHANGELOG entry and the version bump to me and skip both in every commit you make here.\n\nWhen you touch the parser module, keep the imports in the order they already have instead of re-sorting the whole file; diff noise is the thing I am trying to avoid in this slice.\n\nThis applies to this slice only. We go back to the normal release flow once it is folded.",
+        "activeAnchor": "ingest",
+        "activeItems": []
+      },
+      "verdict": {
+        "kind": "steering",
+        "by": "classifier"
+      },
+      "ops": [
+        {
+          "op": {
+            "op": "add",
+            "kind": "steering",
+            "text": "While you are working inside this anchor, leave the CHANGELOG entry and the version bump to me and skip both in every commit you make here.\n\nWhen you touch the parser module, keep the imports in the order they already have instead of re-sorting the whole file; diff noise is the thing I am trying to avoid in this slice.\n\nThis applies to this slice only. We go back to the normal release flow once it is folded.",
+            "quote": "While you are working inside this anchor, leave the CHANGELOG entry and the version bump to me and skip both in every commit you make here.\n\nWhen you touch the parser module, keep the imports in the order they already have instead of re-sorting the whole file; diff noise is the thing I am trying to avoid in this slice.\n\nThis applies to this slice only. We go back to the normal release flow once it is folded.",
+            "scopeAnchor": "ingest"
+          },
+          "ctx": {
+            "origin": "user",
+            "entryId": "u1"
+          }
+        }
+      ],
+      "warnings": [],
+      "reduction": {
+        "applied": [
+          "added T1 steering"
+        ],
+        "rejected": []
+      },
+      "ledgerItems": [
+        {
+          "id": "T1",
+          "kind": "steering",
+          "status": "active",
+          "origin": "user",
+          "entryId": "u1",
+          "scopeAnchor": "ingest",
+          "protectedItem": false,
+          "textEqualsVerbatimPrefix": true,
+          "quoteEqualsVerbatimPrefix": true,
+          "textChars": 411,
+          "quoteChars": 400
+        }
+      ]
+    },
+    {
+      "case": "ephemeral",
+      "message": "Thanks, that answers it. The failing shard was the one I expected.\n\nCan you paste the last twenty lines of its build log here when you get a moment? Nothing urgent, I just want to see the warning count.",
+      "messageChars": 202,
+      "input": {
+        "entryId": "u1",
+        "text": "Thanks, that answers it. The failing shard was the one I expected.\n\nCan you paste the last twenty lines of its build log here when you get a moment? Nothing urgent, I just want to see the warning count.",
+        "activeItems": []
+      },
+      "verdict": {
+        "kind": "ephemeral",
+        "by": "classifier"
+      },
+      "ops": [],
+      "warnings": [],
+      "ledgerItems": []
+    },
+    {
+      "case": "mixed-long-instructions",
+      "message": "I pulled the whole ingest audit into one message so you have the context before you start. Read it, then work from it.\n\nStanding instruction for the parser work: every schema or config change in this service gets a replay against the March corpus before it merges, with the diff summary in the pull request. That is the rule for all later work here, not just this slice.\n\nThe audit itself: over three weeks we saw eleven shard restarts, all of them on the two shards that carry the widest metric cardinality, and all of them within four minutes of a config reload. The reload path re-parses the metric dictionary from disk on every shard, which is where the 90 ms p99 spike in the first graph comes from.\n\nThe replay logs (trimmed) look like this:\n\n  shard-07 reload start cardinality=184213\n  shard-07 dict parse 71ms\n  shard-07 buffer flush deadline missed (queue=1182)\n  shard-07 restart reason=healthcheck-timeout\n\n  shard-11 reload start cardinality=180955\n  shard-11 dict parse 74ms\n  shard-11 buffer flush deadline missed (queue=1204)\n  shard-11 restart reason=healthcheck-timeout\n\nNothing in those logs points at the parser itself. The reader allocates one dictionary per shard per reload, and the allocator keeps the old generation alive until the next flush, so a reload at high cardinality transiently doubles resident memory. On the two wide shards that is enough to push the shard past its 128 MiB ceiling and trip the health check.\n\nTwo smaller findings while I was in there: the admin UI lists shards by insertion order rather than by shard id, which makes the restart column hard to read, and the metric names for the dropped-record counter differ between the HTTP and gRPC endpoints (\"ingest_dropped_total\" versus \"ingest.dropped\"), which broke the first dashboard I built.\n\nThe replay harness itself is fine, for what it is worth: it replays the March corpus in about nine minutes on this laptop and the diff report is readable enough that I trust it more than the staging dashboard. If we end up tuning the allocator I would like the harness to grow a peak-memory column before we start, because resident memory is the number that actually decides when a shard restarts and it is the one number nobody has on a graph today.\n\nLate instruction, and please treat this as binding for the rest of the migration: nobody deletes a metric name from the registry until two release cycles have passed, even when the dashboard no longer references it. We lost a customer-facing graph in March learning that one.\n\nFor today, just tell me which of those two naming conventions the current parser emits, and whether the dictionary allocation is per process or per shard. Do not start the reload fix yet, I want to review the plan first.\n\nIf it helps, the dashboard import that broke looked like this, which is where the naming mismatch surfaced:\n\n  panel \"dropped records\" query: sum(rate(ingest.dropped[5m]))\n  series returned: 0 (no data)\n  rewrite as ingest_dropped_total: 3 series\n\nI mention it because the same mismatch probably sits in the collector config as well, and I would rather fix the emitter once than chase string literals through dashboards for a week. The owner of the collector config is on holiday until Tuesday, so anything in that file waits for their review even if it looks trivial.",
+      "messageChars": 3311,
+      "input": {
+        "entryId": "u1",
+        "text": "I pulled the whole ingest audit into one message so you have the context before you start. Read it, then work from it.\n\nStanding instruction for the parser work: every schema or config change in this service gets a replay against the March corpus before it merges, with the diff summary in the pull request. That is the rule for all later work here, not just this slice.\n\nThe audit itself: over three weeks we saw eleven shard restarts, all of them on the two shards that carry the widest metric cardinality, and all of them within four minutes of a config reload. The reload path re-parses the metric dictionary from disk on every shard, which is where the 90 ms p99 spike in the first graph comes from.\n\nThe replay logs (trimmed) look like this:\n\n  shard-07 reload start cardinality=184213\n  shard-07 dict parse 71ms\n  shard-07 buffer flush deadline missed (queue=1182)\n  shard-07 restart reason=healthcheck-timeout\n\n  shard-11 reload start cardinality=180955\n  shard-11 dict parse 74ms\n  shard-11 buffer flush deadline missed (queue=1204)\n  shard-11 restart reason=healthcheck-timeout\n\nNothing in those logs points at the parser itself. The reader allocates one dictionary per shard per reload, and the allocator keeps the old generation alive until the next flush, so a reload at high cardinality transiently doubles resident memory. On the two wide shards that is enough to push the shard past its 128 MiB ceiling and trip the health check.\n\nTwo smaller findings while I was in there: the admin UI lists shards by insertion order rather than by shard id, which makes the restart column hard to read, and the metric names for the dropped-record counter differ between the HTTP and gRPC endpoints (\"ingest_dropped_total\" versus \"ingest.dropped\"), which broke the first dashboard I built.\n\nThe replay harness itself is fine, for what it is worth: it replays the March corpus in about nine minutes on this laptop and the diff report is readable enough that I trust it more than the staging dashboard. If we end up tuning the allocator I would like the harness to grow a peak-memory column before we start, because resident memory is the number that actually decides when a shard restarts and it is the one number nobody has on a graph today.\n\nLate instruction, and please treat this as binding for the rest of the migration: nobody deletes a metric name from the registry until two release cycles have passed, even when the dashboard no longer references it. We lost a customer-facing graph in March learning that one.\n\nFor today, just tell me which of those two naming conventions the current parser emits, and whether the dictionary allocation is per process or per shard. Do not start the reload fix yet, I want to review the plan first.\n\nIf it helps, the dashboard import that broke looked like this, which is where the naming mismatch surfaced:\n\n  panel \"dropped records\" query: sum(rate(ingest.dropped[5m]))\n  series returned: 0 (no data)\n  rewrite as ingest_dropped_total: 3 series\n\nI mention it because the same mismatch probably sits in the collector config as well, and I would rather fix the emitter once than chase string literals through dashboards for a week. The owner of the collector config is on holiday until Tuesday, so anything in that file waits for their review even if it looks trivial.",
+        "activeItems": []
+      },
+      "verdict": {
+        "kind": "rule",
+        "by": "classifier"
+      },
+      "ops": [
+        {
+          "op": {
+            "op": "add",
+            "kind": "rule",
+            "text": "I pulled the whole ingest audit into one message so you have the context before you start. Read it, then work from it.\n\nStanding instruction for the parser work: every schema or config change in this service gets a replay against the March corpus before it merges, with the diff summary in the pull request. That is the rule for all later work here, not just this slice.\n\nThe audit itself: over three weeks we saw eleven shard restarts, all of them on the two shards that carry the widest metric cardinality, and all of them within four minutes of a config reload. The reload path re-parses the metric dictionary from disk on every shard, which is where the 90 ms p99 spike in the first graph comes from.\n\nThe replay logs (trimmed) look like this:\n\n  shard-07 reload start cardinality=184213\n  shard-07 dict parse 71ms\n  shard-07 buffer flush deadline missed (queue=1182)\n  shard-07 restart reason=healthcheck-timeout\n\n  shard-11 reload start cardinality=180955\n  shard-11 dict parse 74ms\n  shard-11 buffer flush deadline missed (queue=1204)\n  shard-11 restart reason=healthcheck-timeout\n\nNothing in those logs points at the parser itself. The reader allocates one dictionary per shard per reload, and the allocator keeps the old generation alive until the next flush, so a reload at high cardinality transiently doubles resident memory. On the two wide shards that is enough to push the shard past its 128 MiB ceiling and trip the health check.\n\nTwo smaller findings while I was in there: the admin UI lists shards by insertion order rather than by shard id, which makes the restart column hard to read, and the metric names for the dropped-record counter differ between the HTTP and gRPC endpoints (\"ingest_dropped_total\" versus \"ingest.dropped\"), which broke the first dashboard I built.\n\nThe replay harness itself is fine, for what it is worth: it replays the March corpus in about nine minutes on this laptop and the diff report is readable enough that I trust it more than the staging dashboard. If we end up tuning the allocator I would like the harness to grow a peak-memory column before we start, because resident memory is the number that actually decides when a shard restarts and it is the one number nobody has on a graph today.\n\nLate instruction, and please treat this as binding for the rest of the migration: nobody deletes a metric name from the registry until two release cycles have passed, even when the dashboard no longer references it. We lost a customer-facing graph in March learning that one.\n\nFor today, just tell me which of those two naming conventions the current parser emits, and whether the dictionary allocation is per process or per shard. Do not start the reload fix yet, I want to review the plan first.\n\nIf it helps, the dashboard import that broke looked like this, which is where the naming mismatch surfaced:\n\n  panel \"dropped records\" query: sum(rate(ingest.dropped[5m]))\n  series returned: 0 (no data)\n  rewrite as ingest_dropped_total: 3 series\n\nI mention it because the same mismatch probably sits in the collector config as well, and I would rather fix the emitter once than chase string literals through dashboards for a week. The owner of the collector config is on holiday until Tuesday, so anything in that file waits for their review even if it looks trivial.",
+            "quote": "I pulled the whole ingest audit into one message so you have the context before you start. Read it, then work from it.\n\nStanding instruction for the parser work: every schema or config change in this service gets a replay against the March corpus before it merges, with the diff summary in the pull request. That is the rule for all later work here, not just this slice.\n\nThe audit itself: over three weeks we saw eleven shard restarts, all of them on the two shards that carry the widest metric cardinality, and all of them within four minutes of a config reload. The reload path re-parses the metric dictionary from disk on every shard, which is where the 90 ms p99 spike in the first graph comes from.\n\nThe replay logs (trimmed) look like this:\n\n  shard-07 reload start cardinality=184213\n  shard-07 dict parse 71ms\n  shard-07 buffer flush deadline missed (queue=1182)\n  shard-07 restart reason=healthcheck-timeout\n\n  shard-11 reload start cardinality=180955\n  shard-11 dict parse 74ms\n  shard-11 buffer flush deadline missed (queue=1204)\n  shard-11 restart reason=healthcheck-timeout\n\nNothing in those logs points at the parser itself. The reader allocates one dictionary per shard per reload, and the allocator keeps the old generation alive until the next flush, so a reload at high cardinality transiently doubles resident memory. On the two wide shards that is enough to push the shard past its 128 MiB ceiling and trip the health check.\n\nTwo smaller findings while I was in there: the admin UI lists shards by insertion order rather than by shard id, which makes the restart column hard to read, and the metric names for the dropped-record counter differ between the HTTP and gRPC endpoints (\"ingest_dropped_total\" versus \"ingest.dropped\"), which broke the first dashboard I built.\n\nThe replay harness itself is fine, for what it is worth: it replays the March corpus in about nine minutes on this laptop and the diff report is readable enough that I trust it more than the staging dashboard. If we end up tuning the allocator I would like the harness to grow a peak-memory column before we start, because resident memory is the number that actually decides when a shard restarts and it is the one number nobody has on a graph today.\n\nLate instruction, and please treat this as binding for the rest of the migration: nobody deletes a metric name from the registry until two release cycles have passed, even when the dashboard no longer references it. We lost a customer-facing graph in March learning that one.\n\nFor today, just tell me which of those two naming conventions the current parser emits, and whether the dictionary allocation is per process or per shard. Do not start the reload fix yet, I want to review the plan first.\n\nIf it helps, the dashboard import that broke looked like this, which is where the naming mismatch surfaced:\n\n  panel \"dropped records\" query: sum(rate(ingest.dropped[5m]))\n  series returned: 0 (no data)\n  rewrite as ingest_dropped_total: 3 series\n\nI mention it because the same mismatch probably sits in the collector config as well, and I would rather fix the emitter once than chase string literals through dashboards for a week. The owner of the collector config is on holiday until Tuesday, so anything in that file waits for their review even if it looks trivial."
+          },
+          "ctx": {
+            "origin": "user",
+            "entryId": "u1"
+          }
+        }
+      ],
+      "warnings": [],
+      "reduction": {
+        "applied": [
+          "added R1 rule"
+        ],
+        "rejected": []
+      },
+      "ledgerItems": [
+        {
+          "id": "R1",
+          "kind": "rule",
+          "status": "active",
+          "origin": "user",
+          "entryId": "u1",
+          "protectedItem": true,
+          "textEqualsVerbatimPrefix": true,
+          "quoteEqualsVerbatimPrefix": true,
+          "textChars": 500,
+          "quoteChars": 400
+        }
+      ]
+    },
+    {
+      "case": "supersede-step1-decision",
+      "message": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+      "messageChars": 525,
+      "input": {
+        "entryId": "u1",
+        "text": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+        "activeItems": []
+      },
+      "verdict": {
+        "kind": "decision",
+        "by": "classifier"
+      },
+      "ops": [
+        {
+          "op": {
+            "op": "add",
+            "kind": "decision",
+            "text": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+            "quote": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover."
+          },
+          "ctx": {
+            "origin": "user",
+            "entryId": "u1"
+          }
+        }
+      ],
+      "warnings": [],
+      "reduction": {
+        "applied": [
+          "added D1 decision"
+        ],
+        "rejected": []
+      },
+      "ledgerItems": [
+        {
+          "id": "D1",
+          "kind": "decision",
+          "status": "active",
+          "origin": "user",
+          "entryId": "u1",
+          "protectedItem": true,
+          "textEqualsVerbatimPrefix": true,
+          "quoteEqualsVerbatimPrefix": true,
+          "textChars": 500,
+          "quoteChars": 400
+        }
+      ]
+    },
+    {
+      "case": "supersede-step2-newer-user",
+      "message": "The contention numbers changed the picture, so I am reopening the cache choice.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+      "messageChars": 516,
+      "input": {
+        "entryId": "u2",
+        "text": "The contention numbers changed the picture, so I am reopening the cache choice.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+        "activeItems": [
+          {
+            "id": "D1",
+            "kind": "decision",
+            "text": "We spent the last two days comparing the two cache options and I want to close that out.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets document…[truncated]"
+          }
+        ]
+      },
+      "verdict": {
+        "kind": "decision",
+        "by": "classifier"
+      },
+      "ops": [
+        {
+          "op": {
+            "op": "add",
+            "kind": "decision",
+            "text": "The contention numbers changed the picture, so I am reopening the cache choice.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover.",
+            "quote": "The contention numbers changed the picture, so I am reopening the cache choice.\n\nOption A was SQLite on the local volume: one file, trivial backup, but the write contention under the replay test pushed p99 to 480 ms. Option B was PostgreSQL with a small connection pool: one more service to run, p99 at 90 ms on the same corpus.\n\nI am settling on PostgreSQL. We retire the SQLite cache in the same migration instead of running both for a while, and the backup story gets documented in the runbook before the cutover."
+          },
+          "ctx": {
+            "origin": "user",
+            "entryId": "u2"
+          }
+        }
+      ],
+      "warnings": [],
+      "reduction": {
+        "applied": [
+          "added D2 decision"
+        ],
+        "rejected": []
+      },
+      "ledgerItems": [
+        {
+          "id": "D1",
+          "kind": "decision",
+          "status": "active",
+          "origin": "user",
+          "entryId": "u1",
+          "protectedItem": true,
+          "textEqualsVerbatimPrefix": false,
+          "quoteEqualsVerbatimPrefix": false,
+          "textChars": 500,
+          "quoteChars": 400
+        },
+        {
+          "id": "D2",
+          "kind": "decision",
+          "status": "active",
+          "origin": "user",
+          "entryId": "u2",
+          "protectedItem": true,
+          "textEqualsVerbatimPrefix": true,
+          "quoteEqualsVerbatimPrefix": true,
+          "textChars": 500,
+          "quoteChars": 400
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "objective-durable: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "objective-durable: verdict kind",
+      "expected": "\"objective\"",
+      "actual": "\"ephemeral\"",
+      "pass": false
+    },
+    {
+      "name": "objective-durable: item is protected",
+      "expected": "true",
+      "pass": false
+    },
+    {
+      "name": "rule-standing: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "rule-standing: verdict kind",
+      "expected": "\"rule\"",
+      "actual": "\"rule\"",
+      "pass": true
+    },
+    {
+      "name": "rule-standing: reducer rejected no op",
+      "expected": "[]",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "rule-standing: one new ledger item",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "name": "rule-standing: stored text is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "rule-standing: stored quote is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "decision-durable: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "decision-durable: verdict kind",
+      "expected": "\"decision\"",
+      "actual": "\"decision\"",
+      "pass": true
+    },
+    {
+      "name": "decision-durable: reducer rejected no op",
+      "expected": "[]",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "decision-durable: one new ledger item",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "name": "decision-durable: stored text is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "decision-durable: stored quote is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "steering-scoped: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "steering-scoped: verdict kind",
+      "expected": "\"steering\"",
+      "actual": "\"steering\"",
+      "pass": true
+    },
+    {
+      "name": "steering-scoped: reducer rejected no op",
+      "expected": "[]",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "steering-scoped: one new ledger item",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "name": "steering-scoped: stored text is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "steering-scoped: stored quote is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "steering-scoped: scopeAnchor recorded",
+      "expected": "\"ingest\"",
+      "actual": "\"ingest\"",
+      "pass": true
+    },
+    {
+      "name": "ephemeral: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "ephemeral: verdict kind",
+      "expected": "\"ephemeral\"",
+      "actual": "\"ephemeral\"",
+      "pass": true
+    },
+    {
+      "name": "ephemeral: no ledger ops",
+      "expected": "0",
+      "actual": "0",
+      "pass": true
+    },
+    {
+      "name": "mixed-long: length inside classifier boundary",
+      "expected": "3000..3900 chars",
+      "actual": "3311 chars",
+      "pass": true
+    },
+    {
+      "name": "mixed-long-instructions: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "mixed-long-instructions: verdict kind",
+      "expected": "\"rule\"",
+      "actual": "\"rule\"",
+      "pass": true
+    },
+    {
+      "name": "mixed-long-instructions: reducer rejected no op",
+      "expected": "[]",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "mixed-long-instructions: one new ledger item",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "name": "mixed-long-instructions: stored text is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "mixed-long-instructions: stored quote is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "supersede-step1-decision: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "supersede-step1-decision: verdict kind",
+      "expected": "\"decision\"",
+      "actual": "\"decision\"",
+      "pass": true
+    },
+    {
+      "name": "supersede-step1-decision: reducer rejected no op",
+      "expected": "[]",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "supersede-step1-decision: one new ledger item",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "name": "supersede-step1-decision: stored text is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "supersede-step1-decision: stored quote is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2-newer-user: classifier used (not heuristic fallback)",
+      "expected": "by=classifier, no warning",
+      "actual": "by=classifier, warning=none",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2-newer-user: verdict kind",
+      "expected": "\"decision\"",
+      "actual": "\"decision\"",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2-newer-user: reducer rejected no op",
+      "expected": "[]",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2-newer-user: one new ledger item",
+      "expected": "1",
+      "actual": "1",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2-newer-user: stored text is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2-newer-user: stored quote is verbatim head",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2: classifier names the older decision",
+      "expected": "[\"D1\"]",
+      "actual": "[]",
+      "pass": false
+    },
+    {
+      "name": "supersede-step2: op is supersede citing the newer entry",
+      "expected": "\"supersede [D1] citing u2\"",
+      "actual": "\"add undefined citing undefined\"",
+      "pass": false
+    },
+    {
+      "name": "supersede-step2: reducer rejected nothing",
+      "expected": "[]",
+      "actual": "[]",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2: old decision superseded",
+      "expected": "\"superseded\"",
+      "actual": "\"active\"",
+      "pass": false
+    },
+    {
+      "name": "supersede-step2: heir active with user authority",
+      "expected": "\"active/user\"",
+      "actual": "\"active/user\"",
+      "pass": true
+    },
+    {
+      "name": "supersede-step2: old links to heir",
+      "expected": "\"D2\"",
+      "pass": false
+    },
+    {
+      "name": "[reducer] seed applied",
+      "expected": "3",
+      "actual": "3",
+      "pass": true
+    },
+    {
+      "name": "[reducer] user-origin rule is protected",
+      "expected": "true",
+      "actual": "true",
+      "pass": true
+    },
+    {
+      "name": "[reducer] agent archive of user rule rejected",
+      "expected": "\"protected_item\"",
+      "actual": "\"protected_item\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] classifier rewrite of user rule rejected",
+      "expected": "\"protected_item\"",
+      "actual": "\"protected_item\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] agent supersede of protected decision rejected",
+      "expected": "\"invalid_citation\"",
+      "actual": "\"invalid_citation\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] user supersede citing newer entry applied",
+      "expected": "\"superseded\"",
+      "actual": "\"superseded\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] heir keeps user authority",
+      "expected": "\"user\"",
+      "actual": "\"user\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] superseded decision archived by link",
+      "expected": "\"D4\"",
+      "actual": "\"D4\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] pin applied",
+      "expected": "\"pinned\"",
+      "actual": "\"pinned\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] fold leaves pinned steering active",
+      "expected": "\"active\"",
+      "actual": "\"active\"",
+      "pass": true
+    },
+    {
+      "name": "[reducer] fold archives unpinned steering",
+      "expected": "\"archived\"",
+      "actual": "\"archived\"",
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 61,
+    "passed": 55,
+    "failed": 6
+  }
+}

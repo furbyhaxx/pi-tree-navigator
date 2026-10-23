@@ -1,0 +1,42 @@
+(node:187763) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/live-analyzer.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ recognizes text-only summary evidence for Responses, Anthropic and Google (97.49935ms)
+✔ fails when request capture cannot establish a text-only request for every fold (61.563846ms)
+✖ requires matching wire evidence within each fold interval, not aggregate retries (32.059631ms)
+✔ does not correlate a later or aborted same-label request with a completed fold (70.812955ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 336.712155
+
+✖ failing tests:
+
+test at extensions/navigate-tree/live-analyzer.test.ts:150:1
+✖ requires matching wire evidence within each fold interval, not aggregate retries (32.059631ms)
+  AssertionError [ERR_ASSERTION]: {"agent":"agent-1","folds":4,"submitted":true,"peak":1100,"minCacheRatio":1,"minReduction":0.9090909090909091,"failures":[]}
+  {"agents":1,"folds":4,"inputTokensCumulative":null,"peakInputTokens":1100,"cacheReadTokens":null,"outputTokens":null,"passed":true}
+  
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/live-analyzer.test.ts:152:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

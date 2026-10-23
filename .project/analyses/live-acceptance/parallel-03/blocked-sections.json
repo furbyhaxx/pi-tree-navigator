@@ -1,0 +1,122 @@
+[
+  {
+    "agent": "agent-1",
+    "id": "f3754224",
+    "blocked": "- No blockers established.\n"
+  },
+  {
+    "agent": "agent-1",
+    "id": "217672af",
+    "blocked": "- No blockers established.\n"
+  },
+  {
+    "agent": "agent-1",
+    "id": "552ce3c0",
+    "blocked": "- No blockers established.\n"
+  },
+  {
+    "agent": "agent-1",
+    "id": "5884b311",
+    "blocked": "- No blockers established.\n\n### Key Decisions\n- Treat token and context accounting as estimates unless source evidence establishes otherwise.\n"
+  },
+  {
+    "agent": "agent-2",
+    "id": "2610d0e9",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-2",
+    "id": "22e82b2f",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-2",
+    "id": "d4d9a740",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-2",
+    "id": "d6a39692",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-3",
+    "id": "015b3298",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-3",
+    "id": "387c5798",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-3",
+    "id": "6aa0c507",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-3",
+    "id": "1f280199",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-4",
+    "id": "9bca79c4",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-4",
+    "id": "8127da27",
+    "blocked": "- No established blockers.\n\n### Key Decisions\n- Separate verified source behavior from potential navigation or cancellation defects.\n"
+  },
+  {
+    "agent": "agent-4",
+    "id": "5f722c9b",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-4",
+    "id": "7b17bb96",
+    "blocked": "- No established blockers.\n"
+  },
+  {
+    "agent": "agent-5",
+    "id": "9cfdeb06",
+    "blocked": "- No blockers established in the reviewed material.\n"
+  },
+  {
+    "agent": "agent-5",
+    "id": "05cca205",
+    "blocked": "- No blockers established in the reviewed material.\n"
+  },
+  {
+    "agent": "agent-5",
+    "id": "d8175193",
+    "blocked": "- No blockers established.\n"
+  },
+  {
+    "agent": "agent-5",
+    "id": "9cd224a8",
+    "blocked": "- No blockers established in the reviewed material.\n"
+  },
+  {
+    "agent": "agent-6",
+    "id": "ab0e0ca5",
+    "blocked": "- None established.\n"
+  },
+  {
+    "agent": "agent-6",
+    "id": "aa237c06",
+    "blocked": "- None established.\n"
+  },
+  {
+    "agent": "agent-6",
+    "id": "cb66915c",
+    "blocked": "- None established.\n"
+  },
+  {
+    "agent": "agent-6",
+    "id": "f727d5c0",
+    "blocked": "- None established.\n"
+  }
+]

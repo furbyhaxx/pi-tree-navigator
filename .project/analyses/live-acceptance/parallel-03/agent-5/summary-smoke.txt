@@ -1,0 +1,200 @@
+summary turn usage {"input":1291,"cacheRead":117376,"cacheWrite":0,"output":766}
+continuation {"status":"done","rewindTo":"reviewed-three","newLabel":"reviewed-four","targetId":"d8175193","summaryId":"9cd224a8","collapsedEntries":13,"contextBefore":117446,"contextAfter":5049,"contextWindow":372000,"summaryAttempts":1,"foldEstimateBefore":118880,"foldEstimateAfter":5655,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":5,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary 9cfdeb06: work handoff metadata valid (mode full)
+ok    branch_summary 9cfdeb06: own report 1902 chars (cap 4500)
+info  branch_summary 9cfdeb06: total handoff 2748 chars = header+own report 1932 + child handoffs 0 + continuity ledger 816 (no cap on the total)
+ok    branch_summary 05cca205: work handoff metadata valid (mode full)
+ok    branch_summary 05cca205: own report 1630 chars (cap 4500)
+info  branch_summary 05cca205: total handoff 2980 chars = header+own report 1660 + child handoffs 0 + continuity ledger 1320 (no cap on the total)
+ok    branch_summary d8175193: work handoff metadata valid (mode full)
+ok    branch_summary d8175193: own report 2484 chars (cap 4500)
+info  branch_summary d8175193: total handoff 4340 chars = header+own report 2516 + child handoffs 0 + continuity ledger 1824 (no cap on the total)
+ok    branch_summary 9cd224a8: work handoff metadata valid (mode full)
+ok    branch_summary 9cd224a8: own report 2590 chars (cap 4500)
+info  branch_summary 9cd224a8: total handoff 4949 chars = header+own report 2621 + child handoffs 0 + continuity ledger 2328 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions through the lens of configuration and disclosure, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as completion of the task.
+- Review actual source, cite paths and symbols, distinguish verified facts from likely defects, and preserve hashes and observations across folds.
+- Work autonomously until all four partitions and folds are complete and the report is accepted.
+
+## Progress
+### Done
+- [x] Reviewed partition 1: `README.md`, configuration and proposal-related source/tests, among other files.
+- [x] Recorded SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Observed that `README.md` and `config.test.ts` describe layered settings, distinct invalid-value behavior, and ignoring untrusted project configuration.
+- [x] Observed in `proposal-source.test.ts` that `omit` removes tool calls/results and linked context replacements, while `calls-only` retains arguments but omits results/details.
+
+### In Progress
+- [ ] Review partitions 2–4 and complete the remaining folds.
+
+### Blocked
+- No blockers established in the reviewed material.
+
+## Key Decisions
+- **Treat configuration and disclosure as the review lens**: the requested scope is all four source partitions, not just configuration parsing.
+- **Do not infer defects from test coverage alone**: partition 1 yielded verified behavior observations; no likely defect was identified from that excerpt.
+
+## Next Steps
+1. Review partition 2’s supplied source, record its exact SHA-256 and at least two concrete observations, then list anchors and fold to `reviewed-two`.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 2]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. README configuration documents runtime > trusted project > global precedence; invalid hint values block fallback, while other field invalids fall through. Config.test.ts tests those distinct semantics and untrusted project non-read. Verified disclosure behavior in proposal-source.test.ts: omit strips tool calls/results and linked context replacements; calls-only retains arguments but strips results/…[truncated]
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for configuration and disclosure concerns, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+- Cite paths and symbols; distinguish verified facts from likely defects.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Reviewed partition 2. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`.
+- [x] In partition 2, verified `auto-navigate-config.ts` strictly validates fields and ranges and merges tool disclosure policy per tool. `proposal-command.ts` confirms that model proposals send full textual history across branches, identifies tool rules and charges, and notes binary omission; the broad history disclosure is a potential risk.
+
+### In Progress
+- [ ] Review partitions 3–4, fold each review, and submit the report.
+
+### Blocked
+- No blockers established in the reviewed material.
+
+## Key Decisions
+- **Review disclosure as well as configuration**: proposal history transmission is in scope alongside config parsing.
+- **Distinguish facts from risks**: partition 2’s full-history transmission is verified; its breadth is a potential disclosure concern.
+
+## Next Steps
+1. Review partition 3’s supplied source and record its hash and concrete findings.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 3]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. README configuration documents runtime > trusted project > global precedence; invalid hint values block fallback, while other field invalids fall through. Config.test.ts tests those distinct semantics and untrusted project non-read. Verified disclosure behavior in proposal-source.test.ts: omit strips tool calls/results and linked context replacements; calls-only retains arguments but strips results/…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: auto-navigate parser strictly rejects unknown fields, constrains numeric ranges and merges tool disclosure modes per tool (auto-navigate-config.ts parseAutoNavigatePartial/mergeAutoNavigatePartial/materializeAutoNavigateConfig). Verified: retrospective model proposal explicitly treats transcript as untrusted and proposal-command.ts confirms full textual history across branches, tool rules,…[truncated]
+--- end ---
+# Work handoff: reviewed three
+
+## Goal
+Review all four source partitions through the lens of configuration and disclosure, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+- Cite paths and symbols; distinguish verified facts from likely defects.
+- Work autonomously through all four reviews and folds, then submit the report.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. Findings: `README.md` and `config.test.ts` describe configuration precedence and differing invalid-value behavior; `proposal-source.test.ts` documents disclosure modes for tool calls/results and linked context replacements.
+- [x] Reviewed partition 2. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. Findings: `auto-navigate-config.ts` validates fields and ranges and merges disclosure policy per tool. `proposal-command.ts` confirms full textual history across branches is sent for model proposals, a potential disclosure risk.
+- [x] Reviewed partition 3. SHA-256: `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`. Findings: `docs/retrospective-cloning.md` and `proposal-source.ts` describe full textual history by default and structured tool filtering; copied sensitive text in prose or historical summaries remains a disclosure risk. `continuity-briefing.ts` `renderBriefing` preserves objectives/goals/rules/decisions even when over budget, while dropping facts/files/steering with an omission note.
+- [x] Folded partition 3 to `reviewed-three`.
+
+### In Progress
+- [ ] Review partition 4, fold it, and submit the report.
+
+### Blocked
+- No blockers established.
+
+## Key Decisions
+- **Review configuration and disclosure together**: the full four-partition scope includes both settings behavior and history sent to models.
+- **Separate facts from risks**: verified source behavior is reported as fact; broader disclosure is described as a potential concern.
+
+## Next Steps
+1. Review partition 4’s supplied source, preserve its exact hash and at least two concrete observations, then fold to `reviewed-four`.
+2. Call `submit_report` with all four ordered partition entries and exact hashes.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 4]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. README configuration documents runtime > trusted project > global precedence; invalid hint values block fallback, while other field invalids fall through. Config.test.ts tests those distinct semantics and untrusted project non-read. Verified disclosure behavior in proposal-source.test.ts: omit strips tool calls/results and linked context replacements; calls-only retains arguments but strips results/…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: auto-navigate parser strictly rejects unknown fields, constrains numeric ranges and merges tool disclosure modes per tool (auto-navigate-config.ts parseAutoNavigatePartial/mergeAutoNavigatePartial/materializeAutoNavigateConfig). Verified: retrospective model proposal explicitly treats transcript as untrusted and proposal-command.ts confirms full textual history across branches, tool rules,…[truncated]
+F4 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified docs/proposal-source: full textual history default; exact tool exclusions operate on structured records, not quoted prose/history, with warning; invalid disclosure blocks requests per docs. Likely disclosure risk: tools omitted but sensitive copies in prose remain. continuity-briefing renderBriefing never drops objective/goals/rules/decisions, may return overBudget; facts/files/steering dropped with…[truncated]
+--- end ---
+# Work handoff: reviewed four
+
+## Goal
+Review all four source partitions for configuration and disclosure concerns and submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+- Cite paths and symbols, distinguish verified facts from likely defects, and preserve hashes and observations across folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `README.md` and `config.test.ts` describe configuration precedence and different invalid-value behavior; `proposal-source.test.ts` documents tool disclosure modes.
+- [x] Reviewed partition 2. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `auto-navigate-config.ts` validates fields and ranges and merges per-tool disclosure policies; `proposal-command.ts` confirms full textual history across branches is sent for proposals, a potential disclosure risk.
+- [x] Reviewed partition 3. SHA-256: `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`. `proposal-source.ts` and `docs/retrospective-cloning.md` describe full textual history by default and structured tool filtering; sensitive text in prose may remain. `continuity-briefing.ts` preserves objectives, goals, rules, and decisions even when over budget.
+- [x] Reviewed partition 4. SHA-256: `22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322`. `config.ts` parses trusted layered configuration and strictly validates proposal disclosure; `index.ts` `continuityRequestSection` includes folded-span user references in summary requests, a possible sensitivity risk. `continuity-ledger.ts` `parseLedger` and `parseDelta` validate schemas and lineage; `retrospective.ts` binds previews to source hashes and rechecks source bytes before publishing.
+- [x] Folded partition 4 to `reviewed-four`.
+
+### In Progress
+- [ ] Submit the four ordered findings with exact hashes.
+
+### Blocked
+- No blockers established in the reviewed material.
+
+## Key Decisions
+- **Review configuration and disclosure together**: the requested scope covers both settings behavior and information sent to models.
+- **Separate facts from risks**: report verified source behavior as fact and broader exposure as potential concern.
+
+## Next Steps
+1. Submit the four partition hashes and preserved findings.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 5]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. README configuration documents runtime > trusted project > global precedence; invalid hint values block fallback, while other field invalids fall through. Config.test.ts tests those distinct semantics and untrusted project non-read. Verified disclosure behavior in proposal-source.test.ts: omit strips tool calls/results and linked context replacements; calls-only retains arguments but strips results/…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: auto-navigate parser strictly rejects unknown fields, constrains numeric ranges and merges tool disclosure modes per tool (auto-navigate-config.ts parseAutoNavigatePartial/mergeAutoNavigatePartial/materializeAutoNavigateConfig). Verified: retrospective model proposal explicitly treats transcript as untrusted and proposal-command.ts confirms full textual history across branches, tool rules,…[truncated]
+F4 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified docs/proposal-source: full textual history default; exact tool exclusions operate on structured records, not quoted prose/history, with warning; invalid disclosure blocks requests per docs. Likely disclosure risk: tools omitted but sensitive copies in prose remain. continuity-briefing renderBriefing never drops objective/goals/rules/decisions, may return overBudget; facts/files/steering dropped with…[truncated]
+F5 Partition 4 SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322. Verified config.ts parses per-layer config, project trust loader and per-field merge; proposal invalid config blocks proposals, tool disclosure modes strict. Likely risk: continuity capture stores user words verbatim (architecture; index continuityRequestSection/renderFoldCaptureSection) and summary request transmits folded user span, sensitive content may propagate. Verified continuity-ledger parse…[truncated]
+--- end ---
+(node:190474) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

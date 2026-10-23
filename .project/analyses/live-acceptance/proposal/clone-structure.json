@@ -1,0 +1,76 @@
+{
+ "header": {
+  "type": "session",
+  "version": 3,
+  "id": "f0d5bb09-f2f8-49ab-a14b-8cc0d00750f5",
+  "timestamp": "2026-10-23T09:14:19.523Z",
+  "cwd": "/tmp/navigator-live-VaePiv/agent-2/workspace"
+ },
+ "entries": 149,
+ "types": {
+  "custom": 17,
+  "model_change": 1,
+  "thinking_level_change": 1,
+  "message": 86,
+  "label": 16,
+  "custom_message": 7,
+  "context_edit": 14,
+  "branch_summary": 6,
+  "session_info": 1
+ },
+ "newEntries": 21,
+ "newTypes": {
+  "custom": 9,
+  "branch_summary": 3,
+  "label": 8,
+  "session_info": 1
+ },
+ "newBranchSummaries": [
+  {
+   "id": "553f526c-fa2f-43c5-bc79-a82f3c0bc4b9",
+   "group": "partition-one-review",
+   "fromId": "0e783bbb-7880-48f7-a9e6-1b2f03317c54",
+   "handoffBytes": 137,
+   "label": "partition-one-review"
+  },
+  {
+   "id": "85e2673f-1ab5-4c8e-9930-7ede4b6dc5a0",
+   "group": "partition-two-review",
+   "fromId": "b89b8b44-edfb-4635-b035-5cd26cecfc86",
+   "handoffBytes": 124,
+   "label": "partition-two-review"
+  },
+  {
+   "id": "4bea014c-dbd0-4116-9bbb-23215a64844e",
+   "group": "partition-three-review",
+   "fromId": "bad086f7-3e15-444d-ac1b-115a5df5c1e7",
+   "handoffBytes": 134,
+   "label": "partition-three-review"
+  }
+ ],
+ "labels": [
+  "anchor:context-gathered",
+  "anchor:start",
+  "branch:reviewed-one",
+  "anchor:reviewed-one",
+  "branch:reviewed-two",
+  "anchor:reviewed-two",
+  "branch:fold-three",
+  "anchor:fold-three",
+  "branch:partition-one-review",
+  "anchor:partition-one-review",
+  "branch:partition-two-review",
+  "anchor:partition-two-review",
+  "branch:partition-three-review",
+  "anchor:partition-three-review",
+  "anchor:partition-four-and-report",
+  "anchor:source-review"
+ ],
+ "provenance": {
+  "version": 1,
+  "sourceSessionId": "01a167f9-a2f0-7612-b26a-071008d88c15",
+  "sourceSha256": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4"
+ },
+ "provenancePlanGroupCount": 1,
+ "activeLeafLast": "session_info"
+}

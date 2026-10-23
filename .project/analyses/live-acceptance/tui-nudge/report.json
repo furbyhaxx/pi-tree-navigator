@@ -1,0 +1,10 @@
+{
+  "valid": true,
+  "report": {
+    "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+    "findings": [
+      "In `extensions/navigate-tree/retrospective-plan.ts`, `readSessionSnapshot` clears `ids` before its second validation loop, then checks label targets and `branch_summary` `fromId` values against `ids`. Consequently, those references are rejected unless already encountered in that second loop, making acceptance dependent on record order.",
+      "In `frame.ts`, `sanitizeTerminalText` strips terminal escape sequences and control characters before text is rendered (and searched), preventing those characters from being passed through as ordinary terminal text."
+    ]
+  }
+}

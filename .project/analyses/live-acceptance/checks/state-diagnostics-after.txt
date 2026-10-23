@@ -1,0 +1,30 @@
+(node:181810) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/index.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ dispatch: rewind newLabel uniqueness
+  ✔ newLabel collision: rewind refuses before the summary request and mutates nothing (4.083742ms)
+  ✔ identifies an already stored handoff without scheduling a redundant fold (0.784168ms)
+  ✔ newLabel collision refusal copy is byte-exact (0.368866ms)
+✔ dispatch: rewind newLabel uniqueness (6.218744ms)
+(node:181816) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/summary-prompt.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ buildSummaryInstruction
+  ✔ appends the standing-authorization section after r5d, then the focus like upstream's customInstructions shape, {first} substituted (0.47223ms)
+  ✔ keeps the r5d body byte-identical and the authorization block outside it (0.160215ms)
+  ✔ substitutes every {first} occurrence (replaceAll, not replace) (0.261227ms)
+  ✔ numbers from 1 when every visible message is collapsed evidence (0.142861ms)
+  ✔ ends with the focus as the last paragraph, verbatim (0.112033ms)
+  ✔ allows relevance-focused parent synthesis to grow beyond the leaf report limit (0.160974ms)
+  ✔ leaves a literal {first} inside the focus verbatim (0.088645ms)
+✔ buildSummaryInstruction (2.474923ms)
+ℹ tests 10
+ℹ suites 2
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 554.55167

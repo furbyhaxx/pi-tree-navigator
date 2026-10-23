@@ -1,0 +1,42 @@
+
+ ### Blocked                    
+
+ - None established.            
+
+ Key Decisions                  
+
+ - Treat source as evidence: review observations are limited to what the supplied source demonstrates; no tests were run or       
+   results invented.            
+
+ Next Steps                     
+
+ 1. Call finish_review with SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e and the two pinned findings. 
+
+ Standing authorization         
+
+ “Rule: never change files or invent test results. Work autonomously until the review, one fold and finish_review are complete.”  
+ This scope is not complete; finish_review remains.              
+
+                                                                                                                                  
+ [navigate-tree-rewind]                                                                                                           
+                                                                                                                                  
+ [rewind to 'context-gathered' · collapsed as 'review-complete'] · context 30.5% → 0.5% of 372k                                   
+                                                                                                                                  
+ A branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state;    
+ earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### 
+ In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without          
+ re-confirming with the user.                                                                                                     
+                                                                                                                                  
+ A branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction      
+ retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the      
+ authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up   
+ while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized     
+ scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still   
+ apply.                                                                                                                           
+                                                                                                                                  
+
+── ⠼ Working ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-u9nzXq/workspace
+↑118k ↓967 R564k CH98.7% $0.018 (sub) 0.5%/372k                                                          (openai) gpt-6-luna • low

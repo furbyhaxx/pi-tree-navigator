@@ -1,0 +1,219 @@
+summary turn usage {"input":79,"cacheRead":119552,"cacheWrite":0,"output":724}
+continuation {"status":"done","rewindTo":"reviewed-three","newLabel":"reviewed-four","targetId":"cb66915c","summaryId":"f727d5c0","collapsedEntries":20,"contextBefore":118064,"contextAfter":6012,"contextWindow":372000,"summaryAttempts":2,"foldEstimateBefore":119684,"foldEstimateAfter":6617,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":10,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary ab0e0ca5: work handoff metadata valid (mode full)
+ok    branch_summary ab0e0ca5: own report 2158 chars (cap 4500)
+info  branch_summary ab0e0ca5: total handoff 3537 chars = header+own report 2188 + child handoffs 0 + continuity ledger 1349 (no cap on the total)
+ok    branch_summary aa237c06: work handoff metadata valid (mode full)
+ok    branch_summary aa237c06: own report 2244 chars (cap 4500)
+info  branch_summary aa237c06: total handoff 4350 chars = header+own report 2274 + child handoffs 0 + continuity ledger 2076 (no cap on the total)
+ok    branch_summary cb66915c: work handoff metadata valid (mode full)
+ok    branch_summary cb66915c: own report 2480 chars (cap 4500)
+info  branch_summary cb66915c: total handoff 5092 chars = header+own report 2512 + child handoffs 0 + continuity ledger 2580 (no cap on the total)
+ok    branch_summary f727d5c0: work handoff metadata valid (mode full)
+ok    branch_summary f727d5c0: own report 2472 chars (cap 4500)
+info  branch_summary f727d5c0: total handoff 5887 chars = header+own report 2503 + child handoffs 0 + continuity ledger 3384 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions for recovery and continuation behavior, then submit source-grounded findings with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Review actual supplied source; cite paths and symbols and distinguish facts from potential defects.
+- Preserve hashes and findings across folds; do not reread earlier partitions.
+- Work autonomously through all four partitions and submit the report.
+
+## Progress
+### Done
+- [x] Anchored `context-gathered` and reviewed partition 1.
+- [x] Recorded partition 1 hash: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Reviewed `retrospective-plan.ts` `readSessionSnapshot`: hashes source bytes, validates graph ancestry, computes safe cuts and outstanding tool calls; `validateCompleteToolCalls` blocks incomplete batches.
+- [x] Reviewed `index.ts` `completeRewind`: checks projected savings and request headroom, reconciles continuity, and attempts leaf/label rollback after write failure. Potential defect: rollback is best-effort; if restoring the leaf throws, the failure notice may coexist with a moved leaf.
+- [x] Confirmed continuity snapshots replay branch-locally; corrupt snapshots warn while preserving the prior ledger. `current-screen.ts` `createUserOpsWriter` refuses writes while busy or when capture is off.
+
+### In Progress
+- [ ] Review partitions 2–4.
+
+### Blocked
+- None established.
+
+## Key Decisions
+- **Treat rollback risk as a potential defect, not a verified failure**: source shows restoration errors are swallowed, but no runtime failure was established.
+- **Keep partition 1 findings and hash for the final report**: earlier partitions must not be reread.
+
+## Next Steps
+1. Load and review partition 2, record its exact hash and at least two concrete source-grounded observations, pin the findings, list anchors, and fold to `reviewed-two`.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of recovery and continuation and submit a source-grounded report with exact partition hashes.” The scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 5]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: retrospective-plan.ts readSessionSnapshot hashes original bytes, validates parent-before-child graph structure, computes safe cuts and pending tool calls; validateCompleteToolCalls refuses unfinished source batches before conversion/model work.
+F4 P1 verified: index.ts completeRewind reconciles continuity, estimates prospective folded projection and requires it reduce context plus fit output/headroom before branchWithSummary; catch path attempts restore leaf and remove completion label. Potential residual: restoration is best-effort, swallowed if branch() fails, so failure notification may coexist with moved leaf.
+F5 P1 verified: continuity-store tests establish ledger branch-local replay, summary snapshots replacing prior ledger, corrupt snapshots warning while preserving previous ledger, and pre-fold branch retains its own ledger. current-screen.ts createUserOpsWriter refuses writes unless idle and capture enabled.
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for recovery and continuation, then submit source-grounded findings with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Review supplied source, cite paths and symbols, and distinguish verified facts from potential defects.
+- Preserve hashes and findings across folds; do not reread earlier partitions.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. `retrospective-plan.ts` `readSessionSnapshot` hashes and validates the session graph and tool calls. `index.ts` `completeRewind` checks projected savings and headroom, then attempts leaf/label rollback on write failure. Potential defect: rollback is best-effort if restoring the leaf throws. Continuity replay is branch-local; corrupt snapshots preserve the prior ledger. `current-screen.ts` `createUserOpsWriter` gates writes on idle state and capture.
+- [x] Reviewed partition 2; SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. In `index.ts`, `buildContextMessages` uses the edited session projection, invalidates stale usage, freezes pending summary context at the instruction, and surfaces failed rewind outcomes as tool errors. Potential risk: its fallback raw projection may not preserve context-edit behavior. `continuity-ledger.ts` `rewindLedger` preserves revision and ID high-water marks. Proposal flow rechecks the source hash, validates tool-call batches, and writes plans exclusively with mode `0600`.
+
+### In Progress
+- [ ] Review partitions 3 and 4, then submit the complete report.
+
+### Blocked
+- None established.
+
+## Key Decisions
+- Treat the best-effort rollback and raw-projection fallback observations as potential risks, not verified failures.
+- Preserve partition 1 and 2 hashes and findings for the final report; do not reread those partitions.
+
+## Next Steps
+1. Load and review partition 3, record its exact hash and source-grounded findings, pin them, list anchors, and fold to `reviewed-three`.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of recovery and continuation and submit a source-grounded report with exact partition hashes.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 7]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: retrospective-plan.ts readSessionSnapshot hashes original bytes, validates parent-before-child graph structure, computes safe cuts and pending tool calls; validateCompleteToolCalls refuses unfinished source batches before conversion/model work.
+F4 P1 verified: index.ts completeRewind reconciles continuity, estimates prospective folded projection and requires it reduce context plus fit output/headroom before branchWithSummary; catch path attempts restore leaf and remove completion label. Potential residual: restoration is best-effort, swallowed if branch() fails, so failure notification may coexist with moved leaf.
+F5 P1 verified: continuity-store tests establish ledger branch-local replay, summary snapshots replacing prior ledger, corrupt snapshots warning while preserving previous ledger, and pre-fold branch retains its own ledger. current-screen.ts createUserOpsWriter refuses writes unless idle and capture enabled.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified index.ts buildContextMessages uses buildSessionProjection edited view, invalidates stale usage, truncates frozen summary-request context at instruction, maps failed rewind outcomes into tool-result errors. Potential risk: fallback raw projection after projection failure may lose context_edit treatment; defensive fallback stated in source.
+F7 P2 verified auto-navigate config strictly parses bounds and merges partial model overrides; continuity-ledger rewindLedger preserves max revision/ID counter across rewind. Proposal flow hashes source and rechecks before exclusive 0600 plan write; proposals validate complete tool-call batches.
+--- end ---
+# Work handoff: reviewed three
+
+## Goal
+Review all four source partitions through the lens of recovery and continuation, then submit a source-grounded report with exact partition hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+- Review actual supplied source and cite paths and symbols; distinguish verified facts from potential defects.
+- Preserve hashes and findings across folds; do not reread earlier partitions.
+- Work autonomously until all four partitions are reviewed and the report is submitted.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. `retrospective-plan.ts` `readSessionSnapshot` hashes and validates the session graph and tool calls. `index.ts` `completeRewind` checks savings and headroom, then attempts rollback on write failure; rollback is best-effort if restoring the leaf throws. Continuity replay is branch-local, and `current-screen.ts` `createUserOpsWriter` gates writes.
+- [x] Reviewed partition 2; SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `index.ts` `buildContextMessages` uses the edited projection, invalidates stale usage, freezes summary context, and reports failed rewinds. Potential risk: raw-projection fallback may lose context-edit behavior. `rewindLedger` preserves counters; proposals hash/recheck the source and use exclusive `0600` writes.
+- [x] Reviewed partition 3; SHA-256: `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`. `index.ts` `rewindStaleReason` detects compaction after a rewind call, and `planEnding` filters context edits to active-branch entries. Potential risk: bounded evidence in `auto-navigate.ts` may omit older anchors and decline rewind.
+
+### In Progress
+- [ ] Review partition 4, then submit the complete report.
+
+### Blocked
+- None established.
+
+## Key Decisions
+- Treat rollback and raw-projection fallback concerns as potential risks, not verified failures.
+- Preserve the recorded hashes and observations; do not reread earlier partitions.
+
+## Next Steps
+1. Review partition 4, record its exact hash and at least two concrete source-grounded observations, pin the findings, list anchors, and fold to `reviewed-four`.
+2. Submit the four ordered partition entries with hashes and findings.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of recovery and continuation and submit a source-grounded report with exact partition hashes.” The scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 8]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: retrospective-plan.ts readSessionSnapshot hashes original bytes, validates parent-before-child graph structure, computes safe cuts and pending tool calls; validateCompleteToolCalls refuses unfinished source batches before conversion/model work.
+F4 P1 verified: index.ts completeRewind reconciles continuity, estimates prospective folded projection and requires it reduce context plus fit output/headroom before branchWithSummary; catch path attempts restore leaf and remove completion label. Potential residual: restoration is best-effort, swallowed if branch() fails, so failure notification may coexist with moved leaf.
+F5 P1 verified: continuity-store tests establish ledger branch-local replay, summary snapshots replacing prior ledger, corrupt snapshots warning while preserving previous ledger, and pre-fold branch retains its own ledger. current-screen.ts createUserOpsWriter refuses writes unless idle and capture enabled.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified index.ts buildContextMessages uses buildSessionProjection edited view, invalidates stale usage, truncates frozen summary-request context at instruction, maps failed rewind outcomes into tool-result errors. Potential risk: fallback raw projection after projection failure may lose context_edit treatment; defensive fallback stated in source.
+F7 P2 verified auto-navigate config strictly parses bounds and merges partial model overrides; continuity-ledger rewindLedger preserves max revision/ID counter across rewind. Proposal flow hashes source and rechecks before exclusive 0600 plan write; proposals validate complete tool-call batches.
+F8 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified extensions/navigate-tree/index.ts rewindStaleReason detects compaction after rewind-call and planEnding filters context edits to active-branch IDs, avoiding invalid whole-boundary drafts; pending rewinds freeze instruction context and hide failed attempts. Potential risk in auto-navigate.ts evaluateAutoNavigateTurn: when budget only fits tail records, it may exclude older anchors and thereby decline…[truncated]
+--- end ---
+# Work handoff: reviewed four
+
+## Goal
+Review all four source partitions for recovery and continuation, then submit source-grounded findings with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Cite paths and symbols; distinguish verified facts from potential defects.
+- Preserve earlier findings and hashes without rereading prior partitions.
+
+## Progress
+### Done
+- [x] Reviewed partitions 1–4.
+- [x] P1 (`4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`): `retrospective-plan.ts` `readSessionSnapshot` validates graph structure and tool batches. `index.ts` `completeRewind` attempts rollback after write failure; rollback is best-effort if restoring the leaf throws (potential residual).
+- [x] P2 (`42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`): `index.ts` `buildContextMessages` uses the edited projection and freezes summary context; its raw-projection fallback may lose context-edit behavior (potential risk). `continuity-ledger.ts` `rewindLedger` retains revision and ID counters; proposal flow rechecks source hashes and uses exclusive private writes.
+- [x] P3 (`1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`): `index.ts` `rewindStaleReason` detects compaction and `planEnding` filters context edits to active-branch entries. `auto-navigate.ts` bounded evidence may omit older anchors and decline rewind (potential risk).
+- [x] P4 (`22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322`): `index.ts` `planWithhold` reprojects candidate edits and applies none if recovery remains infeasible. `retrospective.ts` `cloneRetrospectiveSession` stages files with mode `0600`, validates the clone, rechecks source and family hashes, and attempts rollback; temporary-file cleanup failures are warnings.
+
+### In Progress
+- [ ] Submit the complete four-partition report.
+
+### Blocked
+- None established.
+
+## Key Decisions
+- Treat rollback, raw-projection fallback, and bounded auto-navigation evidence as potential risks, not verified failures.
+- Preserve all four hashes and findings for submission; do not reread earlier partitions.
+
+## Next Steps
+1. Submit the four ordered partition entries with exact hashes and source-grounded findings.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of recovery and continuation and submit a source-grounded report with exact partition hashes.” Scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 10]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: retrospective-plan.ts readSessionSnapshot hashes original bytes, validates parent-before-child graph structure, computes safe cuts and pending tool calls; validateCompleteToolCalls refuses unfinished source batches before conversion/model work.
+F4 P1 verified: index.ts completeRewind reconciles continuity, estimates prospective folded projection and requires it reduce context plus fit output/headroom before branchWithSummary; catch path attempts restore leaf and remove completion label. Potential residual: restoration is best-effort, swallowed if branch() fails, so failure notification may coexist with moved leaf.
+F5 P1 verified: continuity-store tests establish ledger branch-local replay, summary snapshots replacing prior ledger, corrupt snapshots warning while preserving previous ledger, and pre-fold branch retains its own ledger. current-screen.ts createUserOpsWriter refuses writes unless idle and capture enabled.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified index.ts buildContextMessages uses buildSessionProjection edited view, invalidates stale usage, truncates frozen summary-request context at instruction, maps failed rewind outcomes into tool-result errors. Potential risk: fallback raw projection after projection failure may lose context_edit treatment; defensive fallback stated in source.
+F7 P2 verified auto-navigate config strictly parses bounds and merges partial model overrides; continuity-ledger rewindLedger preserves max revision/ID counter across rewind. Proposal flow hashes source and rechecks before exclusive 0600 plan write; proposals validate complete tool-call batches.
+F8 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified extensions/navigate-tree/index.ts rewindStaleReason detects compaction after rewind-call and planEnding filters context edits to active-branch IDs, avoiding invalid whole-boundary drafts; pending rewinds freeze instruction context and hide failed attempts. Potential risk in auto-navigate.ts evaluateAutoNavigateTurn: when budget only fits tail records, it may exclude older anchors and thereby decline…[truncated]
+F9 P4 SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322. Verified docs/architecture.md states folds preserve abandoned branches and fail-open continuity, while extensions/navigate-tree/index.ts planWithhold reprojects proposed context edits and returns no edits if recovery cannot fit. Potential concern: planWithhold preview editing uses random IDs/timestamps, but no defect established.
+F10 P4 verified extensions/navigate-tree/retrospective.ts cloneRetrospectiveSession stages files exclusively with mode 0600, reload-validates clone context, rechecks source/descendant hashes and family before hard-link publication; rollback attempts unlink published outputs and reports incomplete rollback. Potential residual: temp cleanup failures are warnings, leaving staged temp files.
+--- end ---
+(node:190481) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

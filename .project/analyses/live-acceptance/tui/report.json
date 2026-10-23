@@ -1,0 +1,10 @@
+{
+  "valid": true,
+  "report": {
+    "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+    "findings": [
+      "In `extensions/navigate-tree/retrospective-plan.ts`, `readSessionSnapshot` validates JSONL records line by line but does not require the file to end with a newline. Thus a final valid record without a newline is accepted; continuity consumers should not assume a trailing newline is enforced.",
+      "In `extensions/navigate-tree/output-budget.ts`, `capRecoveryOutput` rejects numeric thinking budgets and non-boolean chat-template values, and refuses `max_output_tokens` caps below 16. These explicit guards constrain which recovery-output requests can proceed."
+    ]
+  }
+}

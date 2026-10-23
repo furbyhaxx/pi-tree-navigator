@@ -1,0 +1,42 @@
+ Potential issue instead: UTF-8 invalid bytes decode        
+ replacement yet SHA hashes original bytes intentionally.   
+ F4 Observation: extensions/navigate-tree/output-budget.ts  
+ capRecoveryOutput rejects requests with numeric thinking   
+ budgets and chat-template non-booleans, and limits         
+ max_output_tokens cap below 16; tests cover these guards.  
+ No defect determined.                                      
+                                                            
+
+                                                            
+ finish_review                                              
+   sha256:                                                  
+ 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d 
+ 6c851e                                                     
+   findings: [                                              
+       "In                                                  
+ `extensions/navigate-tree/retrospective-plan.ts`,          
+ `readSessionSnapshot` validates JSONL records line by line 
+ but does not require the file to end with a newline. Thus  
+ a final valid record without a newline is accepted;        
+ continuity consumers should not assume a trailing newline  
+ is enforced.",                                             
+       "In `extensions/navigate-tree/output-budget.ts`,     
+ `capRecoveryOutput` rejects numeric thinking budgets and   
+ non-boolean chat-template values, and refuses              
+ `max_output_tokens` caps below 16. These explicit guards   
+ constrain which recovery-output requests can proceed."     
+     ]                                                      
+ Accepted: live fold and post-fold work complete.           
+                                                            
+
+ Review complete. The supplied source hash and two          
+ source-grounded observations were submitted and accepted.  
+ No files were changed, and no test results are claimed.    
+
+ Tool output: expanded        
+
+────────────────────────────────────────────────────────────
+               
+────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-c6ku0nla/workspace
+↑122k ↓1.1k R566k CH0.0% $0.018 (sub) 0.6%/372k  gpt-6-luna 

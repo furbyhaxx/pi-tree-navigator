@@ -1,0 +1,424 @@
+{
+  "baseline": {
+    "originalSource": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/parallel-01/agent-2/2026-10-23T08-56-15-857Z_01a167f9-a2f0-7612-b26a-071008d88c15.jsonl",
+    "originalSha256": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4",
+    "originalBytes": 2060348,
+    "localSource": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/input/source-copy.jsonl",
+    "localSourceSha256": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4",
+    "localCopyMatchesOriginal": true,
+    "originalHeaderId": "01a167f9-a2f0-7612-b26a-071008d88c15",
+    "sessionName": "01a167f9-a2f0-7612-b26a-071008d88c15",
+    "entries": 128,
+    "safeCuts": 82,
+    "pendingToolCalls": 0,
+    "labels": [
+      "anchor:context-gathered",
+      "anchor:start",
+      "branch:reviewed-one",
+      "anchor:reviewed-one",
+      "branch:reviewed-two",
+      "anchor:reviewed-two",
+      "branch:fold-three",
+      "anchor:fold-three"
+    ],
+    "toolResults": {
+      "load_partition": 1892735,
+      "navigate_tree": 33634,
+      "submit_report": 1746
+    }
+  },
+  "runs": [
+    {
+      "tag": "attempt2-run-1-full",
+      "run": "full",
+      "elapsedMs": 27926,
+      "runner": "openai/gpt-6-luna:low",
+      "contextWindow": 372000,
+      "maxOutputTokens": 93000,
+      "modelRequests": 2,
+      "progress": [
+        "Tree proposal: openai/gpt-6-luna:low, call 1",
+        "Tree proposal: openai/gpt-6-luna:low, call 2"
+      ],
+      "proposal": {
+        "method": "heuristic",
+        "validatedMethod": "heuristic",
+        "calls": 2,
+        "usage": [
+          {
+            "input": 2871,
+            "output": 146,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 3017,
+            "cost": {
+              "input": 0.00028710000000000004,
+              "output": 0.000073,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.0003601
+            }
+          },
+          {
+            "input": 77838,
+            "output": 943,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 0,
+            "totalTokens": 78781,
+            "cost": {
+              "input": 0.0077838000000000004,
+              "output": 0.00047149999999999997,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.0082553
+            }
+          }
+        ],
+        "inputTokens": 80709,
+        "cacheReadTokens": 0,
+        "outputTokens": 1089,
+        "cost": 0.0086154,
+        "warnings": [
+          "7 non-text payloads or opaque signature fields omitted.",
+          "Model refinement failed (invalid JSON); using deterministic heuristic proposal."
+        ],
+        "modelWarnings": [
+          "7 non-text payloads or opaque signature fields omitted.",
+          "Model refinement failed (invalid JSON); using deterministic heuristic proposal."
+        ]
+      },
+      "plan": {
+        "path": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/plans/attempt2-run-1-full.json",
+        "source": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/input/source-copy.jsonl",
+        "sourceSha256": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4",
+        "nameSuffix": " (restructured)",
+        "parentHandoffMode": "full",
+        "groups": 13,
+        "folded": 0,
+        "open": 13,
+        "maxDepth": 2,
+        "names": [
+          "01a167f9-a2f0-7612-b26a-071008",
+          "goal-review-all-four-source-pa",
+          "work-handoff-reviewed-one",
+          "context-gathered-2",
+          "start-2",
+          "reviewed-one-2",
+          "work-handoff-reviewed-two",
+          "reviewed-one-3",
+          "reviewed-two-2",
+          "work-handoff-fold-three",
+          "reviewed-two-3",
+          "fold-three-2",
+          "fold-three-3"
+        ],
+        "summaries": [
+          {
+            "name": "01a167f9-a2f0-7612-b26a-071008",
+            "state": "open",
+            "firstEntryId": "b4f55861",
+            "lastEntryId": "4711e61d",
+            "title": "01a167f9-a2f0-7612-b26a-071008d88c15",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "goal-review-all-four-source-pa",
+            "state": "open",
+            "firstEntryId": "b0e1da71",
+            "lastEntryId": "c379b111",
+            "title": "Goal: review all four source partitions through the lens of continuity and user authority and submit",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "work-handoff-reviewed-one",
+            "state": "open",
+            "firstEntryId": "476e52f5",
+            "lastEntryId": "83eab807",
+            "title": "# Work handoff: reviewed one",
+            "summary": "# Work handoff: reviewed one\n\n## Goal\nReview all four source partitions for continuity and user authority, then submit a source-grounded report with exact partition hashes.\n\n## Constraints & Preferences\n- Do not edit source, invent test results, or treat a completed partition as task completion.\n- Review the actual supplied source and preserve hashes and concrete observations across folds.\n- Use only the authorized review process; no tests have been run.\n\n## Progress\n### Done\n- [x] Reviewed partition 1, SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.\n- [x] Observed that `extensions/navigate-tree/continuity-capture.test.ts` covers exact user-rule capture and protection; `continuity-store.test.ts` verifies supersession citations must refer to user entries on the active branch.\n- [x] Noted a possible stale-item race in `extensions/navigate-tree/current-screen.ts` `edit`: it applies the edited item after awaiting the editor, using the pre-dialog item.\n\n### In Progress\n- [ ] Review partitions 2–4, preserve their hashes and findings, fold each partition, and submit the four-entry report.\n\n### Blocked\n- None.\n\n## Key Decisions\n- Preserve the partition 1 observations as verified facts, and label the possible `current-screen.ts` race as unverified.\n\n## Next Steps\n1. Review partition 2 source, record its exact hash and at least two concrete observations, then fold to `reviewed-two`.\n\n## Standing authorization\n“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.\n\n## Continuity ledger\n\n[navigate_tree continuity ledger rev 3]\n\nBinding rules:\nR1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.\n  > \"Rule: never edit the source, invent test results or treat a completed partition as completion of this task.\"\n\nFacts:\nF2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e\nF3 Partition 1 observations (verified facts): extensions/navigate-tree/continuity-capture.test.ts exercises captureIntent preserving user's exact rule text and user-origin protection; continuity-store.test.ts verifies supersession citations must resolve to user entries on the active branch. Likely defect to inspect: extensions/navigate-tree/current-screen.ts `edit` awaits editor then applies using the stale item fetched before the dialog, potentially overwriting intervening ledger chang…[truncated]"
+          },
+          {
+            "name": "context-gathered-2",
+            "state": "open",
+            "firstEntryId": "476e52f5",
+            "lastEntryId": "3d38b573",
+            "title": "context-gathered",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "start-2",
+            "state": "open",
+            "firstEntryId": "3c1b14ef",
+            "lastEntryId": "c11e937d",
+            "title": "start",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "reviewed-one-2",
+            "state": "open",
+            "firstEntryId": "83eab807",
+            "lastEntryId": "83eab807",
+            "title": "reviewed-one",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "work-handoff-reviewed-two",
+            "state": "open",
+            "firstEntryId": "5d713eba",
+            "lastEntryId": "90997aa7",
+            "title": "# Work handoff: reviewed two",
+            "summary": "# Work handoff: reviewed two\n\n## Goal\nReview all four source partitions for continuity and user authority, then submit a source-grounded report with exact partition hashes.\n\n## Constraints & Preferences\n- Do not edit source, invent test results, or treat a completed partition as task completion.\n- Preserve hashes and concrete observations across folds. No tests have been run.\n\n## Progress\n### Done\n- [x] Reviewed partition 1, SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `continuity-capture.test.ts` exercises exact rule capture and user-origin protection; `continuity-store.test.ts` checks supersession citations against active-branch user entries. Possible, unverified stale-item race in `current-screen.ts` `edit`.\n- [x] Reviewed partition 2, SHA-256 `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `continuity-ledger.ts` `checkCitation` validates supersession citations and active-branch ordering; `rewindLedger` preserves monotonic revision and ID counter. Possible selector issue: `matchesModelPattern` checks `modelId` for slash-containing wildcard patterns despite its documented full-key matching.\n\n### In Progress\n- [ ] Review partitions 3–4, fold each, and submit the four-entry report.\n\n### Blocked\n- None.\n\n## Key Decisions\n- Treat the partition 1 race and partition 2 wildcard behavior as possible defects, not verified defects.\n\n## Next Steps\n1. Review partition 3 source and preserve its exact hash and concrete findings.\n\n## Standing authorization\n“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.\n\n## Continuity ledger\n\n[navigate_tree continuity ledger rev 5]\n\nBinding rules:\nR1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.\n  > \"Rule: never edit the source, invent test results or treat a completed partition as completion of this task.\"\n\nFacts:\nF2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e\nF3 Partition 1 observations (verified facts): extensions/navigate-tree/continuity-capture.test.ts exercises captureIntent preserving user's exact rule text and user-origin protection; continuity-store.test.ts verifies supersession citations must resolve to user entries on the active branch. Likely defect to inspect: extensions/navigate-tree/current-screen.ts `edit` awaits editor then applies using the stale item fetched before the dialog, potentially overwriting intervening ledger chang…[truncated]\nF4 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Verified: continuity-capture.test.ts tests exact rule capture/user-origin protection; continuity-store.test.ts checks supersession citations resolve to user entries on active branch. Possible unverified stale-item race in current-screen.ts edit after awaited editor.\nF5 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: continuity-ledger.ts checkCitation permits self-citation only for user-origin ctx.entryId and validates newer active-branch user entry indices; rewindLedger preserves monotonic rev/nextId when restoring snapshot. Possible defect: matchesModelPattern for slash-containing wildcard tests full modelKey OR modelId, despite comment claiming full provider/model only; broadens intended selector authority."
+          },
+          {
+            "name": "reviewed-one-3",
+            "state": "open",
+            "firstEntryId": "5d713eba",
+            "lastEntryId": "44ba6f0b",
+            "title": "reviewed-one",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "reviewed-two-2",
+            "state": "open",
+            "firstEntryId": "90997aa7",
+            "lastEntryId": "90997aa7",
+            "title": "reviewed-two",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "work-handoff-fold-three",
+            "state": "open",
+            "firstEntryId": "954ee8a8",
+            "lastEntryId": "5b673766",
+            "title": "# Work handoff: fold three",
+            "summary": "# Work handoff: fold three\n\n## Goal\nReview all four source partitions through continuity and user authority, preserving exact hashes and source-grounded observations, then submit the report.\n\n## Constraints & Preferences\n- Never edit source, invent test results, or treat a completed partition as task completion.\n- Review actual supplied source; no tests have been run.\n\n## Progress\n### Done\n- [x] Partition 1 reviewed. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `continuity-capture.test.ts` tests exact user-rule capture and origin protection; `continuity-store.test.ts` checks supersession citations against active-branch user entries. Possible stale-item race in `current-screen.ts` `edit` remains unverified.\n- [x] Partition 2 reviewed. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `continuity-ledger.ts` `checkCitation` validates citation role/order and `rewindLedger` preserves monotonic counters. Possible slash-wildcard selector expansion in `matchesModelPattern` remains unverified.\n- [x] Partition 3 reviewed. SHA-256: `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`. `continuity-briefing.ts` retains binding durable items and distinguishes non-user authority; `continuity-store.ts` reconciles deltas under ledger protections; `auto-navigate.ts` validates exposed anchors and fresh labels.\n\n### In Progress\n- [ ] Review partition 4, fold it, then submit all four ordered partition entries.\n\n### Blocked\n- None.\n\n## Key Decisions\n- Treat the partition 1 stale-item race and partition 2 selector behavior as possible, not verified, defects.\n- Keep source observations distinct from test coverage and do not claim tests were run.\n\n## Next Steps\n1. Review partition 4 source, preserve its hash and concrete findings, fold to `reviewed-four`, then call `submit_report`.\n\n## Standing authorization\n“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” Scope is incomplete.\n\n## Continuity ledger\n\n[navigate_tree continuity ledger rev 6]\n\nBinding rules:\nR1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.\n  > \"Rule: never edit the source, invent test results or treat a completed partition as completion of this task.\"\n\nFacts:\nF2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e\nF3 Partition 1 observations (verified facts): extensions/navigate-tree/continuity-capture.test.ts exercises captureIntent preserving user's exact rule text and user-origin protection; continuity-store.test.ts verifies supersession citations must resolve to user entries on the active branch. Likely defect to inspect: extensions/navigate-tree/current-screen.ts `edit` awaits editor then applies using the stale item fetched before the dialog, potentially overwriting intervening ledger chang…[truncated]\nF4 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Verified: continuity-capture.test.ts tests exact rule capture/user-origin protection; continuity-store.test.ts checks supersession citations resolve to user entries on active branch. Possible unverified stale-item race in current-screen.ts edit after awaited editor.\nF5 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: continuity-ledger.ts checkCitation permits self-citation only for user-origin ctx.entryId and validates newer active-branch user entry indices; rewindLedger preserves monotonic rev/nextId when restoring snapshot. Possible defect: matchesModelPattern for slash-containing wildcard tests full modelKey OR modelId, despite comment claiming full provider/model only; broadens intended selector authority.\nF6 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified: continuity-briefing.ts renderBriefing deliberately never drops objectives/goals/rules/decisions and labels non-user authored durable items; continuity-store.ts reconcileFoldContinuity treats model deltas as agent-origin and ledger protection governs changes. auto-navigate.ts validates model anchor/rewind names against existing labels and only accepts exposed active anchors. Potential concern: setti…[truncated]"
+          },
+          {
+            "name": "reviewed-two-3",
+            "state": "open",
+            "firstEntryId": "954ee8a8",
+            "lastEntryId": "e06da7a1",
+            "title": "reviewed-two",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "fold-three-2",
+            "state": "open",
+            "firstEntryId": "5b673766",
+            "lastEntryId": "5b673766",
+            "title": "fold-three",
+            "summary": "Open phase; completion is not established."
+          },
+          {
+            "name": "fold-three-3",
+            "state": "open",
+            "firstEntryId": "20986424",
+            "lastEntryId": "4711e61d",
+            "title": "fold-three",
+            "summary": "Open phase; completion is not established."
+          }
+        ]
+      },
+      "sourceGrounding": {
+        "claimedHashes": 3,
+        "verifiedHashes": 3,
+        "unverifiedHashes": [],
+        "labelCollisions": 0,
+        "omittedToolPayloadWarning": false,
+        "withheldMarkerInWire": false,
+        "partitionTextInWire": true,
+        "maxPayloadBytes": 295138
+      },
+      "preview": {
+        "sourceMatchesSnapshot": true,
+        "shaMatches": true,
+        "originalEntries": true,
+        "groupCountMatches": true,
+        "descendants": 0,
+        "addedEntries": 28
+      },
+      "clone": {
+        "path": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/input/2026-10-23T09-13-14-584Z_6a50a5e4-55ae-4e31-8a78-a79b88497584.jsonl",
+        "insideAnalysisDir": true,
+        "sessionId": "6a50a5e4-55ae-4e31-8a78-a79b88497584",
+        "newSessionId": true,
+        "headerIdMatches": true,
+        "reopenIdMatches": true,
+        "reopenName": "01a167f9-a2f0-7612-b26a-071008d88c15 (restructured)",
+        "nameMatches": true,
+        "reopenEntryCount": 156,
+        "entryCountMatches": true,
+        "sourceId": "01a167f9-a2f0-7612-b26a-071008d88c15",
+        "sourceSha256Unchanged": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4",
+        "bytes": 2089492,
+        "warnings": []
+      },
+      "integrity": {
+        "wirePath": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/attempt2-run-1-full-wire.jsonl.gz",
+        "requests": [
+          {
+            "request": 1,
+            "startedAt": "2026-10-23T09:12:47.010Z",
+            "payloadBytes": 12030,
+            "payloadSha256": "012cb7fcb144c1f62bebed78fb547e9f6eadb810ae6b44ad4eb4882dceaa5f9b",
+            "status": 200,
+            "streamEvents": 151
+          },
+          {
+            "request": 2,
+            "startedAt": "2026-10-23T09:12:53.257Z",
+            "payloadBytes": 295138,
+            "payloadSha256": "10de45cce6021338c79e96567bf59e4f05a763bc8e49b5e32cfc2b72ef9ce6f9",
+            "status": 200,
+            "streamEvents": 948
+          }
+        ],
+        "sourceUnchanged": true,
+        "copyUnchanged": true,
+        "copyMatchesOriginal": true
+      }
+    },
+    {
+      "tag": "attempt2-run-2-calls-only",
+      "run": "calls-only",
+      "elapsedMs": 28505,
+      "runner": "openai/gpt-6-luna:low",
+      "contextWindow": 372000,
+      "maxOutputTokens": 93000,
+      "modelRequests": 1,
+      "progress": [
+        "Tree proposal: openai/gpt-6-luna:low, call 1"
+      ],
+      "proposal": {
+        "method": "model",
+        "validatedMethod": "model",
+        "calls": 1,
+        "usage": [
+          {
+            "input": 52981,
+            "output": 1295,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 330,
+            "totalTokens": 54276,
+            "cost": {
+              "input": 0.0052981,
+              "output": 0.0006475,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0.0059456
+            }
+          }
+        ],
+        "inputTokens": 52981,
+        "cacheReadTokens": 0,
+        "outputTokens": 1295,
+        "cost": 0.0059456,
+        "warnings": [
+          "7 tool call/result payloads omitted by disclosure rules. Copies in unrelated prose cannot be redacted by tool exclusions.",
+          "7 non-text payloads or opaque signature fields omitted."
+        ],
+        "modelWarnings": [
+          "7 tool call/result payloads omitted by disclosure rules. Copies in unrelated prose cannot be redacted by tool exclusions.",
+          "7 non-text payloads or opaque signature fields omitted."
+        ]
+      },
+      "plan": {
+        "path": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/plans/attempt2-run-2-calls-only.json",
+        "source": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/input/source-copy.jsonl",
+        "sourceSha256": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4",
+        "nameSuffix": " (restructured)",
+        "parentHandoffMode": "full",
+        "groups": 5,
+        "folded": 3,
+        "open": 2,
+        "maxDepth": 1,
+        "names": [
+          "source-review",
+          "partition-one-review",
+          "partition-two-review",
+          "partition-three-review",
+          "partition-four-and-report"
+        ],
+        "summaries": [
+          {
+            "name": "source-review",
+            "state": "open",
+            "firstEntryId": "b4f55861",
+            "lastEntryId": "4711e61d",
+            "title": "Review four source partitions for continuity and user authority",
+            "summary": "The review identified verified continuity and user-authority safeguards across the partitions, along with possible issues that remain unverified. No tests were run, and the source was not edited. The first three fold summaries landed; the fourth did not. Two report submissions were rejected, and no accepted report is evidenced."
+          },
+          {
+            "name": "partition-one-review",
+            "state": "folded",
+            "firstEntryId": "b0e1da71",
+            "lastEntryId": "7dc36582",
+            "title": "Review partition 1",
+            "summary": "Partition 1 review and fold summary completed; the possible edit race was explicitly left unverified."
+          },
+          {
+            "name": "partition-two-review",
+            "state": "folded",
+            "firstEntryId": "5d713eba",
+            "lastEntryId": "160dd9cb",
+            "title": "Review partition 2",
+            "summary": "Partition 2 review and fold summary completed; the selector concern remained unverified."
+          },
+          {
+            "name": "partition-three-review",
+            "state": "folded",
+            "firstEntryId": "954ee8a8",
+            "lastEntryId": "b1bfa130",
+            "title": "Review partition 3",
+            "summary": "Partition 3 review and fold summary completed; an additional settings concern remained unverified."
+          },
+          {
+            "name": "partition-four-and-report",
+            "state": "open",
+            "firstEntryId": "d65a60fb",
+            "lastEntryId": "4711e61d",
+            "title": "Review partition 4 and submit report",
+            "summary": "The review and report attempts are evidenced, but the fourth fold and accepted report are not. Preserve this phase as open."
+          }
+        ]
+      },
+      "sourceGrounding": {
+        "claimedHashes": 4,
+        "verifiedHashes": 4,
+        "unverifiedHashes": [],
+        "labelCollisions": 0,
+        "omittedToolPayloadWarning": true,
+        "withheldMarkerInWire": true,
+        "partitionTextInWire": false,
+        "maxPayloadBytes": 193362
+      },
+      "preview": {
+        "sourceMatchesSnapshot": true,
+        "shaMatches": true,
+        "originalEntries": true,
+        "groupCountMatches": true,
+        "descendants": 0,
+        "addedEntries": 21
+      },
+      "integrity": {
+        "wirePath": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/attempt2-run-2-calls-only-wire.jsonl.gz",
+        "requests": [
+          {
+            "request": 1,
+            "startedAt": "2026-10-23T09:13:14.644Z",
+            "payloadBytes": 193362,
+            "payloadSha256": "dde38434dee5016c796e2a5faff6e809f744f149ae1107760e6080a8be7d889f",
+            "status": 200,
+            "streamEvents": 978
+          }
+        ],
+        "sourceUnchanged": true,
+        "copyUnchanged": true,
+        "copyMatchesOriginal": true
+      }
+    }
+  ]
+}

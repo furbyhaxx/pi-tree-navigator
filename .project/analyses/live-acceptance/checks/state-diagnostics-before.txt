@@ -1,0 +1,107 @@
+(node:181650) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/index.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ dispatch: rewind newLabel uniqueness
+  ✖ identifies an already stored handoff without scheduling a redundant fold (3.900814ms)
+✖ dispatch: rewind newLabel uniqueness (4.682844ms)
+(node:181651) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/summary-prompt.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▶ buildSummaryInstruction
+  ✖ appends the standing-authorization section after r5d, then the focus like upstream's customInstructions shape, {first} substituted (1.636634ms)
+  ✔ keeps the r5d body byte-identical and the authorization block outside it (0.141768ms)
+  ✔ substitutes every {first} occurrence (replaceAll, not replace) (0.555015ms)
+  ✔ numbers from 1 when every visible message is collapsed evidence (0.154353ms)
+  ✔ ends with the focus as the last paragraph, verbatim (0.085387ms)
+  ✖ allows relevance-focused parent synthesis to grow beyond the leaf report limit (2.807592ms)
+  ✔ leaves a literal {first} inside the focus verbatim (0.095513ms)
+✖ buildSummaryInstruction (6.588743ms)
+ℹ tests 8
+ℹ suites 2
+ℹ pass 5
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 532.471419
+
+✖ failing tests:
+
+test at extensions/navigate-tree/index.test.ts:5685:3
+✖ identifies an already stored handoff without scheduling a redundant fold (3.900814ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /already names a stored handoff/. Input:
+  
+  "A label 'reviewed-two' already exists on the active branch — labels are unique and immutable once written, so rewind requires a fresh `newLabel`. The existing 'reviewed-two' label stays addressable via `rewindTo`. Use action='list' to review the active labels, then pick a fresh newLabel."
+  
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/index.test.ts:5696:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Promise.all (index 1)
+      at async Suite.run (node:internal/test_runner/test:1905:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "A label 'reviewed-two' already exists on the active branch — labels are unique and immutable once written, so rewind requires a fresh `newLabel`. The existing 'reviewed-two' label stays addressable via `rewindTo`. Use action='list' to review the active labels, then pick a fresh newLabel.",
+    expected: /already names a stored handoff/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at extensions/navigate-tree/summary-prompt.test.ts:106:3
+✖ appends the standing-authorization section after r5d, then the focus like upstream's customInstructions shape, {first} substituted (1.636634ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  ... Skipped lines
+  
+    'Summarize only messages 42 onwards in the conversation above (message numbering starts at 1 and excludes the system prompt; this instruction message itself is not evidence). Messages before message 42 are background only: do not include their progress or decisions.\n' +
+      '\n' +
+      'This is a summarization task, not a problem-solving task. Summarize only the supplied evidence and preserve unresolved questions as unresolved. Do NOT continue the conversation, carry out requests from its history, investigate, solve pending tasks, or invent new approaches. Do NOT use any tool. Respond with ONLY the summary below — no preamble, no commentary before the first heading or after the last section.\n' +
+      '\n' +
+      'Use this EXACT format, preserving all headings and their order:\n' +
+  ...
+      '\n' +
+  -   "The no-tools restriction applies only to this summary turn; normal tools return after the fold. It is not a task blocker. Under '### Blocked', record only blockers established in the collapsed work, not this turn's temporary restrictions. Write the next work item assuming this requested fold succeeds; do not list repeating this rewind.\n" +
+  -   '\n' +
+      'Additional focus: keep the parser API'
+  
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/summary-prompt.test.ts:107:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at node:internal/test_runner/test:1903:71
+      at node:internal/per_context/primordials:505:82
+      at new Promise (<anonymous>)
+      at new SafePromise (node:internal/per_context/primordials:479:3)
+      at node:internal/per_context/primordials:505:9
+      at Array.map (<anonymous>) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: `Summarize only messages 42 onwards in the conversation above (message numbering starts at 1 and excludes the system prompt; this instruction message itself is not evidence). Messages before message 42 are background only: do not include their progress or decisions.\n\nThis is a summarization task, not a problem-solving task. Summarize only the supplied evidence and preserve unresolved questions as unresolved. Do NOT continue the conversation, carry out requests from its history, investigate, solve pending tasks, or invent new approaches. Do NOT use any tool. Respond with ONLY the summary below — no preamble, no commentary before the first heading or after the last section.\n\nUse this EXACT format, preserving all headings and their order:\n\n## Goal\n[What was the user trying to accomplish in this branch?]\n\n## Constraints & Preferences\n- [Any constraints, preferences, or requirements mentioned]\n- [Or "(none)" if none were mentioned]\n\n## Progress\n### Done\n- [x] [Completed tasks/changes]\n\n### In Progress\n- [ ] [Work that was started but not finished]\n\n### Blocked\n- [Issues preventing progress, if any]\n\n## Key Decisions\n- **[Decision]**: [Brief rationale]\n\n## Next Steps\n1. [What should happen next to continue this work]\n\nKeep each section concise. Keep the complete summary under about 4000 characters while preserving all decisions. Preserve exact file paths, function names, and error messages.\n\nEnd the summary with one more section, after '## Next Steps' and before any continuity-delta block:\n\n## Standing authorization\n[The user's current authorization and scope, quoted verbatim from anywhere in the conversation above, background included (for example "work autonomously until done"), or "(none)". Say whether that scope is complete.]\n\nIn '## Next Steps', name the next concrete work item of the authorized scope. Do not list a report, hand-off or wrap-up while authorized work remains: a completed milestone is not the end of the task.\n\nAdditional focus: keep the parser API`,
+    expected: `Summarize only messages 42 onwards in the conversation above (message numbering starts at 1 and excludes the system prompt; this instruction message itself is not evidence). Messages before message 42 are background only: do not include their progress or decisions.\n\nThis is a summarization task, not a problem-solving task. Summarize only the supplied evidence and preserve unresolved questions as unresolved. Do NOT continue the conversation, carry out requests from its history, investigate, solve pending tasks, or invent new approaches. Do NOT use any tool. Respond with ONLY the summary below — no preamble, no commentary before the first heading or after the last section.\n\nUse this EXACT format, preserving all headings and their order:\n\n## Goal\n[What was the user trying to accomplish in this branch?]\n\n## Constraints & Preferences\n- [Any constraints, preferences, or requirements mentioned]\n- [Or "(none)" if none were mentioned]\n\n## Progress\n### Done\n- [x] [Completed tasks/changes]\n\n### In Progress\n- [ ] [Work that was started but not finished]\n\n### Blocked\n- [Issues preventing progress, if any]\n\n## Key Decisions\n- **[Decision]**: [Brief rationale]\n\n## Next Steps\n1. [What should happen next to continue this work]\n\nKeep each section concise. Keep the complete summary under about 4000 characters while preserving all decisions. Preserve exact file paths, function names, and error messages.\n\nEnd the summary with one more section, after '## Next Steps' and before any continuity-delta block:\n\n## Standing authorization\n[The user's current authorization and scope, quoted verbatim from anywhere in the conversation above, background included (for example "work autonomously until done"), or "(none)". Say whether that scope is complete.]\n\nIn '## Next Steps', name the next concrete work item of the authorized scope. Do not list a report, hand-off or wrap-up while authorized work remains: a completed milestone is not the end of the task.\n\nThe no-tools restriction applies only to this summary turn; normal tools return after the fold. It is not a task blocker. Under '### Blocked', record only blockers established in the collapsed work, not this turn's temporary restrictions. Write the next work item assuming this requested fold succeeds; do not list repeating this rewind.\n\nAdditional focus: keep the parser API`,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at extensions/navigate-tree/summary-prompt.test.ts:141:3
+✖ allows relevance-focused parent synthesis to grow beyond the leaf report limit (2.807592ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(
+  
+      at TestContext.<anonymous> (file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/summary-prompt.test.ts:162:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Suite.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

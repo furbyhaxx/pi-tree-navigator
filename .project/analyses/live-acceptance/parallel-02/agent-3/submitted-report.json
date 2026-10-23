@@ -1,0 +1,38 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates unique IDs, parent existence, ancestry of context-edit/compaction targets, and pending tool calls.",
+        "Likely concern, not a verified failure: pending-call tracking keyed by tool-call ID may behave problematically if IDs are reused while outstanding.",
+        "Verified: extensions/navigate-tree/index.ts completeRewind validates anchor identity and label availability and attempts rollback if branch writing fails."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts buildContextMessages uses the canonical session projection and truncates pending-rewind context by instruction entry ID.",
+        "Likely concern, not a verified failure: extensions/navigate-tree/handoff.ts validHandoff checks broad field types but does not establish semantic consistency or uniqueness of children and sourceIds."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: extensions/navigate-tree/descendant-sessions.ts copies transcript bodies unchanged while assigning fresh header IDs and remapped parent links.",
+        "Potential concern, not a verified failure: extensions/navigate-tree/handoff-renderer.ts handoffView may use retrospective boundary indices to select a broad entries slice without revalidating graph ancestry."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: extensions/navigate-tree/retrospective.ts validateRanges checks ordered, non-overlapping ranges, safe tool-batch cuts, graph incoming parents, and paired context edits; validateClone checks linkage, reference ancestry, runtime state, and projection equivalence.",
+        "Verified: extensions/navigate-tree/continuity-ledger.ts parseLedger checks unique IDs and bidirectional supersession lineage.",
+        "Likely display concern, not a verified failure: extensions/navigate-tree/tree-screen.ts archivedTurnOf falls back to the last holder when duplicate branch labels cannot be resolved through summary fromId ancestry, potentially associating an archive row with the wrong holder."
+      ]
+    }
+  ]
+}

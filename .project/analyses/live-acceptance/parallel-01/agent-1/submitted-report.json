@@ -1,0 +1,40 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: `extensions/navigate-tree/index.ts` `completeRewind` forms a prospective projected handoff plus late messages and continuation, compares before/after fold estimates, and separately checks request accounting and output/headroom against `pending.contextWindow` before branching.",
+        "Verified source assertions (not tests run): `extensions/navigate-tree/index.test.ts` covers system-message exclusion, `context_edit` omissions, and stale assistant usage invalidation after withheld results.",
+        "Conditional risk, not a confirmed defect: `extensions/navigate-tree/frame.ts` `frameContent` compares the frame end with `options.cursor` while cursor is described as filtered-visible-relative; correctness depends on callers following that coordinate contract."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: `extensions/navigate-tree/index.ts` `buildContextMessages` derives context from `buildSessionProjection`, handles stale usage, freezes pending rewinds at the instruction, and filters system messages; `handoffContext` transforms navigator-owned branch summaries.",
+        "Verified: `extensions/navigate-tree/handoff.ts` deduplicates entry IDs for usage accounting and child IDs for handoff materialization.",
+        "Likely risk, not established defect: `extensions/navigate-tree/history-outline.ts` `manifestFrom` validates ordering-related fields but casts persisted manifest/history and nested group fields, leaving malformed persisted shapes potentially to fail later in use."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: `extensions/navigate-tree/auto-navigate.ts` `evaluateAutoNavigateTurn` budgets framing and output reserve, selects a newest-fitting suffix, exposes only anchors represented in sent records, validates selected IDs/labels, and degrades invalid output to none.",
+        "Verified: `extensions/navigate-tree/context-tokens.ts` `splitContextEstimate` and `estimateRequestTokens` combine usage baselines with estimated tails and use a denser 8/7 content estimate; test source explicitly notes host-version divergence (tests not run).",
+        "Verified: `extensions/navigate-tree/continuity-briefing.ts` evicts facts, non-stale file pointers, then steering. `continuity-capture.ts` abort returns no ops/watermark movement; `continuity-store.ts` ignores malformed snapshots with a warning while retaining the prior ledger. Possible consistency risk is unconfirmed."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: `extensions/navigate-tree/handoff-projection.ts` `invalidateStaleUsage` clears projected assistant usage at compaction/model/system boundaries, context-edit spans, and model mismatch; handoff projection also zeroes usage for cloned source IDs without changing historical entries.",
+        "Verified: `extensions/navigate-tree/index.ts` `planWithhold` considers canonical-projection candidates, reprojects proposed replacements, calibrates tail against valid usage baseline, and rejects drafts if the estimate remains over target.",
+        "Verified: `extensions/navigate-tree/retrospective.ts` validates clone ranges, tool batches, context-edit containment, runtime state and projections before publication, while clone publication rechecks source/family hashes. `docs/architecture.md` describes projection-only context edits and unique-source accounting."
+      ]
+    }
+  ]
+}

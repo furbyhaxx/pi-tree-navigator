@@ -1,0 +1,81 @@
+{
+  "plan": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/plans/attempt2-run-2-calls-only.json",
+  "preview": {
+    "source": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/input/source-copy.jsonl",
+    "sourceSha256": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4",
+    "name": "01a167f9-a2f0-7612-b26a-071008d88c15 (restructured)",
+    "previewToken": "d181cb81211e374861ed33740a0dd6fe635aa819aa1f69796fa87cd76cbeb172",
+    "descendants": [],
+    "originalEntries": 128,
+    "addedEntries": 21,
+    "groups": [
+      {
+        "name": "source-review",
+        "depth": 0,
+        "firstEntryId": "b4f55861",
+        "lastEntryId": "4711e61d",
+        "summary": "The review identified verified continuity and user-authority safeguards across the partitions, along with possible issues that remain unverified. No tests were run, and the source was not edited. The first three fold summaries landed; the fourth did not. Two report submissions were rejected, and no accepted report is evidenced.",
+        "state": "open",
+        "mode": "full"
+      },
+      {
+        "name": "partition-one-review",
+        "depth": 1,
+        "firstEntryId": "b0e1da71",
+        "lastEntryId": "7dc36582",
+        "summary": "Partition 1 review and fold summary completed; the possible edit race was explicitly left unverified.",
+        "state": "folded",
+        "mode": "full"
+      },
+      {
+        "name": "partition-two-review",
+        "depth": 1,
+        "firstEntryId": "5d713eba",
+        "lastEntryId": "160dd9cb",
+        "summary": "Partition 2 review and fold summary completed; the selector concern remained unverified.",
+        "state": "folded",
+        "mode": "full"
+      },
+      {
+        "name": "partition-three-review",
+        "depth": 1,
+        "firstEntryId": "954ee8a8",
+        "lastEntryId": "b1bfa130",
+        "summary": "Partition 3 review and fold summary completed; an additional settings concern remained unverified.",
+        "state": "folded",
+        "mode": "full"
+      },
+      {
+        "name": "partition-four-and-report",
+        "depth": 1,
+        "firstEntryId": "d65a60fb",
+        "lastEntryId": "4711e61d",
+        "summary": "The review and report attempts are evidenced, but the fourth fold and accepted report are not. Preserve this phase as open.",
+        "state": "open",
+        "mode": "full"
+      }
+    ],
+    "warnings": [
+      "Summary accuracy is not machine-verifiable. Review every handoff before creating the clone.",
+      "Extension-specific custom state remains on its original branch; external provider histories and extension sidecar files are not cloned."
+    ]
+  },
+  "clone": {
+    "path": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/proposal/input/2026-10-23T09-14-19-523Z_f0d5bb09-f2f8-49ab-a14b-8cc0d00750f5.jsonl",
+    "insideAnalysisDir": true,
+    "sessionId": "f0d5bb09-f2f8-49ab-a14b-8cc0d00750f5",
+    "newSessionId": true,
+    "headerIdMatches": true,
+    "reopenIdMatches": true,
+    "reopenName": "01a167f9-a2f0-7612-b26a-071008d88c15 (restructured)",
+    "nameMatches": true,
+    "reopenEntryCount": 149,
+    "entryCountMatches": true,
+    "sourceId": "01a167f9-a2f0-7612-b26a-071008d88c15",
+    "sourceSha256Unchanged": "2d5f3e01d17e7aebd12b5c4bcfdd88858dfe4e085403d5193fcb55fe394f28d4",
+    "bytes": 2081117,
+    "warnings": []
+  },
+  "sourceUnchanged": true,
+  "copyUnchanged": true
+}

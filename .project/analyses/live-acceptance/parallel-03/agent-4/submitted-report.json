@@ -1,0 +1,36 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts gates tool calls while rewind is pending; likely usability risk because ordinary navigation tools may also be unavailable until rewind resolves.",
+        "Verified: extensions/navigate-tree/frame.ts FrameList.handleInput maps Ctrl-C to onCancel and Escape clears search before cancelling in list focus. Likely defect: leaveSearch restores by prior index, which may select a different item after filtering."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts buildContextMessages freezes context at the pending instruction, and tool calls are blocked during pending rewind; README describes Escape as explicit cancellation. Potential usability concern: blocked navigation may leave user Escape as the only escape route.",
+        "Verified: extensions/navigate-tree/history-outline.ts patchedInput clears search/query on tui.select.cancel before invoking list.onCancel; F2 toggles the raw tree view."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified source/test documentation: extensions/navigate-tree/frame.test.ts covers Escape clearing search before cancellation, Ctrl-C cancellation from either focus, and filtered selection retaining original indices; these are source observations, not claims of executed tests.",
+        "Verified: extensions/navigate-tree/continuity-capture.ts captureIntent accepts AbortSignal and on abort returns no ops while restoring the prior watermark. Likely tradeoff: retry can rescan entries classified before cancellation."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: extensions/navigate-tree/fold-screen.ts openFoldScreen/pickAnchor permits leaving before confirmation; foldTo revalidates anchor and label after confirmation. Potential usability concern: askLabel normalizes typed labels to kebab-case, which may surprise users.",
+        "Verified: extensions/navigate-tree/tree-screen.ts goTo checks busy state before and after confirmation and handles cancelled navigation without moving; openTreeScreen retains keyed focus across filters. extensions/navigate-tree/anchor-command.ts returns on Escape from anchor list and routes r to fold."
+      ]
+    }
+  ]
+}

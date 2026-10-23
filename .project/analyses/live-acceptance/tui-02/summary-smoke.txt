@@ -1,0 +1,54 @@
+summary turn usage {"input":189,"cacheRead":114304,"cacheWrite":0,"output":356}
+continuation {"status":"done","rewindTo":"context-gathered","newLabel":"review-complete","targetId":"c76de5c5","summaryId":"bb4a9cad","collapsedEntries":25,"contextBefore":113246,"contextAfter":1617,"contextWindow":372000,"summaryAttempts":2,"foldEstimateBefore":113696,"foldEstimateAfter":2063,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":4,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary bb4a9cad: work handoff metadata valid (mode full)
+ok    branch_summary bb4a9cad: own report 1335 chars (cap 4500)
+info  branch_summary bb4a9cad: total handoff 2084 chars = header+own report 1368 + child handoffs 0 + continuity ledger 716 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: review complete
+
+## Goal
+Review the supplied real source for context continuity and provide two concrete, source-grounded observations.
+
+## Constraints & Preferences
+- Never change files or invent test results.
+- Cite exact file paths and symbols; preserve the source hash.
+- Complete the review by calling `finish_review` after the fold.
+
+## Progress
+### Done
+- [x] Loaded the source partition and recorded SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Identified and pinned two observations: `retrospective-plan.ts` validates snapshots and refuses unfinished tool calls; `index.ts`’s `completeRewind` writes a completion label before branching and restores the prior leaf and removes the label if branching fails.
+- [x] Listed anchors and rewound to `context-gathered` as `review-complete`.
+
+### In Progress
+- [ ] Call `finish_review` with the pinned hash and both findings.
+
+### Blocked
+- None.
+
+## Key Decisions
+- **Use source as evidence only**: Do not modify files or claim tests were run.
+
+## Next Steps
+1. Call `finish_review` with SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e` and the two findings above.
+
+## Standing authorization
+“Work autonomously until the review, one fold and finish_review are complete.” The scope is not complete until `finish_review` accepts the result.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 4]
+
+Binding rules:
+R1 Rule: never change files or invent test results.
+  > "Rule: never change files or invent test results."
+
+Facts:
+F2 Exact source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates records/ancestry and detects pending tool calls before conversion; validateCompleteToolCalls refuses unfinished batches.
+F4 Observation: extensions/navigate-tree/index.ts completeRewind writes branch:<newLabel> on the summary entry before branchWithSummary; catch restores prior leaf and removes that completion label if branching fails.
+--- end ---
+(node:176542) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

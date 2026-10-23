@@ -1,0 +1,35 @@
+{
+  "folds": [
+    {
+      "summaryId": "bb4a9cad",
+      "summaryAttempts": 2,
+      "summaryInput": 114493,
+      "summaryCacheRead": 114304,
+      "previousInput": 114493,
+      "nextInput": 1898,
+      "nextRole": "assistant",
+      "cacheRatio": 0.9983492440585887,
+      "reductionRatio": 0.9834225673185261,
+      "nextTools": [
+        "finish_review"
+      ]
+    }
+  ],
+  "userMessages": 1,
+  "nudges": 0,
+  "requests": 11,
+  "responseStatuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+  ],
+  "smokeExit": 0
+}

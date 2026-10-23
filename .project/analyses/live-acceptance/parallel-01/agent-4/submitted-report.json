@@ -1,0 +1,36 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: extensions/navigate-tree/frame.ts FrameList.handleInput routes Ctrl-C to cancellation; Escape first clears active search and Escape from list focus cancels. This is an explicit two-stage navigation behavior, not a defect.",
+        "Verified: extensions/navigate-tree/index.ts completeRewind validates before branching and attempts to restore the prior leaf on failure; restoration errors are swallowed, so rollback is a potential risk, not a demonstrated defect. retrospective-plan.ts validates complete tool-call batches."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: index.ts buildContextMessages truncates the projected request at a pending instruction and overlays failed or aborted rewind outcomes as isError tool-result clones.",
+        "Potential cancellation concern, not verified defect: history-outline.ts patchedInput handles cancellation through the configured tui.select.cancel binding and has no explicit Ctrl-C route; actual behavior depends on host bindings."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: auto-navigate.ts evaluateAutoNavigateTurn forwards AbortSignal to the runner, validates proposed rewind anchors/labels/focus, and returns none for errors or invalid output without mutation. Potential UX gap: cancellation is not distinguished from other errors in its result.",
+        "Verified: continuity-capture.ts captureIntent checks abort around classifier work and on abort returns no ops while preserving the watermark. frame.test.ts specifies Escape clearing search before cancellation and Ctrl-C cancellation; these are source assertions, not tests run."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: extensions/navigate-tree/fold-screen.ts dispatches requestFold only after confirmation and fresh anchor/savings/label checks; cancellation/back returns through the wizard rather than prematurely dispatching.",
+        "Verified: tree-screen.ts goTo checks idle, confirms, and awaits navigation; cancelled navigation reports no move and errors are caught. Possible race (not verified defect): session state could change between checks and navigation. anchor-command.ts returns to the list on selection cancellation."
+      ]
+    }
+  ]
+}

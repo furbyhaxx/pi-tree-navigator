@@ -1,0 +1,36 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: retrospective-plan.ts readSessionSnapshot validates ancestry, unique IDs, parent references, context-edit/compaction targets, tool-result pairing, and pending tool calls before clone derivation.",
+        "Verified: index.ts completeRewind revalidates the anchor and label, writes branch metadata before branchWithSummary, and restores prior leaf/clears marker on write failure; reused tool-call IDs across divergent branches remain a scrutiny point, not a confirmed defect."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: continuity-ledger.ts rewindLedger restores snapshot items while retaining maximum revision and nextId from the abandoned state, avoiding lineage rollback.",
+        "Verified: retrospective-command.ts validates the source snapshot and complete tool calls before proposal; proposal-command.ts validates plan/source hashes, rechecks source before exclusive wx save with mode 0600. handoff.ts locally deduplicates child IDs during materialization while metadata validation permits repeats; this behavior is not established as a defect."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: auto-navigate limits evaluation to a bounded branch tail and gates anchor/rewind decisions on sent records, exposed anchors, fresh names, and valid focus; invalid output falls back to none.",
+        "Verified: descendant-sessions.ts resolves parentSession relative to the file and filters path-linked descendants while rejecting duplicate IDs, cycles, and source changes. continuity-store replay follows active root-to-leaf branch and branch_summary snapshots; malformed entries warn and skip."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: retrospective.ts validateClone rejects duplicate IDs, dangling parents, and compaction/context_edit targets outside ancestry, and checks context projections/runtime state at original-entry checkpoints.",
+        "Verified: cloneRetrospectiveSession binds clone creation to preview token, source hashes, and family; stages exclusive files, validates reopened root SessionManager state before hard-link publication, and rolls back staged outputs on failure."
+      ]
+    }
+  ]
+}

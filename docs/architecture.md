@@ -15,6 +15,8 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `output-budget.ts`: conservative wire-level output caps for overflow recovery;
   request metadata is scoped to the session/model/run, never persisted.
 - `summary-prompt.ts`: summary instructions, stored-summary preamble and file lists.
+- `summary-request.ts`: immutable, adapter-specific text-only request constraints
+  for pending summaries; tool declarations and message arrays remain unchanged.
 - `retrospective-plan.ts`: strict graph snapshots, branch-local tool accounting,
   inspection and nested-plan parsing.
 - `retrospective.ts`: range validation, clone construction, state checks and publication.

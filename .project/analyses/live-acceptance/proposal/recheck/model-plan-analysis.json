@@ -1,0 +1,118 @@
+{
+  "runs": [
+    {
+      "tag": "recheck-run-1-full",
+      "finalCall": 10,
+      "finalUsage": {
+        "input": 12786,
+        "output": 805,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 13591,
+        "cost": {
+          "input": 0.0012786000000000002,
+          "output": 0.00040249999999999997,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0016811
+        }
+      },
+      "modelGroups": 1,
+      "modelFolded": 0,
+      "adoptedEqualsModel": true,
+      "adoptedNames": [
+        "historical-review"
+      ],
+      "modelNames": [
+        "historical-review"
+      ],
+      "boundaries": [
+        {
+          "name": "historical-review",
+          "depth": 0,
+          "state": "open",
+          "start": 0,
+          "end": 127,
+          "startType": "model_change",
+          "endType": "message/assistant",
+          "parentType": "missing",
+          "cutBeforeStartSafe": false,
+          "cutAfterEndSafe": true,
+          "files": true,
+          "contextEditCrossings": 0,
+          "entryCount": 128
+        }
+      ],
+      "unsafeStarts": [],
+      "unsafeEnds": [],
+      "search": {
+        "attempts": [],
+        "found": [],
+        "combinedError": "no candidate starts found"
+      },
+      "timeline": [
+        {
+          "index": 0,
+          "id": "b4f55861",
+          "type": "model_change",
+          "safeCut": true
+        },
+        {
+          "index": 1,
+          "id": "f1d20cff",
+          "type": "thinking_level_change",
+          "safeCut": true
+        },
+        {
+          "index": 126,
+          "id": "57c0104e",
+          "type": "message/toolResult",
+          "tool": "submit_report",
+          "safeCut": true
+        },
+        {
+          "index": 127,
+          "id": "4711e61d",
+          "type": "message/assistant",
+          "safeCut": true
+        }
+      ],
+      "claimGrounding": [
+        {
+          "group": "historical-review",
+          "partition": "all",
+          "claims": 11,
+          "present": 11,
+          "missing": []
+        }
+      ],
+      "repair": {
+        "adoptedNames": [
+          "historical-review"
+        ],
+        "startsChanged": []
+      },
+      "claims": {
+        "total": 4,
+        "inSource": 4,
+        "matchesCorpusManifest": 4,
+        "values": [
+          "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+          "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+          "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+          "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322"
+        ]
+      },
+      "summaries": [
+        {
+          "name": "historical-review",
+          "state": "open",
+          "title": "Four-partition continuity and user-authority review",
+          "summary": "The task was to review four source partitions for continuity and user authority, retain exact hashes and evidence-based findings, complete four folds, and submit a report. Binding rule: never edit source, invent test results, or treat one completed partition as completion. No test execution is evidenced.\n\nChronology and findings:\n1. Partition 1 SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `continuity-capture.test.ts` exercises exact user-rule capture and user-origin protection; `continuity-store.test.ts` checks that supersession citations resolve to user entries on the active branch. A possible stale-item race in `current-screen.ts` `edit` after awaiting the editor was labeled unverified.\n2. Partition 2 SHA-256 `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `continuity-ledger.ts` `checkCitation` validates citation provenance/order; `rewindLedger` preserves monotonic revision and ID counters. Possible overbroad slash-wildcard matching in `matchesModelPattern` was labeled unverified.\n3. Partition 3 SHA-256 `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`. `continuity-briefing.ts` preserves binding durable items and distinguishes non-user authority; `continuity-store.ts` treats fold deltas as agent-origin under ledger protections; `auto-navigate.ts` validates proposed anchor and rewind names against exposed active anchors. A possible `settings-screen.ts` concern was not inspected.\n4. Partition 4 SHA-256 `22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322`. `fold-screen.ts` `askLabel` rejects active-branch label collisions and `foldTo` revalidates anchor and label after confirmation; `current-screen.test.ts` covers confirmation, capture-disabled/busy refusals, user-origin edits and pinning. A possible `config.ts` `mergeAutoNavigateField` layered-fallback issue was labeled unverified. These findings were recorded as ledger fact F7.\n\nFolds for partitions 1–3 landed as `reviewed-one`, `reviewed-two`, and `fold-three`. An attempt to rewind to nonexistent `reviewed-three` was refused. A later rewind to `fold-three` with new label `reviewed-four` was accepted, but its summary attempts called tools instead of producing a summary; after three attempts the rewind failed with “no summary after 3 attempts (last: called a tool)” and “Nothing was collapsed.” Thus the fourth fold did not land. `submit_report` was rejected with: “Rejected: require all four completed folds, exact ordered hashes and substantive findings.” The final recorded message says the report was not accepted and the authorized review process remains incomplete. Remaining work: complete the fourth fold with a valid summary, then submit the exact ordered hashes and substantive findings; no successful report acceptance is evidenced.",
+          "outcome": "Partitions 1–4 were reviewed and findings recorded, but the fourth fold failed and the report was not accepted. The task remains incomplete."
+        }
+      ]
+    }
+  ]
+}

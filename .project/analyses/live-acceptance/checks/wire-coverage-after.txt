@@ -1,0 +1,16 @@
+(node:188718) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/live-analyzer.test.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ recognizes text-only summary evidence for Responses, Anthropic and Google (87.279648ms)
+✔ fails when request capture cannot establish a text-only request for every fold (56.870933ms)
+✔ requires matching wire evidence within each fold interval, not aggregate retries (61.610427ms)
+✔ does not correlate a later or aborted same-label request with a completed fold (56.668359ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 330.963838

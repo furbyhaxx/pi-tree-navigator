@@ -1,0 +1,421 @@
+{
+  "files": [
+    {
+      "file": "README.md",
+      "bytes": 61490,
+      "sha256": "98e1b2a3d0381f3d82050024c9a5539f221466171ac0cb9786f023848207fdcd"
+    },
+    {
+      "file": "docs/architecture.md",
+      "bytes": 7917,
+      "sha256": "04d1c1e3f05fa27ed0d73a12925f7cfd143733e15753c26db2dbbd8949c6c330"
+    },
+    {
+      "file": "docs/retrospective-cloning.md",
+      "bytes": 17686,
+      "sha256": "14fa1d4d8c64cf3e71669e688c11e2975ecbed5d9dbf3f9f971d1e84031c280e"
+    },
+    {
+      "file": "docs/verification.md",
+      "bytes": 22002,
+      "sha256": "4baca5f6f9730b31a242109ae1370748f19b797c45e186f0ccceeb74a14f4a62"
+    },
+    {
+      "file": "extensions/navigate-tree/anchor-command.test.ts",
+      "bytes": 19272,
+      "sha256": "4a3a3c3c02a46b40a659f0405c7281a1f1a49e7a1d9a0b53fbeda62cb489d175"
+    },
+    {
+      "file": "extensions/navigate-tree/anchor-command.ts",
+      "bytes": 16993,
+      "sha256": "2f8acfa1c30bfc0367ed0ae867b2a4442aa487b0a6d42952c2b1d6296342bd1e"
+    },
+    {
+      "file": "extensions/navigate-tree/auto-navigate-config.test.ts",
+      "bytes": 4311,
+      "sha256": "50917990d3d9dc783a97a1133234610ba57c959eab548f488617e8296ce0089c"
+    },
+    {
+      "file": "extensions/navigate-tree/auto-navigate-config.ts",
+      "bytes": 11041,
+      "sha256": "304c42784aca16823963efebc8fde334c3e82f3f27dca8963f96eab4f914b2ad"
+    },
+    {
+      "file": "extensions/navigate-tree/auto-navigate.test.ts",
+      "bytes": 13388,
+      "sha256": "9afcee648207c75d42ad7d1957ba34252f9894fc149686ccb524c7b6025518f3"
+    },
+    {
+      "file": "extensions/navigate-tree/auto-navigate.ts",
+      "bytes": 10112,
+      "sha256": "4f696872c76705271f9c3ae48dc87bf8796064ef6d19ed9ff31601c4c646fb7e"
+    },
+    {
+      "file": "extensions/navigate-tree/clone-screen.test.ts",
+      "bytes": 2446,
+      "sha256": "c6bc7bc6ec642dc6a831ded608600cdf6a8fc3bfc4a95866711b15b7cd867ec3"
+    },
+    {
+      "file": "extensions/navigate-tree/clone-screen.ts",
+      "bytes": 3920,
+      "sha256": "3f8ad587d2c6ff48ad4d21cac649b5589efbb05527b4441a8383f264c98d751c"
+    },
+    {
+      "file": "extensions/navigate-tree/clone-views.test.ts",
+      "bytes": 10803,
+      "sha256": "5eb1f43a6dd9c376c51f27dba5ed640e7dfa33df532cafef297534f900cdca9b"
+    },
+    {
+      "file": "extensions/navigate-tree/clone-views.ts",
+      "bytes": 12104,
+      "sha256": "700d696ccb42fcddffeaf4f601df280bbd188beb461580fcce1325e20df18f82"
+    },
+    {
+      "file": "extensions/navigate-tree/config.test.ts",
+      "bytes": 54988,
+      "sha256": "3362638d80a34fa9f660b3d6011b61954ff7f03b250891dff9257563f94b1b44"
+    },
+    {
+      "file": "extensions/navigate-tree/config.ts",
+      "bytes": 33398,
+      "sha256": "992cb64fd649b64d8ecbcef7d0faf8018c4f05b3fe3f97fa591c569eab772843"
+    },
+    {
+      "file": "extensions/navigate-tree/context-tokens.test.ts",
+      "bytes": 8003,
+      "sha256": "0c1ebf493537295bdf698e9fed7d9d7e91d06af1c6daec934a24765917d93081"
+    },
+    {
+      "file": "extensions/navigate-tree/context-tokens.ts",
+      "bytes": 3160,
+      "sha256": "d4e0fc72fed9fc938d28b1cdeb980dc555948cf31b0489c0e707864c98599172"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-briefing.test.ts",
+      "bytes": 11554,
+      "sha256": "969cc84063a6907b7952b5f743fef42974c50d0c1c0a147873531f1e77c43b3f"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-briefing.ts",
+      "bytes": 12479,
+      "sha256": "6334596de5916effacf9f381c115883b9034a424c004e614e8f4054c8c9296e1"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-capture.test.ts",
+      "bytes": 45955,
+      "sha256": "fc6c538f770502083009daece4233ba8d07ea9845e20187adecea6f298d537a1"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-capture.ts",
+      "bytes": 27208,
+      "sha256": "47aa6d28b416266f83a53cc67f44294cb94d3d5369e535a9bac7c1ca2afe4367"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-ledger.test.ts",
+      "bytes": 20004,
+      "sha256": "08b2990ad567f77cef2fdcb7446c87b9eeb0ab4dfb91f7e2a8dc1b32c30cc4e4"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-ledger.ts",
+      "bytes": 37333,
+      "sha256": "21d635e044deda60e9b8477d60bb9fd270816996a0e9dca3ba1230855500e2d2"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-store.test.ts",
+      "bytes": 16603,
+      "sha256": "d1ef56325db2bd002ba0a033afa4d643c9e92874a30f8143f1b5e035a15b33a7"
+    },
+    {
+      "file": "extensions/navigate-tree/continuity-store.ts",
+      "bytes": 11271,
+      "sha256": "e8447a692f7512c21fab5f4df01b287e3694165ca6634f6a1e9d02d29fa5e0ff"
+    },
+    {
+      "file": "extensions/navigate-tree/current-screen.test.ts",
+      "bytes": 18566,
+      "sha256": "03c84cba62ed95d5ecf4e9c42d787affdf3593ac7919e0b3ace63e8536747c3f"
+    },
+    {
+      "file": "extensions/navigate-tree/current-screen.ts",
+      "bytes": 16073,
+      "sha256": "f6303cc0a9241b00878c8aa3b7be8996efa457ee03fa50aa80b441ae9f0db4f8"
+    },
+    {
+      "file": "extensions/navigate-tree/descendant-sessions.test.ts",
+      "bytes": 3979,
+      "sha256": "05e6e4d45380308702578dfa0be4637ddbae5234e9cf20c13a7eb918e74825cd"
+    },
+    {
+      "file": "extensions/navigate-tree/descendant-sessions.ts",
+      "bytes": 6843,
+      "sha256": "803b823946f9ad3b8d8c31b9a263b6cabff1f7c56dd3a9ca5092f46565de7cac"
+    },
+    {
+      "file": "extensions/navigate-tree/fold-screen.test.ts",
+      "bytes": 15282,
+      "sha256": "c3a612794d35f209fdff7260fb1577d50b7e19eae87988f1b9dd392492c69c3b"
+    },
+    {
+      "file": "extensions/navigate-tree/fold-screen.ts",
+      "bytes": 12462,
+      "sha256": "ae8eab80897943fb8fdb8f64c7b575e9f59b656b32de71d13ee6e17f6b29c659"
+    },
+    {
+      "file": "extensions/navigate-tree/frame.test.ts",
+      "bytes": 17584,
+      "sha256": "beeee60e40f62fce1a53a8c86ad9549f764565dc1f319dc54636e20002b577d6"
+    },
+    {
+      "file": "extensions/navigate-tree/frame.ts",
+      "bytes": 25892,
+      "sha256": "113a1cff949c59ab881c3d63141caa6791495be7b7fc6d1b50bdbc36a6c8aea5"
+    },
+    {
+      "file": "extensions/navigate-tree/handoff-projection.test.ts",
+      "bytes": 10609,
+      "sha256": "b33eb119667606ec597a351bbe85223eb49f932a2a4a9be290e3693f2275d3e5"
+    },
+    {
+      "file": "extensions/navigate-tree/handoff-projection.ts",
+      "bytes": 6557,
+      "sha256": "90eb6c6cf3fd528be0e593fd7961d086c66e3bd6f6b57bf0dade79e945b0d65c"
+    },
+    {
+      "file": "extensions/navigate-tree/handoff-renderer.test.ts",
+      "bytes": 8930,
+      "sha256": "ecab4125814a83c23be1abffb8cbcafd67555471e5ef48e93c1b627279233608"
+    },
+    {
+      "file": "extensions/navigate-tree/handoff-renderer.ts",
+      "bytes": 10200,
+      "sha256": "f12be91b823b4f47c5f84d6cddab71b0cafcd554279b7229f72874bd877336d6"
+    },
+    {
+      "file": "extensions/navigate-tree/handoff.test.ts",
+      "bytes": 2976,
+      "sha256": "6efce67ea566595c4867fc0c57e86b94e9884c44f6b58e56c3909a56ebf32be5"
+    },
+    {
+      "file": "extensions/navigate-tree/handoff.ts",
+      "bytes": 7992,
+      "sha256": "3ae1d9e3ff29e5af384b0d8915d0e318da192c9566bcc76b076e776eb48db242"
+    },
+    {
+      "file": "extensions/navigate-tree/helpers.test.ts",
+      "bytes": 14175,
+      "sha256": "b5f6fd410a15fdda8d01986be8c5f84d9eaac89dc70cd528b2007af63d5922b0"
+    },
+    {
+      "file": "extensions/navigate-tree/helpers.ts",
+      "bytes": 8921,
+      "sha256": "158cd0d285abecd12d8e03f08e9cad1b9f284fcc17cd00aa3bab48e2637c0a00"
+    },
+    {
+      "file": "extensions/navigate-tree/history-outline.test.ts",
+      "bytes": 7043,
+      "sha256": "a19f66f08b9c680251061e8c325282ad1a7b1ae5f9f5ff40b92595a26550571f"
+    },
+    {
+      "file": "extensions/navigate-tree/history-outline.ts",
+      "bytes": 14695,
+      "sha256": "7d83864ac4e614c04a1e3126b6da2088191880d177891cb2a977ce19577847f5"
+    },
+    {
+      "file": "extensions/navigate-tree/index.test.ts",
+      "bytes": 444173,
+      "sha256": "3d7b6398d762460bd8513ced262ce0dd3901d19ca227b181d55bd806000b648e"
+    },
+    {
+      "file": "extensions/navigate-tree/index.ts",
+      "bytes": 204354,
+      "sha256": "578944c5602337e7142ff207acbebe213a4f294540cd5e44cb2ae994eda9b76e"
+    },
+    {
+      "file": "extensions/navigate-tree/output-budget.test.ts",
+      "bytes": 2168,
+      "sha256": "914fa6d8230f989cd60a8908775eab63b6da4aa3604af25bac55bc1391945818"
+    },
+    {
+      "file": "extensions/navigate-tree/output-budget.ts",
+      "bytes": 1574,
+      "sha256": "2514c62e8de53ccb5ef590b93eaf3ace8a63bed7651b127effa154b500c5a139"
+    },
+    {
+      "file": "extensions/navigate-tree/package.test.ts",
+      "bytes": 2537,
+      "sha256": "03e76b86eb678ce007654cee34655284f806cb1b02a10c5c6573a9ca06e6cff0"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-command.test.ts",
+      "bytes": 11563,
+      "sha256": "77051944716be7400a5c2dcc5cb90e87413725ef8ca91faf4d4688127ac53ce2"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-command.ts",
+      "bytes": 13583,
+      "sha256": "92620060545ed2191ed9f8a7d9a540d7fe67da679e1b6f233e95cf38dbfe7860"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-engine.test.ts",
+      "bytes": 13016,
+      "sha256": "19ccc1e4a1d0a52996c29c00ebcbdf30aef82b6358c383183fd20b2a8eedebb2"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-engine.ts",
+      "bytes": 12352,
+      "sha256": "c2cdb16057ee832cb26ba0c16a9596f2d23fcc310ed76ef2ec48508efd0bbacd"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-model.test.ts",
+      "bytes": 4588,
+      "sha256": "c887b67dbc54c8b6569033890addaf288ac2bb216d39e055a1c6a969a6ed8d18"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-model.ts",
+      "bytes": 3639,
+      "sha256": "f2b1dfd1f081c0393074ad795601c8eafff6b63d6cfd90b113ea8ca705ddf897"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-options.test.ts",
+      "bytes": 3035,
+      "sha256": "affcbdbce5b455bec31cf1f11624aab5728209ea8bc89f769d1f57948fe0102c"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-options.ts",
+      "bytes": 3544,
+      "sha256": "980ebe8c7414a31e050dc11ef1188c44a93e5354b602bf5617f348f5dd4911ac"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-source.test.ts",
+      "bytes": 10567,
+      "sha256": "bf596a7f464b9240899070cc6cb4bbba845bc9f4fa96df043986a6422149fe43"
+    },
+    {
+      "file": "extensions/navigate-tree/proposal-source.ts",
+      "bytes": 11668,
+      "sha256": "cacfe19f7de82521bd31ea184782264ea6e5992102a59dca6c392b276d7ab682"
+    },
+    {
+      "file": "extensions/navigate-tree/retrospective-command.test.ts",
+      "bytes": 16063,
+      "sha256": "cd8d8e128447f6be7938f99ec6792536afff407fa17133562087b5d348f74219"
+    },
+    {
+      "file": "extensions/navigate-tree/retrospective-command.ts",
+      "bytes": 8658,
+      "sha256": "16678e27d76cb516e141cef01870dabcae3ebf90e8abd33a27239df9234089cd"
+    },
+    {
+      "file": "extensions/navigate-tree/retrospective-plan.ts",
+      "bytes": 20069,
+      "sha256": "e49435dacd9be5cb3011803ceb7c07bcc3addd18f5654420b896c5343f4c9feb"
+    },
+    {
+      "file": "extensions/navigate-tree/retrospective-snapshot.test.ts",
+      "bytes": 5381,
+      "sha256": "50148e4a87be385c43f227e201fbce69913b8b592a38c070e36e5796eaedb3d5"
+    },
+    {
+      "file": "extensions/navigate-tree/retrospective.test.ts",
+      "bytes": 35057,
+      "sha256": "9f58a3d3cc6d035a6051fb129202712daac16b10c9a818cb8cefeb80218e53ef"
+    },
+    {
+      "file": "extensions/navigate-tree/retrospective.ts",
+      "bytes": 26054,
+      "sha256": "4d48b91fa719e7f43bb02413c5ca9bcc88dc39e8d56f4a804e6d61bc63a7b424"
+    },
+    {
+      "file": "extensions/navigate-tree/rewind-hint.test.ts",
+      "bytes": 7065,
+      "sha256": "ccb73a4a0d51638c18353c87dbe6cf53929da1d41a534e322305c15b406aa3ce"
+    },
+    {
+      "file": "extensions/navigate-tree/rewind-hint.ts",
+      "bytes": 6629,
+      "sha256": "26a39e0b5880c54cd658d5d574b4fe74725c2b6d0044b661685ce7e0a3dc4774"
+    },
+    {
+      "file": "extensions/navigate-tree/runtime-config.test.ts",
+      "bytes": 2114,
+      "sha256": "c0738729ee3bdd9168c1e68bbe9a3814a873226205b7382f0221468a545b3467"
+    },
+    {
+      "file": "extensions/navigate-tree/runtime-config.ts",
+      "bytes": 1047,
+      "sha256": "f51a6683b6cb19cb1e6fd1e0fea5a3b825abad7a12df87f958f2b8c5dbc40f7b"
+    },
+    {
+      "file": "extensions/navigate-tree/settings-model-picker.test.ts",
+      "bytes": 16084,
+      "sha256": "03eb74389f2e9c6ac2914dd9fe71b5849a27530163fac5c3c6d36ebf157228ce"
+    },
+    {
+      "file": "extensions/navigate-tree/settings-model-picker.ts",
+      "bytes": 9570,
+      "sha256": "1787860b73850d10c7032ffb80908882ffb71e0fc679f679507883c743f7dbb6"
+    },
+    {
+      "file": "extensions/navigate-tree/settings-screen.test.ts",
+      "bytes": 43545,
+      "sha256": "e201422c62e37526e203468f39419bc97d1005c0938bbe8267d0adaafbd56ab6"
+    },
+    {
+      "file": "extensions/navigate-tree/settings-screen.ts",
+      "bytes": 69494,
+      "sha256": "3045e18f415109d74765c815d62d5bec048210204875717a90a7cad50b9e72f4"
+    },
+    {
+      "file": "extensions/navigate-tree/summary-prompt.test.ts",
+      "bytes": 15569,
+      "sha256": "4a23aad39e1e5e132c7f16033a26a7e082c10d413ec3d204ea716145fe69e86b"
+    },
+    {
+      "file": "extensions/navigate-tree/summary-prompt.ts",
+      "bytes": 9731,
+      "sha256": "7e390d4c87adb32ad8fedf917610959230fe322c733abcbf8759d5ea02b95533"
+    },
+    {
+      "file": "extensions/navigate-tree/tool-renderer.test.ts",
+      "bytes": 12553,
+      "sha256": "af13e645f07a8c144a22f59ec0d2848dbfd3f00af49f6f8e98a9180919da468e"
+    },
+    {
+      "file": "extensions/navigate-tree/tool-renderer.ts",
+      "bytes": 11663,
+      "sha256": "fd365e669f56df9aafc527a3a5570eeee24e0bf607ce02f42cef443fffad567b"
+    },
+    {
+      "file": "extensions/navigate-tree/tree-screen.test.ts",
+      "bytes": 24107,
+      "sha256": "9e3af605e93271281629cca680aa4436a893cdd716f11b3a0138845d04609109"
+    },
+    {
+      "file": "extensions/navigate-tree/tree-screen.ts",
+      "bytes": 16478,
+      "sha256": "7dfaee8ee106c2d12ca2ac6ca377cd73edddc7e0d179c7353c5645cf7f66c63b"
+    }
+  ],
+  "partitions": [
+    {
+      "index": 1,
+      "bytes": 448102,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e"
+    },
+    {
+      "index": 2,
+      "bytes": 462243,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0"
+    },
+    {
+      "index": 3,
+      "bytes": 444682,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da"
+    },
+    {
+      "index": 4,
+      "bytes": 455028,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322"
+    }
+  ]
+}

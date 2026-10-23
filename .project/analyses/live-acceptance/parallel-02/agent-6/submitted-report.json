@@ -1,0 +1,40 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "extensions/navigate-tree/retrospective-plan.ts: readSessionSnapshot validates append-ordered parent existence and unique IDs, checks tool-call/result pairing, and computes pendingToolCalls; validateCompleteToolCalls blocks unfinished source calls before cloning/proposal work. Verified source behavior.",
+        "extensions/navigate-tree/index.ts: completeRewind validates target/label and projected reduction/headroom before branching, and attempts best-effort leaf restoration if branch writing throws. Likely recovery risk: restoration errors are swallowed, so dual write/restore failure could leave the tree moved despite reporting failure.",
+        "extensions/navigate-tree/index.ts and continuity-store.test.ts: fold reconciles branch-local continuity state and embeds a snapshot/briefing in handoff; tests describe snapshot replacement and corrupt-snapshot fallback to prior ledger with warning. Test descriptions are not claims of executed tests."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "extensions/navigate-tree/index.ts: pending rewind freezes the projected request at instruction time, hides failed attempts, records outcomes, gates tools, and handles abort/failure paths; completeRewind prechecks net context/headroom. Verified source behavior.",
+        "README.md: documents a possible continuation failure when a later turn_end draft targets an abandoned entry: Pi may drop the whole boundary after the branch has moved, leaving the landed fold unannounced. This is a documented risk, not an independently reproduced failure.",
+        "extensions/navigate-tree/continuity-ledger.ts: rewindLedger preserves monotonic revision/identity progression when rewinding ledger state."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "extensions/navigate-tree/auto-navigate.ts: evaluateAutoNavigateTurn budgets UTF-8 payload size, limits anchors to fully exposed records, validates names/IDs, and returns no action on malformed model output or errors. Verified source behavior.",
+        "extensions/navigate-tree/auto-navigate.ts: summaryFocus is trimmed and length-checked (minimum 60 characters) but not semantically checked against the latest instruction or outstanding obligations. Likely continuation risk: a syntactically valid but incomplete focus may lose required handoff context.",
+        "extensions/navigate-tree/continuity-store.ts: readBranchLedger replaces replay state at snapshots and warns/skips malformed operations or snapshots rather than discarding the prior ledger. retrospective-cloning.md documents staged per-file publication but no multi-file transaction, so crashes may leave a partial clone family."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "extensions/navigate-tree/index.ts: rewind/overflow continuation projects canonical context and carries late inputs; planWithhold limits edits to projected results and reprojects estimates. Verified source behavior.",
+        "extensions/navigate-tree/retrospective.ts: validates ranges, tool batches, and state before staging files; documentation acknowledges publication-family rollback is not atomic, leaving a possible partial-publication recovery risk.",
+        "extensions/navigate-tree/config.ts: field-wise merge makes an invalid hint disable rather than fall back, while invalid anchor-start/parent-mode values fall back; file-level parse/read errors ignore a layer. extensions/navigate-tree/continuity-ledger.ts parseLedger strictly validates IDs/revisions/lineage; rewindLedger is documented/tested as preserving monotonic IDs."
+      ]
+    }
+  ]
+}

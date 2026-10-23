@@ -1,0 +1,42 @@
+ once to continue
+
+ [navigate_tree] You ended the turn immediately after a
+ rewind. Its branch_summary is a milestone summary, not a
+ stop condition: if the user's standing instruction or the
+ authorized plan still has open work, continue with it now,
+ in this turn. End the turn only when the authorized scope
+ is done and verified, or a real blocker needs the user —
+ and say which.
+
+                                                            
+ finish_review                                              
+   sha256:                                                  
+ 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d 
+ 6c851e                                                     
+   findings: [                                              
+       "In extensions/navigate-tree/retrospective-plan.ts,  
+ readSessionSnapshot validates branch_summary.fromId by     
+ checking that it exists in ids, but does not verify        
+ ancestry. Therefore, an unrelated existing entry can be    
+ accepted as the summary's fromId despite the purported     
+ source range.",                                            
+       "In extensions/navigate-tree/retrospective-plan.ts,  
+ readSessionSnapshot validates a label target against ids   
+ before adding the current entry.id. Since entries are      
+ processed in append order, targets that are forward        
+ references or self-references are rejected, while          
+ already-seen targets are accepted."                        
+     ]                                                      
+ Accepted: live fold and post-fold work complete.           
+                                                            
+
+ Review complete. finish_review accepted the pinned SHA-256 
+ and both source-grounded findings.                         
+
+ Tool output: expanded        
+
+────────────────────────────────────────────────────────────
+               
+────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-u9nzXq/workspace
+↑120k ↓1.2k R568k CH84.6% $0.018 (sub) 0.6%/372k  gpt-6-luna

@@ -1,0 +1,39 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: retrospective-plan.ts readSessionSnapshot hashes original bytes, validates parent-before-child graph structure, computes safe cuts and pending tool calls; validateCompleteToolCalls refuses unfinished source batches before conversion/model work.",
+        "Verified: index.ts completeRewind reconciles continuity and checks projected savings/headroom before branchWithSummary; failure handling attempts to restore the leaf and remove its label. Potential defect: restoration errors are swallowed, so the failure notice could coexist with a moved leaf.",
+        "Verified: continuity-store replay is branch-local and corrupt snapshots preserve the prior ledger; current-screen.ts createUserOpsWriter only permits writes while idle and capture is enabled."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: index.ts buildContextMessages uses the edited session projection, invalidates stale usage, freezes summary-request context at the instruction, and maps failed rewind outcomes to tool-result errors. Potential risk: raw-projection fallback may bypass context-edit behavior; no failure was established.",
+        "Verified: continuity-ledger.ts rewindLedger preserves revision and ID high-water marks across rewind; proposal flow hashes and rechecks source and writes plans exclusively with mode 0600.",
+        "Verified: proposal inputs validate complete tool-call batches; auto-navigate configuration strictly parses bounds and merges partial model overrides."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts rewindStaleReason detects compaction after a rewind call; planEnding filters context edits to active-branch entries, and pending rewinds freeze instruction context while failed attempts are hidden.",
+        "Potential risk: auto-navigate.ts evaluateAutoNavigateTurn may omit older anchors when the evidence budget fits only tail records, potentially declining a rewind; this is not established as a runtime failure."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts planWithhold reprojects proposed context edits and applies none if recovery remains infeasible.",
+        "Verified: extensions/navigate-tree/retrospective.ts cloneRetrospectiveSession stages files exclusively with mode 0600, validates the clone, rechecks source/descendant hashes and family before publication, and attempts rollback. Cleanup failures are reported as warnings; potential residual is leftover staged temporary files, not a verified defect.",
+        "Verified: docs/architecture.md states folds preserve abandoned branches and continuity is fail-open."
+      ]
+    }
+  ]
+}

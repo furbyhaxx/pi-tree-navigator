@@ -1,0 +1,228 @@
+summary turn usage {"input":34,"cacheRead":119168,"cacheWrite":0,"output":912}
+continuation {"status":"done","rewindTo":"reviewed-three","newLabel":"reviewed-four","targetId":"84ab11eb","summaryId":"b059b46a","collapsedEntries":18,"contextBefore":117640,"contextAfter":5449,"contextWindow":372000,"summaryAttempts":2,"foldEstimateBefore":119044,"foldEstimateAfter":6054,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":6,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary 073990ca: work handoff metadata valid (mode full)
+ok    branch_summary 073990ca: own report 1921 chars (cap 4500)
+info  branch_summary 073990ca: total handoff 2767 chars = header+own report 1951 + child handoffs 0 + continuity ledger 816 (no cap on the total)
+ok    branch_summary b4982066: work handoff metadata valid (mode full)
+ok    branch_summary b4982066: own report 2186 chars (cap 4500)
+info  branch_summary b4982066: total handoff 3491 chars = header+own report 2216 + child handoffs 0 + continuity ledger 1275 (no cap on the total)
+ok    branch_summary 84ab11eb: work handoff metadata valid (mode full)
+ok    branch_summary 84ab11eb: own report 2334 chars (cap 4500)
+info  branch_summary 84ab11eb: total handoff 4110 chars = header+own report 2366 + child handoffs 0 + continuity ledger 1744 (no cap on the total)
+ok    branch_summary b059b46a: work handoff metadata valid (mode full)
+ok    branch_summary b059b46a: own report 3460 chars (cap 4500)
+info  branch_summary b059b46a: total handoff 6243 chars = header+own report 3491 + child handoffs 0 + continuity ledger 2752 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions for branch and clone integrity, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Do not edit source, invent test results, or treat a completed partition as completion of the task.
+- Review actual supplied source and give at least two concrete observations per partition, distinguishing likely defects from verified facts.
+- Preserve partition hashes and observations across folds.
+
+## Progress
+### Done
+- [x] Anchored `context-gathered` and reviewed partition 1.
+- [x] Recorded partition 1 SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Pinned observations on `retrospective-plan.ts` graph validation and `index.ts` rewind completion safeguards.
+
+### In Progress
+- [ ] Partitions 2–4 remain to be reviewed and folded; the report has not been submitted.
+
+### Blocked
+- No blocker recorded.
+
+## Key Decisions
+- **Partition 1 call-ID concern is tentative**: `readSessionSnapshot` tracks pending tool calls by ID; whether this creates a branch-integrity defect for reused outstanding IDs remains a likely concern, not a verified failure.
+- **Rewind safeguards are factual**: `completeRewind` validates anchor identity and label availability and attempts to restore the leaf and remove the branch marker on branch-write failure.
+
+## Next Steps
+1. Review partition 2’s supplied source, record its exact hash and observations, list anchors, then fold to `reviewed-two`.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of branch and clone integrity and submit a source-grounded report with exact partition hashes.
+Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.”
+Scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 2]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates unique IDs/parent existence, ancestry of context_edit/compaction targets, and pending tool calls; factual safeguards. Likely integrity risk: readSessionSnapshot's pending-call tracking keys only by tool call ID within ancestry, so reused IDs are rejected while outstanding rather than disambiguated by call-entry identity. ex…[truncated]
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for branch and clone integrity, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Do not edit source, invent test results, or treat a completed partition as completion of the task.
+- Give at least two concrete observations per partition, distinguishing verified facts from likely defects.
+- Preserve hashes and observations across folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Reviewed partition 2. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`.
+
+### In Progress
+- [ ] Review and fold partitions 3 and 4, then submit the report.
+
+### Blocked
+- None recorded.
+
+## Key Decisions
+- `extensions/navigate-tree/index.ts` `buildContextMessages` uses the canonical session projection and keys pending-rewind truncation by instruction entry ID, addressing reused tool-call IDs. Verified source behavior.
+- `extensions/navigate-tree/handoff.ts` `validHandoff` checks broad field types but not semantic consistency or uniqueness of `children`/`sourceIds`; this is a likely integrity concern, not a verified failure.
+- Partition 1 observations: `retrospective-plan.ts` validates unique IDs, parent existence, ancestry of context-edit/compaction targets, and pending tool calls. Its pending-call tracking by tool-call ID raises a tentative concern if IDs are reused while outstanding. `index.ts` `completeRewind` validates anchor identity and label availability and attempts rollback on branch-write failure.
+
+## Next Steps
+1. Review partition 3’s supplied source, record its exact hash and observations, list anchors, and fold to `reviewed-three`.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of branch and clone integrity and submit a source-grounded report with exact partition hashes.
+Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.”
+This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 3]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates unique IDs/parent existence, ancestry of context_edit/compaction targets, and pending tool calls; factual safeguards. Likely integrity risk: readSessionSnapshot's pending-call tracking keys only by tool call ID within ancestry, so reused IDs are rejected while outstanding rather than disambiguated by call-entry identity. ex…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: index.ts buildContextMessages uses canonical session projection and truncates to pending instruction entry ID, explicitly addressing reused tool-call IDs. Likely integrity issue in handoff.ts validHandoff checks broad fields/types but does not validate semantic consistency/uniqueness of children/sourceIds (though persistence validation may occur elsewhere).
+--- end ---
+# Work handoff: reviewed three
+
+## Goal
+Review all four source partitions for branch and clone integrity, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Do not edit source, invent test results, or treat a completed partition as completion.
+- Review supplied source; provide concrete observations and distinguish verified facts from likely defects.
+- Preserve hashes and observations across folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 1: SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Reviewed partition 2: SHA-256 `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`.
+- [x] Reviewed partition 3: SHA-256 `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`.
+
+### In Progress
+- [ ] Partitions 3 and 4 remain to be folded; partition 4 remains to be reviewed. Report not submitted.
+
+### Blocked
+- No blocker recorded.
+
+## Key Decisions
+- Partition 1: `retrospective-plan.ts` validates graph references and ancestry; its pending-call tracking by tool-call ID raises a tentative concern when IDs are reused while outstanding. `index.ts` `completeRewind` validates anchor identity and label availability and attempts rollback if branch writing fails.
+- Partition 2: `index.ts` `buildContextMessages` uses the canonical session projection and truncates by instruction entry ID. Likely concern: `handoff.ts` `validHandoff` checks field types but not semantic consistency or uniqueness of `children`/`sourceIds`.
+- Partition 3: Verified `descendant-sessions.ts` copies transcript bodies unchanged while assigning new IDs and parent links. Potential concern: `handoff-renderer.ts` `handoffView` uses retrospective boundary indices to select a slice without revalidating graph ancestry.
+
+## Next Steps
+1. Review partition 4’s supplied source, record its exact hash and concrete observations, then fold to `reviewed-four`.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of branch and clone integrity and submit a source-grounded report with exact partition hashes.
+Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.”
+Scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 4]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates unique IDs/parent existence, ancestry of context_edit/compaction targets, and pending tool calls; factual safeguards. Likely integrity risk: readSessionSnapshot's pending-call tracking keys only by tool call ID within ancestry, so reused IDs are rejected while outstanding rather than disambiguated by call-entry identity. ex…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: index.ts buildContextMessages uses canonical session projection and truncates to pending instruction entry ID, explicitly addressing reused tool-call IDs. Likely integrity issue in handoff.ts validHandoff checks broad fields/types but does not validate semantic consistency/uniqueness of children/sourceIds (though persistence validation may occur elsewhere).
+F4 Partition 3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified: descendant-sessions.ts discovers canonical path-linked descendants and retains transcript body bytes while assigning fresh header IDs/parent links. Potential integrity risk: handoff-renderer.ts handoffView accepts retrospective boundary indices from details and may include a broad entries slice without revalidating graph ancestry; likely sourceIds provenance concern.
+--- end ---
+# Work handoff: reviewed four
+
+## Goal
+Review all four source partitions for branch and clone integrity and submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Do not edit source, invent test results, or treat a completed partition as completion.
+- Give concrete source observations and distinguish verified behavior from likely concerns.
+
+## Progress
+### Done
+- [x] Reviewed all four supplied partitions and recorded their hashes and observations.
+- [x] Folded the reviewed work through `reviewed-four`.
+
+### In Progress
+- [ ] Submit the four-partition report.
+
+### Blocked
+- I cannot submit the report in this turn.
+
+## Key Decisions
+- Findings below distinguish verified source behavior from tentative integrity concerns; no test results are claimed.
+
+## Next Steps
+1. Submit the four ordered partition entries with the hashes and findings below.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of branch and clone integrity and submit a source-grounded report with exact partition hashes.
+Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.”
+Scope is not complete.
+
+### Partition findings
+
+1. **SHA-256:** `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`
+   - Verified: `extensions/navigate-tree/retrospective-plan.ts` `readSessionSnapshot` validates unique IDs, parent existence, ancestry of context-edit/compaction targets, and pending tool calls.
+   - Likely concern, not a verified failure: pending-call tracking keyed by tool-call ID may behave problematically if IDs are reused while outstanding.
+   - Verified: `extensions/navigate-tree/index.ts` `completeRewind` validates anchor identity and label availability and attempts rollback if branch writing fails.
+
+2. **SHA-256:** `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`
+   - Verified: `index.ts` `buildContextMessages` uses the canonical session projection and truncates pending-rewind context by instruction entry ID.
+   - Likely concern, not a verified failure: `handoff.ts` `validHandoff` checks broad field types but does not establish semantic consistency or uniqueness of `children` and `sourceIds`.
+
+3. **SHA-256:** `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`
+   - Verified: `descendant-sessions.ts` copies transcript bodies unchanged while assigning fresh header IDs and remapped parent links.
+   - Potential concern, not a verified failure: `handoff-renderer.ts` `handoffView` may use retrospective boundary indices to select a broad entries slice without revalidating graph ancestry.
+
+4. **SHA-256:** `22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322`
+   - Verified: `retrospective.ts` `validateRanges` checks ordered, non-overlapping ranges, safe tool-batch cuts, graph incoming parents, and paired context edits; `validateClone` checks linkage, reference ancestry, runtime state, and projection equivalence.
+   - Verified: `continuity-ledger.ts` `parseLedger` checks unique IDs and bidirectional supersession lineage.
+   - Likely display concern, not a verified failure: `tree-screen.ts` `archivedTurnOf` falls back to the last holder when duplicate branch labels cannot be resolved through the summary’s `fromId` ancestry, which could associate an archive row with the wrong holder.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 6]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates unique IDs/parent existence, ancestry of context_edit/compaction targets, and pending tool calls; factual safeguards. Likely integrity risk: readSessionSnapshot's pending-call tracking keys only by tool call ID within ancestry, so reused IDs are rejected while outstanding rather than disambiguated by call-entry identity. ex…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: index.ts buildContextMessages uses canonical session projection and truncates to pending instruction entry ID, explicitly addressing reused tool-call IDs. Likely integrity issue in handoff.ts validHandoff checks broad fields/types but does not validate semantic consistency/uniqueness of children/sourceIds (though persistence validation may occur elsewhere).
+F4 Partition 3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified: descendant-sessions.ts discovers canonical path-linked descendants and retains transcript body bytes while assigning fresh header IDs/parent links. Potential integrity risk: handoff-renderer.ts handoffView accepts retrospective boundary indices from details and may include a broad entries slice without revalidating graph ancestry; likely sourceIds provenance concern.
+F5 Partition 4 SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322. Verified: retrospective.ts validateRanges checks ordered/nonoverlapping nested ranges, safe tool-batch cuts, graph incoming parents and paired context edits; validateClone checks IDs/parents, compaction/context-edit ancestry and runtime-state/projection equivalence. Likely integrity concern: buildClone's copy() preserves original entry IDs while rewriting parentId and appends synthetic handoffs; clo…[truncated]
+F6 Partition 4 concrete verified: continuity-ledger.ts parseLedger checks unique IDs, nextId bounds, item invariants and bidirectional supersession lineage. index.ts writeStartAnchorIfNeeded is session-keyed and avoids duplicate active-branch anchor labels; fold-screen rechecks anchor/foldability and label uniqueness immediately before request. Potential issue: tree-screen archivedTurnOf resolves duplicate branch labels by searching the summary's fromId ancestry then falls back to last …[truncated]
+--- end ---
+(node:176694) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

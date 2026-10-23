@@ -1,0 +1,54 @@
+summary turn usage {"input":141,"cacheRead":114304,"cacheWrite":0,"output":581}
+continuation {"status":"continue-nudge","summaryId":"efd4a7dc"}
+ok    branch_summary efd4a7dc: work handoff metadata valid (mode full)
+ok    branch_summary efd4a7dc: own report 1635 chars (cap 4500)
+info  branch_summary efd4a7dc: total handoff 2802 chars = header+own report 1668 + child handoffs 0 + continuity ledger 1134 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: review complete
+
+## Goal
+Review the supplied source for context continuity and identify two concrete, source-grounded observations.
+
+## Constraints & Preferences
+- Never change files or invent test results.
+- Work autonomously until the review, one fold and `finish_review` are complete.
+- The latest instruction says not to use tools.
+
+## Progress
+### Done
+- [x] Loaded source with SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Identified an observation in `extensions/navigate-tree/retrospective-plan.ts`, `readSessionSnapshot`: the second validation loop checks label targets and `branch_summary` `fromId` against `ids` after it was cleared, so those checks reject references not already encountered in that loop.
+- [x] Recorded a `frame.ts` observation: `sanitizeTerminalText` strips terminal sequences and control characters for rendered text.
+
+### In Progress
+- [ ] Complete `finish_review` with the source hash and two findings.
+
+### Blocked
+- The latest instruction prohibits tool use, while the remaining authorized review step requires `finish_review`.
+
+## Key Decisions
+- **No further tool calls in this response**: the latest user instruction explicitly says “Do NOT use any tool.”
+
+## Next Steps
+1. If continuing under the original review authorization, submit the exact hash and two concrete findings via `finish_review`.
+
+## Standing authorization
+“Goal: review the supplied real source for context continuity. Rule: never change files or invent test results. Work autonomously until the review, one fold and finish_review are complete.” The scope is not complete; `finish_review` remains outstanding.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 4]
+
+Binding rules:
+R1 Rule: never change files or invent test results.
+  > "Rule: never change files or invent test results."
+
+Facts:
+F2 Source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e
+F3 Finding: retrospective-plan.ts readSessionSnapshot validates ancestry and tool-call completion across the graph, but stores ids in `ids` only as records are iterated and clears `ids` before the second validation loop. In that loop, label target and branch_summary fromId checks test `ids.has(...)`; forward references are therefore rejected despite earlier validation permitting parent ordering. This is a concrete behavior worth reviewing against format expectations.
+F4 Finding: frame.ts `FrameList.ensureVisible` computes row heights only for currently visible filtered indices and clamps offset to position; `frameContent` uses a layout measured from all rows, so filtering preserves frame height. No defect asserted; source-grounded observation: terminal text sanitizer strips escape sequences/control characters before rendering and fuzzy search.
+--- end ---
+(node:190414) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

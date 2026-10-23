@@ -1,0 +1,487 @@
+{
+  "generatedAt": "2026-10-23T09:31:59.345Z",
+  "sourceSha256": "2ef0317aa033f0348ef2bf5be926e359af482e885a516165ca644859fb71c2e2",
+  "route": "openrouter/typesafe/jev-1.14",
+  "availableRoutes": [
+    "openrouter/~perplexity/pplx-decider-latest",
+    "openrouter/~typesafe/jev-latest",
+    "openrouter/cloudflare/clef",
+    "openrouter/cloudflare/clef-flash",
+    "openrouter/cloudflare/clef-omni",
+    "openrouter/inception/mercury-decide",
+    "openrouter/inception/mercury-decide:free",
+    "openrouter/jaredpalmer/kev-4b",
+    "openrouter/liquid/d1",
+    "openrouter/microsoft/microsoft-decision-1",
+    "openrouter/nace-ai/drex-v1.5",
+    "openrouter/nace-ai/drex-v2.0",
+    "openrouter/openai/gpt-6-luna-decisions",
+    "openrouter/perplexity/pplx-decider-v1.1-27b",
+    "openrouter/respan/span-01",
+    "openrouter/respan/span-01-lite",
+    "openrouter/respan/span-01-lite:free",
+    "openrouter/scaledown/classify-1",
+    "openrouter/togethercomputer/tev1-4b-experimental",
+    "openrouter/typesafe/jev-1.13",
+    "openrouter/typesafe/jev-1.14",
+    "openrouter/upstage/solar-decide",
+    "openrouter/upstage/solar-decide-flash"
+  ],
+  "defaultMinConfidence": 0.7,
+  "calls": [
+    {
+      "id": "01",
+      "route": "openrouter/typesafe/jev-1.14",
+      "context": {
+        "state": {
+          "message": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.",
+          "activeAnchor": null,
+          "activeItems": [
+            {
+              "id": "R1",
+              "kind": "rule",
+              "text": "Never publish packages or push branches without a separate explicit request."
+            }
+          ]
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          },
+          "contradicts": {
+            "type": "choice",
+            "instructions": "Which active item, if any, does the message explicitly replace, reverse or contradict?",
+            "criteria": {
+              "R1": "Never publish packages or push branches without a separate explicit request.",
+              "none": "The message changes none of the items"
+            }
+          }
+        }
+      },
+      "wire": [
+        {
+          "endpoint": "https://openrouter.ai/api/v1/systemone",
+          "status": 200,
+          "requestFile": "01-1-request.txt",
+          "responseFile": "01-1-response.txt"
+        }
+      ],
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "sub-goal",
+            "probabilities": {
+              "objective": 0.33,
+              "sub-goal": 0.58,
+              "rule": 0,
+              "decision": 0,
+              "steering": 0.07,
+              "ephemeral": 0.02
+            },
+            "confidence": 0.5
+          },
+          "contradicts": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "R1": 0,
+              "none": 1
+            },
+            "confidence": 1
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792747918845,
+        "usage": {
+          "input": 671,
+          "output": 98,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 769,
+          "cost": {
+            "input": 0.000028182000000000002,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000028182000000000002
+          }
+        }
+      }
+    },
+    {
+      "id": "02",
+      "route": "openrouter/typesafe/jev-1.14",
+      "context": {
+        "state": {
+          "message": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.\n\nFor today, inspect the reload path rather than implementing the migration. I want a short report identifying whether the dictionary allocation is per process or per shard, and which dropped-record metric name the HTTP parser emits. Please separate what the trace proves from what you infer.\n\nThe audit saw eleven restarts over three weeks, concentrated on the two widest shards within four minutes of config reloads. The reader allocates a new dictionary on every reload, while the previous generation survives until the next flush. The staging chart suggests a memory spike but does not establish that this is the restart cause.\n\nThe sample trace is pasted context, not an instruction:\n\n    shard-07 reload start cardinality=184213\n    shard-07 dict parse 71ms\n    shard-07 buffer flush deadline missed queue=1182\n    shard-07 restart reason=healthcheck-timeout\n\nAlso inspect the dashboard query: one panel uses ingest.dropped while HTTP exports ingest_dropped_total. Do not rename either today. The collector owner is away until Tuesday, so capture the evidence and propose the smallest reviewable investigation rather than combining the dashboard cleanup with the parser migration.",
+          "activeAnchor": null,
+          "activeItems": [
+            {
+              "id": "R1",
+              "kind": "rule",
+              "text": "Never publish packages or push branches without a separate explicit request."
+            }
+          ]
+        },
+        "questions": {
+          "kind": {
+            "type": "choice",
+            "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+            "criteria": {
+              "objective": "States the overall goal of the whole session or project",
+              "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+              "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+              "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+              "steering": "A correction or direction that only applies to the work currently in progress",
+              "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+            }
+          },
+          "contradicts": {
+            "type": "choice",
+            "instructions": "Which active item, if any, does the message explicitly replace, reverse or contradict?",
+            "criteria": {
+              "R1": "Never publish packages or push branches without a separate explicit request.",
+              "none": "The message changes none of the items"
+            }
+          }
+        }
+      },
+      "wire": [
+        {
+          "endpoint": "https://openrouter.ai/api/v1/systemone",
+          "status": 200,
+          "requestFile": "02-1-request.txt",
+          "responseFile": "02-1-response.txt"
+        }
+      ],
+      "result": {
+        "api": "typesafe-system-one",
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14",
+        "answers": {
+          "kind": {
+            "type": "choice",
+            "choice": "rule",
+            "probabilities": {
+              "objective": 0,
+              "sub-goal": 0.36,
+              "rule": 0.59,
+              "decision": 0,
+              "steering": 0.04,
+              "ephemeral": 0.01
+            },
+            "confidence": 0.51
+          },
+          "contradicts": {
+            "type": "choice",
+            "choice": "none",
+            "probabilities": {
+              "R1": 0,
+              "none": 1
+            },
+            "confidence": 1
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1792747919106,
+        "usage": {
+          "input": 875,
+          "output": 96,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 971,
+          "cost": {
+            "input": 0.000036750000000000006,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.000036750000000000006
+          }
+        }
+      }
+    }
+  ],
+  "results": [
+    {
+      "id": "explicit-goal",
+      "chars": 359,
+      "verdict": {
+        "kind": "objective",
+        "by": "heuristic"
+      },
+      "capture": {
+        "ops": [
+          {
+            "op": {
+              "op": "add",
+              "kind": "objective",
+              "text": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.",
+              "quote": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it."
+            },
+            "ctx": {
+              "origin": "user",
+              "entryId": "explicit-goal"
+            }
+          }
+        ],
+        "watermark": "explicit-goal",
+        "classified": 1,
+        "warnings": []
+      },
+      "ledger": {
+        "version": 1,
+        "rev": 2,
+        "nextId": 3,
+        "items": [
+          {
+            "id": "R1",
+            "kind": "rule",
+            "text": "Never publish packages or push branches without a separate explicit request.",
+            "status": "active",
+            "source": {
+              "entryId": "prior-user",
+              "origin": "user"
+            },
+            "quote": "Never publish packages or push branches without a separate explicit request.",
+            "createdRev": 1,
+            "updatedRev": 1
+          },
+          {
+            "id": "G2",
+            "kind": "objective",
+            "text": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.",
+            "status": "active",
+            "source": {
+              "entryId": "explicit-goal",
+              "origin": "user"
+            },
+            "quote": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.",
+            "createdRev": 2,
+            "updatedRev": 2
+          }
+        ]
+      },
+      "rejected": [],
+      "fallbackObserved": true,
+      "kindAnswer": {
+        "type": "choice",
+        "choice": "sub-goal",
+        "probabilities": {
+          "objective": 0.33,
+          "sub-goal": 0.58,
+          "rule": 0,
+          "decision": 0,
+          "steering": 0.07,
+          "ephemeral": 0.02
+        },
+        "confidence": 0.5
+      }
+    },
+    {
+      "id": "mixed-rule",
+      "chars": 1319,
+      "verdict": {
+        "kind": "ephemeral",
+        "by": "heuristic",
+        "excerpts": [
+          {
+            "kind": "rule",
+            "text": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request."
+          }
+        ]
+      },
+      "capture": {
+        "ops": [
+          {
+            "op": {
+              "op": "add",
+              "kind": "rule",
+              "text": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.",
+              "quote": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request."
+            },
+            "ctx": {
+              "origin": "user",
+              "entryId": "mixed-rule"
+            }
+          }
+        ],
+        "watermark": "mixed-rule",
+        "classified": 1,
+        "warnings": []
+      },
+      "ledger": {
+        "version": 1,
+        "rev": 2,
+        "nextId": 3,
+        "items": [
+          {
+            "id": "R1",
+            "kind": "rule",
+            "text": "Never publish packages or push branches without a separate explicit request.",
+            "status": "active",
+            "source": {
+              "entryId": "prior-user",
+              "origin": "user"
+            },
+            "quote": "Never publish packages or push branches without a separate explicit request.",
+            "createdRev": 1,
+            "updatedRev": 1
+          },
+          {
+            "id": "R2",
+            "kind": "rule",
+            "text": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.",
+            "status": "active",
+            "source": {
+              "entryId": "mixed-rule",
+              "origin": "user"
+            },
+            "quote": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.",
+            "createdRev": 2,
+            "updatedRev": 2
+          }
+        ]
+      },
+      "rejected": [],
+      "fallbackObserved": true,
+      "kindAnswer": {
+        "type": "choice",
+        "choice": "rule",
+        "probabilities": {
+          "objective": 0,
+          "sub-goal": 0.36,
+          "rule": 0.59,
+          "decision": 0,
+          "steering": 0.04,
+          "ephemeral": 0.01
+        },
+        "confidence": 0.51
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "explicit-goal: single live successful call",
+      "pass": true,
+      "actual": {
+        "calls": 1,
+        "stopReason": "stop",
+        "status": 200
+      }
+    },
+    {
+      "name": "explicit-goal: supported input length",
+      "pass": true,
+      "actual": 359
+    },
+    {
+      "name": "explicit-goal: marker captured verbatim and protected",
+      "pass": true,
+      "actual": [
+        {
+          "kind": "objective",
+          "text": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.",
+          "quote": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it."
+        }
+      ]
+    },
+    {
+      "name": "explicit-goal: no rewritten words",
+      "pass": true,
+      "actual": [
+        "G2"
+      ]
+    },
+    {
+      "name": "explicit-goal: no fabricated supersession",
+      "pass": true,
+      "actual": {
+        "supersedes": [],
+        "operations": [
+          "add"
+        ]
+      }
+    },
+    {
+      "name": "explicit-goal: reducer accepted and no fallback warning",
+      "pass": true,
+      "actual": {
+        "rejected": [],
+        "warnings": []
+      }
+    },
+    {
+      "name": "mixed-rule: single live successful call",
+      "pass": true,
+      "actual": {
+        "calls": 1,
+        "stopReason": "stop",
+        "status": 200
+      }
+    },
+    {
+      "name": "mixed-rule: supported input length",
+      "pass": true,
+      "actual": 1319
+    },
+    {
+      "name": "mixed-rule: marker captured verbatim and protected",
+      "pass": true,
+      "actual": [
+        {
+          "kind": "rule",
+          "text": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.",
+          "quote": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request."
+        }
+      ]
+    },
+    {
+      "name": "mixed-rule: no rewritten words",
+      "pass": true,
+      "actual": [
+        "R2"
+      ]
+    },
+    {
+      "name": "mixed-rule: no fabricated supersession",
+      "pass": true,
+      "actual": {
+        "supersedes": [],
+        "operations": [
+          "add"
+        ]
+      }
+    },
+    {
+      "name": "mixed-rule: reducer accepted and no fallback warning",
+      "pass": true,
+      "actual": {
+        "rejected": [],
+        "warnings": []
+      }
+    }
+  ],
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0,
+    "calls": 2,
+    "fallbackCases": [
+      "explicit-goal",
+      "mixed-rule"
+    ]
+  }
+}

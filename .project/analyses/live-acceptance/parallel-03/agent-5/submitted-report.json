@@ -1,0 +1,36 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: README.md documents runtime > trusted project > global configuration precedence; config.test.ts distinguishes invalid-hint behavior (blocks fallback) from other invalid fields (fall through), and tests that untrusted project configuration is not read.",
+        "Verified: proposal-source.test.ts documents disclosure modes: omit removes tool calls/results and linked context replacements, while calls-only retains arguments but omits results/details."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: auto-navigate-config.ts parseAutoNavigatePartial/mergeAutoNavigatePartial/materializeAutoNavigateConfig validate fields and ranges and merge per-tool disclosure policy.",
+        "Verified: proposal-command.ts sends full textual history across branches for model proposals. Potential disclosure risk: the breadth of transmitted history may include material beyond the immediate proposal context."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: proposal-source.ts and docs/retrospective-cloning.md describe full textual history by default and structured tool filtering; excluded tool records do not remove sensitive copies in prose or historical summaries, a potential disclosure risk.",
+        "Verified: continuity-briefing.ts renderBriefing preserves objectives/goals/rules/decisions even when over budget, while dropping facts/files/steering with an omission note."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: config.ts parses trusted layered configuration and strictly validates proposal disclosure; invalid proposal configuration blocks proposals. continuity-ledger.ts parseLedger/parseDelta validate schemas and lineage; retrospective.ts binds previews to source hashes and rechecks source bytes before publishing.",
+        "Verified: index.ts continuityRequestSection includes folded-span user references in summary requests. Potential sensitivity risk: captured verbatim user content may be propagated into summaries."
+      ]
+    }
+  ]
+}

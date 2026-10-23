@@ -1,0 +1,45 @@
+{
+  "api": "typesafe-system-one",
+  "provider": "openrouter",
+  "model": "typesafe/jev-1.14",
+  "answers": {
+    "kind": {
+      "type": "choice",
+      "choice": "sub-goal",
+      "probabilities": {
+        "objective": 0.33,
+        "sub-goal": 0.58,
+        "rule": 0,
+        "decision": 0,
+        "steering": 0.07,
+        "ephemeral": 0.02
+      },
+      "confidence": 0.5
+    },
+    "contradicts": {
+      "type": "choice",
+      "choice": "none",
+      "probabilities": {
+        "R1": 0,
+        "none": 1
+      },
+      "confidence": 1
+    }
+  },
+  "stopReason": "stop",
+  "timestamp": 1792747918845,
+  "usage": {
+    "input": 671,
+    "output": 98,
+    "cacheRead": 0,
+    "cacheWrite": 0,
+    "totalTokens": 769,
+    "cost": {
+      "input": 0.000028182000000000002,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "total": 0.000028182000000000002
+    }
+  }
+}

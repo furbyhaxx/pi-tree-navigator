@@ -1,0 +1,38 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "extensions/navigate-tree/index.ts buildContextMessages projects the session tree; tests cover honoring context_edit omissions and clearing stale assistant usage after edits while preserving post-edit usage.",
+        "extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot hashes raw bytes and validates graph ancestry, safe cuts, and pending tool calls before planning; token estimates remain heuristic rather than provider-tokenization proof."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "extensions/navigate-tree/index.ts buildContextMessages uses projection entries, invalidates stale usage, truncates pending rewind context to its instruction, adjusts failed tool results, then removes system messages; projection and in-band rewind details affect visibility accounting.",
+        "extensions/navigate-tree/handoff.ts handoffStats deduplicates usage by entry ID and aggregates message/usage/compaction/branch_summary records. Slash-containing wildcard model patterns may match modelId as well as the full key, a potential matching ambiguity."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "extensions/navigate-tree/auto-navigate.ts evaluateAutoNavigateTurn bounds serialized UTF-8 payload and validates returned IDs and anchors; its payload identifies older records withheld from the controller.",
+        "extensions/navigate-tree/context-tokens.ts estimateContextTokens combines host estimateTokens with recorded-usage baseline and heuristic tail; estimateRequestTokens applies an 8/7 factor. Tests disclaim cross-version numeric parity; circular toolCall arguments can throw TypeError, a potential robustness issue if such input reaches the estimator.",
+        "extensions/navigate-tree/continuity-briefing.ts drops facts, files, and steering in order but flags overBudget when nondroppable content exceeds the limit. continuity-store.ts restores fold snapshots at branch summaries and skips malformed ops with warnings."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "extensions/navigate-tree/handoff-projection.ts invalidateStaleUsage clears stale usage on projected copies, and projectHandoffs strips usage from historical clone entries without changing persisted accounting.",
+        "extensions/navigate-tree/index.ts planWithhold selects eligible results from canonical projection, excludes navigator and already-edited results, reprojects proposed edits, and calibrates estimates from real usage while enforcing a complete-request bound.",
+        "extensions/navigate-tree/config.ts mergeHintField allows a present invalid project hint to override the global hint; fallback fields may instead use a valid lower-layer value."
+      ]
+    }
+  ]
+}

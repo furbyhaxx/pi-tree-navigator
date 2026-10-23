@@ -1,0 +1,47 @@
+{
+  "folds": [
+    {
+      "summaryId": "efd4a7dc",
+      "summaryAttempts": 3,
+      "summaryInput": 114445,
+      "summaryCacheRead": 114304,
+      "previousInput": 114445,
+      "nextInput": 1984,
+      "nextRole": "assistant",
+      "cacheRatio": 0.9987679671457905,
+      "reductionRatio": 0.9826641618244571,
+      "nextTools": []
+    }
+  ],
+  "nudges": [
+    {
+      "id": "4a17ab4b",
+      "nextRole": "assistant",
+      "nextTools": [
+        "finish_review"
+      ]
+    }
+  ],
+  "userMessages": 1,
+  "checkpointRequests": [
+    11
+  ],
+  "requests": 13,
+  "responseStatuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+  ],
+  "smokeExit": 0,
+  "reportAccepted": true
+}

@@ -1,0 +1,35 @@
+{
+  "state": {
+    "message": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.",
+    "activeAnchor": null,
+    "activeItems": [
+      {
+        "id": "R1",
+        "kind": "rule",
+        "text": "Never publish packages or push branches without a separate explicit request."
+      }
+    ]
+  },
+  "questions": {
+    "kind": {
+      "type": "choice",
+      "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+      "criteria": {
+        "objective": "States the overall goal of the whole session or project",
+        "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+        "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+        "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+        "steering": "A correction or direction that only applies to the work currently in progress",
+        "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+      }
+    },
+    "contradicts": {
+      "type": "choice",
+      "instructions": "Which active item, if any, does the message explicitly replace, reverse or contradict?",
+      "criteria": {
+        "R1": "Never publish packages or push branches without a separate explicit request.",
+        "none": "The message changes none of the items"
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts completeRewind restores the prior leaf if branch writing fails; endOutsideBoundary catches persistence errors, though partial ending persistence is a possible recovery concern.",
+        "Verified: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates ancestry and completed tool calls and computes safe cuts; continuity snapshots replace replay state at summaries and sibling branches have independent ledgers."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts buildContextMessages freezes the projection at the pending instruction and represents failed outcomes as tool errors.",
+        "Verified: extensions/navigate-tree/continuity-ledger.ts rewindLedger restores snapshot items while preserving monotonic revision and ID counters."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: extensions/navigate-tree/index.ts startRewindCompaction bounds retries/output and withholds failed entries.",
+        "Verified: extensions/navigate-tree/continuity-capture.ts captureIntent uses watermark and source-entry deduplication; abort retains the watermark and classifier failure falls back to heuristics. Possible risk: concurrent classification may use stale initial ledger state for contradictory instructions in one scan."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: extensions/navigate-tree/retrospective.ts cloneRetrospectiveSession stages temporary files, reload-validates the root clone, checks source/family hashes, hard-links publication, and rolls back published outputs on error. Likely recovery risk: rollback unlink failure can leave files; temporary cleanup failure only warns.",
+        "Verified: extensions/navigate-tree/config.ts invalid hint values are disabled without cross-layer fallback, while invalid start-anchor and handoff values fall back."
+      ]
+    }
+  ]
+}

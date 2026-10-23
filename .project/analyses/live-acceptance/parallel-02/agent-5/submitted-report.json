@@ -1,0 +1,38 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "config.test.ts asserts trusted project values override global values per field and untrusted project files are not read; invalid hint values block fallback while invalid start/handoff values fall through. This is asserted test coverage, not independent runtime verification.",
+        "proposal-engine.test.ts and proposal-source.test.ts cover disclosure modes: omit removes tool arguments/results/details, while calls-only retains arguments but excludes results. Bounded auto-navigate evidence identifies older omitted records; settings-screen.ts describeSettings exposes effective policies/settings, with no transcript leak established."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "auto-navigate-config.ts parseAutoNavigatePartial validates ranges and tool modes; mergeAutoNavigatePartial merges by field/tool and materialization layers over proposal tool policy.",
+        "proposal-command.ts modelProposal explicitly confirms sending full textual history across branches to the selected model and reports tool rules, charges, and binary omission. The proposal flow treats transcript as untrusted and applies configured per-tool evidence filtering; this is source behavior, not proof of provider-side safeguards.",
+        "Continuity classifier context is bounded to a user message and active ledger items/anchor, but can disclose ledger facts/rules to a configured classifier; no unintended disclosure is established."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "auto-navigate.ts bounds controller evidence to its context budget, reports omitted older records, and validates selected anchors, entry IDs, and labels.",
+        "continuity-capture.ts classifierContext sends up to 4,000 characters of user message, up to 30 active items capped at 200 characters each, plus an anchor, to the configured classifier: a bounded disclosure surface, with no source evidence that it is unintended.",
+        "proposal-source.ts structured tool records default to full; configured exact-tool omit/calls-only modes restrict disclosure, but the source warns that copies of tool data embedded in unrelated prose cannot be redacted. No runtime tests are claimed."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "config.ts rejects invalid proposal disclosure configuration for model proposals and disables invalid auto_navigate; it documents that project configuration is read only when trusted. This is fail-closed behavior for those invalid settings.",
+        "index.ts resolveAnchorTarget rejects duplicate active-branch anchor names rather than overwriting. proposal-model.ts passes request.systemPrompt and request.text to registry.streamSimple with toolChoice none; proposal-options.ts defines per-tool full, calls-only, and omit modes. This identifies the model disclosure path and controls, without establishing an unintended leak."
+      ]
+    }
+  ]
+}

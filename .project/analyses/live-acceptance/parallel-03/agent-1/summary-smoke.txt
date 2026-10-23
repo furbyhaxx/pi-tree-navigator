@@ -1,0 +1,196 @@
+summary turn usage {"input":1398,"cacheRead":117760,"cacheWrite":0,"output":403}
+continuation {"status":"done","rewindTo":"reviewed-three","newLabel":"reviewed-four","targetId":"552ce3c0","summaryId":"5884b311","collapsedEntries":18,"contextBefore":117920,"contextAfter":4957,"contextWindow":372000,"summaryAttempts":1,"foldEstimateBefore":119316,"foldEstimateAfter":5563,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":8,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary f3754224: work handoff metadata valid (mode full)
+ok    branch_summary f3754224: own report 1621 chars (cap 4500)
+info  branch_summary f3754224: total handoff 2467 chars = header+own report 1651 + child handoffs 0 + continuity ledger 816 (no cap on the total)
+ok    branch_summary 217672af: work handoff metadata valid (mode full)
+ok    branch_summary 217672af: own report 1569 chars (cap 4500)
+info  branch_summary 217672af: total handoff 2919 chars = header+own report 1599 + child handoffs 0 + continuity ledger 1320 (no cap on the total)
+ok    branch_summary 552ce3c0: work handoff metadata valid (mode full)
+ok    branch_summary 552ce3c0: own report 2077 chars (cap 4500)
+info  branch_summary 552ce3c0: total handoff 4365 chars = header+own report 2109 + child handoffs 0 + continuity ledger 2256 (no cap on the total)
+ok    branch_summary 5884b311: work handoff metadata valid (mode full)
+ok    branch_summary 5884b311: own report 1843 chars (cap 4500)
+info  branch_summary 5884b311: total handoff 4890 chars = header+own report 1874 + child handoffs 0 + continuity ledger 3016 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions through the lens of context projection and accounting, then submit a source-grounded report with exact partition hashes.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as task completion.
+- Work autonomously until all four partitions have been reviewed and the report is accepted.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Observed in `extensions/navigate-tree/index.ts` that `buildContextMessages` projects the session tree; supplied tests cover honoring `context_edit` omissions and zeroing stale assistant usage after edits while preserving post-edit usage.
+- [x] Observed in `extensions/navigate-tree/retrospective-plan.ts` that `readSessionSnapshot` hashes raw bytes and validates graph ancestry, safe cuts, and pending tool calls. Token estimates are heuristic, not proof of provider tokenization.
+
+### In Progress
+- [ ] Review partitions 2–4 and submit the report.
+
+### Blocked
+- No blockers established.
+
+## Key Decisions
+- **Treat token accounting as an estimate**: the reviewed source and README describe local estimates, not provider-tokenization proof.
+
+## Next Steps
+1. Load and review partition 2, then continue through partitions 3 and 4, preserving each hash and at least two source-grounded findings.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of context projection and accounting and submit a source-grounded report with exact partition hashes.” Scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 2]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/index.ts buildContextMessages projects the session tree; its tests assert context_edit omissions are honored and stale assistant usage after edits is zeroed, preserving post-edit usage. Fact: retrospective-plan.ts readSessionSnapshot hashes raw bytes and checks ancestry, safe cuts, and outstanding tool calls before plans; tool tests cover disclosure modes. Review caut…[truncated]
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for context projection and accounting, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as completion of the task.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `extensions/navigate-tree/index.ts` projects the session tree; `retrospective-plan.ts` hashes raw bytes and checks graph ancestry and safe cuts.
+- [x] Reviewed partition 2. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `index.ts` uses projected entries, invalidates stale usage, and limits pending rewind context to its instruction. `handoff.ts` deduplicates usage by entry ID and child reports by ID. Slash-containing wildcard model patterns may match `modelId` as well as the full key.
+
+### In Progress
+- [ ] Review partitions 3 and 4, then submit the report.
+
+### Blocked
+- No blockers established.
+
+## Key Decisions
+- **Treat token accounting as an estimate**: local estimates do not establish provider tokenization or actual request usage.
+
+## Next Steps
+1. Load and review partition 3, preserving its exact hash and at least two source-grounded observations.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of context projection and accounting and submit a source-grounded report with exact partition hashes.” This scope is not complete; continue through all four partitions and submit the report.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 3]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/index.ts buildContextMessages projects the session tree; its tests assert context_edit omissions are honored and stale assistant usage after edits is zeroed, preserving post-edit usage. Fact: retrospective-plan.ts readSessionSnapshot hashes raw bytes and checks ancestry, safe cuts, and outstanding tool calls before plans; tool tests cover disclosure modes. Review caut…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. index.ts buildContextMessages uses buildSessionProjection entries, applies invalidateStaleUsage, truncates to pending instruction, adjusts failed tool results, then removes system messages; projection and in-band rewind source details support accurate visibility accounting. handoff.ts handoffStats deduplicates by entry id and sums usage from message/usage/compaction/branch_summary records, while mat…[truncated]
+--- end ---
+# Work handoff: reviewed three
+
+## Goal
+Review all four source partitions through the lens of context projection and accounting, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as completion of the task.
+- Work autonomously until all four partitions are reviewed and the report is accepted.
+- Preserve exact hashes and source-grounded findings across folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 3. SHA-256: `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`.
+- [x] In `extensions/navigate-tree/auto-navigate.ts`, `evaluateAutoNavigateTurn` bounds the serialized UTF-8 payload and validates returned IDs and anchors; the payload identifies older records withheld from the controller.
+- [x] In `extensions/navigate-tree/context-tokens.ts`, `estimateContextTokens` uses host `estimateTokens` with a recorded-usage baseline plus a heuristic tail; `estimateRequestTokens` applies an 8/7 factor. Tests disclaim cross-version numeric parity. Circular tool-call arguments can make estimation throw `TypeError`—a potential robustness issue if such input reaches the estimator.
+- [x] In `extensions/navigate-tree/continuity-briefing.ts`, budget handling drops facts, files, and steering in order, but reports `overBudget` when nondroppable content still exceeds the limit. `continuity-store.ts` restores snapshots at branch summaries and skips malformed ops with warnings.
+
+### In Progress
+- [ ] Review partition 4 and submit the report.
+
+### Blocked
+- No blockers established.
+
+## Key Decisions
+- **Treat token accounting as heuristic**: Host token estimation and the 8/7 request adjustment do not establish provider-tokenization parity.
+
+## Next Steps
+1. Review partition 4, preserving its exact SHA-256 and at least two concrete, source-grounded observations.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of context projection and accounting and submit a source-grounded report with exact partition hashes.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 6]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/index.ts buildContextMessages projects the session tree; its tests assert context_edit omissions are honored and stale assistant usage after edits is zeroed, preserving post-edit usage. Fact: retrospective-plan.ts readSessionSnapshot hashes raw bytes and checks ancestry, safe cuts, and outstanding tool calls before plans; tool tests cover disclosure modes. Review caut…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. index.ts buildContextMessages uses buildSessionProjection entries, applies invalidateStaleUsage, truncates to pending instruction, adjusts failed tool results, then removes system messages; projection and in-band rewind source details support accurate visibility accounting. handoff.ts handoffStats deduplicates by entry id and sums usage from message/usage/compaction/branch_summary records, while mat…[truncated]
+F4 Partition 3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. auto-navigate evaluateAutoNavigateTurn sizes bounded serialized UTF-8 payload against contextWindow minus output/reserve; avoids claims about omitted older records and validates returned IDs/anchors.
+F5 Partition 3 source fact: context-tokens.ts estimates via host estimateTokens, usage baseline plus trailing heuristic; estimateRequestTokens applies 8/7 factor. Tests explicitly disclaim cross-version numeric parity and identify circular toolCall arguments throwing TypeError (likely robustness defect if untrusted circular input reaches estimator).
+F6 Partition 3 source fact: continuity-briefing.ts drops oldest facts/files/steering to budget but returns overBudget true if nondroppable content exceeds limit; stale file items remain visible. continuity-store.ts restores fold snapshots on branch_summary and skips malformed ops with warning.
+--- end ---
+# Work handoff: reviewed four
+
+## Goal
+Review all four source partitions for context projection and accounting, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Preserve source-grounded findings and exact hashes across folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 4. SHA-256: `22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322`.
+- [x] In `extensions/navigate-tree/handoff-projection.ts`, `invalidateStaleUsage` clears stale usage on projected message copies; `projectHandoffs` also strips usage from historical clone entries, without changing persisted accounting.
+- [x] In `extensions/navigate-tree/index.ts`, `planWithhold` selects eligible results from the canonical projection, excludes navigator and already-edited results, reprojects proposed edits, and calibrates its estimate from real usage while enforcing a complete-request bound.
+- [x] In `extensions/navigate-tree/config.ts`, `mergeHintField` lets a present invalid project hint override the global hint; fallback fields can instead use a valid lower-layer value.
+- [x] Partitions 1–3 were reviewed; their exact hashes and findings are preserved in the continuity ledger.
+
+### In Progress
+- [ ] Submit the four-partition report.
+
+### Blocked
+- No blockers established.
+
+### Key Decisions
+- Treat token and context accounting as estimates unless source evidence establishes otherwise.
+
+## Next Steps
+1. Submit the ordered report with each partition’s exact hash and at least two source-grounded findings.
+
+## Standing authorization
+“Goal: review all four source partitions through the lens of context projection and accounting and submit a source-grounded report with exact partition hashes.” This scope is not complete; the report remains to be submitted.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 8]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/index.ts buildContextMessages projects the session tree; its tests assert context_edit omissions are honored and stale assistant usage after edits is zeroed, preserving post-edit usage. Fact: retrospective-plan.ts readSessionSnapshot hashes raw bytes and checks ancestry, safe cuts, and outstanding tool calls before plans; tool tests cover disclosure modes. Review caut…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. index.ts buildContextMessages uses buildSessionProjection entries, applies invalidateStaleUsage, truncates to pending instruction, adjusts failed tool results, then removes system messages; projection and in-band rewind source details support accurate visibility accounting. handoff.ts handoffStats deduplicates by entry id and sums usage from message/usage/compaction/branch_summary records, while mat…[truncated]
+F4 Partition 3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. auto-navigate evaluateAutoNavigateTurn sizes bounded serialized UTF-8 payload against contextWindow minus output/reserve; avoids claims about omitted older records and validates returned IDs/anchors.
+F5 Partition 3 source fact: context-tokens.ts estimates via host estimateTokens, usage baseline plus trailing heuristic; estimateRequestTokens applies 8/7 factor. Tests explicitly disclaim cross-version numeric parity and identify circular toolCall arguments throwing TypeError (likely robustness defect if untrusted circular input reaches estimator).
+F6 Partition 3 source fact: continuity-briefing.ts drops oldest facts/files/steering to budget but returns overBudget true if nondroppable content exceeds limit; stale file items remain visible. continuity-store.ts restores fold snapshots on branch_summary and skips malformed ops with warning.
+F7 Partition 4 SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322. handoff-projection.ts invalidateStaleUsage clones assistants with zeroed usage for stale measurements while preserving stored accounting; projectHandoffs also strips usage from provenance-marked historical source IDs. Verified code behavior.
+F8 Partition 4: index.ts planWithhold restricts eligible results to canonical projection, excludes navigate_tree and already-edited results, reprojects each proposed edit, and applies real-usage tail calibration plus complete-request estimate bound. config.ts documents per-field layer semantics; mergeHintField lets present invalid project hint override global and disable hint, while fallback fields can use valid lower layer.
+--- end ---
+(node:190428) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

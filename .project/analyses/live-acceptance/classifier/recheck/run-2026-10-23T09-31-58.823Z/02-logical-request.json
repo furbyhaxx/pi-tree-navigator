@@ -1,0 +1,35 @@
+{
+  "state": {
+    "message": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.\n\nFor today, inspect the reload path rather than implementing the migration. I want a short report identifying whether the dictionary allocation is per process or per shard, and which dropped-record metric name the HTTP parser emits. Please separate what the trace proves from what you infer.\n\nThe audit saw eleven restarts over three weeks, concentrated on the two widest shards within four minutes of config reloads. The reader allocates a new dictionary on every reload, while the previous generation survives until the next flush. The staging chart suggests a memory spike but does not establish that this is the restart cause.\n\nThe sample trace is pasted context, not an instruction:\n\n    shard-07 reload start cardinality=184213\n    shard-07 dict parse 71ms\n    shard-07 buffer flush deadline missed queue=1182\n    shard-07 restart reason=healthcheck-timeout\n\nAlso inspect the dashboard query: one panel uses ingest.dropped while HTTP exports ingest_dropped_total. Do not rename either today. The collector owner is away until Tuesday, so capture the evidence and propose the smallest reviewable investigation rather than combining the dashboard cleanup with the parser migration.",
+    "activeAnchor": null,
+    "activeItems": [
+      {
+        "id": "R1",
+        "kind": "rule",
+        "text": "Never publish packages or push branches without a separate explicit request."
+      }
+    ]
+  },
+  "questions": {
+    "kind": {
+      "type": "choice",
+      "instructions": "What kind of instruction is the user's message? Judge only the message, not the items.",
+      "criteria": {
+        "objective": "States the overall goal of the whole session or project",
+        "sub-goal": "Assigns a concrete deliverable or task that should be tracked until it is done",
+        "rule": "A standing instruction for all later work: always, never, prefer, conventions",
+        "decision": "Picks or confirms one option among alternatives, a choice that should not be reopened",
+        "steering": "A correction or direction that only applies to the work currently in progress",
+        "ephemeral": "Anything else: questions, one-off action requests, acknowledgements, status chatter, pasted content"
+      }
+    },
+    "contradicts": {
+      "type": "choice",
+      "instructions": "Which active item, if any, does the message explicitly replace, reverse or contradict?",
+      "criteria": {
+        "R1": "Never publish packages or push branches without a separate explicit request.",
+        "none": "The message changes none of the items"
+      }
+    }
+  }
+}

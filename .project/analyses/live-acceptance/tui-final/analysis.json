@@ -1,0 +1,45 @@
+{
+  "folds": [
+    {
+      "summaryId": "fc48d8fe",
+      "summaryAttempts": 1,
+      "summaryInput": 114700,
+      "summaryCacheRead": 113152,
+      "previousInput": 113321,
+      "nextInput": 1961,
+      "nextRole": "assistant",
+      "cacheRatio": 0.998508661236664,
+      "reductionRatio": 0.9829032258064516,
+      "nextTools": []
+    }
+  ],
+  "nudges": [
+    {
+      "id": "b55fe9d1",
+      "nextRole": "assistant",
+      "nextTools": [
+        "finish_review"
+      ]
+    }
+  ],
+  "userMessages": 1,
+  "checkpointRequests": [
+    9
+  ],
+  "requests": 11,
+  "responseStatuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+  ],
+  "smokeExit": 0,
+  "reportAccepted": true
+}

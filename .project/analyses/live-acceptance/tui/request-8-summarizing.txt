@@ -1,0 +1,42 @@
+ This way you can have a session that looks like this :)                                                                          
+ ... (12792 more lines, ctrl+o to expand)                                                                                         
+                                                                                                                                  
+
+                                                                                                                                  
+ pin fact: Source partition SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.                            
+ F2 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Source partition SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e."
+
+                                                                                                                                  
+ pin fact: Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot accepts arbitrary JSONL line records … 
+ F3 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot accepts arbitrary JSONL …
+
+                                                                                                                                  
+ pin fact: Observation: extensions/navigate-tree/output-budget.ts capRecoveryOutput rejects requests with numeric thinking budge… 
+ F4 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Observation: extensions/navigate-tree/output-budget.ts capRecoveryOutput rejects requests with numeric t…
+
+                                                                                                                                  
+ list                                                                                                                             
+ 2 labels · ctx 30.4% of 372k                                                                                                     
+                                                                                                                                  
+
+                                                                                                                                  
+ rewind context-gathered → review-complete                                                                                        
+ accepted · summarizing                                                                                                           
+                                                                                                                                  
+
+ [rewind to 'context-gathered' · collapse as 'review-complete'] · summarizing · context 30.5% → ~0.3% of 372k
+
+── ⠙ Working ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-c6ku0nla/workspace
+↑116k ↓551 R451k CH99.6% $0.016 (sub) 30.8%/372k                                                         (openai) gpt-6-luna • low

@@ -1,0 +1,36 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "README.md documents that rewind forks while preserving the abandoned subtree, and cautions against folding with a pending user decision or unresolved question.",
+        "extensions/navigate-tree/continuity-store.test.ts covers branch-local ledgers, fold snapshots, and user-entry citations for supersession; extensions/navigate-tree/index.ts completeRewind validates anchor/fresh label and reappends late user messages."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "README.md documents late-input handling during rewind and carrying authorization in handoffs.",
+        "extensions/navigate-tree/continuity-ledger.ts applySupersede requires newer user-entry citations and protects user-owned items; extensions/navigate-tree/proposal-command.ts confirms before sending full history for remote analysis and rechecks the source hash before saving a reviewed plan."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "extensions/navigate-tree/auto-navigate.ts treats controller input as untrusted, blocks rewinds during pending user decisions, and restricts proposed targets to supplied IDs/anchors; invalid output becomes none.",
+        "extensions/navigate-tree/continuity-capture.ts preserves user text verbatim and does not advance the watermark on abort; continuity-briefing.ts protects user rules, decisions, and objectives from fold deltas. Likely disclosure risk: structured tool-data filters may not catch copies embedded in prose or summaries."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "docs/architecture.md documents branch-preserving rewinds, active-ancestry context, and protected user-origin ledger entries. extensions/navigate-tree/fold-screen.ts foldTo requires confirmation and rechecks anchor/foldability and label collision before requesting a fold.",
+        "extensions/navigate-tree/current-screen.test.ts covers refusal, busy/capture-off write protections, and user-pin protections (source observations; tests not run). Likely risk in extensions/navigate-tree/index.ts planWithhold: its backward walk starts at fromEntryId; if that ID is absent from the branch, the loop skips withholding, subject to caller guarantees not established by these observations."
+      ]
+    }
+  ]
+}

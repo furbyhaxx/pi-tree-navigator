@@ -1,0 +1,42 @@
+ This way you can have a session that looks like this :)                                                                          
+ ... (12792 more lines, ctrl+o to expand)                                                                                         
+                                                                                                                                  
+
+                                                                                                                                  
+ pin fact: Exact source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.                                
+ F2 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Exact source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e."
+
+                                                                                                                                  
+ pin fact: Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates records/ancestry and detect… 
+ F3 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates records/ancest…
+
+                                                                                                                                  
+ pin fact: Observation: extensions/navigate-tree/index.ts completeRewind writes branch:<newLabel> on the summary entry before br… 
+ F4 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Observation: extensions/navigate-tree/index.ts completeRewind writes branch:<newLabel> on the summary en…
+
+                                                                                                                                  
+ list                                                                                                                             
+ 2 labels · ctx 30.4% of 372k                                                                                                     
+                                                                                                                                  
+
+                                                                                                                                  
+ rewind context-gathered → review-complete                                                                                        
+ accepted · summarizing                                                                                                           
+                                                                                                                                  
+
+ [rewind to 'context-gathered' · collapse as 'review-complete'] · summarizing · context 30.4% → ~0.3% of 372k
+
+── ⠼ Working ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-SCBfDo/workspace
+↑115k ↓504 R452k CH99.7% $0.016 (sub) 30.8%/372k                                                         (openai) gpt-6-luna • low

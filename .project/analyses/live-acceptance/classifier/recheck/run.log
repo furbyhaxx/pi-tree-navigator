@@ -1,0 +1,20 @@
+(node:168602) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/continuity-capture.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS explicit-goal: single live successful call: {"calls":1,"stopReason":"stop","status":200}
+PASS explicit-goal: supported input length: 359
+PASS explicit-goal: marker captured verbatim and protected: [{"kind":"objective","text":"Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.","quote":"Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it."}]
+PASS explicit-goal: no rewritten words: ["G2"]
+PASS explicit-goal: no fabricated supersession: {"supersedes":[],"operations":["add"]}
+PASS explicit-goal: reducer accepted and no fallback warning: {"rejected":[],"warnings":[]}
+OBSERVATION explicit-goal: choice=sub-goal, confidence=0.5, by=heuristic, liveAbstentionFallback=true
+PASS mixed-rule: single live successful call: {"calls":1,"stopReason":"stop","status":200}
+PASS mixed-rule: supported input length: 1319
+PASS mixed-rule: marker captured verbatim and protected: [{"kind":"rule","text":"From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.","quote":"From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request."}]
+PASS mixed-rule: no rewritten words: ["R2"]
+PASS mixed-rule: no fabricated supersession: {"supersedes":[],"operations":["add"]}
+PASS mixed-rule: reducer accepted and no fallback warning: {"rejected":[],"warnings":[]}
+OBSERVATION mixed-rule: choice=rule, confidence=0.51, by=heuristic, liveAbstentionFallback=true
+SUMMARY {"total":12,"passed":12,"failed":0,"calls":2,"fallbackCases":["explicit-goal","mixed-rule"]}
+EVIDENCE /mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/classifier/recheck/run-2026-10-23T09-31-58.823Z/

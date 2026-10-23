@@ -1,0 +1,136 @@
+{
+ "attempt1-run-1-full": {
+  "calls": 10,
+  "input": 585539,
+  "output": 9766,
+  "cacheRead": 0,
+  "cost": 0.0634369,
+  "perCall": [
+   {
+    "call": 1,
+    "promptBytes": 10456,
+    "responseBytes": 883,
+    "input": 2871,
+    "output": 207
+   },
+   {
+    "call": 2,
+    "promptBytes": 277887,
+    "responseBytes": 5511,
+    "input": 77838,
+    "output": 1176
+   },
+   {
+    "call": 3,
+    "promptBytes": 227804,
+    "responseBytes": 3155,
+    "input": 64010,
+    "output": 920
+   },
+   {
+    "call": 4,
+    "promptBytes": 277887,
+    "responseBytes": 5589,
+    "input": 76526,
+    "output": 1229
+   },
+   {
+    "call": 5,
+    "promptBytes": 248520,
+    "responseBytes": 3143,
+    "input": 68535,
+    "output": 796
+   },
+   {
+    "call": 6,
+    "promptBytes": 277887,
+    "responseBytes": 4746,
+    "input": 77109,
+    "output": 897
+   },
+   {
+    "call": 7,
+    "promptBytes": 220464,
+    "responseBytes": 2956,
+    "input": 61774,
+    "output": 875
+   },
+   {
+    "call": 8,
+    "promptBytes": 277887,
+    "responseBytes": 7986,
+    "input": 77591,
+    "output": 1616
+   },
+   {
+    "call": 9,
+    "promptBytes": 239481,
+    "responseBytes": 2484,
+    "input": 66441,
+    "output": 828
+   },
+   {
+    "call": 10,
+    "promptBytes": 52354,
+    "responseBytes": 5052,
+    "input": 12844,
+    "output": 1222
+   }
+  ]
+ },
+ "attempt1-run-2-calls-only": {
+  "calls": 1,
+  "input": 52981,
+  "output": 1061,
+  "cacheRead": 0,
+  "cost": 0.0058286,
+  "perCall": [
+   {
+    "call": 1,
+    "promptBytes": 180603,
+    "responseBytes": 4801,
+    "input": 52981,
+    "output": 1061
+   }
+  ]
+ },
+ "attempt2-run-1-full": {
+  "calls": 2,
+  "input": 80709,
+  "output": 1089,
+  "cacheRead": 0,
+  "cost": 0.0086154,
+  "perCall": [
+   {
+    "call": 1,
+    "promptBytes": 10456,
+    "responseBytes": 646,
+    "input": 2871,
+    "output": 146
+   },
+   {
+    "call": 2,
+    "promptBytes": 277887,
+    "responseBytes": 4499,
+    "input": 77838,
+    "output": 943
+   }
+  ]
+ },
+ "attempt2-run-2-calls-only": {
+  "calls": 1,
+  "input": 52981,
+  "output": 1295,
+  "cacheRead": 0,
+  "cost": 0.0059456,
+  "perCall": [
+   {
+    "call": 1,
+    "promptBytes": 180603,
+    "responseBytes": 4156,
+    "input": 52981,
+    "output": 1295
+   }
+  ]
+ }
+}

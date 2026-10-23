@@ -1,0 +1,14 @@
+{
+  "model": {
+    "provider": "openai",
+    "id": "gpt-6-luna",
+    "api": "openai-responses",
+    "contextWindow": 372000,
+    "maxTokens": 128000
+  },
+  "lens": "branch and clone integrity",
+  "sourceCommit": "7bac0ab862726748d086855b691eaa63378ace99",
+  "session": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/live-acceptance/parallel-02/agent-3/2026-10-23T09-25-43-069Z_01a16814-9a1c-74d0-a6c1-600d7a424c46.jsonl",
+  "agent": 2,
+  "started": "2026-10-23T09:25:43.511Z"
+}

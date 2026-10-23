@@ -1,0 +1,216 @@
+summary turn usage {"input":1729,"cacheRead":119296,"cacheWrite":0,"output":279}
+continuation {"status":"done","rewindTo":"reviewed-three","newLabel":"reviewed-four","targetId":"04c8e7e0","summaryId":"ee9b6ffc","collapsedEntries":44,"contextBefore":119380,"contextAfter":5538,"contextWindow":372000,"summaryAttempts":1,"foldEstimateBefore":120781,"foldEstimateAfter":6144,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":12,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary 644d58fe: work handoff metadata valid (mode full)
+ok    branch_summary 644d58fe: own report 2156 chars (cap 4500)
+info  branch_summary 644d58fe: total handoff 3410 chars = header+own report 2186 + child handoffs 0 + continuity ledger 1224 (no cap on the total)
+ok    branch_summary ab31cf1b: work handoff metadata valid (mode full)
+ok    branch_summary ab31cf1b: own report 1967 chars (cap 4500)
+info  branch_summary ab31cf1b: total handoff 3688 chars = header+own report 1997 + child handoffs 0 + continuity ledger 1691 (no cap on the total)
+ok    branch_summary 04c8e7e0: work handoff metadata valid (mode full)
+ok    branch_summary 04c8e7e0: own report 2502 chars (cap 4500)
+info  branch_summary 04c8e7e0: total handoff 4970 chars = header+own report 2534 + child handoffs 0 + continuity ledger 2436 (no cap on the total)
+ok    branch_summary ee9b6ffc: work handoff metadata valid (mode full)
+ok    branch_summary ee9b6ffc: own report 1390 chars (cap 4500)
+info  branch_summary ee9b6ffc: total handoff 4900 chars = header+own report 1421 + child handoffs 0 + continuity ledger 3479 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions through the lens of TUI navigation and cancellation and submit a source-grounded report with exact partition hashes.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as completion of the task.
+- Cite concrete observations from the supplied source and distinguish verified facts from likely defects.
+- Do not reread earlier partitions; preserve hashes and findings across folds.
+- Use the specified anchor/list/rewind sequence and submit only after all four partitions and folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Verified `extensions/navigate-tree/frame.ts` `FrameList.handleInput`: Ctrl-C invokes cancellation; Escape in search clears the search before Escape in list focus cancels.
+- [x] Reviewed `extensions/navigate-tree/index.ts` `completeRewind`: it validates before branching; restoring the leaf on failure is best-effort. Potential risk, not a verified defect: restoration may fail.
+- [x] Reviewed `extensions/navigate-tree/retrospective-plan.ts`: `validateCompleteToolCalls` refuses unfinished tool-call batches.
+
+### In Progress
+- [ ] Review partitions 2–4 and complete their required folds.
+
+### Blocked
+- A rewind summary attempt failed with `Summarization failed: no summary after 3 attempts (last: called a tool).` A subsequent rewind to `context-gathered` was accepted as `reviewed-one`; its summary is pending.
+
+## Key Decisions
+- **Treat the rollback concern as a potential risk, not a confirmed defect**: the supplied source shows restoration is attempted and errors are swallowed, but does not establish that restoration fails in practice.
+- **No tests were run**: observations are based on the supplied source.
+
+## Next Steps
+1. Review partition 2, record its exact hash and at least two source-grounded observations, then list and fold to `reviewed-two`.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” Scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 5]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: extensions/navigate-tree/frame.ts FrameList.handleInput routes ctrl-c to onCancel; Escape in search or with query calls leaveSearch (clears filter) while Escape in list cancels. This two-stage cancellation is explicit behavior, not verified defect.
+F4 P1 verified: extensions/navigate-tree/index.ts completeRewind validates anchor identity/new-label collision/stale rewind before branching; catch restores prior leaf and clears completion branch label. Potential risk, not confirmed defect: rollback restoration is best-effort and swallowed if sm.branch fails.
+F5 P1 verified: retrospective-plan.ts readSessionSnapshot builds pending-tool-call state over ancestry and validateCompleteToolCalls blocks incomplete sources; FrameList filtering/cancel and proposal UI support Escape cancellation. No tests run.
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for TUI navigation and cancellation, preserving exact hashes and source-grounded observations, then submit the report.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat one completed partition as completion of the task.
+- Cite concrete source observations and distinguish verified facts from likely defects.
+- Do not reread earlier partitions; preserve hashes and findings across folds.
+- No tests were run.
+
+## Progress
+### Done
+- [x] Partition 1 reviewed. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `FrameList.handleInput` routes Ctrl-C to cancellation; Escape clears active search before list cancellation. `completeRewind` validates before branching and attempts best-effort restoration on failure; restoration failure is a potential risk, not a verified defect. `retrospective-plan.ts` validates complete tool-call batches.
+- [x] Partition 2 reviewed. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `index.ts` `buildContextMessages` freezes the projection at the pending instruction and overlays failure outcomes as error tool results. Potential risk, not confirmed defect: `history-outline.ts` `patchedInput` uses the configured cancel binding without an explicit Ctrl-C path; behavior depends on host bindings.
+
+### In Progress
+- [ ] Review partitions 3 and 4; complete their folds and submit the ordered report.
+
+### Blocked
+- None.
+
+## Key Decisions
+- Treat best-effort restoration and the history-outline Ctrl-C concern as risks, not confirmed defects.
+- No tests were run; observations are from supplied source.
+
+## Next Steps
+1. Review partition 3, record its exact hash and source-grounded findings, then fold to `reviewed-three`.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 6]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: extensions/navigate-tree/frame.ts FrameList.handleInput routes ctrl-c to onCancel; Escape in search or with query calls leaveSearch (clears filter) while Escape in list cancels. This two-stage cancellation is explicit behavior, not verified defect.
+F4 P1 verified: extensions/navigate-tree/index.ts completeRewind validates anchor identity/new-label collision/stale rewind before branching; catch restores prior leaf and clears completion branch label. Potential risk, not confirmed defect: rollback restoration is best-effort and swallowed if sm.branch fails.
+F5 P1 verified: retrospective-plan.ts readSessionSnapshot builds pending-tool-call state over ancestry and validateCompleteToolCalls blocks incomplete sources; FrameList filtering/cancel and proposal UI support Escape cancellation. No tests run.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: index.ts buildContextMessages truncates projected request at pending instruction entry, and overlays failed/aborted rewind outcomes as toolResult isError clones. Likely risk (not proven defect): history-outline.ts patchedInput handles cancellation via configured tui.select.cancel only; unlike index rewind Escape logic it has no explicit Ctrl-C route, host binding dependent.
+--- end ---
+# Work handoff: reviewed three
+
+## Goal
+Review all four source partitions for TUI navigation and cancellation, preserving exact hashes and concrete source-grounded findings.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat one completed partition as completion.
+- Cite source paths and symbols; distinguish verified facts from potential defects.
+- Do not reread earlier partitions; preserve findings and hashes across folds.
+- No tests were run.
+
+## Progress
+### Done
+- [x] Partition 1 reviewed. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `extensions/navigate-tree/frame.ts` `FrameList.handleInput` routes Ctrl-C to cancellation; Escape clears search before cancelling from list focus. `index.ts` `completeRewind` validates before branching and attempts best-effort restoration on failure; restoration failure is a potential risk, not a verified defect. `retrospective-plan.ts` validates complete tool-call batches.
+- [x] Partition 2 reviewed. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `index.ts` `buildContextMessages` truncates projection at a pending instruction and overlays failed/aborted outcomes as `isError` tool-result clones. Potential, unconfirmed cancellation concern: `history-outline.ts` `patchedInput` uses the configured cancel binding without an explicit Ctrl-C path.
+- [x] Partition 3 reviewed. SHA-256: `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`. `auto-navigate.ts` `evaluateAutoNavigateTurn` forwards `AbortSignal`; invalid output and errors return `none` without mutation. Potential UX concern, not a verified defect: cancellation is not distinguished from other errors in its return value. `continuity-capture.ts` `captureIntent` returns no ops and preserves the watermark when aborted. `frame.test.ts` specifies Escape’s two-stage behavior and Ctrl-C cancellation.
+
+### In Progress
+- [ ] Review partition 4 and complete its fold.
+
+### Blocked
+- None.
+
+## Key Decisions
+- Treat rollback restoration, the history-outline Ctrl-C path, and auto-navigation’s lack of a distinct cancellation result as potential risks, not confirmed defects.
+- Findings are based on supplied source; no tests were run.
+
+## Next Steps
+1. Review partition 4, preserve its hash and concrete findings, then fold to `reviewed-four`.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” Scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 8]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: extensions/navigate-tree/frame.ts FrameList.handleInput routes ctrl-c to onCancel; Escape in search or with query calls leaveSearch (clears filter) while Escape in list cancels. This two-stage cancellation is explicit behavior, not verified defect.
+F4 P1 verified: extensions/navigate-tree/index.ts completeRewind validates anchor identity/new-label collision/stale rewind before branching; catch restores prior leaf and clears completion branch label. Potential risk, not confirmed defect: rollback restoration is best-effort and swallowed if sm.branch fails.
+F5 P1 verified: retrospective-plan.ts readSessionSnapshot builds pending-tool-call state over ancestry and validateCompleteToolCalls blocks incomplete sources; FrameList filtering/cancel and proposal UI support Escape cancellation. No tests run.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: index.ts buildContextMessages truncates projected request at pending instruction entry, and overlays failed/aborted rewind outcomes as toolResult isError clones. Likely risk (not proven defect): history-outline.ts patchedInput handles cancellation via configured tui.select.cancel only; unlike index rewind Escape logic it has no explicit Ctrl-C route, host binding dependent.
+F7 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified auto-navigate.ts evaluateAutoNavigateTurn passes AbortSignal to runner and returns none on errors/invalid output; validates rewind anchor against exposed anchors, fresh label and >=60-char focus. Likely cancellation gap: it catches errors as none; after provider cancellation this is safe no mutation, but no surfaced cancellation distinction.
+F8 P3 verified: continuity-capture.ts captureIntent checks signal before/after classifier batch; on abort returns no ops and preserves original watermark. frame.test.ts specifies Escape first clears search and second cancels, Ctrl-C cancels in either focus; these are source/test assertions, not tests run here.
+--- end ---
+# Work handoff: reviewed four
+
+## Goal
+Review all four source partitions for TUI navigation and cancellation, preserving exact hashes and concrete observations for the final report.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat one completed partition as completion.
+- Cite source paths and symbols; distinguish verified facts from potential defects.
+- Do not reread earlier partitions. No tests were run.
+
+## Progress
+### Done
+- [x] Reviewed all four partitions and recorded their hashes and findings.
+- [x] Completed folds through `reviewed-four`.
+
+### In Progress
+- [ ] Submit the ordered report with all four hashes and findings.
+
+### Blocked
+- None.
+
+## Key Decisions
+- Treat best-effort rewind restoration, host-dependent Ctrl-C handling, auto-navigation’s lack of a distinct cancellation result, and possible navigation timing as risks—not confirmed defects.
+- Partition 4’s `fold-screen.ts` dispatches a fold only after confirmation and fresh validity checks; cancellation returns or backtracks. `tree-screen.ts` handles cancelled navigation and errors.
+
+## Next Steps
+1. Submit the report for partitions 1–4 with the recorded hashes and source-grounded findings.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” The scope is not complete until the report is accepted.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 12]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 P1 verified: extensions/navigate-tree/frame.ts FrameList.handleInput routes ctrl-c to onCancel; Escape in search or with query calls leaveSearch (clears filter) while Escape in list cancels. This two-stage cancellation is explicit behavior, not verified defect.
+F4 P1 verified: extensions/navigate-tree/index.ts completeRewind validates anchor identity/new-label collision/stale rewind before branching; catch restores prior leaf and clears completion branch label. Potential risk, not confirmed defect: rollback restoration is best-effort and swallowed if sm.branch fails.
+F5 P1 verified: retrospective-plan.ts readSessionSnapshot builds pending-tool-call state over ancestry and validateCompleteToolCalls blocks incomplete sources; FrameList filtering/cancel and proposal UI support Escape cancellation. No tests run.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: index.ts buildContextMessages truncates projected request at pending instruction entry, and overlays failed/aborted rewind outcomes as toolResult isError clones. Likely risk (not proven defect): history-outline.ts patchedInput handles cancellation via configured tui.select.cancel only; unlike index rewind Escape logic it has no explicit Ctrl-C route, host binding dependent.
+F7 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified auto-navigate.ts evaluateAutoNavigateTurn passes AbortSignal to runner and returns none on errors/invalid output; validates rewind anchor against exposed anchors, fresh label and >=60-char focus. Likely cancellation gap: it catches errors as none; after provider cancellation this is safe no mutation, but no surfaced cancellation distinction.
+F8 P3 verified: continuity-capture.ts captureIntent checks signal before/after classifier batch; on abort returns no ops and preserves original watermark. frame.test.ts specifies Escape first clears search and second cancels, Ctrl-C cancels in either focus; these are source/test assertions, not tests run here.
+F9 P4 SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322.
+F10 P4 verified: extensions/navigate-tree/fold-screen.ts openFoldScreen loops pickAnchor/foldTo; Escape in pickAnchor returns back, while askLabel/askFocus undefined returns to prior wizard step; deps.requestFold occurs only after confirmation and fresh anchor/savings/label checks. Thus cancel/back does not dispatch fold prematurely.
+F11 P4 verified: tree-screen.ts goTo checks idle, confirms, then awaits ctx.navigateTree; cancelled result reports no move and errors are caught. Potential race (not verified defect): session may become busy after confirmation check and before/during navigation; source rechecks idle just before call.
+F12 P4 verified: anchor-command.ts openAnchorList returns back on selectFrame cancellation, and r dispatches requestFold then exits done. index.ts writeStartAnchorIfNeeded skips when tool inactive, session settled, forced rewind active, or before configured threshold; fallback label append is guarded and errors swallowed.
+--- end ---
+(node:136814) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

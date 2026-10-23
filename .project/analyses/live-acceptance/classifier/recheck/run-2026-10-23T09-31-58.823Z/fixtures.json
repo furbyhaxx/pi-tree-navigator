@@ -1,0 +1,14 @@
+[
+  {
+    "id": "explicit-goal",
+    "kind": "objective",
+    "text": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes.\n\nStart with a reviewable parser slice behind a flag; keep rollout plumbing separate. The March replay must match byte for byte and each shard must stay below 128 MiB.\n\nFor today, inspect the reload path and report the allocation hot spots before editing it.",
+    "marker": "Goal: migrate telemetry ingestion to a streaming parser without changing metric names or error codes."
+  },
+  {
+    "id": "mixed-rule",
+    "kind": "rule",
+    "marker": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.",
+    "text": "From now on, run the March replay corpus before merging any parser or schema change and include its diff summary in the pull request.\n\nFor today, inspect the reload path rather than implementing the migration. I want a short report identifying whether the dictionary allocation is per process or per shard, and which dropped-record metric name the HTTP parser emits. Please separate what the trace proves from what you infer.\n\nThe audit saw eleven restarts over three weeks, concentrated on the two widest shards within four minutes of config reloads. The reader allocates a new dictionary on every reload, while the previous generation survives until the next flush. The staging chart suggests a memory spike but does not establish that this is the restart cause.\n\nThe sample trace is pasted context, not an instruction:\n\n    shard-07 reload start cardinality=184213\n    shard-07 dict parse 71ms\n    shard-07 buffer flush deadline missed queue=1182\n    shard-07 restart reason=healthcheck-timeout\n\nAlso inspect the dashboard query: one panel uses ingest.dropped while HTTP exports ingest_dropped_total. Do not rename either today. The collector owner is away until Tuesday, so capture the evidence and propose the smallest reviewable investigation rather than combining the dashboard cleanup with the parser migration."
+  }
+]

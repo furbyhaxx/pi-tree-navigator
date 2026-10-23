@@ -1,0 +1,42 @@
+ This way you can have a session that looks like this :)                                                                          
+ ... (12792 more lines, ctrl+o to expand)                                                                                         
+                                                                                                                                  
+
+                                                                                                                                  
+ pin fact: Reviewed source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e1                             
+ F2 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Reviewed source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e1"
+
+                                                                                                                                  
+ pin fact: Finding: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates branch_summary.fromId only for … 
+ F3 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Finding: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot validates branch_summary.fro…
+
+                                                                                                                                  
+ pin fact: Finding: extensions/navigate-tree/retrospective-plan.ts validates labels by checking ids.has(entry.targetId) before a… 
+ F4 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Finding: extensions/navigate-tree/retrospective-plan.ts validates labels by checking ids.has(entry.targe…
+
+                                                                                                                                  
+ list                                                                                                                             
+ 2 labels · ctx 30.4% of 372k                                                                                                     
+                                                                                                                                  
+
+                                                                                                                                  
+ rewind context-gathered → review-complete                                                                                        
+ accepted · summarizing                                                                                                           
+                                                                                                                                  
+
+ [rewind to 'context-gathered' · collapse as 'review-complete'] · summarizing · context 30.5% → ~0.3% of 372k
+
+── ⠸ Working ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-u9nzXq/workspace
+↑116k ↓574 R451k CH99.6% $0.016 (sub) 30.9%/372k                                                         (openai) gpt-6-luna • low

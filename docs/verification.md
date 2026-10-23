@@ -109,6 +109,32 @@ Live proof means running the real flow against the real surface and capturing th
 
 Live-run hygiene: back up any global extension config you must modify (`~/.pi/agent/tree-navigator.json`, etc.) and restore/remove it afterwards; never leave test thresholds or credentials behind.
 
+### Parallel long-context acceptance
+
+Run the live harness only with explicit provider-call authorization. It uses the existing
+credential store without copying credentials, isolated settings/workspaces, six concurrent
+sessions and four substantial real-source partitions per session:
+
+```bash
+node scripts/live-navigator-acceptance.mjs --sessions 6 --model provider/model --auth-dir /path/to/agent-dir --output /path/to/evidence
+node scripts/analyze-live-navigator.mjs /path/to/evidence --require-text-only
+```
+
+The harness reports its reusable corpus snapshot path; `--corpus <snapshot.json>` keeps the
+same source workload for a rerun. Each session must submit all hashes and findings after
+four folds from one user prompt. Premature settlement fails; the driver never sends a
+continuation prompt. Capture raw payloads, safe response headers, parsed provider stream
+events, recorded usage and the unchanged session files. Report cumulative input separately
+from peak request input. The analyzer checks OpenAI, Anthropic and Google native no-tools
+fields and requires captured summary requests for every completed fold.
+
+Run `scripts/summary-quality-check.mjs <session.jsonl> --all` on every session. Modern
+handoffs validate the own report separately from child reports and the continuity ledger;
+parent reports have no fixed length cap. Legacy summaries retain their original preamble
+contract. A structural pass does not prove semantic completeness. Inspect hashes, retained
+rules, next actions, source-grounded findings and actual model-facing proposal reports.
+Keep unsuccessful runs and safety fallbacks visible in the report.
+
 ### Retrospective clone verification
 
 For changes to `retrospective*.ts` or `/anchor clone`, run the focused clone tests

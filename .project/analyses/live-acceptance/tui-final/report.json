@@ -1,0 +1,10 @@
+{
+  "valid": true,
+  "report": {
+    "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+    "findings": [
+      "In extensions/navigate-tree/retrospective-plan.ts, readSessionSnapshot validates branch_summary.fromId by checking that it exists in ids, but does not verify ancestry. Therefore, an unrelated existing entry can be accepted as the summary's fromId despite the purported source range.",
+      "In extensions/navigate-tree/retrospective-plan.ts, readSessionSnapshot validates a label target against ids before adding the current entry.id. Since entries are processed in append order, targets that are forward references or self-references are rejected, while already-seen targets are accepted."
+    ]
+  }
+}

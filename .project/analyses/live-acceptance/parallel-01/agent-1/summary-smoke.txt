@@ -1,0 +1,217 @@
+summary turn usage {"input":187,"cacheRead":121728,"cacheWrite":0,"output":394}
+continuation {"status":"done","rewindTo":"reviewed-three","newLabel":"reviewed-four","targetId":"d6e17f5d","summaryId":"68c970c9","collapsedEntries":58,"contextBefore":120719,"contextAfter":6319,"contextWindow":372000,"summaryAttempts":3,"foldEstimateBefore":122352,"foldEstimateAfter":6926,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":13,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary a413efa3: work handoff metadata valid (mode full)
+ok    branch_summary a413efa3: own report 1712 chars (cap 4500)
+info  branch_summary a413efa3: total handoff 3255 chars = header+own report 1742 + child handoffs 0 + continuity ledger 1513 (no cap on the total)
+ok    branch_summary 16cc34c8: work handoff metadata valid (mode full)
+ok    branch_summary 16cc34c8: own report 2248 chars (cap 4500)
+info  branch_summary 16cc34c8: total handoff 4295 chars = header+own report 2278 + child handoffs 0 + continuity ledger 2017 (no cap on the total)
+ok    branch_summary d6e17f5d: work handoff metadata valid (mode full)
+ok    branch_summary d6e17f5d: own report 2401 chars (cap 4500)
+info  branch_summary d6e17f5d: total handoff 5962 chars = header+own report 2433 + child handoffs 0 + continuity ledger 3529 (no cap on the total)
+ok    branch_summary 68c970c9: work handoff metadata valid (mode full)
+ok    branch_summary 68c970c9: own report 1601 chars (cap 4500)
+info  branch_summary 68c970c9: total handoff 6583 chars = header+own report 1632 + child handoffs 0 + continuity ledger 4951 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions through the lens of context projection and accounting, then submit a source-grounded report with exact partition hashes.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as completion of the task.
+- Preserve exact hashes and cite concrete observations with paths and symbols; distinguish likely defects from verified facts.
+
+## Progress
+### Done
+- [x] Reviewed partition 1 (SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`).
+- [x] Verified `extensions/navigate-tree/index.ts` `completeRewind` compares prospective projected-context estimates and checks request headroom before branching.
+- [x] Noted `extensions/navigate-tree/index.test.ts` context-handler cases covering system-message exclusion, `context_edit` omissions, and stale usage invalidation. These are source/test assertions, not tests run here.
+- [x] Recorded a conditional UI cursor risk in `extensions/navigate-tree/frame.ts`; no definite defect established.
+
+### In Progress
+- [ ] Review partitions 2–4, fold after each review, and submit the four-partition report.
+
+### Blocked
+- None.
+
+## Key Decisions
+- **Treat source assertions as evidence, not executed results**: no tests were run.
+- **Keep the frame cursor concern qualified**: `FrameList` uses filtered-relative positions; no definite defect was established.
+
+## Next Steps
+1. Review partition 2, record its exact hash and source-grounded observations, then fold to `reviewed-two`.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result”; scope is incomplete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 5]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e
+F3 P1 verified: extensions/navigate-tree/index.ts completeRewind constructs a prospective projected handoff plus late messages and continuation, compares foldEstimateAfter against foldEstimateBefore, and separately checks requestAccounting plus output/headroom against pending.contextWindow before branchWithSummary. This is explicit projected-context accounting.
+F4 P1 verified: extensions/navigate-tree/index.test.ts context handler cases establish buildContextMessages excludes system messages, honors null context_edit omissions, and zeroes stale assistant usage after withheld results while retaining post-edit usage. These are tested source contracts, not independently executed here.
+F5 P1 likely defect/risk: extensions/navigate-tree/frame.ts frameContent sets `start` from scrollOffset and compares `end === options.cursor`, but cursor is documented as a position within filtered `visible`; correctness depends on callers passing filtered-relative indices. In `FrameList`, position is relative and okay, while externally supplied FrameOptions must respect this contract; no definite defect established.
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions through the lens of context projection and accounting, then submit a source-grounded report with exact partition hashes.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as completion of the task.
+- Preserve exact hashes and cite concrete observations; distinguish likely defects from verified facts.
+- Source assertions are evidence, not executed test results.
+
+## Progress
+### Done
+- [x] Reviewed partition 1, SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. In `extensions/navigate-tree/index.ts`, `completeRewind` compares projected fold estimates and checks request headroom before branching. `index.test.ts` contains source assertions about system-message exclusion, `context_edit` omissions, and stale usage invalidation; tests were not run. `frame.ts` has a conditional cursor-position risk, not a confirmed defect.
+- [x] Reviewed partition 2, SHA-256 `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. In `index.ts`, `buildContextMessages` uses `buildSessionProjection`, invalidates stale usage, freezes pending rewinds at the instruction, and filters system messages. `handoff.ts` deduplicates entry IDs for usage accounting and child IDs for handoff materialization. Likely risk, not verified defect: `history-outline.ts` `manifestFrom` casts persisted provenance and nested groups during validation, so malformed data may fail in use.
+- [x] Folded partition 1 as `reviewed-one` and partition 2 as `reviewed-two`.
+
+### In Progress
+- [ ] Review partitions 3–4, fold after each, and submit the four-partition report.
+
+### Blocked
+- None.
+
+## Key Decisions
+- **Do not claim tests were run**: source test assertions are not execution results.
+- **Qualify possible defects**: neither the partition 1 cursor concern nor partition 2 manifest-shape concern is established as a definite defect.
+
+## Next Steps
+1. Review partition 3, preserve its exact hash and source-grounded findings, then fold to `reviewed-three`.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result”; scope remains incomplete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 6]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e
+F3 P1 verified: extensions/navigate-tree/index.ts completeRewind constructs a prospective projected handoff plus late messages and continuation, compares foldEstimateAfter against foldEstimateBefore, and separately checks requestAccounting plus output/headroom against pending.contextWindow before branchWithSummary. This is explicit projected-context accounting.
+F4 P1 verified: extensions/navigate-tree/index.test.ts context handler cases establish buildContextMessages excludes system messages, honors null context_edit omissions, and zeroes stale assistant usage after withheld results while retaining post-edit usage. These are tested source contracts, not independently executed here.
+F5 P1 likely defect/risk: extensions/navigate-tree/frame.ts frameContent sets `start` from scrollOffset and compares `end === options.cursor`, but cursor is documented as a position within filtered `visible`; correctness depends on callers passing filtered-relative indices. In `FrameList`, position is relative and okay, while externally supplied FrameOptions must respect this contract; no definite defect established.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: extensions/navigate-tree/index.ts buildContextMessages derives context from buildSessionProjection, invalidates stale usage, freezes pending rewind at instruction, filters system messages, and handoffContext transforms navigator-owned branch summaries. Likely risk: history-outline.ts manifestFrom validates group entry/start/source ordering but casts manifest/history and nested group fields without …[truncated]
+--- end ---
+# Work handoff: reviewed three
+
+## Goal
+Review all four source partitions through the lens of context projection and accounting, preserving exact hashes and concrete observations, then submit a source-grounded report.
+
+## Constraints & Preferences
+- Never edit the source, invent test results, or treat a completed partition as completion of the task.
+- Cite paths and symbols; distinguish verified facts from likely defects.
+- Source test assertions are not test execution results.
+
+## Progress
+### Done
+- [x] Reviewed partition 1, SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`: `extensions/navigate-tree/index.ts` `completeRewind` compares projected estimates and checks request headroom. `frame.ts` has a conditional cursor-position risk, not a confirmed defect.
+- [x] Reviewed partition 2, SHA-256 `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`: `buildContextMessages` uses the session projection and handles stale usage; `handoff.ts` deduplicates IDs for usage and handoff materialization. `history-outline.ts` manifest-shape concern remains unconfirmed.
+- [x] Reviewed partition 3, SHA-256 `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`: `auto-navigate.ts` budgets framing and a suffix of records, exposing only anchors represented in sent records. `context-tokens.ts` estimates usage baseline plus tail and a denser 8/7 estimate. `continuity-briefing.ts` evicts facts, non-stale file pointers, then steering; malformed snapshots in `continuity-store.ts` are warned about and ignored, with a possible consistency risk.
+- [x] Initiated fold 3 as `reviewed-three`; the tool accepted it and instructed that a following message should complete it. The fold has not yet landed.
+
+### In Progress
+- [ ] Complete fold 3, then review and fold partition 4 and submit the report.
+
+### Blocked
+- Fold 3 completion is pending.
+
+## Key Decisions
+- **Do not claim tests were run**: test files provide source assertions only.
+- **Qualify potential defects**: the frame cursor and malformed-manifest/snapshot concerns are not established defects.
+
+## Next Steps
+1. Complete the pending fold 3, then review partition 4, fold it, and submit all four ordered entries with exact hashes and findings.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result”; scope is incomplete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 9]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e
+F3 P1 verified: extensions/navigate-tree/index.ts completeRewind constructs a prospective projected handoff plus late messages and continuation, compares foldEstimateAfter against foldEstimateBefore, and separately checks requestAccounting plus output/headroom against pending.contextWindow before branchWithSummary. This is explicit projected-context accounting.
+F4 P1 verified: extensions/navigate-tree/index.test.ts context handler cases establish buildContextMessages excludes system messages, honors null context_edit omissions, and zeroes stale assistant usage after withheld results while retaining post-edit usage. These are tested source contracts, not independently executed here.
+F5 P1 likely defect/risk: extensions/navigate-tree/frame.ts frameContent sets `start` from scrollOffset and compares `end === options.cursor`, but cursor is documented as a position within filtered `visible`; correctness depends on callers passing filtered-relative indices. In `FrameList`, position is relative and okay, while externally supplied FrameOptions must respect this contract; no definite defect established.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: extensions/navigate-tree/index.ts buildContextMessages derives context from buildSessionProjection, invalidates stale usage, freezes pending rewind at instruction, filters system messages, and handoffContext transforms navigator-owned branch summaries. Likely risk: history-outline.ts manifestFrom validates group entry/start/source ordering but casts manifest/history and nested group fields without …[truncated]
+F7 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified extensions/navigate-tree/auto-navigate.ts evaluateAutoNavigateTurn budgets controller system prompt/framing/output reserve, selects a newest-fitting suffix and only exposes anchors whose entries remain sent; validates model-selected IDs/labels and degrades to none on invalid output. Likely accounting risk: it sums UTF-8 bytes yet reserves those byte counts as tokens, explicitly conservative but not …[truncated]
+F8 P3 verified: extensions/navigate-tree/context-tokens.ts splitContextEstimate uses newest valid usage baseline plus estimated tail (and effective system state absent baseline); estimateRequestTokens uses converted messages and max of denser 8/7 content estimate versus usage baseline+tail. context-tokens.test.ts source assertions pin shapes/system semantics and explicitly note host-version divergence; not tests run. extensions/navigate-tree/continuity-briefing.ts renderBriefing drops o…[truncated]
+F9 P3 verified: extensions/navigate-tree/continuity-capture.ts captureIntent scans after watermark or latest branch_summary, skips already sourced entries, classifies with concurrency 4 and returns no ops/watermark movement on abort. continuity-store.ts readBranchLedger replays ops and replaces ledger at valid snapshots; malformed snapshots warn and are ignored (previous ledger retained). Likely risk: replay after malformed snapshot can continue with earlier ledger although snapshot rep…[truncated]
+--- end ---
+# Work handoff: reviewed four
+
+## Goal
+Review all four source partitions through the lens of context projection and accounting, preserving exact hashes and source-grounded observations, then submit the report.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+- Cite paths and symbols; distinguish verified facts from likely defects.
+- Source assertions are not test execution results.
+
+## Progress
+### Done
+- [x] Reviewed partitions 1–3 and preserved their hashes and findings in prior handoffs.
+- [x] Reviewed partition 4, SHA-256 `22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322`. `handoff-projection.ts` invalidates stale projected assistant usage while preserving historical accounting. `index.ts` `planWithhold` uses canonical-projection candidates, reprojects proposed edits, and rejects them if the estimate remains over target. `retrospective.ts` validates clone ranges and projections and rechecks hashes before publication.
+- [x] Initiated the fourth fold to `reviewed-four`.
+
+### In Progress
+- [ ] Submit the four-partition report with the exact hashes and findings.
+
+### Blocked
+- None.
+
+## Key Decisions
+- No tests were run; source assertions are not execution results.
+- No confirmed defect was established in partition 4.
+
+## Next Steps
+1. Submit the four ordered partition entries with their exact hashes and source-grounded findings.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result”; the scope is incomplete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 13]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e
+F3 P1 verified: extensions/navigate-tree/index.ts completeRewind constructs a prospective projected handoff plus late messages and continuation, compares foldEstimateAfter against foldEstimateBefore, and separately checks requestAccounting plus output/headroom against pending.contextWindow before branchWithSummary. This is explicit projected-context accounting.
+F4 P1 verified: extensions/navigate-tree/index.test.ts context handler cases establish buildContextMessages excludes system messages, honors null context_edit omissions, and zeroes stale assistant usage after withheld results while retaining post-edit usage. These are tested source contracts, not independently executed here.
+F5 P1 likely defect/risk: extensions/navigate-tree/frame.ts frameContent sets `start` from scrollOffset and compares `end === options.cursor`, but cursor is documented as a position within filtered `visible`; correctness depends on callers passing filtered-relative indices. In `FrameList`, position is relative and okay, while externally supplied FrameOptions must respect this contract; no definite defect established.
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: extensions/navigate-tree/index.ts buildContextMessages derives context from buildSessionProjection, invalidates stale usage, freezes pending rewind at instruction, filters system messages, and handoffContext transforms navigator-owned branch summaries. Likely risk: history-outline.ts manifestFrom validates group entry/start/source ordering but casts manifest/history and nested group fields without …[truncated]
+F7 P3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified extensions/navigate-tree/auto-navigate.ts evaluateAutoNavigateTurn budgets controller system prompt/framing/output reserve, selects a newest-fitting suffix and only exposes anchors whose entries remain sent; validates model-selected IDs/labels and degrades to none on invalid output. Likely accounting risk: it sums UTF-8 bytes yet reserves those byte counts as tokens, explicitly conservative but not …[truncated]
+F8 P3 verified: extensions/navigate-tree/context-tokens.ts splitContextEstimate uses newest valid usage baseline plus estimated tail (and effective system state absent baseline); estimateRequestTokens uses converted messages and max of denser 8/7 content estimate versus usage baseline+tail. context-tokens.test.ts source assertions pin shapes/system semantics and explicitly note host-version divergence; not tests run. extensions/navigate-tree/continuity-briefing.ts renderBriefing drops o…[truncated]
+F9 P3 verified: extensions/navigate-tree/continuity-capture.ts captureIntent scans after watermark or latest branch_summary, skips already sourced entries, classifies with concurrency 4 and returns no ops/watermark movement on abort. continuity-store.ts readBranchLedger replays ops and replaces ledger at valid snapshots; malformed snapshots warn and are ignored (previous ledger retained). Likely risk: replay after malformed snapshot can continue with earlier ledger although snapshot rep…[truncated]
+F10 P4 SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322.
+F11 P4 verified: extensions/navigate-tree/handoff-projection.ts invalidateStaleUsage walks projection conversation order (including compaction positioning), clears usage on assistant measurements after compaction/model/system boundaries, in context-edit spans, or mismatching model; projectHandoffs also zeroes usage for source IDs in clone provenance while preserving recorded entries. This is projection-only budgeting, not historical cost mutation.
+F12 P4 verified: extensions/navigate-tree/index.ts planWithhold limits candidates to canonical projection, walks branch tool results newest-first, skips already edited/nonprojected/navigate_tree results, reprojects after each proposed replacement, calibrates tail against valid usage baseline, and rejects all drafts if estimate still exceeds target. Source code only, no tests run.
+F13 P4 verified: docs/architecture.md states compaction/context edits affect projection not source payloads and accounting unions unique source IDs; extensions/navigate-tree/retrospective.ts validates clone ranges/tool batches/context-edit containment, runtime state, compaction targets and before/after projections before publication; cloneRetrospectiveSession binds preview token and rechecks source/family hashes before publishing. Likely concern: docs/verification.md says reviewers must …[truncated]
+--- end ---
+(node:176565) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

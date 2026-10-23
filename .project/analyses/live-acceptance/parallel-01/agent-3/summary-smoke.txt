@@ -1,0 +1,214 @@
+summary turn usage {"input":4907,"cacheRead":1792,"cacheWrite":0,"output":426}
+continuation {"status":"done","rewindTo":"context-gathered","newLabel":"review-two-done","targetId":"9ac327ca","summaryId":"cecb525e","collapsedEntries":27,"contextBefore":5390,"contextAfter":3313,"contextWindow":372000,"summaryAttempts":1,"foldEstimateBefore":5765,"foldEstimateAfter":3920,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":6,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary d461d558: work handoff metadata valid (mode full)
+ok    branch_summary d461d558: own report 1504 chars (cap 4500)
+info  branch_summary d461d558: total handoff 2799 chars = header+own report 1534 + child handoffs 0 + continuity ledger 1265 (no cap on the total)
+ok    branch_summary 4010c3fa: work handoff metadata valid (mode full)
+ok    branch_summary 4010c3fa: own report 1968 chars (cap 4500)
+info  branch_summary 4010c3fa: total handoff 4173 chars = header+own report 1998 + child handoffs 0 + continuity ledger 2175 (no cap on the total)
+ok    branch_summary cecb525e: work handoff metadata valid (mode full)
+ok    branch_summary cecb525e: own report 1763 chars (no fixed cap: parent of 2 child handoffs)
+info  branch_summary cecb525e: total handoff 8074 chars = header+own report 1796 + child handoffs 3723 + continuity ledger 2555 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions for branch and clone integrity, then submit a source-grounded report with exact partition hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Cite concrete observations from supplied source and distinguish verified facts from likely defects.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Recorded observations: `retrospective-plan.ts` validates parent ordering and ancestry and finds pending calls per graph leaf; `index.ts` `completeRewind` checks projected savings/headroom and attempts leaf/label restoration on persistence errors.
+
+### In Progress
+- [ ] Review partitions 2–4 and submit the report.
+
+### Blocked
+- None.
+
+## Key Decisions
+- **Potential validation mismatch remains unresolved**: `retrospective-plan.ts` requires a non-empty `toolResult.toolCallId`, while live rewind tests and documentation describe support for empty/reused call IDs. This is a possible offline snapshot compatibility issue, not a verified defect.
+
+## Next Steps
+1. Review partition 2’s supplied source, preserve its exact hash and concrete findings, then continue through partitions 3 and 4 before submitting the report.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 3]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Verified design/fact: retrospective-plan.ts validates parent IDs earlier and uses ancestry intervals for context edits/compactions; computes pending tool calls per graph leaf, not just append tail. Likely defect candidate: validateRecord requires non-empty string for toolResult.toolCallId, although README/tests explicitly claim reused/empty call IDs are supported for live rewind; offline session sn…[truncated]
+F3 Partition 1 observation: extensions/navigate-tree/index.ts completeRewind computes prospective branch handoff projection and validates estimated token reduction/headroom before branchWithSummary; on persistence exception it attempts to restore the prior leaf and clear branch label. This directly protects clone/branch integrity. current-screen.ts routes writes through applyOps and checks idle/capture-enabled before appending to active branch.
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for branch and clone integrity, preserving exact hashes and source-grounded findings.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Cite concrete observations and distinguish verified facts from likely defects.
+
+## Progress
+### Done
+- [x] Partition 1 reviewed. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `retrospective-plan.ts` checks parent ordering and ancestry; `index.ts` `completeRewind` checks projected savings/headroom and attempts restoration after persistence errors.
+- [x] Partition 2 reviewed. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `continuity-ledger.ts` `rewindLedger` restores snapshot items while preserving monotonic `rev`/`nextId`; `history-outline.ts` `manifestFrom` validates IDs, ranges, ordering, and containment. `retrospective-command.ts` gates clone creation on UI, idle state, and confirmation; `proposal-command.ts` rehashes source and writes plans exclusively.
+
+### In Progress
+- [ ] Review partitions 3–4, fold each review, and submit the report.
+
+### Blocked
+- None.
+
+## Key Decisions
+- Partition 1 possible compatibility concern remains unresolved: `retrospective-plan.ts` requires non-empty `toolResult.toolCallId`, although live rewind documentation/tests describe empty or reused IDs. This is a possible offline snapshot mismatch, not a verified defect.
+- README documents that `_extensionRunner` is a private-field dependency for history-mirror notification; loss of it degrades notification (`historyRewriteNotified: false`), not necessarily rewind completion.
+
+## Next Steps
+1. Review partition 3 and preserve its exact hash and concrete observations.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 5]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Verified design/fact: retrospective-plan.ts validates parent IDs earlier and uses ancestry intervals for context edits/compactions; computes pending tool calls per graph leaf, not just append tail. Likely defect candidate: validateRecord requires non-empty string for toolResult.toolCallId, although README/tests explicitly claim reused/empty call IDs are supported for live rewind; offline session sn…[truncated]
+F3 Partition 1 observation: extensions/navigate-tree/index.ts completeRewind computes prospective branch handoff projection and validates estimated token reduction/headroom before branchWithSummary; on persistence exception it attempts to restore the prior leaf and clear branch label. This directly protects clone/branch integrity. current-screen.ts routes writes through applyOps and checks idle/capture-enabled before appending to active branch.
+F4 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: continuity-ledger.ts rewindLedger preserves monotonic rev/nextId using max(snapshot,abandoned), while restoring snapshot items. history-outline.ts manifestFrom validates unique sourceOrder IDs, contiguous non-overlapping ranges and nested containment before rendering; likely integrity risk: traversal validation mutates global names/markers sets and malformed duplicate names reject manifest safely.
+F5 P2 additional verified observation: retrospective-command.ts requires UI confirmation/idle for create and invokes cloneRetrospectiveSession only after preview token; proposal-command.ts rehashes source before saving and uses exclusive wx mode 0600. README acknowledges history mirror event depends on private _extensionRunner, with historyRewriteNotified=false degradation (documented risk, not necessarily defect).
+--- end ---
+# Work handoff: review two done
+
+## Goal
+Review all four source partitions for branch and clone integrity, preserve exact hashes and source-grounded findings, then submit the report.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Cite concrete source observations and distinguish verified facts from likely defects.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Reviewed partition 2. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`.
+- [x] Folded the partition 2 review into the continuity handoff.
+
+### In Progress
+- [ ] Review partitions 3 and 4, fold each review, and submit all four findings and hashes.
+
+### Blocked
+- Partition 3 loading was refused because the required previous fold had not landed. A subsequent fold to `review-two-done` was accepted.
+
+### Key Decisions
+- **Keep the empty `toolCallId` concern unresolved**: `retrospective-plan.ts` requires a non-empty `toolResult.toolCallId`, while live rewind documentation/tests reportedly describe support for empty or reused IDs. This remains a possible compatibility mismatch, not a verified defect.
+- **Treat `_extensionRunner` dependency as a documented risk**: history-mirror notification may degrade (`historyRewriteNotified: false`); available evidence does not establish rewind failure.
+
+## Next Steps
+1. Load and review partition 3, recording its exact hash and at least two concrete source observations; then fold it before proceeding to partition 4.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” Scope is not complete.
+
+---
+
+## Child handoffs in chronological order
+
+These are historical reports at each child's completion. The parent report above records the later outcome and superseding decisions.
+
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions for branch and clone integrity, then submit a source-grounded report with exact partition hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Cite concrete observations from supplied source and distinguish verified facts from likely defects.
+
+## Progress
+### Done
+- [x] Reviewed partition 1. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Recorded observations: `retrospective-plan.ts` validates parent ordering and ancestry and finds pending calls per graph leaf; `index.ts` `completeRewind` checks projected savings/headroom and attempts leaf/label restoration on persistence errors.
+
+### In Progress
+- [ ] Review partitions 2–4 and submit the report.
+
+### Blocked
+- None.
+
+## Key Decisions
+- **Potential validation mismatch remains unresolved**: `retrospective-plan.ts` requires a non-empty `toolResult.toolCallId`, while live rewind tests and documentation describe support for empty/reused call IDs. This is a possible offline snapshot compatibility issue, not a verified defect.
+
+## Next Steps
+1. Review partition 2’s supplied source, preserve its exact hash and concrete findings, then continue through partitions 3 and 4 before submitting the report.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+---
+
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for branch and clone integrity, preserving exact hashes and source-grounded findings.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as task completion.
+- Cite concrete observations and distinguish verified facts from likely defects.
+
+## Progress
+### Done
+- [x] Partition 1 reviewed. SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`. `retrospective-plan.ts` checks parent ordering and ancestry; `index.ts` `completeRewind` checks projected savings/headroom and attempts restoration after persistence errors.
+- [x] Partition 2 reviewed. SHA-256: `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`. `continuity-ledger.ts` `rewindLedger` restores snapshot items while preserving monotonic `rev`/`nextId`; `history-outline.ts` `manifestFrom` validates IDs, ranges, ordering, and containment. `retrospective-command.ts` gates clone creation on UI, idle state, and confirmation; `proposal-command.ts` rehashes source and writes plans exclusively.
+
+### In Progress
+- [ ] Review partitions 3–4, fold each review, and submit the report.
+
+### Blocked
+- None.
+
+## Key Decisions
+- Partition 1 possible compatibility concern remains unresolved: `retrospective-plan.ts` requires non-empty `toolResult.toolCallId`, although live rewind documentation/tests describe empty or reused IDs. This is a possible offline snapshot mismatch, not a verified defect.
+- README documents that `_extensionRunner` is a private-field dependency for history-mirror notification; loss of it degrades notification (`historyRewriteNotified: false`), not necessarily rewind completion.
+
+## Next Steps
+1. Review partition 3 and preserve its exact hash and concrete observations.
+
+## Standing authorization
+“work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 6]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Verified design/fact: retrospective-plan.ts validates parent IDs earlier and uses ancestry intervals for context edits/compactions; computes pending tool calls per graph leaf, not just append tail. Likely defect candidate: validateRecord requires non-empty string for toolResult.toolCallId, although README/tests explicitly claim reused/empty call IDs are supported for live rewind; offline session sn…[truncated]
+F3 Partition 1 observation: extensions/navigate-tree/index.ts completeRewind computes prospective branch handoff projection and validates estimated token reduction/headroom before branchWithSummary; on persistence exception it attempts to restore the prior leaf and clear branch label. This directly protects clone/branch integrity. current-screen.ts routes writes through applyOps and checks idle/capture-enabled before appending to active branch.
+F4 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified: continuity-ledger.ts rewindLedger preserves monotonic rev/nextId using max(snapshot,abandoned), while restoring snapshot items. history-outline.ts manifestFrom validates unique sourceOrder IDs, contiguous non-overlapping ranges and nested containment before rendering; likely integrity risk: traversal validation mutates global names/markers sets and malformed duplicate names reject manifest safely.
+F5 P2 additional verified observation: retrospective-command.ts requires UI confirmation/idle for create and invokes cloneRetrospectiveSession only after preview token; proposal-command.ts rehashes source before saving and uses exclusive wx mode 0600. README acknowledges history mirror event depends on private _extensionRunner, with historyRewriteNotified=false degradation (documented risk, not necessarily defect).
+F6 P2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. continuity-ledger.ts rewindLedger maintains monotonic rev/nextId while restoring items; history-outline.ts manifestFrom validates unique IDs/ranges/order/containment. retrospective-command.ts confirms clone only after UI/idle/confirmation; proposal-command.ts rehashes source and writes exclusively.
+--- end ---
+(node:176589) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

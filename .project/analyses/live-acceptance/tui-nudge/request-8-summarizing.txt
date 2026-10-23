@@ -1,0 +1,42 @@
+ This way you can have a session that looks like this :)                                                                          
+ ... (12792 more lines, ctrl+o to expand)                                                                                         
+                                                                                                                                  
+
+                                                                                                                                  
+ pin fact: Source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e                                       
+ F2 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Source SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e"
+
+                                                                                                                                  
+ pin fact: Finding: retrospective-plan.ts readSessionSnapshot validates ancestry and tool-call completion across the graph, but … 
+ F3 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Finding: retrospective-plan.ts readSessionSnapshot validates ancestry and tool-call completion across th…
+
+                                                                                                                                  
+ pin fact: Finding: frame.ts `FrameList.ensureVisible` computes row heights only for currently visible filtered indices and clam… 
+ F4 fact recorded                                                                                                                 
+                                                                                                                                  
+
+ ledger · +fact(agent) "Finding: frame.ts `FrameList.ensureVisible` computes row heights only for currently visible filtered ind…
+
+                                                                                                                                  
+ list                                                                                                                             
+ 2 labels · ctx 30.4% of 372k                                                                                                     
+                                                                                                                                  
+
+                                                                                                                                  
+ rewind context-gathered → review-complete                                                                                        
+ accepted · summarizing                                                                                                           
+                                                                                                                                  
+
+ [rewind to 'context-gathered' · collapse as 'review-complete'] · summarizing · context 30.5% → ~0.3% of 372k
+
+── ⠦ Working ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+                                
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-live-tui-quJ1YQ/workspace
+↑115k ↓479 R452k CH99.5% $0.016 (sub) 30.8%/372k                                                         (openai) gpt-6-luna • low

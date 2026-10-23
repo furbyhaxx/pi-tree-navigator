@@ -1,0 +1,54 @@
+summary turn usage {"input":1398,"cacheRead":113152,"cacheWrite":0,"output":283}
+continuation {"status":"done","rewindTo":"context-gathered","newLabel":"review-complete","targetId":"9116944b","summaryId":"21d7ee76","collapsedEntries":21,"contextBefore":113300,"contextAfter":1577,"contextWindow":372000,"summaryAttempts":1,"foldEstimateBefore":113744,"foldEstimateAfter":2002,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":4,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary 21d7ee76: work handoff metadata valid (mode full)
+ok    branch_summary 21d7ee76: own report 1110 chars (cap 4500)
+info  branch_summary 21d7ee76: total handoff 2071 chars = header+own report 1143 + child handoffs 0 + continuity ledger 928 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: review complete
+
+## Goal
+Review the supplied source for context continuity and provide two concrete, source-grounded observations.
+
+## Constraints & Preferences
+- Never change files or invent test results.
+- Work autonomously through the review, one fold, and `finish_review`.
+- Cite file paths and symbols; preserve the exact SHA-256.
+
+## Progress
+### Done
+- [x] Loaded the source partition.
+- [x] Recorded SHA-256: `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Folded to `context-gathered` as `review-complete`.
+
+### In Progress
+- [ ] Submit the hash and two observations to `finish_review`.
+
+### Blocked
+- None.
+
+## Key Decisions
+- **No test claims**: Only source evidence was reviewed; no test results were established.
+
+## Next Steps
+1. Call `finish_review` with the recorded hash and two concrete observations citing `extensions/navigate-tree/retrospective-plan.ts` / `readSessionSnapshot` and `extensions/navigate-tree/output-budget.ts` / `capRecoveryOutput`.
+
+## Standing authorization
+“Work autonomously until the review, one fold and finish_review are complete.” The scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 4]
+
+Binding rules:
+R1 Rule: never change files or invent test results.
+  > "Rule: never change files or invent test results."
+
+Facts:
+F2 Source partition SHA-256: 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e.
+F3 Observation: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot accepts arbitrary JSONL line records after per-line validation but does not require final newline; test proposal-command.ts source mutation adds an extra blank line and expects hash stale, consistent. Potential issue instead: UTF-8 invalid bytes decode replacement yet SHA hashes original bytes intentionally.
+F4 Observation: extensions/navigate-tree/output-budget.ts capRecoveryOutput rejects requests with numeric thinking budgets and chat-template non-booleans, and limits max_output_tokens cap below 16; tests cover these guards. No defect determined.
+--- end ---
+(node:136835) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

@@ -1,0 +1,186 @@
+summary turn usage {"input":1701,"cacheRead":116992,"cacheWrite":0,"output":193}
+continuation {"status":"done","rewindTo":"reviewed-three","newLabel":"reviewed-four","targetId":"88c7bc5b","summaryId":"77a5eb60","collapsedEntries":13,"contextBefore":117111,"contextAfter":4206,"contextWindow":372000,"summaryAttempts":1,"foldEstimateBefore":118382,"foldEstimateAfter":4811,"agentMessagesRefreshed":true,"historyRewriteNotified":true,"readFiles":[],"modifiedFiles":[],"reappendedLateMessages":0,"continuity":{"rev":5,"applied":0,"rejected":[],"evicted":[]}}
+ok    branch_summary 25089614: work handoff metadata valid (mode full)
+ok    branch_summary 25089614: own report 1335 chars (cap 4500)
+info  branch_summary 25089614: total handoff 2181 chars = header+own report 1365 + child handoffs 0 + continuity ledger 816 (no cap on the total)
+ok    branch_summary 44af7724: work handoff metadata valid (mode full)
+ok    branch_summary 44af7724: own report 1574 chars (cap 4500)
+info  branch_summary 44af7724: total handoff 2924 chars = header+own report 1604 + child handoffs 0 + continuity ledger 1320 (no cap on the total)
+ok    branch_summary 88c7bc5b: work handoff metadata valid (mode full)
+ok    branch_summary 88c7bc5b: own report 1382 chars (cap 4500)
+info  branch_summary 88c7bc5b: total handoff 3238 chars = header+own report 1414 + child handoffs 0 + continuity ledger 1824 (no cap on the total)
+ok    branch_summary 77a5eb60: work handoff metadata valid (mode full)
+ok    branch_summary 77a5eb60: own report 934 chars (cap 4500)
+info  branch_summary 77a5eb60: total handoff 3293 chars = header+own report 965 + child handoffs 0 + continuity ledger 2328 (no cap on the total)
+--- summary text (eyeball scope: branch only, background excluded, work not continued) ---
+# Work handoff: reviewed one
+
+## Goal
+Review all four source partitions for continuity and user authority, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Do not edit source, invent test results, or treat a completed partition as completion of the task.
+- Work autonomously until all four partitions are reviewed, all four folds land, and the report is accepted.
+
+## Progress
+### Done
+- [x] Reviewed partition 1, SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Recorded observations about read-only snapshot validation, rewind rollback protections, and preservation of user rules during continuity reconciliation.
+
+### In Progress
+- [ ] Review partitions 2–4.
+
+### Blocked
+- The required review tools are unavailable in this turn.
+
+## Key Decisions
+- **Preserve user authority across folds**: partition 1 observations note that user-origin rules are protected from agent archival, while scoped steering can be archived during fold reconciliation.
+
+## Next Steps
+1. Load and review partition 2, then continue through partitions 3 and 4, preserving each partition’s exact hash and source-grounded findings.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 2]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot hashes original bytes, parses entries read-only, validates ancestry/references and detects pending tool calls before conversion. Fact: extensions/navigate-tree/index.ts completeRewind checks the anchor identity and label uniqueness before folding; failed branch write restores the prior leaf and clears branch label. Fact: contin…[truncated]
+--- end ---
+# Work handoff: reviewed two
+
+## Goal
+Review all four source partitions for continuity and user authority, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+- Preserve findings and hashes across folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 1, SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Reviewed partition 2, SHA-256 `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`.
+- [x] Partition 2 findings: `continuity-ledger.ts` protects user-origin objectives, rules, and decisions, as well as pinned items, from agent/classifier mutation; protected supersession checks citations. `index.ts` freezes the projected context at the pending summary instruction; the README describes late input being re-appended in order after a successful fold. Potential risk: `summary-prompt.ts` inserts `summaryFocus` verbatim, though the summary prompt constrains its role.
+
+### In Progress
+- [ ] Review partitions 3 and 4, fold after each, then submit the report.
+
+### Blocked
+- Partition 3 is the next item to review.
+
+## Key Decisions
+- Preserve user authority and exact partition hashes in the continuity record.
+
+## Next Steps
+1. Review partition 3, record its hash and source-grounded findings, and fold; then continue with partition 4.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 3]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot hashes original bytes, parses entries read-only, validates ancestry/references and detects pending tool calls before conversion. Fact: extensions/navigate-tree/index.ts completeRewind checks the anchor identity and label uniqueness before folding; failed branch write restores the prior leaf and clears branch label. Fact: contin…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified facts: continuity-ledger.ts guardProtected protects user-origin objective/rule/decision and pinned any-kind items from agent/classifier edits; checkCitation enforces later user entry citation when indices are known. index.ts buildContextMessages freezes pending rewind projection at instruction entry, hiding later input; completion reappends late messages per README. Likely authority risk: s…[truncated]
+--- end ---
+# Work handoff: reviewed three
+
+## Goal
+Review all four source partitions for continuity and user authority, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+- Preserve findings and hashes across folds.
+
+## Progress
+### Done
+- [x] Reviewed partition 1, SHA-256 `4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e`.
+- [x] Reviewed partition 2, SHA-256 `42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0`.
+- [x] Reviewed partition 3, SHA-256 `1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da`.
+
+### In Progress
+- [ ] Review partition 4.
+
+### Blocked
+- Partition 4 has not yet been loaded or reviewed.
+
+## Key Decisions
+- **Preserve user authority across folds**: prior observations indicate user-origin rules are protected, while scoped steering may be archived when its anchor is folded.
+- **Distinguish facts from potential risks**: the `summaryFocus` and auto-navigation summary text are observations of possible authority risks, not verified defects.
+
+## Next Steps
+1. Review partition 4 and record its exact hash and source-grounded findings.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 4]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot hashes original bytes, parses entries read-only, validates ancestry/references and detects pending tool calls before conversion. Fact: extensions/navigate-tree/index.ts completeRewind checks the anchor identity and label uniqueness before folding; failed branch write restores the prior leaf and clears branch label. Fact: contin…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified facts: continuity-ledger.ts guardProtected protects user-origin objective/rule/decision and pinned any-kind items from agent/classifier edits; checkCitation enforces later user entry citation when indices are known. index.ts buildContextMessages freezes pending rewind projection at instruction entry, hiding later input; completion reappends late messages per README. Likely authority risk: s…[truncated]
+F4 Partition 3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified: continuity-briefing.ts marks non-user-origin rules/decisions/objective as nonbinding and never drops rules/decisions/goals for budget; continuity-capture.ts stores user's verbatim message text and model classifier only selects category/superseded ids. Likely concern: auto-navigate rewind's generated steer in auto-navigate.ts forwards model summary_focus verbatim (though output is bounded, …[truncated]
+--- end ---
+# Work handoff: reviewed four
+
+## Goal
+Review all four source partitions for continuity and user authority, then submit a source-grounded report with exact hashes.
+
+## Constraints & Preferences
+- Never edit source, invent test results, or treat a completed partition as completion of the task.
+
+## Progress
+### Done
+- [x] Reviewed partitions 1–4 and recorded hashes and source-grounded observations.
+
+### In Progress
+- [ ] Submit the four-partition report.
+
+### Blocked
+- The report cannot be submitted in this turn.
+
+## Key Decisions
+- **Distinguish verified behavior from potential risks**: the `summaryFocus` and auto-navigation observations remain potential concerns, not verified defects.
+
+## Next Steps
+1. Submit the ordered report with all four exact hashes and findings.
+
+## Standing authorization
+“Work autonomously until all four partitions have been reviewed, all four folds have landed, and submit_report accepts the result.” This scope is not complete.
+
+## Continuity ledger
+
+[navigate_tree continuity ledger rev 5]
+
+Binding rules:
+R1 Rule: never edit the source, invent test results or treat a completed partition as completion of this task.
+  > "Rule: never edit the source, invent test results or treat a completed partition as completion of this task."
+
+Facts:
+F2 Partition 1 SHA-256 4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e. Fact: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot hashes original bytes, parses entries read-only, validates ancestry/references and detects pending tool calls before conversion. Fact: extensions/navigate-tree/index.ts completeRewind checks the anchor identity and label uniqueness before folding; failed branch write restores the prior leaf and clears branch label. Fact: contin…[truncated]
+F3 Partition 2 SHA-256 42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0. Verified facts: continuity-ledger.ts guardProtected protects user-origin objective/rule/decision and pinned any-kind items from agent/classifier edits; checkCitation enforces later user entry citation when indices are known. index.ts buildContextMessages freezes pending rewind projection at instruction entry, hiding later input; completion reappends late messages per README. Likely authority risk: s…[truncated]
+F4 Partition 3 SHA-256 1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da. Verified: continuity-briefing.ts marks non-user-origin rules/decisions/objective as nonbinding and never drops rules/decisions/goals for budget; continuity-capture.ts stores user's verbatim message text and model classifier only selects category/superseded ids. Likely concern: auto-navigate rewind's generated steer in auto-navigate.ts forwards model summary_focus verbatim (though output is bounded, …[truncated]
+F5 Partition 4 SHA-256 22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322. Verified: fold-screen.ts parseFocus strips terminal controls, labels, minimum-length-checks user words and only sends a focus after explicit confirmation; untouched template leaves focus to agent. index.ts planWithhold uses canonical projection membership, skips user/custom/navigation results and commits no partial drafts if it cannot fit. Likely risk: config.ts resolveAutoNavigateConfig short-circu…[truncated]
+--- end ---
+(node:176686) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /mnt/Projects/furbyhaxx/pi-tree-navigator/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

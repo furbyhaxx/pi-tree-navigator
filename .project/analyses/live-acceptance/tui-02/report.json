@@ -1,0 +1,10 @@
+{
+  "valid": true,
+  "report": {
+    "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+    "findings": [
+      "In `extensions/navigate-tree/retrospective-plan.ts`, `readSessionSnapshot` validates snapshot records and ancestry and checks for pending tool calls before conversion; `validateCompleteToolCalls` rejects unfinished tool-call batches.",
+      "In `extensions/navigate-tree/index.ts`, `completeRewind` writes `branch:<newLabel>` to the summary entry before calling `branchWithSummary`; if branching fails, its catch path restores the prior leaf and removes that completion label."
+    ]
+  }
+}

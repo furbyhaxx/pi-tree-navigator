@@ -1,0 +1,40 @@
+{
+  "partitions": [
+    {
+      "index": 1,
+      "sha256": "4d6e7d18c24a5c7b23da8fa1b63b959baaa4622cfc9646ba2ca907ee9d6c851e",
+      "findings": [
+        "Verified: extensions/navigate-tree/retrospective-plan.ts readSessionSnapshot hashes original bytes, parses entries read-only, validates ancestry/references, and detects pending tool calls before conversion.",
+        "Verified: extensions/navigate-tree/index.ts completeRewind checks anchor identity and label uniqueness before folding; failed branch write restores the prior leaf and clears the branch label.",
+        "Verified: continuity reconciliation protects user-origin rules from agent archival while scoped steering can be archived during fold reconciliation."
+      ]
+    },
+    {
+      "index": 2,
+      "sha256": "42ed6114ed85f9f93921c2217be3aa8d3fff03caefe441391525b98f51b80ef0",
+      "findings": [
+        "Verified: continuity-ledger.ts guardProtected protects user-origin objectives, rules, decisions, and pinned items from agent/classifier mutation; checkCitation enforces a later user-entry citation for protected supersession when indices are known.",
+        "Verified: index.ts buildContextMessages freezes the pending rewind projection at instruction entry, so later input is excluded from that projection; README describes late messages being re-appended in order after a successful fold.",
+        "Potential risk, not a verified defect: summary-prompt.ts inserts summaryFocus verbatim, although the prompt constrains its role."
+      ]
+    },
+    {
+      "index": 3,
+      "sha256": "1bb6fe3872c6d805867247fd76ccc4ca86343e616cfd7ed4c659e16f5cb688da",
+      "findings": [
+        "Verified: continuity-briefing.ts marks non-user-origin rules, decisions, and objectives as nonbinding and does not drop rules, decisions, or goals to meet a budget.",
+        "Verified: continuity-capture.ts stores the user's verbatim message text; the model classifier selects category and superseded IDs.",
+        "Potential concern, not a verified defect: auto-navigate.ts forwards model summary_focus verbatim as generated steering, though its output is bounded."
+      ]
+    },
+    {
+      "index": 4,
+      "sha256": "22ec7a2ad8839af558d656fe6b102e7404f23f8bcdc23ba22b8d7b4e38f25322",
+      "findings": [
+        "Verified: fold-screen.ts strips terminal controls, labels, and checks minimum-length user words; focus is sent only after explicit confirmation, while leaving the template untouched leaves focus to the agent.",
+        "Verified: index.ts planWithhold uses canonical projection membership, skips user/custom/navigation results, and commits no partial drafts if it cannot fit.",
+        "Potential risk, not a verified defect: config.ts resolveAutoNavigateConfig short-circuited before remaining behavior on the reported branch; the specific concern is incompletely preserved in the handoff, so it cannot be asserted further without re-reading this completed partition."
+      ]
+    }
+  ]
+}
