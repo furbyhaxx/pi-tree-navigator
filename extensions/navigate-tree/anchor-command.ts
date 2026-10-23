@@ -57,6 +57,8 @@ export interface AnchorCommandDeps extends FoldScreenDeps, CurrentScreenDeps {
     ctx: ExtensionCommandContext,
     preselect?: string,
   ): Promise<"back" | "done">;
+  /** `/anchor fold [anchor|recommended] [label]` without a UI: print the plan, or fold. */
+  foldWithoutUi(ctx: ExtensionCommandContext, args: string): Promise<void>;
 }
 
 type SubcommandName =
@@ -92,7 +94,7 @@ const SUBCOMMANDS: readonly {
   { name: "settings", aliases: ["config", "set"], summary: "settings" },
 ];
 
-const ANCHOR_USAGE = `Usage: /anchor [tree|list|current|fold|clone|settings]. Run /anchor alone to open the menu.\n${CLONE_USAGE}`;
+const ANCHOR_USAGE = `Usage: /anchor [tree|list|current|fold|clone|settings]. Run /anchor alone to open the menu.\n/anchor fold [anchor|recommended] [new-label]: without a UI, no anchor prints the plan and an anchor folds.\n${CLONE_USAGE}`;
 
 const HUB: readonly {
   view: SubcommandName;
@@ -540,11 +542,15 @@ export function registerAnchorCommand(
           ].join("\n"),
           "info",
         );
-      } else if (subcommand === "fold" && !ctx.hasUI) {
-        ctx.ui.notify(
-          "The guided fold requires an interactive terminal. Use navigate_tree action=rewind with rewindTo, newLabel and summaryFocus.",
-          "info",
-        );
+      } else if (subcommand === "fold") {
+        if (!ctx.hasUI) await deps.foldWithoutUi(ctx, rest);
+        else {
+          const preselect = rest.trim().split(/\s+/)[0];
+          await deps.openFoldPlan(
+            ctx,
+            preselect && preselect !== "recommended" ? preselect : undefined,
+          );
+        }
       } else if (subcommand === "settings") {
         if (!ctx.hasUI || rest === "show")
           ctx.ui.notify(
