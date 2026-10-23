@@ -51,6 +51,7 @@ import {
   type ContextUsage,
   type ExtensionAPI,
   type ExtensionCommandContext,
+  type SessionEntry,
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
@@ -3297,7 +3298,11 @@ describe("rewind: completion", () => {
         .getBranch()
         .some((entry) => f.sm.getLabel(entry.id) === "anchor:end"),
     );
-    assert.equal(boundary.continue, true, "the model reads the refusal");
+    assert.equal(
+      boundary.continue,
+      false,
+      "commit-stage refusals stop the run",
+    );
     assert.equal(boundary.entries[0].details.status, "failed");
     assert.equal(boundary.entries[0].details.stage, "commit");
     assert.match(
@@ -4018,7 +4023,7 @@ describe("rewind: multi-block summaries and late entries", () => {
     assert.deepEqual(tailAfterSummary(f.sm), ["branch_summary", "label"]);
   });
 
-  it("a throwing re-append does not fail the rewind and is not counted", async () => {
+  it("a throwing late-input append fails the rewind and stops the late batch", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
     // Arm the appendMessage throw only once the branch has been written.
@@ -4034,19 +4039,60 @@ describe("rewind: multi-block summaries and late entries", () => {
       };
       return id;
     };
-    await rewindWithLate(f, () => {
-      appendLateUser(f.sm, "lost steer");
+    let lateId = "";
+    const { boundary } = await rewindWithLate(f, () => {
+      lateId = appendLateUser(f.sm, "lost steer");
       f.sm.appendCustomMessageEntry("subagent-result", "kept", true, {});
     });
-    const done = rewindMessages(f.pi)[0].message;
-    assert.equal(done.details.status, "done");
-    assert.equal(done.details.reappendedLateMessages, 1);
-    assert.ok(done.content.endsWith(`\n\n${NOTE_ONE}`));
-    assert.deepEqual(tailAfterSummary(f.sm), [
-      "branch_summary",
-      "label",
-      'custom:subagent-result:"kept"',
-    ]);
+    // The original user input must stay active; a partial fold cannot continue.
+    const failed = rewindMessages(f.pi)[0].message;
+    assert.equal(failed.details.status, "failed");
+    assert.equal(boundary.continue, false);
+    assert.match(failed.content, /late input could not be written/);
+    assert.ok(!failed.content.includes("Nothing was collapsed"));
+    assert.ok(f.sm.getBranch().some((entry) => entry.id === lateId));
+    assert.equal(
+      f.sm
+        .getEntries()
+        .filter(
+          (entry) =>
+            entry.type === "custom_message" &&
+            entry.customType === "subagent-result",
+        ).length,
+      1,
+      "the custom input after the failed user append was not copied",
+    );
+  });
+
+  it("late-input cursor restoration failure stops without appending a receipt to the uncertain branch", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi, { capture: true });
+    const branchWithSummary = f.sm.branchWithSummary.bind(f.sm);
+    f.sm.branchWithSummary = (...args) => {
+      const id = branchWithSummary(...args);
+      const append = f.sm.appendMessage.bind(f.sm);
+      f.sm.appendMessage = (...messages) => {
+        append(...messages);
+        f.sm.branch = () => {
+          throw new Error("cursor restoration unavailable");
+        };
+        throw new Error("late append failed after memory update");
+      };
+      return id;
+    };
+    const { boundary } = await rewindWithLate(f, () =>
+      appendLateUser(f.sm, "retained original input"),
+    );
+    assert.equal(boundary.continue, false);
+    assert.deepEqual(boundary.entries, []);
+    assert.ok(
+      f.ctx.notifyCalls.some(
+        ([message, level]) =>
+          level === "error" &&
+          message.includes("could not be restored in memory"),
+      ),
+    );
+    assert.equal(rewindMessages(f.pi).length, 0);
   });
 
   it("an estimator throw after the branch still delivers the continuation with contextAfter 0", async () => {
@@ -4109,6 +4155,12 @@ describe("rewind: multi-block summaries and late entries", () => {
 // =============================================================================
 
 describe("commitFold: engine shape", () => {
+  function reopenSession(sm: SessionManager) {
+    const path = sm.getSessionFile();
+    assert.ok(path);
+    return SessionManager.open(path);
+  }
+
   function engineFold(
     f: { sm: SessionManager },
     anchorId: string,
@@ -4172,6 +4224,205 @@ describe("commitFold: engine shape", () => {
       `folded to ${outcome.afterTokens}\n\n${buildLateEntriesNote(1)}`,
     );
     assert.equal(run.lead.length, 2, "prospective estimate, then final");
+  });
+
+  it("late-input persistence failure restores the original branch without dangling receipt parents", async () => {
+    for (const persistent of [false, true]) {
+      const dir = mkdtempSync(join(tmpdir(), "fold-persistence-"));
+      try {
+        const sm = SessionManager.create(dir, dir);
+        const pi = makeFakePi(sm);
+        const { anchorId } = setupRewindable(sm, pi);
+        const run = engineFold({ sm }, anchorId);
+        const originalInput = sm.appendMessage({
+          role: "user",
+          content: "late original",
+          timestamp: 1,
+        });
+        const originalLeaf = sm.appendCustomMessageEntry(
+          "subagent-result",
+          "late result",
+          true,
+        );
+        const internals = sm as unknown as {
+          _persist(entry: SessionEntry): void;
+        };
+        const persist = internals._persist.bind(sm);
+        let failedId = "";
+        internals._persist = (entry) => {
+          if (failedId && persistent)
+            throw new Error("persistent disk failure");
+          if (
+            entry.type === "message" &&
+            entry.message.role === "user" &&
+            !failedId
+          ) {
+            failedId = entry.id;
+            throw new Error("injected late-input disk failure");
+          }
+          persist(entry);
+        };
+        const outcome = await commitFold(sm, run.input);
+        assert.ok(!outcome.ok, JSON.stringify(outcome));
+        assert.match(outcome.reason, /late input could not be written/);
+        assert.match(outcome.reason, /[Pp]ersistence.*uncertain/);
+        if (persistent) {
+          assert.equal(sm.getLeafId(), originalLeaf);
+          assert.match(outcome.reason, /[Nn]o restoration append succeeded/);
+        } else {
+          assert.match(outcome.reason, /restoration append succeeded/);
+        }
+        assert.ok(sm.getBranch().some((entry) => entry.id === originalInput));
+        assert.ok(sm.getBranch().some((entry) => entry.id === originalLeaf));
+        assert.equal(
+          sm.getLabel(run.leaf),
+          persistent ? "branch:end" : undefined,
+        );
+        assert.equal(
+          sm
+            .getEntries()
+            .filter(
+              (entry) =>
+                entry.type === "custom_message" &&
+                entry.customType === "subagent-result",
+            ).length,
+          1,
+        );
+        internals._persist = persist;
+        const receipt = sm.appendCustomEntry("receipt", {});
+        const reopened = reopenSession(sm);
+        assert.equal(reopened.getLeafId(), receipt);
+        assert.deepEqual(
+          reopened.getBranch().map((entry) => entry.id),
+          sm.getBranch().map((entry) => entry.id),
+        );
+        const ids = new Set(reopened.getEntries().map((entry) => entry.id));
+        assert.ok(!ids.has(failedId));
+        for (const entry of reopened.getEntries()) {
+          assert.ok(
+            entry.parentId === null || ids.has(entry.parentId),
+            `dangling parent ${entry.parentId}`,
+          );
+        }
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("persistence failures in the branch or mandatory labels refuse and preserve unrelated labels", async () => {
+    for (const step of ["marker", "branch", "summary-label"] as const) {
+      const dir = mkdtempSync(join(tmpdir(), "fold-write-"));
+      try {
+        const sm = SessionManager.create(dir, dir);
+        const pi = makeFakePi(sm);
+        const { anchorId } = setupRewindable(sm, pi);
+        const run = engineFold({ sm }, anchorId);
+        if (step !== "marker")
+          sm.appendLabelChange(run.leaf, "unrelated bookmark");
+        const originalLeaf = sm.getLeafId();
+        const internals = sm as unknown as {
+          _persist(entry: SessionEntry): void;
+        };
+        const persist = internals._persist.bind(sm);
+        let failedId = "";
+        internals._persist = (entry) => {
+          const matches =
+            step === "branch"
+              ? entry.type === "branch_summary"
+              : entry.type === "label" &&
+                entry.label ===
+                  (step === "marker" ? "branch:end" : "anchor:end");
+          if (matches && !failedId) {
+            failedId = entry.id;
+            throw new Error(`injected ${step} failure`);
+          }
+          persist(entry);
+        };
+        const outcome = await commitFold(sm, run.input);
+        assert.ok(!outcome.ok, JSON.stringify(outcome));
+        assert.match(outcome.reason, /restoration append succeeded/);
+        assert.ok(sm.getBranch().some((entry) => entry.id === originalLeaf));
+        assert.equal(
+          sm.getLabel(run.leaf),
+          step === "marker" ? undefined : "unrelated bookmark",
+        );
+        const reopened = reopenSession(sm);
+        assert.deepEqual(
+          reopened.getBranch().map((entry) => entry.id),
+          sm.getBranch().map((entry) => entry.id),
+        );
+        const ids = new Set(reopened.getEntries().map((entry) => entry.id));
+        assert.ok(!ids.has(failedId));
+        for (const entry of reopened.getEntries())
+          assert.ok(entry.parentId === null || ids.has(entry.parentId));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("persistence label retry and receipt retry never parent failed in-memory entries", async () => {
+    for (const operation of ["label", "receipt"] as const) {
+      const dir = mkdtempSync(join(tmpdir(), "fold-retry-"));
+      try {
+        const sm = SessionManager.create(dir, dir);
+        const pi = makeFakePi(sm);
+        navigateTree(pi.pi);
+        const ctx = makeCtx(sm);
+        const { anchorId } = setupRewindable(sm, pi);
+        const internals = sm as unknown as {
+          _persist(entry: SessionEntry): void;
+        };
+        const persist = internals._persist.bind(sm);
+        let failedId = "";
+        internals._persist = (entry) => {
+          if (
+            !failedId &&
+            (operation === "label"
+              ? entry.type === "label"
+              : entry.type === "custom_message")
+          ) {
+            failedId = entry.id;
+            throw new Error(`injected ${operation} failure`);
+          }
+          persist(entry);
+        };
+        pi.pi.sendMessage = (message) => {
+          sm.appendCustomMessageEntry(
+            message.customType,
+            message.content,
+            message.display ?? true,
+            message.details,
+          );
+        };
+        const api = __testHooks.foldApi(pi.pi);
+        assert.ok(api);
+        const outcome = await api.runFoldNow(
+          { ...ctx, isIdle: () => true } as never,
+          {
+            origin: "manual",
+            rewindTo: "start",
+            newLabel: "end",
+            focus: "Preserve user instructions and continue the work.",
+          },
+        );
+        assert.equal(outcome.status, "done", JSON.stringify(outcome));
+        assert.equal(sm.getEntry(anchorId)?.id, anchorId);
+        assert.ok(failedId);
+        const reopened = reopenSession(sm);
+        assert.deepEqual(
+          reopened.getBranch().map((entry) => entry.id),
+          sm.getBranch().map((entry) => entry.id),
+        );
+        const ids = new Set(reopened.getEntries().map((entry) => entry.id));
+        assert.ok(!ids.has(failedId));
+        for (const entry of reopened.getEntries())
+          assert.ok(entry.parentId === null || ids.has(entry.parentId));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
   });
 
   it("preserves additive requests across a second fold without nesting continuations", async () => {

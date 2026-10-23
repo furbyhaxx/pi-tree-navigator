@@ -214,6 +214,7 @@ import {
   RewindHintTracker,
 } from "./rewind-hint.ts";
 import { clearRuntimeConfig, readRuntimeConfig } from "./runtime-config.ts";
+import { trySessionWrite } from "./session-write.ts";
 import { createSettingsScreenDeps } from "./settings-screen.ts";
 import {
   appendContinuityBriefing,
@@ -1399,7 +1400,7 @@ export interface FoldPreviewInput {
 
 /** What the commit stage of a fold needs; the caller owns the summary and its own bookkeeping. */
 export interface FoldCommitInput extends FoldPreviewInput {
-  /** Best-effort label write; false when it failed. */
+  /** Synchronous label write; false when it failed. */
   writeLabel(entryId: string, label: string | undefined): boolean;
 }
 
@@ -1673,6 +1674,8 @@ export function previewFoldCommit(
   }
 }
 
+const unrestoredFoldCursors = new WeakSet<SessionManager>();
+
 /**
  * The commit stage of a fold: preview it (`previewFoldCommit`), then branch
  * from the target, label, re-append late input, refresh the agent and emit
@@ -1683,6 +1686,13 @@ export async function commitFold(
   sm: SessionManager,
   input: FoldCommitInput,
 ): Promise<FoldCommitOutcome> {
+  if (unrestoredFoldCursors.has(sm)) {
+    return {
+      ok: false,
+      reason:
+        "A previous fold could not restore the session cursor. Persistence remains uncertain; reload the session before another fold.",
+    };
+  }
   const preview = previewFoldCommit(sm, input);
   if (!preview.ok) return preview;
   const {
@@ -1699,51 +1709,80 @@ export async function commitFold(
     foldEstimateAfter,
   } = preview;
   const { targetId, newLabel, branchLabelEntryId } = input;
-  // Completion marker: `branch:<newLabel>` on the abandoned branch's last
-  // entry, written before the branch.
-  const branchLabel = BRANCH_LABEL_PREFIX + newLabel;
-  let branchLabelWritten = false;
-  let summaryId: string;
-  // The leaf right before the branch call (the label write above appended
-  // an entry, so it is not `oldLeafId`).
-  let leafBeforeBranch: string | null | undefined = oldLeafId;
-  try {
-    if (branchLabelEntryId)
-      branchLabelWritten = input.writeLabel(branchLabelEntryId, branchLabel);
-    leafBeforeBranch = sm.getLeafId();
-    // `fromHook: true` pairs with the `session_tree` payload's
-    // `fromExtension: true`, as pi's own navigateTree does for an
-    // extension-provided summary.
-    summaryId = sm.branchWithSummary(targetId, materialized, details, true);
-  } catch (err) {
-    // pi's branchWithSummary moves the leaf and appends in memory before
-    // the file append that may throw: put the leaf back, or the session
-    // stays collapsed while the model is told nothing was.
-    try {
-      if (leafBeforeBranch && sm.getLeafId() !== leafBeforeBranch) {
-        sm.branch(leafBeforeBranch);
+  const previousLabel = branchLabelEntryId
+    ? sm.getLabel(branchLabelEntryId)
+    : undefined;
+  const labelWrite = (entryId: string, label: string | undefined) =>
+    trySessionWrite(sm, () => {
+      if (!input.writeLabel(entryId, label)) {
+        throw new Error("label write failed");
       }
+    });
+  const refuseWrite = (step: string, error: unknown): FoldCommitOutcome => {
+    let cursorRestored = false;
+    try {
+      if (oldLeafId === null) sm.resetLeaf();
+      else sm.branch(oldLeafId);
+      cursorRestored = sm.getLeafId() === oldLeafId;
     } catch {
-      // Fail-open: the refusal below still reaches the model.
+      // No append is safe until the original cursor has been restored.
     }
-    // Nothing branched: undo the completion marker, then report the refusal.
-    if (branchLabelWritten && branchLabelEntryId) {
-      input.writeLabel(branchLabelEntryId, undefined);
+    let restorationAppended = false;
+    if (cursorRestored) {
+      const restoration = branchLabelEntryId
+        ? labelWrite(branchLabelEntryId, previousLabel)
+        : trySessionWrite(sm, () =>
+            sm.appendCustomEntry("navigate-tree-fold-restoration", {
+              oldLeafId,
+              newLabel,
+            }),
+          );
+      restorationAppended = restoration.ok;
+      cursorRestored = restoration.ok || restoration.cursorRestored;
     }
+    if (cursorRestored) unrestoredFoldCursors.delete(sm);
+    else unrestoredFoldCursors.add(sm);
+    refreshAgentMessages(sm);
     return {
       ok: false,
-      reason: `the branch could not be written (${err instanceof Error ? err.message : String(err)})`,
+      reason: `${step} (${error instanceof Error ? error.message : String(error)}). ${
+        cursorRestored
+          ? "Original active branch restored in memory."
+          : "Original active branch could not be restored in memory."
+      } ${
+        restorationAppended
+          ? "A restoration append succeeded."
+          : "No restoration append succeeded; durable rollback and completion-marker restoration are not confirmed."
+      } Persistence remains uncertain after the write failure; original archived entries were retained. Stop and inspect the session before continuing.`,
     };
+  };
+  // An unrelated existing label must remain addressable on the archived branch.
+  if (branchLabelEntryId && previousLabel === undefined) {
+    const marker = labelWrite(
+      branchLabelEntryId,
+      BRANCH_LABEL_PREFIX + newLabel,
+    );
+    if (!marker.ok)
+      return refuseWrite(
+        "the completion marker could not be written",
+        marker.error,
+      );
   }
-  // The summary landed unlabeled if both writes fail; `list` simply won't
-  // show it.
-  input.writeLabel(summaryId, LABEL_PREFIX + newLabel);
+  const branch = trySessionWrite(sm, () =>
+    sm.branchWithSummary(targetId, materialized, details, true),
+  );
+  if (!branch.ok)
+    return refuseWrite("the branch could not be written", branch.error);
+  const summaryId = branch.value;
+  const label = labelWrite(summaryId, LABEL_PREFIX + newLabel);
+  if (!label.ok)
+    return refuseWrite("the summary label could not be written", label.error);
   // Direct appends, not the steer queue: no second pass through other
   // extensions' input handlers, and anything still queued is delivered
   // after these, keeping the original order.
   let reappended = 0;
   for (const late of lateEntries) {
-    try {
+    const appended = trySessionWrite(sm, () => {
       if (late.kind !== "custom") {
         sm.appendMessage(
           late.message as Parameters<SessionManager["appendMessage"]>[0],
@@ -1758,10 +1797,10 @@ export async function commitFold(
           late.details,
         );
       }
-      reappended++;
-    } catch {
-      // Fail-open: the original stays on disk on the abandoned branch.
-    }
+    });
+    if (!appended.ok)
+      return refuseWrite("late input could not be written", appended.error);
+    reappended++;
   }
   // The branch has landed: every step below is guarded so the
   // continuation always reaches the model.
@@ -2203,7 +2242,7 @@ function foldDoneDraft(
   });
 }
 
-/** The receipt of a fold that did not land; the history is as it was. */
+/** The receipt of a fold that did not finish, including uncertain commit writes. */
 function foldFailedDraft(
   request: FoldRequest,
   outcome: Exclude<FoldResult, { status: "done" }>,
@@ -2218,7 +2257,7 @@ function foldFailedDraft(
   };
   if (outcome.status === "failed") {
     return rewindMessageDraft(
-      `${head} failed at the ${outcome.stage} stage (${outcome.reason}): ${outcome.detail}\n\nNothing was collapsed.`,
+      `${head} failed at the ${outcome.stage} stage (${outcome.reason}): ${outcome.detail}${outcome.stage === "commit" ? "" : "\n\nNothing was collapsed."}`,
       {
         ...base,
         stage: outcome.stage,
@@ -2487,18 +2526,11 @@ export default function (pi: ExtensionAPI) {
     entryId: string,
     label: string | undefined,
   ): boolean {
-    try {
-      pi.setLabel(entryId, label);
-      return true;
-    } catch {
-      // Stale runtime: the captured SessionManager still writes.
-      try {
-        sm.appendLabelChange(entryId, label);
-        return true;
-      } catch {
-        return false;
-      }
-    }
+    if (unrestoredFoldCursors.has(sm)) return false;
+    const primary = trySessionWrite(sm, () => pi.setLabel(entryId, label));
+    if (primary.ok) return true;
+    if (!primary.cursorRestored) return false;
+    return trySessionWrite(sm, () => sm.appendLabelChange(entryId, label)).ok;
   }
 
   // ---------------------------------------------------------------------------
@@ -2863,7 +2895,8 @@ export default function (pi: ExtensionAPI) {
     sm: SessionManager,
     draft: RewindMessageDraft,
   ): void {
-    try {
+    if (unrestoredFoldCursors.has(sm)) return;
+    const primary = trySessionWrite(sm, () =>
       pi.sendMessage(
         {
           customType: draft.customType,
@@ -2872,19 +2905,17 @@ export default function (pi: ExtensionAPI) {
           details: draft.details,
         },
         { triggerTurn: false },
-      );
-    } catch {
-      try {
-        sm.appendCustomMessageEntry(
-          draft.customType,
-          draft.content,
-          draft.display,
-          draft.details,
-        );
-      } catch {
-        // Fail-open: the fold itself has landed.
-      }
-    }
+      ),
+    );
+    if (primary.ok || !primary.cursorRestored) return;
+    trySessionWrite(sm, () =>
+      sm.appendCustomMessageEntry(
+        draft.customType,
+        draft.content,
+        draft.display,
+        draft.details,
+      ),
+    );
   }
 
   /** Fold an idle session now: nothing is written before the commit, then the continuation is appended. */
@@ -3017,8 +3048,8 @@ export default function (pi: ExtensionAPI) {
   /**
    * The queued fold at a `turn_end` boundary, after this turn's tool results
    * are on the branch: its receipt is a boundary draft. Esc cancels it; a
-   * landed fold continues the run; a failed one continues only when the
-   * model asked for it and the run was not cancelled. Undefined when the ctx
+   * landed fold continues the run; a precommit failure continues only when
+   * the model asked for it and the run was not cancelled. Undefined when the ctx
    * is stale (the fold stays queued).
    */
   async function runQueuedFold(
@@ -3046,13 +3077,25 @@ export default function (pi: ExtensionAPI) {
         ...(event.entries ?? []),
         draft,
       ]),
-      ...(cont && { continue: true }),
+      continue: cont,
     });
-    const notLanded = (outcome: Exclude<FoldResult, { status: "done" }>) =>
-      deliver(
-        foldFailedDraft(request, outcome),
-        request.origin === "agent" && outcome.status !== "cancelled",
+    const notLanded = (outcome: Exclude<FoldResult, { status: "done" }>) => {
+      const draft = foldFailedDraft(request, outcome);
+      if (unrestoredFoldCursors.has(sm)) {
+        try {
+          if (ctx.hasUI) ctx.ui.notify(String(draft.content), "error");
+        } catch {
+          // A stale UI cannot make a receipt append safe.
+        }
+        return { entries: [], continue: false };
+      }
+      return deliver(
+        draft,
+        request.origin === "agent" &&
+          outcome.status !== "cancelled" &&
+          !(outcome.status === "failed" && outcome.stage === "commit"),
       );
+    };
     if (signal?.aborted || message.stopReason === "aborted") {
       return notLanded({ status: "cancelled", usage: [] });
     }
