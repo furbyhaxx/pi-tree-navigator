@@ -42,6 +42,11 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `continuity-capture.ts`: deterministic capture of user intent (rules, decisions,
   objective, steering, `ask_user` answers) with a heuristic classifier and an
   optional model classifier. User words are stored verbatim.
+- `intent-policy.ts`: validated `continuity.intentClassifier` policies (single model,
+  `recommended` preset, per-stage object overrides), Decisions/chat stage adapters
+  and supersession escalation on abstention only.
+- `milestone-classifier.ts`: milestone status/boundary request builders with optional
+  session-structure context; shared by the opt-in auto controller and the benchmark.
 - `proposal-options.ts`: exact model/thinking selectors and tool disclosure rules.
 - `proposal-source.ts`: deterministic outlines and filtered full-text source records.
 - `proposal-engine.ts`: optional bounded model analysis and explicit heuristic fallback.
