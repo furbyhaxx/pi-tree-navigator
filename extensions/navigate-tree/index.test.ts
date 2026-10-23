@@ -7907,50 +7907,61 @@ Active anchors (root → leaf, % of 100k):
     );
   });
 
-  it("explicit error: nothing at turn_end, recovery at agent_before_settle in the same run", async () => {
+  it("explicit error: independently folds at agent_before_settle without withholding results", async () => {
     const f = await forcedSetup();
     try {
+      const archived = structuredClone(f.sm.getEntries());
       const err = errorOverflow(f.sm);
       const { turn, settle } = await runErrorEnd(f, err.message);
       assert.deepEqual(turn.entries, []);
       assert.equal(settle.continue, true);
-      const edits = settle.entries.filter((d) => d.type === "context_edit");
-      assert.deepEqual(
-        edits.map((d) => [d.targetId, d.replacement === null]),
-        [
-          [err.id, true],
-          [f.r2, false],
-        ],
-        "the error is hidden, then only the newest result is withheld",
+      assert.equal(
+        settle.entries.some((entry) => entry.type === "context_edit"),
+        false,
       );
-      assert.deepEqual(edits[1].replacement, {
-        content: [
-          {
-            type: "text",
-            text: "[navigate_tree] Output withheld: adding it overflowed the context window (~12k tokens). The call ran; only its output was dropped. Rewind first, then re-run it if you still need the output.",
-          },
-        ],
-      });
-      const [d5] = forcedDrafts(settle);
-      assert.equal(d5.content, D5_ONE);
-      assert.equal(d5.display, true);
-      assert.deepEqual(d5.details, {
-        status: "forced",
-        withheld: 1,
-        contextWindow: WINDOW,
-      });
-      // The tool call stays; the result keeps its toolCallId.
+      const [done] = forcedDrafts(settle);
+      assert.equal(done.details.status, "done");
+      assert.ok(f.ctx.registryCalls.length > 0);
+      assert.ok(
+        f.sm.getBranch().some((entry) => entry.type === "branch_summary"),
+      );
+      for (const entry of archived)
+        assert.deepEqual(f.sm.getEntry(entry.id), entry);
       const wire = fireContext(f.pi, f.ctx);
-      const r2 = wire.find((m) => m.toolCallId === "r2");
-      assert.ok(r2);
-      assert.match(JSON.stringify(r2.content), /Output withheld/);
-      assert.ok(!wire.some((m) => m.stopReason === "error"));
-      // No start anchor at the limit.
+      assert.ok(!wire.some((message) => message.stopReason === "error"));
+      assert.ok(!JSON.stringify(wire).includes("Output withheld"));
       assert.equal(f.sm.getLabel(err.id), undefined);
     } finally {
       cleanupConfigFixture(f.fixture);
     }
   });
+
+  for (const change of ["model", "session"] as const) {
+    it(`explicit recovery refuses a stale ${change} before committing`, async () => {
+      const f = await forcedSetup();
+      try {
+        f.ctx.modelRegistry = fakeRegistry(() => {
+          if (change === "model") {
+            assert.ok(f.ctx.model);
+            f.ctx.model = { ...f.ctx.model, id: "changed-model" };
+          } else
+            f.ctx.sessionManager = SessionManager.inMemory(
+              "/tmp/replaced-recovery-session",
+            );
+          return reply(SUMMARY_TEXT);
+        }).registry;
+        const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
+        assert.equal(settle.continue, false);
+        assert.equal(
+          f.sm.getBranch().some((entry) => entry.type === "branch_summary"),
+          false,
+        );
+        assert.equal(forcedDrafts(settle)[0].details.status, "failed");
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    });
+  }
 
   it("squeezed length: recovered at turn_end, the reply and its failed calls hidden", async () => {
     const f = await forcedSetup();
@@ -8401,13 +8412,14 @@ Active anchors (root → leaf, % of 100k):
         cleanupConfigFixture(f.fixture);
       }
     }
-    // No hint reserve: off.
+    // Recovery is on even when proactive hints are disabled.
     {
       const f = await forcedSetup({ config: {} });
       try {
         const err = errorOverflow(f.sm);
         const { settle } = await runErrorEnd(f, err.message);
-        assert.deepEqual(settle.entries, []);
+        assert.equal(settle.continue, true);
+        assert.equal(forcedDrafts(settle)[0].details.status, "done");
       } finally {
         cleanupConfigFixture(f.fixture);
       }
