@@ -1364,7 +1364,7 @@ function rewindStaleReason(
  * first; this extension's own rewind and rewind-hint messages are excluded
  * (a pre-rewind rewind hint is stale once it lands).
  */
-type LateEntry =
+export type LateEntry =
   | {
       kind: "user";
       message: Extract<SessionEntry, { type: "message" }>["message"];
@@ -1438,8 +1438,8 @@ export function buildLateEntriesNote(count: number): string {
     : `The ${count} messages between the branch_summary and this one arrived while the rewind was pending — they are new and still unanswered; handle them now.`;
 }
 
-/** What the commit stage of a fold needs; the caller owns the summary and its own bookkeeping. */
-export interface FoldCommitInput {
+/** What the preview stage of a fold needs: a commit's input without its session writes. */
+export interface FoldPreviewInput {
   /** The anchor entry the new branch starts from. */
   targetId: string;
   /** The anchor name that must still resolve to `targetId`. */
@@ -1457,9 +1457,41 @@ export interface FoldCommitInput {
   branchLabelEntryId?: string;
   /** The continuation's lead text for a post-fold request of `afterTokens`. */
   continuationText(afterTokens: number): string;
+}
+
+/** What the commit stage of a fold needs; the caller owns the summary and its own bookkeeping. */
+export interface FoldCommitInput extends FoldPreviewInput {
   /** Best-effort label write; false when it failed. */
   writeLabel(entryId: string, label: string | undefined): boolean;
 }
+
+/** Everything a fold writes, prepared from session reads alone. */
+export interface FoldMaterialization {
+  /** The leaf the fold abandons. */
+  oldLeafId: string | null;
+  /** The `branch_summary` text: handoff, full child reports and the continuity briefing. */
+  materialized: string;
+  /** The `branch_summary` details: file lists, handoff metadata and the ledger snapshot. */
+  details: Record<string, unknown>;
+  /** The entries between the target and the leaf. */
+  collapsedEntries: number;
+  readFiles: string[];
+  modifiedFiles: string[];
+  /** Input after the fold point, re-appended after the summary. */
+  lateEntries: LateEntry[];
+  continuity: FoldContinuity;
+}
+
+/** `ok: false` is the reason `commitFold` would refuse for; nothing was written either way. */
+export type FoldPreview =
+  | { ok: false; reason: string }
+  | ({
+      ok: true;
+      /** The admission estimate of the first request after the fold, continuation included. */
+      projectedAfterTokens: number;
+      foldEstimateBefore: number;
+      foldEstimateAfter: number;
+    } & FoldMaterialization);
 
 /** `ok: false` writes nothing; the session is as the caller found it. */
 export type FoldCommitOutcome =
@@ -1485,18 +1517,21 @@ export type FoldCommitOutcome =
     };
 
 /**
- * The commit stage of a fold: revalidate, materialize the handoff, gate it on
- * the projected budget, branch from the target, label, re-append late input,
- * refresh the agent and emit `session_tree`. Throws only before anything is
- * written; every step after the branch is guarded.
+ * Everything a fold commit decides, from session reads alone: revalidate the
+ * target, collect the span and the late input, reconcile the continuity
+ * ledger, materialize the handoff, project the branch it leaves (full child
+ * handoffs, briefing, late input and continuation included) and gate it on
+ * reducing context and on the request headroom. `commitFold` lands exactly
+ * this; candidate pricing reuses it with a placeholder `summaryText`.
+ * A session read failing during the target checks throws; any later one is a
+ * refusal.
  */
-export async function commitFold(
+export function previewFoldCommit(
   sm: SessionManager,
-  input: FoldCommitInput,
-): Promise<FoldCommitOutcome> {
-  const { targetId, rewindTo, newLabel, foldPointId, branchLabelEntryId } =
-    input;
-  const refuse = (reason: string): FoldCommitOutcome => ({ ok: false, reason });
+  input: FoldPreviewInput,
+): FoldPreview {
+  const { targetId, rewindTo, newLabel, foldPointId } = input;
+  const refuse = (reason: string): FoldPreview => ({ ok: false, reason });
   // A compaction or tree move since the summary was requested invalidates the
   // fold: the anchor must still be the same labeled entry on the active
   // branch, and the new label must still be free.
@@ -1512,31 +1547,13 @@ export async function commitFold(
   // Input that arrived after the fold point (user steers drained at the
   // rewind turn's boundary, other extensions' messages) sits on the segment
   // about to be abandoned. It is new input, not collapsed work: it is
-  // re-appended onto the new branch below, in order, ahead of the
-  // continuation (which flags it as unanswered).
+  // re-appended onto the new branch, in order, ahead of the continuation
+  // (which flags it as unanswered).
   const lateEntries = collectLateEntries(sm, foldPointId);
-  // Completion marker: `branch:<newLabel>` on the abandoned branch's last
-  // entry, written before the branch.
-  const branchLabel = BRANCH_LABEL_PREFIX + newLabel;
-  let branchLabelWritten = false;
-  let foldEstimateBefore = 0;
-  let foldEstimateAfter = 0;
-  let entries: SessionEntry[];
-  let readFiles: string[];
-  let modifiedFiles: string[];
-  let continuity: FoldContinuity;
-  let summaryId: string;
-  // The leaf right before the branch call (the label write above appended
-  // an entry, so it is not `oldLeafId`).
-  let leafBeforeBranch: string | null | undefined;
   try {
-    ({ entries } = collectEntriesForBranchSummary(sm, oldLeafId, targetId));
+    const { entries } = collectEntriesForBranchSummary(sm, oldLeafId, targetId);
     const { fileOps } = prepareBranchEntries(entries, Number.MAX_SAFE_INTEGER);
-    ({ readFiles, modifiedFiles } = computeFileLists(fileOps));
-    // `fromHook: true` pairs with the `session_tree` payload's
-    // `fromExtension: true`, as pi's own navigateTree does for an
-    // extension-provided summary.
-    leafBeforeBranch = sm.getLeafId();
+    const { readFiles, modifiedFiles } = computeFileLists(fileOps);
     const children = entries.filter((entry) => entry.type === "branch_summary");
     const all = new Map(sm.getEntries().map((entry) => [entry.id, entry]));
     const sourceIds = new Set(
@@ -1554,9 +1571,9 @@ export async function commitFold(
         for (const entry of path.slice(at + 1)) sourceIds.add(entry.id);
       }
     }
-    // Pure: the ledger only changes through the branch_summary written
-    // below, so every failure ending before it leaves the ledger untouched.
-    continuity = reconcileFoldContinuity(
+    // Pure: the ledger only changes through the branch_summary a commit
+    // writes, so every failure ending before it leaves the ledger untouched.
+    const continuity = reconcileFoldContinuity(
       sm.getBranch(),
       input.summaryText,
       rewindTo,
@@ -1634,13 +1651,13 @@ export async function commitFold(
     );
     if (foldPointAt < 0)
       return refuse("the folded work is no longer in the projected context");
-    foldEstimateBefore = estimateContentTokens([
+    const foldEstimateBefore = estimateContentTokens([
       ...currentEntries
         .slice(0, foldPointAt + 1)
         .flatMap((entry) => entry.messages),
       ...lateMessages,
     ]);
-    const continuation = {
+    prospective.push({
       role: "custom" as const,
       customType: REWIND_CUSTOM_TYPE,
       content:
@@ -1652,9 +1669,8 @@ export async function commitFold(
         `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`,
       display: true,
       timestamp: Date.now(),
-    };
-    prospective.push(continuation);
-    foldEstimateAfter = estimateContentTokens(prospective);
+    });
+    const foldEstimateAfter = estimateContentTokens(prospective);
     if (foldEstimateAfter >= foldEstimateBefore) {
       const restoresCompacted =
         precedesLatestCompaction(sm.getBranch(), targetId) &&
@@ -1666,9 +1682,10 @@ export async function commitFold(
           : `the materialized handoff does not reduce projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`,
       );
     }
+    const projectedAfterTokens = requestAccounting(sm, prospective).tokens;
     if (
       input.contextWindow > 0 &&
-      requestAccounting(sm, prospective).tokens +
+      projectedAfterTokens +
         RECOVERY_MIN_OUTPUT_TOKENS +
         RECOVERY_HEADROOM_TOKENS >
         input.contextWindow
@@ -1677,9 +1694,67 @@ export async function commitFold(
         "the materialized handoff leaves insufficient request headroom; original history was kept",
       );
     }
+    return {
+      ok: true,
+      projectedAfterTokens,
+      foldEstimateBefore,
+      foldEstimateAfter,
+      oldLeafId,
+      materialized,
+      details,
+      collapsedEntries: entries.length,
+      readFiles,
+      modifiedFiles,
+      lateEntries,
+      continuity,
+    };
+  } catch (err) {
+    return refuse(
+      `the fold could not be prepared (${err instanceof Error ? err.message : String(err)})`,
+    );
+  }
+}
+
+/**
+ * The commit stage of a fold: preview it (`previewFoldCommit`), then branch
+ * from the target, label, re-append late input, refresh the agent and emit
+ * `session_tree`. Throws only before anything is written; every step after the
+ * branch is guarded.
+ */
+export async function commitFold(
+  sm: SessionManager,
+  input: FoldCommitInput,
+): Promise<FoldCommitOutcome> {
+  const preview = previewFoldCommit(sm, input);
+  if (!preview.ok) return preview;
+  const {
+    oldLeafId,
+    materialized,
+    details,
+    collapsedEntries,
+    readFiles,
+    modifiedFiles,
+    lateEntries,
+    continuity,
+    foldEstimateBefore,
+    foldEstimateAfter,
+  } = preview;
+  const { targetId, newLabel, branchLabelEntryId } = input;
+  // Completion marker: `branch:<newLabel>` on the abandoned branch's last
+  // entry, written before the branch.
+  const branchLabel = BRANCH_LABEL_PREFIX + newLabel;
+  let branchLabelWritten = false;
+  let summaryId: string;
+  // The leaf right before the branch call (the label write above appended
+  // an entry, so it is not `oldLeafId`).
+  let leafBeforeBranch: string | null | undefined = oldLeafId;
+  try {
     if (branchLabelEntryId)
       branchLabelWritten = input.writeLabel(branchLabelEntryId, branchLabel);
     leafBeforeBranch = sm.getLeafId();
+    // `fromHook: true` pairs with the `session_tree` payload's
+    // `fromExtension: true`, as pi's own navigateTree does for an
+    // extension-provided summary.
     summaryId = sm.branchWithSummary(targetId, materialized, details, true);
   } catch (err) {
     // pi's branchWithSummary moves the leaf and appends in memory before
@@ -1696,9 +1771,10 @@ export async function commitFold(
     if (branchLabelWritten && branchLabelEntryId) {
       input.writeLabel(branchLabelEntryId, undefined);
     }
-    return refuse(
-      `the branch could not be written (${err instanceof Error ? err.message : String(err)})`,
-    );
+    return {
+      ok: false,
+      reason: `the branch could not be written (${err instanceof Error ? err.message : String(err)})`,
+    };
   }
   // The summary landed unlabeled if both writes fail; `list` simply won't
   // show it.
@@ -1746,7 +1822,7 @@ export async function commitFold(
     ok: true,
     summaryId,
     oldLeafId,
-    collapsedEntries: entries.length,
+    collapsedEntries,
     afterTokens,
     foldEstimateBefore,
     foldEstimateAfter,
