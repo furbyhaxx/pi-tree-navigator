@@ -2,18 +2,22 @@
  * `/anchor fold`: one screen with a recommended fold plan.
  *
  * The plan names the target anchor, the summary label, the projected result and the
- * summary strategy. Enter folds, `e` edits label and focus, the arrows pick another
- * anchor, Esc leaves (or cancels a running fold). The host supplies every session and
- * engine access through `FoldPlanDeps`; this module imports neither.
+ * summary strategy. Enter folds, `e` edits label and focus, the arrows, the wheel and
+ * a click pick another anchor (a second click folds), `/` filters anchors and previews,
+ * Esc clears the filter, then leaves (or cancels a running fold). The host supplies
+ * every session and engine access through `FoldPlanDeps`; this module imports neither.
  */
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
+  type Focusable,
   Key,
   type Keybinding,
   type KeybindingsManager,
   type KeyId,
   matchesKey,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
@@ -23,12 +27,10 @@ import type { FoldSummaryProgress } from "./fold-summarizer.ts";
 import {
   type FrameHost,
   type FrameKeybinding,
-  type FrameLayout,
-  type FrameOptions,
+  FrameList,
   type FrameRow,
   type FrameTheme,
   type FrameTone,
-  measureFrame,
   renderFrame,
   sanitizeTerminalText,
 } from "./frame.ts";
@@ -144,6 +146,9 @@ const STATUS_ROWS = 2;
 const NO_REASON = "This anchor cannot be folded.";
 const NO_ANCHORS =
   "There is no anchor to fold to. Run /anchor list and press n to set one.";
+const SEARCH_PLACEHOLDER = "Press / to search anchors and previews…";
+const SEARCH_ENTER =
+  "enter does not fold while searching · esc clears the search, then enter folds the selected anchor";
 
 const formatTokens = (tokens: number): string =>
   tokens >= 1000 ? `${(tokens / 1000).toFixed(1)}k` : String(tokens);
@@ -181,9 +186,8 @@ function candidateRow(
     detail: candidate.afterPreview
       ? `after: “${candidate.afterPreview}”`
       : undefined,
-    description: candidate.valid
-      ? `Fold the work since '${candidate.name}' into one summary and continue from it.`
-      : (candidate.reason ?? NO_REASON),
+    // Only refusals carry a description: boilerplate would match every search.
+    description: candidate.valid ? undefined : (candidate.reason ?? NO_REASON),
   };
 }
 
@@ -329,41 +333,79 @@ interface PanelOptions {
   done(exit: PanelExit): void;
 }
 
-/** The frame with the plan in place of the search row; every state renders the same number of lines. */
-class FoldPlanPanel implements Component {
+/** FrameList keeps its focus private, but Enter and the hint bar depend on it. */
+const isSearching = (list: FrameList): boolean =>
+  (list as unknown as { focus: string }).focus === "search";
+
+/**
+ * The frame with the plan between the search row and the list. The list owns search,
+ * selection and the mouse; every state renders the same number of lines.
+ */
+class FoldPlanPanel implements Component, Focusable {
   private mode: Mode = { kind: "plan" };
   private status?: Message;
   private controller?: AbortController;
-  private offset = 0;
-  private layout?: FrameLayout;
+  private frozen?: { width: number; terminalRows: number };
   private planRows = 1;
-  private readonly rows: FrameRow[];
+  /** Lines the plan block adds to the frame; the mouse rows below it shift by this. */
+  private extraRows = 0;
+  private readonly list: FrameList;
   private readonly options: PanelOptions;
 
   constructor(options: PanelOptions) {
     this.options = options;
-    const { candidates, recommended } = options.state;
-    this.rows = candidates.length
-      ? candidates.map((candidate) =>
-          candidateRow(candidate, candidate.name === recommended),
-        )
-      : [EMPTY_ROW];
+    const { candidates, recommended, selected } = options.state;
+    const badge = () => this.badge();
+    this.list = new FrameList({
+      tui: options.tui,
+      theme: options.theme,
+      keyboard: options.keyboard,
+      breadcrumbs: ["Anchor", "Fold"],
+      rows: candidates.length
+        ? candidates.map((candidate) =>
+            candidateRow(candidate, candidate.name === recommended),
+          )
+        : [EMPTY_ROW],
+      cursor: selected,
+      placeholder: SEARCH_PLACEHOLDER,
+      get rightBadge() {
+        return badge();
+      },
+      onSelect: (_row, index) => this.fold(index),
+      onCancel: () => options.done({ kind: "close", result: "back" }),
+      shortcuts: [
+        {
+          key: "e",
+          action: "edit label/focus",
+          enabled: (_row, index) => candidates[index]?.valid === true,
+          onPress: () => options.done({ kind: "edit" }),
+        },
+      ],
+    });
   }
 
-  invalidate(): void {}
+  get focused(): boolean {
+    return this.list.focused;
+  }
+
+  set focused(value: boolean) {
+    this.list.focused = value;
+  }
+
+  invalidate(): void {
+    this.list.invalidate();
+  }
 
   render(width: number): string[] {
     const columns = Math.max(0, Math.floor(width));
-    const layout = this.measure(columns);
-    this.ensureVisible(layout);
-    const frame = renderFrame({
-      ...this.frameOptions(columns),
-      layout,
-      rightBadge: this.badge(),
-      keybindings: this.keybindings(),
-    });
-    // The frame's header is the rule, the search row and a blank row.
-    return [frame[0], ...this.block(columns), ...frame.slice(3)];
+    const frame = this.list.render(columns);
+    this.freeze(columns);
+    const block = this.block(columns);
+    // The block takes the place of the frame's blank row under the search row.
+    this.extraRows = block.length - 1;
+    const lines = [frame[0], frame[1], ...block, ...frame.slice(3)];
+    lines[lines.length - 2] = this.hintLine(columns);
+    return lines;
   }
 
   handleInput(data: string): void {
@@ -379,14 +421,26 @@ class FoldPlanPanel implements Component {
     } else if (mode.kind === "finished") {
       if (leaving || this.matches(data, "tui.select.confirm", Key.enter))
         this.options.done({ kind: "close", result: mode.exit });
-    } else if (leaving) {
-      this.options.done({ kind: "close", result: "back" });
-    } else if (this.matches(data, "tui.select.up", Key.up)) this.move(-1);
-    else if (this.matches(data, "tui.select.down", Key.down)) this.move(1);
-    else if (this.matches(data, "tui.select.confirm", Key.enter)) this.fold();
-    else if (matchesKey(data, "e") && this.selected()?.valid)
-      this.options.done({ kind: "edit" });
+    } else if (
+      this.matches(data, "tui.select.confirm", Key.enter) &&
+      isSearching(this.list)
+    ) {
+      this.status = { tone: "muted", text: SEARCH_ENTER };
+    } else {
+      this.track(() => this.list.handleInput(data));
+    }
     this.options.tui.requestRender();
+  }
+
+  /** Mouse rows are the list's own once the plan block above them is taken out. */
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (this.mode.kind !== "plan") return undefined;
+    const y = event.y <= 1 ? event.y : Math.max(2, event.y - this.extraRows);
+    let result: TuiMouseEventResult | undefined;
+    this.track(() => {
+      result = this.list.handleMouse({ ...event, y });
+    });
+    return result;
   }
 
   private matches(data: string, id: Keybinding, fallback: KeyId): boolean {
@@ -394,29 +448,28 @@ class FoldPlanPanel implements Component {
     return keyboard ? keyboard.matches(data, id) : matchesKey(data, fallback);
   }
 
+  /** Runs a list interaction; the chosen anchor outlives the panel, and a new choice drops an old status. */
+  private track(act: () => void): void {
+    const { cursor, search } = this.list;
+    act();
+    if (this.list.cursor !== cursor || this.list.search !== search)
+      this.status = undefined;
+    if (this.list.cursor >= 0) this.options.state.selected = this.list.cursor;
+  }
+
   private selected(): FoldPlanCandidate | undefined {
-    const { state } = this.options;
-    return state.candidates[state.selected];
+    return this.options.state.candidates[this.list.cursor];
   }
 
   private agentRunning(): boolean {
     return this.options.deps.isAgentRunning(this.options.ctx);
   }
 
-  private move(delta: number): void {
-    const { state } = this.options;
-    const next = Math.min(
-      Math.max(0, state.selected + delta),
-      Math.max(0, state.candidates.length - 1),
-    );
-    if (next === state.selected) return;
-    state.selected = next;
-    this.status = undefined;
-  }
-
-  private fold(): void {
+  /** `index` addresses the unfiltered candidates, whatever the list shows. */
+  private fold(index: number): void {
+    if (this.mode.kind !== "plan") return;
     const { ctx, deps, state } = this.options;
-    const candidate = this.selected();
+    const candidate = state.candidates[index];
     if (!candidate) {
       this.status = { tone: "warning", text: NO_ANCHORS };
       return;
@@ -480,28 +533,15 @@ class FoldPlanPanel implements Component {
     tui.requestRender();
   }
 
-  private frameOptions(width: number): FrameOptions {
-    return {
-      width,
-      terminalRows: this.options.tui.terminal.rows,
-      breadcrumbs: ["Anchor", "Fold"],
-      rows: this.rows,
-      cursor: this.options.state.selected,
-      scrollOffset: this.offset,
-      keybindings: [],
-      theme: this.options.theme,
-    };
-  }
-
-  /** Frozen on the first render and again when the width or the terminal height changes. */
-  private measure(width: number): FrameLayout {
+  /** Plan rows are frozen on the first render and again when the width or the terminal height changes. */
+  private freeze(width: number): void {
     const terminalRows = this.options.tui.terminal.rows;
     if (
-      this.layout?.width === width &&
-      this.layout.terminalRows === terminalRows
+      this.frozen?.width === width &&
+      this.frozen.terminalRows === terminalRows
     )
-      return this.layout;
-    this.layout = measureFrame(this.frameOptions(width));
+      return;
+    this.frozen = { width, terminalRows };
     const longest = "x".repeat(MAX_NAME_LENGTH);
     const available = Math.max(1, width - INDENT.length);
     this.planRows = Math.max(
@@ -517,19 +557,6 @@ class FoldPlanPanel implements Component {
             ).length,
         ),
     );
-    return this.layout;
-  }
-
-  private ensureVisible(layout: FrameLayout): void {
-    const { selected } = this.options.state;
-    this.offset = Math.min(this.offset, selected);
-    const height = (index: number) =>
-      index === selected && this.rows[index].detail ? 2 : 1;
-    let used = 0;
-    for (let index = this.offset; index <= selected; index++)
-      used += height(index);
-    while (this.offset < selected && used > layout.listRows)
-      used -= height(this.offset++);
   }
 
   private badge(): string | undefined {
@@ -542,13 +569,23 @@ class FoldPlanPanel implements Component {
       : foldable;
   }
 
+  /** The list draws its own hints; they know nothing of the fold states, so the frame draws these instead. */
+  private hintLine(width: number): string {
+    const lines = renderFrame({
+      width,
+      terminalRows: this.options.tui.terminal.rows,
+      breadcrumbs: [],
+      rows: [],
+      cursor: 0,
+      scrollOffset: 0,
+      keybindings: this.keybindings(),
+      theme: this.options.theme,
+    });
+    return lines[lines.length - 2];
+  }
+
   private keybindings(): FrameKeybinding[] {
     const { mode } = this;
-    const leave: FrameKeybinding = {
-      key: "esc",
-      action: "back",
-      priority: "essential",
-    };
     if (mode.kind === "running") {
       return mode.cancelling
         ? [{ key: "…", action: "cancelling", priority: "essential" }]
@@ -561,7 +598,24 @@ class FoldPlanPanel implements Component {
       action: "choose anchor",
       priority: "navigation",
     };
-    if (!this.selected()?.valid) return [choose, leave];
+    if (isSearching(this.list)) {
+      return [
+        { key: "type", action: "to filter" },
+        choose,
+        { key: "esc", action: "clear search", priority: "essential" },
+      ];
+    }
+    const leave: FrameKeybinding = {
+      key: "esc",
+      action: this.list.search ? "clear search" : "back",
+      priority: "essential",
+    };
+    const search: FrameKeybinding = {
+      key: "/",
+      action: "search",
+      priority: "essential",
+    };
+    if (!this.selected()?.valid) return [choose, search, leave];
     return [
       choose,
       {
@@ -570,6 +624,7 @@ class FoldPlanPanel implements Component {
         priority: "essential",
       },
       { key: "e", action: "edit label/focus", priority: "navigation" },
+      search,
       leave,
     ];
   }
@@ -619,7 +674,14 @@ class FoldPlanPanel implements Component {
     let plan: string[];
     let focus = "";
     if (!candidate) {
-      plan = [theme.fg("muted", "No plan: there is no anchor to fold to.")];
+      plan = [
+        theme.fg(
+          "muted",
+          state.candidates.length
+            ? `No plan: no anchor matches “${oneLine(this.list.search)}”.`
+            : "No plan: there is no anchor to fold to.",
+        ),
+      ];
     } else if (!candidate.valid) {
       plan = [theme.fg("warning", `✗ cannot fold to ${candidate.name}`)];
     } else {
