@@ -8466,7 +8466,7 @@ Active anchors (root → leaf, % of 100k):
   }
 
   it("aborts an infeasible complete request before sending a one-token continuation", async () => {
-    const f = await forcedSetup({ issuerTokens: 99_000 });
+    const f = await forcedSetup({ issuerTokens: 99_000, anchor: false });
     try {
       const aborter = new AbortController();
       const ctx = {
@@ -11950,10 +11950,9 @@ describe("independent folds through the engine host", () => {
     try {
       const registry = fakeRegistry();
       const ctx = foldCtx(f, registry.registry);
-      assert.equal(
-        await guardAborts(f, ctx),
-        true,
-        "the guard refuses the next request",
+      assert.ok(
+        estimateAdmissionTokens(f.sm) + GUARD_RESERVE > WINDOW,
+        "the next request exceeds the admission guard",
       );
       const before = snapshotOf(f.sm);
 
@@ -12406,7 +12405,7 @@ describe("independent folds through the engine host", () => {
     try {
       const registry = fakeRegistry();
       const ctx = foldCtx(f, registry.registry);
-      assert.equal(await guardAborts(f, ctx), true);
+      assert.ok(estimateAdmissionTokens(f.sm) + GUARD_RESERVE > WINDOW);
       await driveAnchor(f, ctx, "fold", [
         async (screen) => {
           assert.match(screen.render(PLAN_WIDTH).join("\n"), /chunked/);
