@@ -63,6 +63,7 @@ import {
   buildSessionProjection,
   CONFIG_DIR_NAME,
   collectEntriesForBranchSummary,
+  convertToLlm,
   type ExtensionAPI,
   type ExtensionCommandContext,
   type ExtensionContext,
@@ -82,11 +83,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { registerAnchorCommand } from "./anchor-command.ts";
-import {
-  AUTO_NAVIGATE_REWIND_CUSTOM_TYPE,
-  buildAutoNavigateRewindSteerText,
-  evaluateAutoNavigateTurn,
-} from "./auto-navigate.ts";
+import { type AutoFoldState, planAutomaticFold } from "./auto-fold-planner.ts";
 import type { AutoNavigatePartial } from "./auto-navigate-config.ts";
 import {
   CONTINUITY_CAPTURE_DEFAULT,
@@ -184,6 +181,7 @@ import {
   toOneLine,
 } from "./helpers.ts";
 import { registerHistoryOutline } from "./history-outline.ts";
+import { resolveIntentPolicy } from "./intent-policy.ts";
 import {
   collectLegacyRewindOutcomes,
   LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
@@ -198,10 +196,6 @@ import {
   type OpenUserRequest,
   renderOpenUserRequests,
 } from "./open-user-requests.ts";
-import {
-  createProposalModelRunner,
-  resolveProposalModel,
-} from "./proposal-model.ts";
 import type { ProposalOptions } from "./proposal-options.ts";
 import { sha256 } from "./retrospective-plan.ts";
 import {
@@ -1850,6 +1844,7 @@ interface FoldHost {
   /** Set for an idle run: its commit refuses once the agent is working again. */
   isIdle?: () => boolean;
   recoveryEvidenceId?: string;
+  foldPointId?: string;
 }
 
 /** What a landed engine fold reports on top of `commitFold`'s own result. */
@@ -2346,7 +2341,7 @@ export default function (pi: ExtensionAPI) {
           JSON.stringify(oldController) !==
           JSON.stringify(resolveAutoNavigateConfig(loaded.config, modelKey))
         )
-          autoNavigateStateBySession.delete(sessionId);
+          autoFoldStateBySession.delete(sessionId);
         if (
           oldContinuity.capture !== continuityConfig.capture ||
           oldContinuity.intentClassifier !== continuityConfig.intentClassifier
@@ -2575,7 +2570,7 @@ export default function (pi: ExtensionAPI) {
     const foldPointId =
       request.origin === "recovery"
         ? recoveryCuts.get(request.sessionId)
-        : sessionLeaf;
+        : (host.foldPointId ?? sessionLeaf);
     if (!foldPointId) {
       return { error: "the recovery boundary was not snapshotted" };
     }
@@ -3223,7 +3218,7 @@ export default function (pi: ExtensionAPI) {
       if (model === null) return;
       classifierTimedOut.add(sessionId);
       warn(
-        `${TOOL_NAME}: continuity classifier ${model} did not answer within ${CONTINUITY_CAPTURE_TIMEOUT_MS / 1000} s; capture uses heuristics for the rest of this session.`,
+        `${TOOL_NAME}: continuity classifier ${model.startsWith("{") ? (resolveIntentPolicy(model)?.kind.model ?? "configured policy") : model} did not answer within ${CONTINUITY_CAPTURE_TIMEOUT_MS / 1000} s; capture uses heuristics for the rest of this session.`,
       );
       return await captureContinuity(sm, sessionId, ctx, message);
     }
@@ -3429,7 +3424,13 @@ export default function (pi: ExtensionAPI) {
     if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
       await captureContinuity(sm, sessionId, ctx, message);
     }
-    const auto = await maybeRunAutoNavigate(sm, sessionId, message, event, ctx);
+    const auto = await maybeRunAutomaticFold(
+      sm,
+      sessionId,
+      message,
+      event,
+      ctx,
+    );
     if (auto) return auto;
     let signal: AbortSignal | undefined;
     try {
@@ -3586,7 +3587,7 @@ export default function (pi: ExtensionAPI) {
       nativeRetryOwned.delete(sessionId);
       recoveryCuts.delete(sessionId);
       queuedFolds.delete(sessionId);
-      autoNavigateStateBySession.delete(sessionId);
+      autoFoldStateBySession.delete(sessionId);
     } catch {
       // Fail-open: session_start clears it too.
     }
@@ -3699,15 +3700,7 @@ export default function (pi: ExtensionAPI) {
   let autoNavigateByModel: ReadonlyMap<string, AutoNavigatePartial | null> =
     new Map();
   let proposalConfig: ProposalOptions | undefined;
-  interface AutoNavigateState {
-    modelKey: string;
-    turnsSinceCheck: number;
-    lastAnchorEntryId?: string;
-    lastCheckTokens?: number;
-    lastSteerTokens?: number;
-    aboveRewindThreshold?: boolean;
-  }
-  const autoNavigateStateBySession = new Map<string, AutoNavigateState>();
+  const autoFoldStateBySession = new Map<string, AutoFoldState>();
   let hintTracker = new RewindHintTracker();
 
   // Auto start-anchor closure state (#55). All of it is keyed by session id
@@ -3835,7 +3828,7 @@ export default function (pi: ExtensionAPI) {
     autoNavigateBase = undefined;
     autoNavigateByModel = new Map();
     proposalConfig = undefined;
-    autoNavigateStateBySession.delete(sessionId);
+    autoFoldStateBySession.delete(sessionId);
     hintTracker = new RewindHintTracker();
     toolActive = true;
     continuityConfig = {
@@ -4263,208 +4256,260 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
-  // Sidecar auto_navigate controller: when enabled for the active model
-  // (globally or via wildcard model_overrides), periodically inspects the
-  // completed segment since the latest anchor and either sets an anchor label
-  // or steers an immediate rewind.
-  async function maybeRunAutoNavigate(
+  async function maybeRunAutomaticFold(
     sm: SessionManager,
     sessionId: string,
-    message: {
-      role?: string;
-      stopReason?: string;
-      content?: unknown;
-    },
+    message: { role?: string; stopReason?: string; content?: unknown },
     event: { entries?: SessionBoundaryDraft[] },
-    ctx: {
-      model?: OverflowModel;
-      modelRegistry?: Parameters<typeof resolveProposalModel>[0]["registry"] &
-        Parameters<typeof createProposalModelRunner>[0]["registry"];
-      signal?: AbortSignal;
-    },
+    ctx: ExtensionContext,
   ): Promise<
     { entries: SessionBoundaryDraft[]; continue: boolean } | undefined
   > {
-    if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
-    if (message.stopReason === "error" || message.stopReason === "aborted") {
+    if (
+      (toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+      message.stopReason === "error" ||
+      message.stopReason === "aborted" ||
+      rewindTurns.has(message) ||
+      overflowedTurns.has(message) ||
+      queuedFolds.has(sessionId) ||
+      runningFolds.has(sessionId) ||
+      unrestoredFoldCursors.has(sm)
+    )
       return;
-    }
-    if (rewindTurns.has(message) || overflowedTurns.has(message)) return;
-    let activeModel: OverflowModel | undefined;
+    let host: FoldHost;
+    let signal: AbortSignal | undefined;
+    let registry: ModelRegistry;
+    let notify: ((text: string) => void) | undefined;
     try {
-      activeModel = ctx.model;
+      host = foldHostOf(ctx);
+      signal = ctx.signal;
+      registry = ctx.modelRegistry;
+      const ui = ctx.hasUI ? ctx.ui : undefined;
+      notify = ui ? (text) => ui.notify(text, "warning") : undefined;
+      if (host.sm !== sm || sm.getSessionId() !== sessionId) return;
     } catch {
       return;
     }
-    if (!activeModel) return;
-    const modelKey = `${activeModel.provider}/${activeModel.id}`;
-    const autoConfig = resolveAutoNavigateConfig(
-      {
-        autoNavigate: autoNavigateBase,
-        autoNavigateByModel,
-        proposal: proposalConfig,
-      },
+    if (!host.model) return;
+    host.model = structuredClone(host.model);
+    const modelKey = `${host.model.provider}/${host.model.id}`;
+    const contextWindow = host.model.contextWindow;
+    const modelSnapshot = JSON.stringify(host.model);
+    const currentConfig = () =>
+      resolveAutoNavigateConfig(
+        {
+          autoNavigate: autoNavigateBase,
+          autoNavigateByModel,
+          proposal: proposalConfig,
+        },
+        modelKey,
+      );
+    const config = structuredClone(currentConfig());
+    if (!config.enabled) return;
+    const signature = JSON.stringify(config);
+    const capturedSource = capturedSystems.get(sessionId);
+    const captured = structuredClone(capturedSource);
+    const handoffMode = parentModes.get(sessionId) ?? "full";
+    const reserve = resolveRewindHintReserve(
+      { rewindHintReserveTokens, rewindHintModelReserveTokens: hintByModel },
       modelKey,
     );
-    if (!autoConfig.enabled) return;
-
-    const calledNavigateTree =
-      Array.isArray(message.content) &&
-      (message.content as Array<{ type?: string; name?: string }>).some(
-        (b) => b?.type === "toolCall" && b.name === TOOL_NAME,
-      );
-    const previousState = autoNavigateStateBySession.get(sessionId);
-    const state: AutoNavigateState =
-      previousState?.modelKey === modelKey
-        ? previousState
-        : { modelKey, turnsSinceCheck: 0 };
-    if (calledNavigateTree) {
-      try {
-        state.lastCheckTokens = estimateAdmissionTokens(sm);
-      } catch {
-        return;
-      }
-      state.turnsSinceCheck = 0;
-      autoNavigateStateBySession.set(sessionId, state);
-      return;
-    }
-    state.turnsSinceCheck++;
-    autoNavigateStateBySession.set(sessionId, state);
-
-    let branch: SessionEntry[];
-    let allEntries: SessionEntry[];
-    try {
-      branch = sm.getBranch();
-      allEntries = sm.getEntries();
-    } catch {
-      return;
-    }
-    if (branch.length < 2) return;
-    const byId = new Map<string, SessionEntry>();
-    for (const e of allEntries) byId.set(e.id, e);
-    const activeTokens = estimateAdmissionTokens(sm);
-    let newestAnchorId: string | undefined;
-    for (let i = branch.length - 1; i >= 0; i--) {
-      const lbl = sm.getLabel(branch[i].id);
-      if (lbl?.startsWith(LABEL_PREFIX)) {
-        newestAnchorId = branch[i].id;
-        break;
-      }
-    }
-    const anchorTokens = newestAnchorId
-      ? estimateAtEntry(sm, allEntries, newestAnchorId, byId)
-      : 0;
-    const tokensSinceLastAnchor = Math.max(0, activeTokens - anchorTokens);
-    if (state.lastAnchorEntryId !== newestAnchorId) {
-      state.lastAnchorEntryId = newestAnchorId;
-      state.lastCheckTokens =
-        activeTokens < (state.lastCheckTokens ?? 0)
-          ? anchorTokens
-          : Math.max(state.lastCheckTokens ?? 0, anchorTokens);
-      state.lastSteerTokens = undefined;
-    }
-    const canRewind =
-      autoConfig.mode === "anchor-and-rewind" &&
-      activeTokens >= autoConfig.rewindAtTokens;
-    const crossedThreshold = canRewind && !state.aboveRewindThreshold;
-    state.aboveRewindThreshold = canRewind;
-    if (
-      state.lastSteerTokens !== undefined &&
-      activeTokens >= state.lastSteerTokens &&
-      activeTokens - state.lastSteerTokens < autoConfig.minTokensSinceAnchor
-    )
-      return;
-    const tokensSinceCheck = Math.max(
-      0,
-      activeTokens - (state.lastCheckTokens ?? anchorTokens),
-    );
-    if (
-      !crossedThreshold &&
-      state.turnsSinceCheck < autoConfig.checkEveryTurns &&
-      tokensSinceCheck < autoConfig.minTokensSinceAnchor
-    )
-      return;
-
-    let runner: ReturnType<typeof createProposalModelRunner>;
-    try {
-      const registry = ctx.modelRegistry;
-      if (!registry || typeof registry.streamSimple !== "function") return;
-      const currentThinking =
-        typeof pi.getThinkingLevel === "function"
-          ? pi.getThinkingLevel()
-          : ("off" as const);
-      const selected = resolveProposalModel({
-        registry,
-        currentModel: activeModel as never,
-        currentThinking,
-        selector: autoConfig.controllerModel,
-      });
-      runner = createProposalModelRunner({ registry, ...selected });
-    } catch {
-      return;
-    }
-
-    state.turnsSinceCheck = 0;
-    state.lastCheckTokens = activeTokens;
     const leafId = sm.getLeafId();
-    const signal = ctx.signal;
-    const decision = await evaluateAutoNavigateTurn({
-      config: autoConfig,
-      runner,
-      branch,
-      getLabel: (id) => sm.getLabel(id),
+    if (!leafId) return;
+    const entries = structuredClone(sm.getEntries());
+    const labels = new Map(
+      entries.map((entry) => [entry.id, sm.getLabel(entry.id)]),
+    );
+    const snapshot = JSON.stringify(entries);
+    const branch = sm.getBranch();
+    const newestAnchorId = branch.findLast((entry) =>
+      labels.get(entry.id)?.startsWith(LABEL_PREFIX),
+    )?.id;
+    const activeTokens = estimateAdmissionTokens(sm);
+    const anchorTokens = newestAnchorId
+      ? estimateAtEntry(
+          sm,
+          entries,
+          newestAnchorId,
+          new Map(entries.map((entry) => [entry.id, entry])),
+        )
+      : 0;
+    let expectedState = autoFoldStateBySession.get(sessionId);
+    const isCurrent = () => {
+      try {
+        return (
+          !signal?.aborted &&
+          ctx.signal === signal &&
+          ctx.sessionManager === sm &&
+          sm.getSessionId() === sessionId &&
+          sm.getLeafId() === leafId &&
+          `${ctx.model?.provider}/${ctx.model?.id}` === modelKey &&
+          JSON.stringify(ctx.model) === modelSnapshot &&
+          ctx.modelRegistry === registry &&
+          capturedSystems.get(sessionId) === capturedSource &&
+          JSON.stringify(capturedSource) === JSON.stringify(captured) &&
+          (parentModes.get(sessionId) ?? "full") === handoffMode &&
+          resolveRewindHintReserve(
+            {
+              rewindHintReserveTokens,
+              rewindHintModelReserveTokens: hintByModel,
+            },
+            modelKey,
+          ) === reserve &&
+          JSON.stringify(currentConfig()) === signature &&
+          JSON.stringify(sm.getEntries()) === snapshot &&
+          entries.every(
+            (entry) => sm.getLabel(entry.id) === labels.get(entry.id),
+          ) &&
+          autoFoldStateBySession.get(sessionId) === expectedState &&
+          (toolActiveBySession.get(sessionId) ?? toolActive) !== false &&
+          !queuedFolds.has(sessionId) &&
+          !unrestoredFoldCursors.has(sm)
+        );
+      } catch {
+        return false;
+      }
+    };
+    const plan = await planAutomaticFold({
+      state: expectedState,
+      sessionId,
+      modelKey,
+      config,
       activeTokens,
-      tokensSinceLastAnchor,
-      turnsSinceLastCheck: autoConfig.checkEveryTurns,
+      newestAnchorId,
+      anchorTokens,
+      calledNavigateTree:
+        Array.isArray(message.content) &&
+        message.content.some(
+          (block: { type?: string; name?: string }) =>
+            block?.type === "toolCall" && block.name === TOOL_NAME,
+        ),
+      entries,
+      leafId,
+      getLabel: (id) => labels.get(id),
+      registry,
       signal,
+      isCurrent: () => isCurrent() && !runningFolds.has(sessionId),
     });
-    try {
+    if (!isCurrent() || runningFolds.has(sessionId)) return;
+    expectedState = plan.state;
+    autoFoldStateBySession.set(sessionId, plan.state);
+    const warnings = plan.warnings
+      .slice(0, 3)
+      .map(
+        (text) => toOneLine(text, 500) ?? "Automatic fold check unavailable.",
+      );
+    const drafts: SessionBoundaryDraft[] = [...(event.entries ?? [])];
+    if (warnings.length) {
+      const text = warnings.join("\n");
+      try {
+        notify?.(text);
+      } catch {
+        /* A stale UI must not block the receipt. */
+      }
+      drafts.push({
+        type: "custom_message",
+        customType: "navigate-tree-auto-warning",
+        content: text,
+        display: true,
+      });
+    }
+    const deliver = (draft?: RewindMessageDraft, cont = false) => ({
+      entries: keepValidDrafts<SessionBoundaryDraft>(sm, [
+        ...drafts,
+        ...(draft ? [draft] : []),
+      ]),
+      continue: cont,
+    });
+    const anchor = (entryId: string, name: string) => {
       if (
-        signal?.aborted ||
-        sm.getLeafId() !== leafId ||
-        autoNavigateStateBySession.get(sessionId) !== state ||
-        `${ctx.model?.provider}/${ctx.model?.id}` !== modelKey ||
-        (toolActiveBySession.get(sessionId) ?? toolActive) === false
+        !isCurrent() ||
+        runningFolds.has(sessionId) ||
+        !sm.getBranch().some((entry) => entry.id === entryId) ||
+        sm.getLabel(entryId) !== undefined
       )
         return;
-      if (decision.action === "anchor") {
-        if (
-          sm.getLabel(decision.targetEntryId) !== undefined ||
-          findLabeledEntry(sm, LABEL_PREFIX + decision.name)
-        )
-          return;
-        if (
-          writeLabel(sm, decision.targetEntryId, LABEL_PREFIX + decision.name)
-        ) {
-          state.lastAnchorEntryId = decision.targetEntryId;
-          state.lastSteerTokens = undefined;
+      let unique = name;
+      for (let n = 2; findLabeledEntry(sm, LABEL_PREFIX + unique); n++) {
+        const suffix = `-${n}`;
+        unique =
+          name.slice(0, MAX_NAME_LENGTH - suffix.length).replace(/-+$/, "") +
+          suffix;
+      }
+      if (isValidName(unique)) writeLabel(sm, entryId, LABEL_PREFIX + unique);
+    };
+    if (plan.action.kind === "anchor") {
+      anchor(plan.action.entryId, plan.action.suggestedName);
+    } else if (plan.action.kind === "fold") {
+      const boundary = plan.action.boundaryEntryId;
+      const cut = recoveryCutOf(sm);
+      const projected = projectHandoffs(
+        buildSessionProjection(entries, leafId),
+        entries,
+      ).entries;
+      const at = projected.findIndex(
+        (entry) => entry.sourceEntry.id === boundary,
+      );
+      const completeTail =
+        at >= 0 &&
+        !projected
+          .slice(at + 1)
+          .some((entry) => convertToLlm(entry.messages).length > 0);
+      const fallback = () => anchor(boundary, "milestone");
+      if (!cut.ok || cut.foldPointId !== boundary || !completeTail) {
+        fallback();
+      } else {
+        const focus = defaultFoldFocus(sm);
+        const candidates = priceFoldCandidates(sm, {
+          model: host.model,
+          handoffMode,
+          captured,
+          focus,
+          suggestLabel: (name) => suggestFoldLabel(sm, name),
+          foldPointId: boundary,
+        });
+        const selected = selectFoldTarget(
+          candidates,
+          foldRecommendationBudget(contextWindow, reserve),
+        );
+        if (!selected.ok) fallback();
+        else {
+          if (!isCurrent() || runningFolds.has(sessionId)) return;
+          const request: FoldRequest = {
+            sessionId,
+            origin: "auto",
+            rewindTo: selected.candidate.name,
+            newLabel: selected.candidate.suggestedLabel,
+            focus,
+          };
+          host.isIdle = isCurrent;
+          host.foldPointId = boundary;
+          rewindTurns.add(message);
+          let outcome: FoldResult;
+          try {
+            outcome = await runFold(host, request, { signal });
+          } catch (error) {
+            outcome = gateFailed(
+              "exception",
+              error instanceof Error ? error.message : String(error),
+            );
+          }
+          if (outcome.status === "done")
+            return deliver(foldDoneDraft(request, outcome), true);
+          const draft = foldFailedDraft(request, outcome);
+          if (unrestoredFoldCursors.has(sm)) {
+            try {
+              notify?.(String(draft.content));
+            } catch {
+              /* The cursor is quarantined. */
+            }
+            return { entries: [], continue: false };
+          }
+          return deliver(draft);
         }
-        return;
       }
-      if (decision.action === "rewind") {
-        const target = findLabeledEntry(sm, LABEL_PREFIX + decision.rewindTo);
-        if (!target || findLabeledEntry(sm, LABEL_PREFIX + decision.newLabel))
-          return;
-        const targetTokens = estimateAtEntry(sm, allEntries, target, byId);
-        if (activeTokens - targetTokens < MIN_REWIND_SAVINGS_TOKENS) return;
-        state.lastSteerTokens = activeTokens;
-        const text = buildAutoNavigateRewindSteerText(decision);
-        return {
-          entries: keepValidDrafts(sm, [
-            ...(event.entries ?? []),
-            {
-              type: "custom_message",
-              customType: AUTO_NAVIGATE_REWIND_CUSTOM_TYPE,
-              content: text,
-              display: true,
-            },
-          ]),
-          continue: true,
-        };
-      }
-    } catch {
-      return;
     }
+    return warnings.length ? deliver() : undefined;
   }
 
   // Auto start anchor (#55) run-end fallback: a run that finishes before its
