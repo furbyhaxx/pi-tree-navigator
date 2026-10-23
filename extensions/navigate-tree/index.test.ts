@@ -82,8 +82,10 @@ import navigateTree, {
   buildSummaryFailedText,
   buildSummaryRequestRow,
   CONTINUE_NUDGE_TEXT,
+  commitFold,
   estimateAdmissionTokens,
   extractSummaryText,
+  type FoldCommitInput,
   MAX_HINT_WALK_DEPTH,
   MAX_SESSION_REFS,
   MAX_SUMMARY_ATTEMPTS,
@@ -5337,6 +5339,120 @@ describe("rewind phase 2: multi-block text and late entries", () => {
     );
     assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
     assert.equal(fireToolCall(f.pi, f.ctx), undefined, "gate reopened");
+  });
+});
+
+// =============================================================================
+// commitFold, engine shape: fold point is the leaf, no summary turn, no hidden
+// attempts (the in-band path is pinned byte-exactly by the suites above)
+// =============================================================================
+
+describe("commitFold: engine shape", () => {
+  function engineFold(
+    f: { sm: SessionManager },
+    anchorId: string,
+    overrides: Partial<FoldCommitInput> = {},
+  ) {
+    const leaf = f.sm.getLeafId() as string;
+    const lead: number[] = [];
+    let branched = 0;
+    const input: FoldCommitInput = {
+      targetId: anchorId,
+      rewindTo: "start",
+      newLabel: "end",
+      summaryText: SUMMARY_TEXT,
+      handoffMode: "full",
+      contextWindow: 200_000,
+      foldPointId: leaf,
+      branchLabelEntryId: leaf,
+      excludeFromFileLists: [],
+      continuationText: (afterTokens) => {
+        lead.push(afterTokens);
+        return `folded to ${afterTokens}`;
+      },
+      writeLabel: (entryId, label) => {
+        f.sm.appendLabelChange(entryId, label);
+        return true;
+      },
+      onBranched: () => {
+        branched++;
+      },
+      ...overrides,
+    };
+    return { leaf, lead, input, branched: () => branched };
+  }
+
+  it("branches from the target, labels both ends and re-appends input after the fold point", async () => {
+    const f = setup();
+    const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
+    const run = engineFold(f, anchorId);
+    const lateId = f.sm.appendMessage({
+      role: "user",
+      content: [{ type: "text", text: "late steer" }],
+      timestamp: 1,
+    } as never);
+    const outcome = await commitFold(f.sm, run.input);
+    assert.ok(outcome.ok);
+    const summary = f.sm.getEntry(outcome.summaryId);
+    assert.ok(summary && summary.type === "branch_summary");
+    assert.equal(summary.parentId, anchorId);
+    assert.equal(outcome.oldLeafId, lateId);
+    assert.equal(f.sm.getLabel(run.leaf), "branch:end");
+    assert.equal(f.sm.getLabel(outcome.summaryId), "anchor:end");
+    assert.equal(outcome.reappended, 1);
+    const branch = f.sm.getBranch();
+    const tail = branch
+      .slice(branch.findIndex((e) => e.id === outcome.summaryId) + 1)
+      .filter((e) => e.type !== "label");
+    assert.equal(tail.length, 1);
+    assert.notEqual(tail[0].id, lateId);
+    assert.ok(tail[0].type === "message" && tail[0].message.role === "user");
+    assert.equal(tail[0].id, f.sm.getLeafId());
+    assert.equal(run.branched(), 1);
+    assert.ok(outcome.refreshed);
+    assert.ok(outcome.foldEstimateAfter < outcome.foldEstimateBefore);
+    assert.equal(outcome.afterTokens, estimateAdmissionTokens(f.sm));
+    assert.equal(
+      outcome.continuation,
+      `folded to ${outcome.afterTokens}\n\n${buildLateEntriesNote(1)}`,
+    );
+    assert.equal(run.lead.length, 2, "prospective estimate, then final");
+  });
+
+  it("refuses a non-reducing materialization and writes nothing", async () => {
+    const f = setup();
+    const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
+    const run = engineFold(f, anchorId, {
+      summaryText: `${SUMMARY_TEXT}\n${"detail ".repeat(20_000)}`,
+    });
+    const entryCount = f.sm.getEntries().length;
+    const outcome = await commitFold(f.sm, run.input);
+    assert.ok(!outcome.ok);
+    assert.match(
+      outcome.reason,
+      /^the materialized handoff does not reduce projected context \(estimated \d+ -> \d+ tokens\); original history was kept$/,
+    );
+    assert.equal(f.sm.getLeafId(), run.leaf);
+    assert.equal(f.sm.getEntries().length, entryCount);
+    assert.equal(f.sm.getLabel(run.leaf), undefined);
+    assert.equal(run.branched(), 0);
+  });
+
+  it("refuses a label that became taken and writes nothing", async () => {
+    const f = setup();
+    const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
+    const run = engineFold(f, anchorId);
+    f.pi.pi.setLabel(run.leaf, "anchor:end");
+    const leafBefore = f.sm.getLeafId();
+    const entryCount = f.sm.getEntries().length;
+    const outcome = await commitFold(f.sm, run.input);
+    assert.deepEqual(outcome, {
+      ok: false,
+      reason: "a label 'end' now exists on the active branch",
+    });
+    assert.equal(f.sm.getLeafId(), leafBefore);
+    assert.equal(f.sm.getEntries().length, entryCount);
+    assert.equal(run.branched(), 0);
   });
 });
 
