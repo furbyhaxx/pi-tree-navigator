@@ -37,6 +37,8 @@ import {
 import { prepareCase } from "./prepare.ts";
 import type { EvalAnswer, EvalCase, PreparedCase } from "./types.ts";
 
+type MilestoneCaseInput = Extract<EvalCase["input"], { type: "milestone" }>;
+
 const KEY = "sk-or-test-SECRET-0000000000";
 const TABLE = loadRouteTable(ROUTE_PRICES_URL);
 const EVIDENCE = new URL(
@@ -186,6 +188,112 @@ describe("base variant", () => {
       );
       assert.equal(result.observation.model, `${candidate.label}#base`);
       assert.equal(result.observation.requestSha256, old.requestSha256);
+    }
+  });
+});
+
+/** Hashes of the serialized request (state and questions) each variant sent before the wording moved into the production module. */
+const REQUEST_SHA256: Record<string, string> = {
+  "status-docs-migration-milestone|base":
+    "ae48f5a4baca94feac9fa043cb65b334f40ea96be758c1dc573fb6fca2f34e6a",
+  "status-docs-migration-milestone|instructions":
+    "7f3bd5a9f8bf038b021813978c7bbecdde5e2aa85f1f35a458b0aadeebeb0179",
+  "status-docs-migration-milestone|granular":
+    "3b1ec95b37eeeea647927c9eec7e8ba3f44e8fb2b9667187e7921ed4d2b6db4d",
+  "status-docs-migration-milestone|tree-heuristic":
+    "8f1965c62b36b0476b8d63c30d0c2e7380f4eaceab94d6af8f00e90b243b334d",
+  "status-docs-migration-milestone|instructions+tree-heuristic":
+    "09c769aad2861d1d5c22895093b0656dfde5df956f99c279eca8869541a9e2fb",
+  "status-docs-migration-milestone|granular+tree-heuristic":
+    "90c9e135762863657bb4c9ce93cb99aa9e62ef3bf3026aa784c7a91c5f938286",
+  "status-docs-migration-milestone|instructions+tree-luna":
+    "136bb5f9bca9c52da791a497677dfd276a6f3c0f7f4d8973868c161dd8555266",
+  "boundary-lint-cleanup-hook-started|base":
+    "6bcd06149babc1053eb392858e78752843e7aff201f9eebe8ceb202cc3e63f89",
+  "boundary-lint-cleanup-hook-started|instructions":
+    "d36524b7af4bd93da69cb31ed6e9527dd860376142a0ba0c796ea9f4eea29b32",
+  "boundary-lint-cleanup-hook-started|granular":
+    "cb4b69015c1152f187a7d5d88af5e20b2f035535582c16c3eaeddf9104f4f875",
+  "boundary-lint-cleanup-hook-started|tree-heuristic":
+    "0a432bf96dc301bada8a6e8f97401b1c554035d0b5cffc104ff852d9b6c898a1",
+  "boundary-lint-cleanup-hook-started|instructions+tree-heuristic":
+    "2850d17d05816b3e7308c702eb49cc561cbbf9ee9dc1408f4b1f8a3f9f80a429",
+  "boundary-lint-cleanup-hook-started|granular+tree-heuristic":
+    "96ad6b81f6fdb91105427e459750c1ee83de683d7cb47cb4d924c8696f1f0d74",
+  "boundary-lint-cleanup-hook-started|instructions+tree-luna":
+    "8daa7b6fdc150ff1946405b46994dcaf82833960a4b16f8a94051c59f83c054b",
+  "status-redirect-asks-user-mixed|base":
+    "467c40e4a9c7d7b0f4d3525247a4a340df221575a7c1ae5b1a227cc9891ec908",
+  "status-redirect-asks-user-mixed|instructions":
+    "b645c55071137575c04c8c8a1f4153886a064b1c6525365574e149b2778ddff5",
+  "status-redirect-asks-user-mixed|granular":
+    "6d8b540d5515f3a9293c0791bb889a97d94d74f5fee1fbad80c4dbff1d60355e",
+  "status-redirect-asks-user-mixed|tree-heuristic":
+    "b7b09e53452ba829ce574fe2e9087c26549f77100fc4c5df327792146c5df533",
+  "status-redirect-asks-user-mixed|instructions+tree-heuristic":
+    "77094c36cf243b23c931727d64c6cbcfee7218ca34932a37b32b447dccd9f27d",
+  "status-redirect-asks-user-mixed|granular+tree-heuristic":
+    "61c430d42c77a12afb26e5de6ae47291ea08fb3252be488755fb9d35558f7cc6",
+  "status-redirect-asks-user-mixed|instructions+tree-luna":
+    "572d3902f900619cf5a943fa124ae8f39335f6db2acb058e77815c1cd922b049",
+  "status-retry-backoff-milestone|base":
+    "2b5386fe757acaa950e14b098d011c47441073ba3fe08c3f8088db6897afe830",
+  "status-retry-backoff-milestone|instructions":
+    "81dd12f6eff3d0ed60f2393ba8b3c8b31291fd10a4758aa7c3944e1dea210660",
+  "status-retry-backoff-milestone|granular":
+    "cbc8be351ee9caff7718fc797cf8fb5727a4e7abafab1a66a5b2bd13f15f9a95",
+  "status-retry-backoff-milestone|tree-heuristic":
+    "24e29f6a5d0061ea9381718d4c4107eed9b8425dbbe42716371097eeb98f18ca",
+  "status-retry-backoff-milestone|instructions+tree-heuristic":
+    "163082851fd97fd919ea2997c986ba5a424028d89a5318d071dfc892635cc6fc",
+  "status-retry-backoff-milestone|granular+tree-heuristic":
+    "4bc665e736a4149aa57c1f0f2ac1d911779d60df82bf3e620247a4aeaf2db29c",
+  "status-retry-backoff-milestone|instructions+tree-luna":
+    "ac967b07401af0ca9fc224257221c21d8e564eb81a9f1718d05a670c1d60aa90",
+  "boundary-config-rename-next-phase-started|base":
+    "98c8979e9607dd66aaf38477eaa1bd0e658133b5abc1e9561c1fa4cfd42e64c7",
+  "boundary-config-rename-next-phase-started|instructions":
+    "7dea3b124a85e314439c6eed1fc4a3c36334b8e32539898fdc2cab834ccd9be2",
+  "boundary-config-rename-next-phase-started|granular":
+    "0b9d5f171ba99c45c53af8738f0cfd78da7eabd2f2a273437109986c08c13c72",
+  "boundary-config-rename-next-phase-started|tree-heuristic":
+    "1eaf98dbb4829ac88ff92a123f24227474a811dc854ed964edcd76af03d397a2",
+  "boundary-config-rename-next-phase-started|instructions+tree-heuristic":
+    "25135b743b6704a94e388a05dc0c2ddf3c03a9a1aa63f02cac6c7d627b76204d",
+  "boundary-config-rename-next-phase-started|granular+tree-heuristic":
+    "4d215ba8c760298fbb26ed5b289d6c2992998e16bfe1d7ad14ad82ea8ec7f848",
+  "boundary-config-rename-next-phase-started|instructions+tree-luna":
+    "2e718c8aea18ba379dd85dd051e12bd1399209fed8fc33f52eb36ecb37e5b33f",
+};
+
+const FIXED_STRUCTURE: MilestoneStructure = {
+  objective: "Fixed objective",
+  goals: ["g1", "g2"],
+  folds: [{ label: "f1", title: "t", outcome: "o" }],
+  anchors: [{ name: "a" }],
+};
+
+describe("benchmark requests", () => {
+  it("stay byte-identical to what earlier runs sent, for every variant", () => {
+    const entries = Object.entries(REQUEST_SHA256);
+    assert.equal(entries.length, 35);
+    for (const [key, expected] of entries) {
+      const [caseId = "", spec = ""] = key.split("|");
+      const fixture = CASES.find((c) => c.id === caseId);
+      assert.ok(fixture, `no case ${caseId}`);
+      const variant = parseVariant(spec);
+      const structure =
+        variant.tree === "heuristic"
+          ? heuristicStructure(fixture.input as MilestoneCaseInput)
+          : variant.tree === "luna"
+            ? FIXED_STRUCTURE
+            : undefined;
+      const sent = variantCase(prepareCase(fixture), variant, structure);
+      assert.equal(
+        createHash("sha256").update(JSON.stringify(sent.context)).digest("hex"),
+        expected,
+        key,
+      );
     }
   });
 });
