@@ -90,6 +90,15 @@ Safe points:
   child handoffs (the 141.5k -> 218.4k refusal). Extract a pure preview from
   `commitFold` and reuse it. Recommendation budget: window minus the resolved hint
   reserve, or 25% of the window when the hint is off.
+- **E17** (user, 2026-10-23, supersedes E14's confirmer) Opt-in milestone auto-fold uses
+  `confirm(jev-1.14#instructions + gpt-6-luna chat#instructions)` for both status and
+  boundary: 0 unsafe on development and expanded holdout; status 64.6%, boundary 76.0%
+  accepted-exact; p95 4-8 s per check (`reports/holdout-v3-2026-10-23/summary.md`).
+- **E18** (user, 2026-10-23) The capture preset keeps the gpt-6-luna escalation for
+  supersession (92.7%, 1 unsafe in 96 on holdout v3) and adds a retirement safety
+  check: a retirement proposed by the escalation applies only when another classifier
+  confirms that specific item is replaced. Verifier chosen by a pre-registered live
+  spike (selected on development, reported on holdout).
 
 ## Units
 
@@ -101,6 +110,8 @@ Safe points:
 | U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | merged |
 | U4a | rewind tool on the engine; delete the in-band summary turn | U4a.1 host merged (a4e0182); U4a.2 in progress |
 | U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI module merged; wiring with U4a |
+| M1 | `milestone-policy.ts`: E17 confirm policy, tunable, production builders | in progress |
+| R1 | retirement-verification spike for E18, then preset integration | in progress |
 | U4c | auto controller executes through the engine | later |
 | U4d | overflow and guard-abort recovery through the engine | later |
 | U6 | live acceptance: refused full window, pre-compaction anchor, auto fold, TUI | later |
