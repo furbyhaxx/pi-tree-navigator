@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   anchorMessageIndex,
+  buildFoldProjection,
   buildFoldSegment,
   buildInContextMessages,
 } from "./fold-inputs.ts";
@@ -158,6 +159,34 @@ describe("buildFoldSegment", () => {
       records.some((r) => r.id === f.ask),
       false,
     );
+  });
+
+  it("restricts current edited evidence to the fold ancestry for both strategies", () => {
+    const sm = SessionManager.inMemory();
+    const target = sm.appendMessage(said("anchor"));
+    const work = sm.appendMessage(said("obsolete work"));
+    sm.appendMessage(user("unanswered exact request"));
+    sm.appendCustomMessageEntry("other", "unanswered custom", true);
+    sm.appendLabelChange(work, "metadata");
+    sm.appendContextEdit(work, {
+      content: [{ type: "text", text: "current edited work" }],
+    });
+    const leaf = sm.getLeafId();
+    assert.ok(leaf);
+    const projection = buildFoldProjection(sm.getEntries(), leaf, work);
+    const inContext = buildInContextMessages(
+      [],
+      projection.messages,
+      anchorMessageIndex(projection, target),
+    );
+    const segment = buildFoldSegment(sm.getEntries(), leaf, target, work);
+    assert.deepEqual(
+      segment.records.map((record) => record.text),
+      ["current edited work"],
+    );
+    const text = JSON.stringify(inContext.messages);
+    assert.match(text, /current edited work/);
+    assert.doesNotMatch(text, /obsolete work|unanswered/);
   });
 
   it("treats every visible message as collapsed when the anchor predates a compaction", () => {

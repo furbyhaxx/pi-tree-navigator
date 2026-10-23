@@ -334,8 +334,21 @@ describe("production preflight recovery", () => {
     });
   });
 
-  it("keeps unanswered input out of evidence when metadata follows it", async () => {
+  it("uses current edited work and replays unanswered input across later metadata", async () => {
     await withSession("recover", async ({ sm, prompt, calls }) => {
+      const work = sm
+        .getBranch()
+        .findLast(
+          (entry) =>
+            entry.type === "message" && entry.message.role === "assistant",
+        );
+      assert.ok(work);
+      const obsolete = `OBSOLETE-WORK-UNIQUE${"old work ".repeat(1200)}`;
+      const edited = `CURRENT-EDITED-WORK-UNIQUE${"new work ".repeat(1200)}`;
+      sm.appendContextEdit(work.id, {
+        content: [{ type: "text", text: obsolete }],
+      });
+      const custom = "preserve exact custom input";
       const append = sm.appendMessage.bind(sm);
       let requestId = "";
       sm.appendMessage = (message) => {
@@ -345,11 +358,27 @@ describe("production preflight recovery", () => {
           sm.appendLabelChange(id, "request-metadata");
           sm.appendModelChange("mock", "mock-1");
           sm.appendCustomEntry("navigate-tree-continuity-ops", {});
+          sm.appendCustomMessageEntry("other-extension", custom, true, {
+            exact: 1,
+          });
+          sm.appendContextEdit(work.id, {
+            content: [{ type: "text", text: edited }],
+          });
         }
         return id;
       };
       assert.equal(await prompt(REQUEST), undefined);
       assert.ok(calls.some((call) => call.side));
+      const evidence = calls
+        .filter((call) => call.side)
+        .map((call) => call.text)
+        .join("\n");
+      assert.ok(
+        evidence.includes(edited),
+        "summary must receive the current edit",
+      );
+      assert.equal(evidence.includes(obsolete), false);
+      assert.equal(evidence.includes(custom), false);
       assert.equal(
         calls.some(
           (call) => call.side && call.text.includes(`[${requestId}] user:`),
@@ -365,8 +394,76 @@ describe("production preflight recovery", () => {
       assert.ok(
         branch
           .slice(summaryAt + 1)
+          .some(
+            (entry) =>
+              entry.type === "custom_message" &&
+              entry.customType === "other-extension" &&
+              entry.content === custom &&
+              entry.display === true &&
+              JSON.stringify(entry.details) === JSON.stringify({ exact: 1 }),
+          ),
+      );
+      assert.ok(
+        branch
+          .slice(summaryAt + 1)
           .some((entry) => userText(entry) === REQUEST),
       );
+    });
+  });
+
+  it("refuses interleaved tool results without rewriting history or calling a model", async () => {
+    await withSession("recover", async ({ sm, prompt, calls }) => {
+      sm.appendMessage(
+        fauxAssistantMessage(
+          [
+            {
+              type: "toolCall",
+              id: "interleaved",
+              name: "read",
+              arguments: {},
+            },
+          ],
+          { stopReason: "toolUse" },
+        ),
+      );
+      const before = sm.getEntries().map((entry) => JSON.stringify(entry));
+      const append = sm.appendMessage.bind(sm);
+      sm.appendMessage = (message) => {
+        const id = append(message);
+        if (message.role === "user" && messageText(message) === REQUEST) {
+          append({
+            role: "toolResult",
+            toolCallId: "interleaved",
+            toolName: "read",
+            content: [{ type: "text", text: "real interleaved result" }],
+            isError: false,
+            timestamp: 1,
+          });
+        }
+        return id;
+      };
+      await prompt(REQUEST);
+      assert.equal(calls.length, 0);
+      assert.deepEqual(
+        sm
+          .getEntries()
+          .slice(0, before.length)
+          .map((entry) => JSON.stringify(entry)),
+        before,
+      );
+      assert.equal(
+        sm.getEntries().some((entry) => entry.type === "branch_summary"),
+        false,
+      );
+      for (const entry of sm.getEntries()) {
+        if (entry.type !== "context_edit") continue;
+        const target = sm.getEntry(entry.targetId);
+        assert.ok(
+          target?.type === "message" && target.message.role === "assistant",
+        );
+        assert.equal(target.message.stopReason, "error");
+      }
+      assert.ok(sm.getBranch().some((entry) => userText(entry) === REQUEST));
     });
   });
 

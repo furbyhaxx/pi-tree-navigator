@@ -143,6 +143,7 @@ import {
 } from "./fold-engine.ts";
 import {
   anchorMessageIndex,
+  buildFoldProjection,
   buildFoldSegment,
   buildInContextMessages,
 } from "./fold-inputs.ts";
@@ -1512,6 +1513,8 @@ export function recoveryCutOf(
           pending.set(callId, occurrence(sourceEntry.id, callId));
         }
         if (envelope.result !== undefined) {
+          if (unansweredInput)
+            throw new Error("tool result crosses unanswered input");
           if (!pending.delete(envelope.result))
             throw new Error("tool result without its call");
         }
@@ -2147,19 +2150,21 @@ function preparedInContext(
   )
     return undefined;
   const allEntries = sm.getEntries();
-  const projectedMessages =
-    throughId === sm.getLeafId()
-      ? buildContextMessages(sm)
-      : buildContextMessages(sm, throughId);
+  const leafId = sm.getLeafId();
+  if (!leafId) return undefined;
+  const projection = buildFoldProjection(allEntries, leafId, throughId);
+  const projectedMessages = buildContextMessages({
+    buildContextEntries: () => sm.buildContextEntries(),
+    buildSessionProjection: () => projection,
+    getBranch: () => sm.getBranch(),
+    getLabel: (id) => sm.getLabel(id),
+  });
   return buildInContextMessages(
     captured.messages,
     projectedMessages,
     anchorMessageIndex(
       {
-        entries: projectHandoffs(
-          buildSessionProjection(allEntries, throughId),
-          allEntries,
-        ).entries.map((entry) => ({
+        entries: projection.entries.map((entry) => ({
           ...entry,
           messages: entry.messages.filter(
             (message) => message.role !== "system",
@@ -3111,7 +3116,7 @@ export default function (pi: ExtensionAPI) {
     return {
       leafId: foldPointId,
       targetId,
-      segment: buildFoldSegment(allEntries, foldPointId, targetId),
+      segment: buildFoldSegment(allEntries, sessionLeaf, targetId, foldPointId),
       inContext,
       parent: {
         mode: parentModes.get(request.sessionId) ?? "full",
