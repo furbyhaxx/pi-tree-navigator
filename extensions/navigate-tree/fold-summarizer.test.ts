@@ -356,6 +356,39 @@ describe("summarizeFold in-context strategy", () => {
     );
   });
 
+  it("sends system messages inside messages unchanged, before the summary request, without a separate prompt", async () => {
+    const { runner, requests } = harness();
+    const system: Message = {
+      role: "system",
+      content: SYSTEM,
+      timestamp: 0,
+    };
+    const live: Message = { role: "user", content: "live work", timestamp: 1 };
+    const admitted: Message[][] = [];
+    const result = await summarizeFold(
+      options(runner, {
+        inContext: { messages: [system, live], first: 2 },
+        admit: (request) => {
+          admitted.push(request.messages);
+          return { fits: true, inputEstimate: 10 };
+        },
+      }),
+    );
+    assert.ok(result.ok);
+    assert.equal(result.strategy, "in-context");
+    const [request] = requests;
+    assert.equal(request.systemPrompt, undefined);
+    assert.equal(request.tools, undefined);
+    assert.equal(request.messages.length, 3);
+    assert.equal(request.messages[0], system);
+    assert.equal(request.messages[1], live);
+    assert.equal(
+      lastText(request),
+      buildSummaryRequestText(2, FOCUS, PARENT, CONTINUITY),
+    );
+    assert.deepEqual(admitted[0], request.messages);
+  });
+
   for (const [name, reply] of [
     ["length", { stopReason: "length", text: "## Goal\ncut off" }],
     ["a reply without the summary heading", { text: "Done." }],

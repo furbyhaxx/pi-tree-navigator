@@ -97,12 +97,15 @@ export interface SummarizeFoldOptions {
   focus: string;
   parent?: { mode: "full" | "synthesized"; childCount: number };
   continuitySection?: string;
-  /** Strategy A candidate: the projected live request up to the leaf; `first` is the 1-based first collapsed message. */
+  /**
+   * Strategy A candidate: the projected live request up to the leaf; `first` is the 1-based first collapsed message.
+   * pi 1.3 carries the system prompt and tools as system messages inside `messages`; the separate fields are optional.
+   */
   inContext?: {
-    systemPrompt: string;
-    tools: Tool[];
     messages: Message[];
     first: number;
+    systemPrompt?: string;
+    tools?: Tool[];
   };
   /** Strategy B evidence: background text (may be empty) and the anchor-to-leaf records in order. */
   segment: { background: string; records: FoldSegmentRecord[] };
