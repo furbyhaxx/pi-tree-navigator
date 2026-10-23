@@ -333,10 +333,6 @@ interface PanelOptions {
   done(exit: PanelExit): void;
 }
 
-/** FrameList keeps its focus private, but Enter and the hint bar depend on it. */
-const isSearching = (list: FrameList): boolean =>
-  (list as unknown as { focus: string }).focus === "search";
-
 /**
  * The frame with the plan between the search row and the list. The list owns search,
  * selection and the mouse; every state renders the same number of lines.
@@ -423,7 +419,7 @@ class FoldPlanPanel implements Component, Focusable {
         this.options.done({ kind: "close", result: mode.exit });
     } else if (
       this.matches(data, "tui.select.confirm", Key.enter) &&
-      isSearching(this.list)
+      this.list.isSearching
     ) {
       this.status = { tone: "muted", text: SEARCH_ENTER };
     } else {
@@ -598,7 +594,7 @@ class FoldPlanPanel implements Component, Focusable {
       action: "choose anchor",
       priority: "navigation",
     };
-    if (isSearching(this.list)) {
+    if (this.list.isSearching) {
       return [
         { key: "type", action: "to filter" },
         choose,
