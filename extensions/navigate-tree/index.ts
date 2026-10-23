@@ -65,6 +65,7 @@ import {
   type ContextEditableContent,
   collectEntriesForBranchSummary,
   type ExtensionAPI,
+  type ExtensionCommandContext,
   type ExtensionContext,
   estimateTokens,
   getAgentDir,
@@ -137,6 +138,8 @@ import {
   type FoldPrepared,
   type FoldRequest,
   type FoldRunOptions,
+  type FoldTargetCandidate,
+  selectFoldTarget,
 } from "./fold-engine.ts";
 import {
   anchorMessageIndex,
@@ -144,7 +147,14 @@ import {
   buildInContextMessages,
 } from "./fold-inputs.ts";
 import {
+  type FoldPlan,
+  type FoldPlanCandidate,
+  foldPlanResult,
+  openFoldPlanScreen,
+} from "./fold-plan-screen.ts";
+import {
   createFoldSummaryRunner,
+  DEFAULT_REDUCE_OUTPUT_TOKENS,
   type SummarizeFoldOptions,
 } from "./fold-summarizer.ts";
 import {
@@ -163,7 +173,6 @@ import { registerHandoffRenderer } from "./handoff-renderer.ts";
 import {
   type AnchorTableRow,
   BRANCH_LABEL_PREFIX,
-  buildFoldRequestText,
   extractTextContent,
   formatAnchorTable,
   formatContextDelta,
@@ -216,6 +225,7 @@ import { clearRuntimeConfig, readRuntimeConfig } from "./runtime-config.ts";
 import { createSettingsScreenDeps } from "./settings-screen.ts";
 import {
   appendContinuityBriefing,
+  buildSummaryRequestText,
   computeFileLists,
   formatFileOperations,
   hasOpenWork,
@@ -1917,6 +1927,294 @@ function foldAdmission(contextWindow: number): SummarizeFoldOptions["admit"] {
   };
 }
 
+/** Output cap the reduce pass and a prospective summary are sized to. */
+export function foldSummaryPlaceholderTokens(
+  maxTokens: number | undefined,
+): number {
+  return Math.min(
+    DEFAULT_REDUCE_OUTPUT_TOKENS,
+    typeof maxTokens === "number" && maxTokens > 0
+      ? maxTokens
+      : DEFAULT_REDUCE_OUTPUT_TOKENS,
+  );
+}
+
+/** A valid summary whose text estimates to `tokens` at four characters per token. */
+export function foldPlaceholderSummary(tokens: number): string {
+  const head = "## Goal\nContinue the latest request and the open work.\n";
+  const chars = Math.max(1, tokens) * 4;
+  if (head.length >= chars) return head.slice(0, chars);
+  return head + "x".repeat(chars - head.length);
+}
+
+/**
+ * Tokens the post-fold request may use: the window minus the hint reserve, or
+ * 75% of the window when the hint is off.
+ */
+export function foldRecommendationBudget(
+  contextWindow: number,
+  hintReserve: number | null,
+): number {
+  if (contextWindow <= 0) return 0;
+  const reserve =
+    hintReserve === null ? Math.floor(contextWindow * 0.25) : hintReserve;
+  return Math.max(0, contextWindow - reserve);
+}
+
+/** Index of {@link selectFoldTarget}'s choice, or undefined when none is valid. */
+export function recommendFoldIndex<T extends FoldTargetCandidate>(
+  candidates: readonly T[],
+  budget: number,
+): number | undefined {
+  const selected = selectFoldTarget(candidates, budget);
+  if (!selected.ok) return undefined;
+  const index = candidates.indexOf(selected.candidate);
+  return index >= 0 ? index : undefined;
+}
+
+/** One priced fold target, root to leaf, for the plan and for recovery or auto. */
+export interface FoldCandidatePrice extends FoldPlanCandidate {
+  targetId: string;
+}
+
+/** What a fold would replay for Strategy A, or undefined when that request cannot be captured. */
+function preparedInContext(
+  sm: SessionManager,
+  targetId: string,
+  leafId: string,
+  captured: { modelKey: string; messages: Message[] } | undefined,
+  model: { provider: string; id: string } | undefined,
+): SummarizeFoldOptions["inContext"] | undefined {
+  if (
+    !captured ||
+    !model ||
+    captured.modelKey !== `${model.provider}/${model.id}`
+  )
+    return undefined;
+  const allEntries = sm.getEntries();
+  return buildInContextMessages(
+    captured.messages,
+    buildContextMessages(sm),
+    anchorMessageIndex(
+      {
+        entries: projectHandoffs(
+          buildSessionProjection(allEntries, leafId),
+          allEntries,
+        ).entries.map((entry) => ({
+          ...entry,
+          messages: entry.messages.filter(
+            (message) => message.role !== "system",
+          ),
+        })),
+      },
+      targetId,
+    ),
+  );
+}
+
+/** The reduce allowance `summarizeFold` admits, including the runner's window cap. */
+function summarizerReduceTokens(
+  model:
+    | {
+        maxTokens?: number;
+        contextWindow?: number;
+      }
+    | undefined,
+): number {
+  const maxTokens = model?.maxTokens;
+  if (typeof maxTokens !== "number" || maxTokens <= 0)
+    return foldSummaryPlaceholderTokens(undefined);
+  const runnerMax = Math.min(
+    maxTokens,
+    Math.floor((model?.contextWindow ?? 0) / 4),
+  );
+  return Math.min(DEFAULT_REDUCE_OUTPUT_TOKENS, runnerMax);
+}
+
+function previewStrategy(
+  inContext: SummarizeFoldOptions["inContext"] | undefined,
+  contextWindow: number,
+  reduceOut: number,
+  focus: string,
+  parent: { mode: HandoffMode; childCount: number },
+  continuitySection: string | undefined,
+): "in-context" | "chunked" {
+  if (!inContext) return "chunked";
+  const admitted = foldAdmission(contextWindow)(
+    {
+      systemPrompt: inContext.systemPrompt,
+      tools: inContext.tools,
+      messages: [
+        ...inContext.messages,
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: buildSummaryRequestText(
+                inContext.first,
+                focus,
+                parent,
+                continuitySection,
+              ),
+            },
+          ],
+          timestamp: 0,
+        },
+      ],
+    },
+    reduceOut,
+  );
+  return admitted.fits ? "in-context" : "chunked";
+}
+
+const FOCUS_REQUEST_CHARS = 400;
+
+/** Focus for a manual fold: the latest user request and whether a handoff still has open work. */
+function defaultFoldFocus(sm: SessionManager): string {
+  let latest = "";
+  let newestSummary = "";
+  try {
+    for (const entry of sm.getBranch()) {
+      if (entry.type === "message" && entry.message.role === "user") {
+        const text = extractTextContent(entry.message.content)
+          .replace(/\s+/g, " ")
+          .trim();
+        if (text) latest = text;
+      } else if (entry.type === "branch_summary") {
+        newestSummary = entry.summary;
+      }
+    }
+  } catch {
+    latest = "";
+    newestSummary = "";
+  }
+  const open = newestSummary !== "" && hasOpenWork(newestSummary);
+  const request = latest
+    ? `Latest request: ${latest.slice(0, FOCUS_REQUEST_CHARS).trimEnd()}`
+    : "Latest request: continue the work on this branch.";
+  const remaining = open
+    ? "Open work remains in the newest handoff; continue it rather than wrapping up."
+    : "Continue the unfinished work still on this branch from that request.";
+  const focus = `${request} ${remaining}`;
+  return focus.length >= MIN_SUMMARY_FOCUS_LENGTH
+    ? focus
+    : `${focus} Continue the authorized work.`;
+}
+
+/**
+ * Price every active anchor with the commit preview, including full child
+ * handoffs, the ledger and the continuation. `projectedAfterTokens` is that
+ * preview, never the anchor's own footprint subtracted from the current total.
+ */
+export function priceFoldCandidates(
+  sm: SessionManager,
+  input: {
+    model?: {
+      provider: string;
+      id: string;
+      contextWindow?: number;
+      maxTokens?: number;
+    };
+    handoffMode: HandoffMode;
+    captured?: { modelKey: string; messages: Message[] };
+    focus: string;
+    suggestLabel(anchorName: string): string;
+  },
+): FoldCandidatePrice[] {
+  const contextWindow = input.model?.contextWindow ?? 0;
+  const beforeTokens = estimateAdmissionTokens(sm);
+  const placeholder = foldPlaceholderSummary(
+    foldSummaryPlaceholderTokens(input.model?.maxTokens),
+  );
+  const reduceOut = summarizerReduceTokens(input.model);
+  const leafId = sm.getLeafId();
+  return collectActiveAnchors(sm).map((anchor) => {
+    const suggestedLabel = input.suggestLabel(anchor.name);
+    const targetId = findLabeledEntry(sm, LABEL_PREFIX + anchor.name) ?? "";
+    const priced = {
+      name: anchor.name,
+      targetId,
+      ...(LABEL_PREFIX + anchor.name === START_ANCHOR_LABEL
+        ? { auto: true as const }
+        : {}),
+      ...(anchor.hint ? { afterPreview: anchor.hint } : {}),
+      beforeTokens,
+      projectedAfterTokens: beforeTokens,
+      contextWindow,
+      strategy: "chunked" as const,
+      suggestedLabel,
+    };
+    if (!leafId || !targetId || !isValidName(anchor.name)) {
+      return {
+        ...priced,
+        valid: false,
+        reason: !isValidName(anchor.name)
+          ? `anchor names are kebab-case, at most ${MAX_NAME_LENGTH} characters`
+          : `'${anchor.name}' is no longer on the active branch`,
+      };
+    }
+    let strategy: "in-context" | "chunked" = "chunked";
+    try {
+      const { entries } = collectEntriesForBranchSummary(sm, leafId, targetId);
+      strategy = previewStrategy(
+        preparedInContext(sm, targetId, leafId, input.captured, input.model),
+        contextWindow,
+        reduceOut,
+        input.focus,
+        {
+          mode: input.handoffMode,
+          childCount: entries.filter((entry) => entry.type === "branch_summary")
+            .length,
+        },
+        continuityRequestSection(sm, {
+          target: targetId,
+          rewindTo: anchor.name,
+        }),
+      );
+    } catch {
+      strategy = "chunked";
+    }
+    try {
+      const preview = previewFoldCommit(sm, {
+        targetId,
+        rewindTo: anchor.name,
+        newLabel: suggestedLabel,
+        summaryText: placeholder,
+        handoffMode: input.handoffMode,
+        contextWindow,
+        foldPointId: leafId,
+        continuationText: (afterTokens) =>
+          buildRewindDoneText(
+            {
+              rewindTo: anchor.name,
+              newLabel: suggestedLabel,
+              beforeTokens,
+              contextWindow,
+            },
+            afterTokens,
+          ),
+      });
+      if (!preview.ok) {
+        return { ...priced, strategy, valid: false, reason: preview.reason };
+      }
+      return {
+        ...priced,
+        strategy,
+        valid: true,
+        projectedAfterTokens: preview.projectedAfterTokens,
+      };
+    } catch (error) {
+      return {
+        ...priced,
+        strategy,
+        valid: false,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  });
+}
+
 /** The receipt of a fold that landed: the continuation text plus the fold's figures. */
 function foldDoneDraft(
   request: FoldRequest,
@@ -2112,19 +2410,11 @@ export default function (pi: ExtensionAPI) {
       suggestFoldLabel(ctx.sessionManager as SessionManager, anchor.name),
     minSavingsTokens: MIN_REWIND_SAVINGS_TOKENS,
     minFocusLength: MIN_SUMMARY_FOCUS_LENGTH,
-    requestFold(ctx, anchorName, options) {
-      const label =
-        options?.label ??
-        suggestFoldLabel(ctx.sessionManager as SessionManager, anchorName);
-      pi.sendUserMessage(
-        buildFoldRequestText(
-          anchorName,
-          label,
-          MIN_SUMMARY_FOCUS_LENGTH,
-          options?.focus,
-        ),
-        ctx.isIdle() ? undefined : { deliverAs: "followUp" },
-      );
+    requestFold(ctx, anchorName) {
+      void openManualFold(ctx, anchorName);
+    },
+    openFoldPlan(ctx, preselect) {
+      return openManualFold(ctx, preselect);
     },
     contextBadge(ctx) {
       const cw = ctx.model?.contextWindow ?? 0;
@@ -2629,30 +2919,13 @@ export default function (pi: ExtensionAPI) {
         ),
       };
     }
-    const captured = capturedSystems.get(request.sessionId);
-    const inContext =
-      captured &&
-      host.model &&
-      captured.modelKey === `${host.model.provider}/${host.model.id}`
-        ? buildInContextMessages(
-            captured.messages,
-            buildContextMessages(sm),
-            anchorMessageIndex(
-              {
-                entries: projectHandoffs(
-                  buildSessionProjection(allEntries, leafId),
-                  allEntries,
-                ).entries.map((entry) => ({
-                  ...entry,
-                  messages: entry.messages.filter(
-                    (message) => message.role !== "system",
-                  ),
-                })),
-              },
-              targetId,
-            ),
-          )
-        : undefined;
+    const inContext = preparedInContext(
+      sm,
+      targetId,
+      leafId,
+      capturedSystems.get(request.sessionId),
+      host.model,
+    );
     return {
       leafId,
       targetId,
@@ -2859,6 +3132,104 @@ export default function (pi: ExtensionAPI) {
     if (outcome.status === "done")
       appendFoldMessage(host.sm, foldDoneDraft(full, outcome));
     return outcome;
+  }
+
+  function foldBudget(ctx: ExtensionCommandContext): number {
+    const model = ctx.model;
+    return foldRecommendationBudget(
+      model?.contextWindow ?? 0,
+      resolveRewindHintReserve(
+        {
+          rewindHintReserveTokens,
+          rewindHintModelReserveTokens: hintByModel,
+        },
+        model ? `${model.provider}/${model.id}` : undefined,
+      ),
+    );
+  }
+
+  function manualFocus(plan: FoldPlan, sm: SessionManager): string {
+    const typed = plan.focus?.trim();
+    return typed && typed.length >= MIN_SUMMARY_FOCUS_LENGTH
+      ? typed
+      : defaultFoldFocus(sm);
+  }
+
+  /** The one-screen plan. `preselect` wraps the recommendation so list `r` lands on that anchor. */
+  function openManualFold(
+    ctx: ExtensionCommandContext,
+    preselect?: string,
+  ): Promise<"back" | "done"> {
+    const recommend = (candidates: readonly FoldPlanCandidate[]) => {
+      if (preselect) {
+        const at = candidates.findIndex(
+          (candidate) => candidate.name === preselect,
+        );
+        if (at >= 0) return at;
+      }
+      return recommendFoldIndex(candidates, foldBudget(ctx));
+    };
+    return openFoldPlanScreen(ctx, {
+      candidates(commandCtx) {
+        const sm = commandCtx.sessionManager as SessionManager;
+        const sessionId = sm.getSessionId();
+        return priceFoldCandidates(sm, {
+          model: commandCtx.model,
+          handoffMode: parentModes.get(sessionId) ?? "full",
+          captured: capturedSystems.get(sessionId),
+          focus: defaultFoldFocus(sm),
+          suggestLabel: (name) => suggestFoldLabel(sm, name),
+        });
+      },
+      recommend,
+      isAgentRunning: (commandCtx) => !commandCtx.isIdle(),
+      summaryModel(commandCtx) {
+        const model = commandCtx.model;
+        if (!model) return "no model selected";
+        const thinking =
+          typeof pi.getThinkingLevel === "function"
+            ? pi.getThinkingLevel()
+            : "off";
+        return `${model.provider}/${model.id}:${thinking}`;
+      },
+      minFocusLength: MIN_SUMMARY_FOCUS_LENGTH,
+      async start(commandCtx, plan, options) {
+        const sm = commandCtx.sessionManager as SessionManager;
+        const before = estimateAdmissionTokens(sm);
+        const outcome = await runFoldNow(
+          commandCtx,
+          {
+            origin: "manual",
+            rewindTo: plan.anchor,
+            newLabel: plan.label,
+            focus: manualFocus(plan, sm),
+          },
+          { signal: options.signal, onProgress: options.onProgress },
+        );
+        const landed = outcome.status === "done" ? outcome.commit : undefined;
+        return foldPlanResult(outcome, {
+          label: plan.label,
+          beforeTokens: landed?.contextBefore ?? before,
+          afterTokens: landed?.afterTokens ?? before,
+        });
+      },
+      queue(commandCtx, plan) {
+        try {
+          const sm = commandCtx.sessionManager as SessionManager;
+          return queueFold(sm.getSessionId(), {
+            origin: "manual",
+            rewindTo: plan.anchor,
+            newLabel: plan.label,
+            focus: manualFocus(plan, sm),
+          });
+        } catch (error) {
+          return {
+            ok: false,
+            reason: error instanceof Error ? error.message : String(error),
+          };
+        }
+      },
+    });
   }
 
   foldApis.set(pi, { queueFold, runFoldNow });
