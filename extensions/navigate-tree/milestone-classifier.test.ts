@@ -1,8 +1,12 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  BASE_WORDING,
   buildMilestoneClassifierContext,
+  INSTRUCTED_WORDING,
+  instructedWording,
   MAX_STRUCTURE_ITEMS,
+  NO_BOUNDARY,
 } from "./milestone-classifier.ts";
 
 const records = [
@@ -53,5 +57,52 @@ describe("milestone classifier context", () => {
     assert.deepEqual(structure.anchors, [
       { name: "parser-start", afterRecordId: "r1" },
     ]);
+  });
+});
+
+describe("milestone question wording", () => {
+  const sent = (
+    wording?: Parameters<typeof buildMilestoneClassifierContext>[1],
+  ) => buildMilestoneClassifierContext({ records }, wording).context;
+
+  it("sends the base wording unless another is given", () => {
+    assert.deepEqual(sent(), sent(BASE_WORDING));
+    assert.notDeepEqual(sent(INSTRUCTED_WORDING).questions, sent().questions);
+  });
+
+  it("changes only the question text, never the state or the offered choices", () => {
+    const base = sent();
+    const instructed = sent(INSTRUCTED_WORDING);
+    assert.deepEqual(instructed.state, base.state);
+    for (const id of ["status", "boundary"]) {
+      const choices = (context: typeof base) => {
+        const question = context.questions[id];
+        assert.equal(question?.type, "choice");
+        return question?.type === "choice"
+          ? Object.keys(question.criteria)
+          : [];
+      };
+      assert.deepEqual(choices(instructed), choices(base));
+    }
+    assert.deepEqual(Object.keys(instructed.questions), ["status", "boundary"]);
+  });
+
+  it("replaces the instructions of one question and keeps its criteria", () => {
+    const wording = instructedWording({ status: "Custom status question" });
+    assert.equal(wording.status.instructions, "Custom status question");
+    assert.deepEqual(
+      wording.status.criteria,
+      INSTRUCTED_WORDING.status.criteria,
+    );
+    assert.equal(
+      wording.boundary.instructions,
+      INSTRUCTED_WORDING.boundary.instructions,
+    );
+    const boundary = sent(wording).questions.boundary;
+    assert.ok(boundary?.type === "choice");
+    assert.equal(
+      boundary.criteria[NO_BOUNDARY],
+      INSTRUCTED_WORDING.boundary.none,
+    );
   });
 });

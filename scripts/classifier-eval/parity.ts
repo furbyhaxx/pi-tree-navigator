@@ -840,7 +840,10 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 }
 
 /** Opens the shared ledger, waiting while another owner holds its lock; a lock is never removed. */
-async function openLedger(options: Options, deps: Deps): Promise<BudgetLedger> {
+export async function openLedger(
+  options: Pick<Options, "ledger" | "cap" | "waitMinutes">,
+  deps: Pick<Deps, "now" | "stderr" | "sleep">,
+): Promise<BudgetLedger> {
   const deadline = deps.now().getTime() + options.waitMinutes * 60_000;
   for (;;) {
     try {
@@ -1124,7 +1127,7 @@ async function createRegistry(
 const gitOutput = (...args: string[]) =>
   execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
 
-const defaultDeps: Deps = {
+export const defaultDeps: Deps = {
   async loadCases() {
     const { CASES } = (await import(
       pathToFileURL(resolve(import.meta.dirname, "cases.ts")).href

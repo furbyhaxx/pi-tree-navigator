@@ -15,10 +15,10 @@ import type {
 } from "@earendil-works/pi-ai";
 import {
   buildMilestoneClassifierContext,
+  INSTRUCTED_WORDING,
   MAX_MILESTONE_RECORDS,
   type MilestoneInput,
   type MilestoneRecord,
-  type MilestoneStatus,
   type MilestoneStructure,
   NO_BOUNDARY,
 } from "../../extensions/navigate-tree/milestone-classifier.ts";
@@ -100,48 +100,6 @@ export function parseVariant(spec: string): Variant {
     ...(tree ? [`tree-${tree}`] : []),
   ].join("+");
   return { id: id || "base", instructions, granular, ...(tree && { tree }) };
-}
-
-// ---------------------------------------------------------------------------
-// Instructions
-// ---------------------------------------------------------------------------
-
-const STATUS_INSTRUCTIONS =
-  "What is the state of the work at the end of these records? Judge from the records only: the agent's claim that work is done counts only if no tool output and no user message contradicts it. If you are unsure, choose continue.";
-
-const STATUS_CRITERIA: Record<MilestoneStatus, string> = {
-  continue:
-    "Work is still in progress. Choose it when anything is open at the end of the records: a check that fails, is missing or contradicts the agent's claim, an objection or correction from the user, a next step the agent has announced, an edit in progress, or a new task that has just started. Also choose it when you are unsure",
-  milestone:
-    "A phase of the user's request just finished: the deliverable is done and verified (passing tests or confirming output in the records) or explicitly reported complete, no later record contradicts it, nothing of that phase is still open and no new work has started after it. Never choose it while the agent waits for the user",
-  "await-user":
-    "The newest assistant message asks the user a question or requests a decision, approval or input, and the agent must wait for the answer. Choose it even when earlier work is finished",
-  blocked:
-    "The agent is stopped by an obstacle it cannot resolve itself (missing access, credentials or permission, an outage, a required input only someone else can supply), has no workaround, and says it cannot go on",
-};
-
-const BOUNDARY_INSTRUCTIONS =
-  "Which record is the last record of the most recent finished phase of work? A finished phase is a part of the user's request that is done and verified or explicitly reported complete, with no later record contradicting it. Choose the agent's completion report, not the tool output before it. Records after the report belong to later, unfinished work. Choose none if no phase has finished or if the only completion claim is contradicted by tool output or by the user.";
-
-const NO_BOUNDARY_CRITERION =
-  "No phase of work has finished in these records, or the only completion claim is contradicted";
-
-function improvedQuestions(base: Questions): Questions {
-  const boundary = base.boundary;
-  if (boundary?.type !== "choice")
-    throw new Error("the base request has no boundary choice question");
-  return {
-    status: {
-      type: "choice",
-      instructions: STATUS_INSTRUCTIONS,
-      criteria: STATUS_CRITERIA,
-    },
-    boundary: {
-      type: "choice",
-      instructions: BOUNDARY_INSTRUCTIONS,
-      criteria: { ...boundary.criteria, [NO_BOUNDARY]: NO_BOUNDARY_CRITERION },
-    },
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -357,23 +315,19 @@ export function variantCase(
   const { input } = fixture;
   if (input.type !== "milestone")
     throw new Error(`${fixture.id}: variants apply to milestone cases`);
-  const { context, records } = buildMilestoneClassifierContext({
-    records: input.records,
-    ...(input.lastAnchor !== undefined && { lastAnchor: input.lastAnchor }),
-    ...(structure && { structure }),
-  });
-  const base = context.questions;
-  const previews = Object.fromEntries(
-    Object.entries(
-      base.boundary?.type === "choice" ? base.boundary.criteria : {},
-    ),
+  const { context, records } = buildMilestoneClassifierContext(
+    {
+      records: input.records,
+      ...(input.lastAnchor !== undefined && { lastAnchor: input.lastAnchor }),
+      ...(structure && { structure }),
+    },
+    variant.instructions ? INSTRUCTED_WORDING : undefined,
   );
-  const questions = variant.granular
-    ? granularQuestions(records, previews)
-    : variant.instructions
-      ? improvedQuestions(base)
-      : base;
-  const requested = { ...context, questions };
+  const boundary = context.questions.boundary;
+  const previews = boundary?.type === "choice" ? boundary.criteria : {};
+  const requested = variant.granular
+    ? { ...context, questions: granularQuestions(records, previews) }
+    : context;
   return {
     ...fixture,
     context: requested,
