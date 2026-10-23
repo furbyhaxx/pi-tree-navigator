@@ -70,6 +70,7 @@ const parents = [
   parent("p-c", ["none"]),
   parent("p-d", ["R1"]),
   parent("p-e", ["R1"]),
+  parent("p-f", ["R1", "none"]),
 ];
 const msObs = [
   observation(MS, "p-a", pick("R1"), 100),
@@ -77,6 +78,7 @@ const msObs = [
   observation(MS, "p-c", pick("R2"), 100),
   observation(MS, "p-d", pick("R1", 0.3), 100),
   observation(MS, "p-e", pick("R1"), 100),
+  observation(MS, "p-f", pick("R1"), 100),
 ];
 const lunaObs = parents.map((p) =>
   observation(
@@ -105,12 +107,13 @@ const fullVerifier = [
   verdict("p-c", "R2", "yes", 500),
   verdict("p-d", "R1", "yes", 600),
   verdict("p-e", "R1", "no", 700),
+  verdict("p-f", "R1", "no", 800),
 ];
 
 test("without verification the pipeline keeps its accepted unsafe retirements", () => {
   const sim = simulate({ ...base, verifier: [] }, "none");
-  assert.equal(sim.decisions, 5);
-  assert.equal(sim.acceptedExact, 3);
+  assert.equal(sim.decisions, 6);
+  assert.equal(sim.acceptedExact, 4);
   assert.equal(sim.unsafe, 2);
   assert.equal(sim.verified, 0);
   assert.equal(sim.addedP95Ms, null);
@@ -123,22 +126,26 @@ test("verify escalated checks only retirements proposed after microsoft abstaine
   assert.equal(sim.confirmed, 1);
   assert.equal(sim.rejected, 1);
   assert.equal(sim.unsafeRejected, 1);
-  assert.equal(sim.correctRejected, 0);
+  assert.equal(sim.positivesBlocked, 0);
+  assert.equal(sim.ambiguousRejected, 0);
   assert.equal(sim.unsafe, 1);
-  assert.equal(sim.acceptedExact, 3);
-  assert.equal(sim.acceptedExactIfRejectedIsNone, 4);
+  assert.equal(sim.acceptedExact, 4);
+  assert.equal(sim.acceptedExactIfRejectedIsNone, 5);
   assert.equal(sim.addedP95Ms, 600);
   assert.equal(sim.totalP95Ms, 2700);
 });
 
-test("verify every retirement also blocks correct retirements the verifier doubts", () => {
+test("verify every retirement also blocks correct and ambiguous retirements the verifier doubts", () => {
   const sim = simulate({ ...base, verifier: fullVerifier }, "every");
-  assert.equal(sim.verified, 5);
+  assert.equal(sim.verified, 6);
+  assert.equal(sim.confirmed, 3);
   assert.equal(sim.unsafe, 1);
   assert.equal(sim.unsafeRejected, 1);
-  assert.equal(sim.correctRejected, 1);
+  assert.equal(sim.positivesBlocked, 1);
+  assert.equal(sim.ambiguousRejected, 1);
   assert.equal(sim.acceptedExact, 2);
-  assert.equal(sim.addedP95Ms, 700);
+  assert.equal(sim.acceptedExactIfRejectedIsNone, 4);
+  assert.equal(sim.addedP95Ms, 800);
   assert.ok(sim.addedCostPer1000 > 0);
 });
 
@@ -168,7 +175,7 @@ test("a failed check keeps the item; a missing pair is reported and excluded", (
   assert.deepEqual(missing.missing, [
     { caseId: "p-c", item: "R2", repetition: 0 },
   ]);
-  assert.equal(missing.decisions, 4);
+  assert.equal(missing.decisions, 5);
 });
 
 test("ranking puts zero unsafe first, then positives, cost and p95", () => {

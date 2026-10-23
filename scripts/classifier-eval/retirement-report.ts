@@ -181,8 +181,12 @@ export interface Simulation {
   failed: number;
   /** Checked retirements with no verifier observation; excluded from every figure. */
   missing: { caseId: string; item: string; repetition: number }[];
+  /** Rejected retirements of an item that is not replaced (a wrong retirement stopped). */
   unsafeRejected: number;
-  correctRejected: number;
+  /** Rejected retirements of an item the message truly replaces (a missed positive). */
+  positivesBlocked: number;
+  /** Rejected retirements the reference accepts either way. */
+  ambiguousRejected: number;
   addedP95Ms: number | null;
   totalP95Ms: number | null;
   costPer1000: number;
@@ -251,7 +255,8 @@ export function simulate(
     failed: 0,
     missing: [],
     unsafeRejected: 0,
-    correctRejected: 0,
+    positivesBlocked: 0,
+    ambiguousRejected: 0,
     addedP95Ms: null,
     totalP95Ms: null,
     costPer1000: 0,
@@ -343,7 +348,9 @@ export function simulate(
       if (kind.accepted && kind.unsafe) sim.unsafe++;
       if (rejected) {
         if (final.unsafe) sim.unsafeRejected++;
-        if (final.correct) sim.correctRejected++;
+        if (final.correct && expected.choices.includes(NONE))
+          sim.ambiguousRejected++;
+        else if (final.correct) sim.positivesBlocked++;
         if (kindExact && expected.choices.includes(NONE))
           sim.acceptedExactIfRejectedIsNone++;
         continue;
@@ -363,19 +370,25 @@ export function simulate(
   return sim;
 }
 
+const VARIANTS: Record<VerifyMode, string> = {
+  none: "no verification",
+  escalated: "verify escalated only",
+  every: "verify every retirement",
+};
+
 export function renderSimulations(
   rows: readonly { verifier: string; sims: readonly Simulation[] }[],
 ): string {
   const lines = [
-    "| verifier | variant | accepted-exact | unsafe | checked (confirmed / rejected / failed) | unsafe rejected | correct rejected | p95 added ms | p95 total ms | $/1k | added $/1k | missing pairs |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| verifier | variant | accepted-exact | if a rejection keeps the item | unsafe | checked (confirmed / rejected / failed) | unsafe stopped | positives blocked | ambiguous rejected | p95 added ms | p95 total ms | $/1k | added $/1k | missing pairs |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ];
   for (const { verifier, sims } of rows)
     for (const s of sims) {
       const rate = (n: number) =>
         `${pct(s.decisions === 0 ? null : n / s.decisions)} (${n}/${s.decisions})`;
       lines.push(
-        `| ${verifier} | ${s.mode === "none" ? "no verification" : s.mode === "escalated" ? "verify escalated only" : "verify every retirement"} | ${rate(s.acceptedExact)} | ${s.unsafe} | ${s.verified} (${s.confirmed} / ${s.rejected} / ${s.failed}) | ${s.unsafeRejected} | ${s.correctRejected} | ${ms(s.addedP95Ms)} | ${ms(s.totalP95Ms)} | ${s.costPer1000.toFixed(4)} | ${s.addedCostPer1000.toFixed(4)} | ${s.missing.length} |`,
+        `| ${verifier} | ${VARIANTS[s.mode]} | ${rate(s.acceptedExact)} | ${rate(s.acceptedExactIfRejectedIsNone)} | ${s.unsafe} | ${s.verified} (${s.confirmed} / ${s.rejected} / ${s.failed}) | ${s.unsafeRejected} | ${s.positivesBlocked} | ${s.ambiguousRejected} | ${ms(s.addedP95Ms)} | ${ms(s.totalP95Ms)} | ${s.costPer1000.toFixed(4)} | ${s.addedCostPer1000.toFixed(4)} | ${s.missing.length} |`,
       );
     }
   return `${lines.join("\n")}\n`;
