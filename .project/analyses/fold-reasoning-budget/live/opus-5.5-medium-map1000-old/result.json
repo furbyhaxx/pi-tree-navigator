@@ -1,0 +1,12 @@
+{
+  "impl": "old",
+  "model": "openrouter/anthropic/claude-opus-5.5",
+  "thinking": "medium",
+  "blocks": 10,
+  "mapOutputTokens": 1000,
+  "evidenceChars": 165178,
+  "ok": false,
+  "reason": "invalid-summary",
+  "detail": "map call 1/1 ended with stop reason \"length\" and incomplete notes",
+  "calls": 1
+}
