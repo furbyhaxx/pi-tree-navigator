@@ -50,11 +50,15 @@ import { readFile, stat } from "node:fs/promises";
 import { join, normalize, resolve } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
+  type Api,
   type AssistantMessage,
   getCurrentSystemMessage,
   getSystemMessageText,
   isContextOverflow,
   isRecoverableLength,
+  type Message,
+  type Model,
+  type ThinkingLevel,
 } from "@earendil-works/pi-ai";
 import {
   AgentSession,
@@ -64,8 +68,10 @@ import {
   collectEntriesForBranchSummary,
   convertToLlm,
   type ExtensionAPI,
+  type ExtensionContext,
   estimateTokens,
   getAgentDir,
+  type ModelRegistry,
   prepareBranchEntries,
   type SessionBoundaryDraft,
   type SessionEntry,
@@ -127,6 +133,23 @@ import {
   userEntryIndexOf,
 } from "./continuity-store.ts";
 import { createUserOpsWriter } from "./current-screen.ts";
+import {
+  createFoldEngine,
+  type FoldCommitResult,
+  type FoldOutcome,
+  type FoldPrepared,
+  type FoldRequest,
+  type FoldRunOptions,
+} from "./fold-engine.ts";
+import {
+  anchorMessageIndex,
+  buildFoldSegment,
+  buildInContextMessages,
+} from "./fold-inputs.ts";
+import {
+  createFoldSummaryRunner,
+  type SummarizeFoldOptions,
+} from "./fold-summarizer.ts";
 import {
   getHandoff,
   type HandoffMode,
@@ -1009,26 +1032,36 @@ function overflowed(
   }
 }
 
-function requestAccounting(sm: SessionManager, messages: AgentMessage[]) {
+/** The request `messages` as pi will send them: a forced system prompt replaces the head. */
+function effectiveRequestMessages(
+  sm: SessionManager,
+  messages: AgentMessage[],
+): AgentMessage[] {
   const session = findOwningSession(sm);
   const forcedPrompt = session
     ? asInternals(session)._runSystemPromptOptions?.forceSystemPrompt
     : undefined;
+  if (forcedPrompt === undefined) return messages;
   const currentSystem = getCurrentSystemMessage(messages);
-  const effective: AgentMessage[] =
-    forcedPrompt === undefined
-      ? messages
-      : [
-          {
-            role: "system",
-            content: forcedPrompt,
-            ...(currentSystem?.toolsAdded
-              ? { toolsAdded: currentSystem.toolsAdded }
-              : {}),
-            timestamp: currentSystem?.timestamp ?? 0,
-          },
-          ...messages.filter((message) => message.role !== "system"),
-        ];
+  return [
+    {
+      role: "system",
+      content: forcedPrompt,
+      ...(currentSystem?.toolsAdded
+        ? { toolsAdded: currentSystem.toolsAdded }
+        : {}),
+      timestamp: currentSystem?.timestamp ?? 0,
+    },
+    ...messages.filter((message) => message.role !== "system"),
+  ];
+}
+
+function requestAccounting(sm: SessionManager, messages: AgentMessage[]) {
+  return accountRequest(effectiveRequestMessages(sm, messages));
+}
+
+/** The admission estimate of a complete request whose system state is already effective. */
+function accountRequest(effective: AgentMessage[]) {
   const system = getCurrentSystemMessage(effective);
   const mandated =
     system !== undefined &&
@@ -1488,7 +1521,7 @@ function endingText(
  */
 function continuityRequestSection(
   sm: SessionManager,
-  pending: PendingRewind,
+  pending: Pick<PendingRewind, "target" | "rewindTo">,
 ): string | undefined {
   try {
     const branch = sm.getBranch();
@@ -2327,6 +2360,144 @@ export async function commitFold(
   };
 }
 
+/** What an engine fold needs from its session, read from the live context before any await. */
+interface FoldHost {
+  sm: SessionManager;
+  model: Model<Api> | undefined;
+  registry: Pick<ModelRegistry, "streamSimple" | "hasConfiguredAuth">;
+  thinking: ThinkingLevel | "off";
+  /** Set for an idle run: its commit refuses once the agent is working again. */
+  isIdle?: () => boolean;
+}
+
+/** What a landed engine fold reports on top of `commitFold`'s own result. */
+type FoldLanded = Omit<Extract<FoldCommitOutcome, { ok: true }>, "ok"> & {
+  targetId: string;
+  contextBefore: number;
+  contextWindow: number;
+};
+
+type FoldResult = FoldOutcome<FoldLanded>;
+
+/** The queued-or-idle request shape: the session id comes from the caller's context. */
+export type FoldRequestInput = Omit<FoldRequest, "sessionId">;
+
+/** The engine entry points of one extension instance. */
+export interface FoldApi {
+  /**
+   * Queue a fold for the session's next `turn_end` boundary (a running agent).
+   * Refused while an in-band rewind is pending or another fold is queued or running.
+   */
+  queueFold(
+    sessionId: string,
+    request: FoldRequestInput,
+  ): { ok: true } | { ok: false; reason: string };
+  /** Fold an idle session now and append the continuation without starting a turn. */
+  runFoldNow(
+    ctx: Pick<
+      ExtensionContext,
+      "sessionManager" | "model" | "modelRegistry" | "isIdle"
+    >,
+    request: FoldRequestInput,
+    options?: FoldRunOptions,
+  ): Promise<FoldResult>;
+}
+
+/**
+ * The shared admission policy for the engine's in-context request: the
+ * estimate of the complete request (system prompt and tools included), the
+ * output allowance and the recovery headroom must fit the model's window.
+ */
+function foldAdmission(contextWindow: number): SummarizeFoldOptions["admit"] {
+  return (request, maxOutputTokens) => {
+    const inputEstimate =
+      accountRequest([
+        ...(request.systemPrompt
+          ? [
+              {
+                role: "system" as const,
+                content: request.systemPrompt,
+                timestamp: 0,
+              },
+            ]
+          : []),
+        ...request.messages,
+      ]).tokens +
+      (request.tools
+        ? Math.ceil(JSON.stringify(request.tools).length / 3.5)
+        : 0);
+    return {
+      fits:
+        inputEstimate + maxOutputTokens + RECOVERY_HEADROOM_TOKENS <=
+        contextWindow,
+      inputEstimate,
+    };
+  };
+}
+
+/** The receipt of a fold that landed: the continuation text plus the fold's figures. */
+function foldDoneDraft(
+  request: FoldRequest,
+  done: Extract<FoldResult, { status: "done" }>,
+): RewindMessageDraft {
+  const landed = done.commit;
+  return rewindMessageDraft(landed.continuation, {
+    status: "done",
+    rewindTo: request.rewindTo,
+    newLabel: request.newLabel,
+    targetId: landed.targetId,
+    summaryId: landed.summaryId,
+    collapsedEntries: landed.collapsedEntries,
+    contextBefore: landed.contextBefore,
+    contextAfter: landed.afterTokens,
+    contextWindow: landed.contextWindow,
+    origin: request.origin,
+    summaryStrategy: done.strategy,
+    summaryCalls: done.calls,
+    foldEstimateBefore: landed.foldEstimateBefore,
+    foldEstimateAfter: landed.foldEstimateAfter,
+    agentMessagesRefreshed: landed.refreshed,
+    historyRewriteNotified: landed.historyRewriteNotified,
+    readFiles: landed.readFiles,
+    modifiedFiles: landed.modifiedFiles,
+    reappendedLateMessages: landed.reappended,
+    ...(landed.continuityReport && { continuity: landed.continuityReport }),
+  });
+}
+
+/** The receipt of a fold that did not land; the history is as it was. */
+function foldFailedDraft(
+  request: FoldRequest,
+  outcome: Exclude<FoldResult, { status: "done" }>,
+): RewindMessageDraft {
+  const head = `[${TOOL_NAME}] Fold to '${request.rewindTo}' (collapse as '${request.newLabel}')`;
+  const base = {
+    status: "failed",
+    rewindTo: request.rewindTo,
+    newLabel: request.newLabel,
+    origin: request.origin,
+    ...(request.toolCallId && { toolCallId: request.toolCallId }),
+  };
+  if (outcome.status === "failed") {
+    return rewindMessageDraft(
+      `${head} failed at the ${outcome.stage} stage (${outcome.reason}): ${outcome.detail}\n\nNothing was collapsed.`,
+      {
+        ...base,
+        stage: outcome.stage,
+        reason: outcome.reason,
+        detail: outcome.detail,
+      },
+    );
+  }
+  const reason = outcome.status === "busy" ? "busy" : "cancelled";
+  return rewindMessageDraft(
+    outcome.status === "busy"
+      ? `${head} was not started: another fold is running for this session. Nothing was collapsed.`
+      : `${head} was cancelled. Nothing was collapsed.`,
+    { ...base, reason },
+  );
+}
+
 interface ToolResult {
   content: Array<{ type: "text"; text: string }>;
   details: Record<string, unknown>;
@@ -2349,6 +2520,8 @@ function toolError(
     isError: true,
   };
 }
+
+const foldApis = new WeakMap<ExtensionAPI, FoldApi>();
 
 export default function (pi: ExtensionAPI) {
   registerAnchorCommand(pi, {
@@ -2481,6 +2654,15 @@ export default function (pi: ExtensionAPI) {
   // tool call, completed or ended by a later boundary / event (#90).
   const pendingRewinds = new Map<string, PendingRewind>();
   const parentModes = new Map<string, HandoffMode>();
+  // Independent folds (engine host), keyed by session id. The system head of
+  // the latest request is what Strategy A replays; a queued fold runs at the
+  // session's next `turn_end`; a session in `runningFolds` is folding now.
+  const capturedSystems = new Map<
+    string,
+    { modelKey: string; messages: Message[] }
+  >();
+  const queuedFolds = new Map<string, FoldRequest>();
+  const runningFolds = new Set<string>();
   // pi-codemode nested calls (#103): nested calls seen so far per codemode
   // call, and the codemode call each accepted nested rewind lands on.
   const nestedCallCounts = new Map<string, number>();
@@ -3308,6 +3490,381 @@ export default function (pi: ExtensionAPI) {
     ];
   }
 
+  // ---------------------------------------------------------------------------
+  // Independent folds (engine host): a fold summarized by side calls through
+  // `createFoldEngine`, never by a main-agent turn, so it works for a session
+  // whose next main request the admission guard would refuse.
+  // ---------------------------------------------------------------------------
+
+  /** The system head a request carries, kept for Strategy A of a later fold. */
+  function captureSystemHead(
+    sm: SessionManager,
+    sessionId: string,
+    model: OverflowModel | undefined,
+    messages: AgentMessage[],
+  ): void {
+    try {
+      const head = effectiveRequestMessages(sm, messages).filter(
+        (message): message is Message => message.role === "system",
+      );
+      if (!model || head.length === 0) capturedSystems.delete(sessionId);
+      else {
+        capturedSystems.set(sessionId, {
+          modelKey: `${model.provider}/${model.id}`,
+          messages: head,
+        });
+      }
+    } catch {
+      capturedSystems.delete(sessionId);
+    }
+  }
+
+  /** The fold's snapshot: the gates every entry point shares, then the summary inputs. */
+  function prepareFold(
+    host: FoldHost,
+    request: FoldRequest,
+  ): FoldPrepared | { error: string } {
+    const { sm } = host;
+    const { rewindTo, newLabel } = request;
+    const leafId = sm.getLeafId();
+    if (!leafId) return { error: "no session entries yet, nothing to fold" };
+    if (!isValidName(rewindTo) || !isValidName(newLabel)) {
+      return {
+        error: `anchor and label names are kebab-case, at most ${MAX_NAME_LENGTH} characters`,
+      };
+    }
+    if (findLabeledEntry(sm, LABEL_PREFIX + newLabel)) {
+      return {
+        error: `a label '${newLabel}' already exists on the active branch`,
+      };
+    }
+    const targetId = findLabeledEntry(sm, LABEL_PREFIX + rewindTo);
+    if (!targetId)
+      return { error: `no label '${rewindTo}' on the active branch` };
+    if (targetId === leafId)
+      return { error: `already at '${rewindTo}', nothing to summarize` };
+    const { entries } = collectEntriesForBranchSummary(sm, leafId, targetId);
+    if (entries.length === 0) {
+      return {
+        error: `no entries between the leaf and '${rewindTo}', nothing to summarize`,
+      };
+    }
+    const allEntries = sm.getEntries();
+    const byId = new Map(allEntries.map((entry) => [entry.id, entry]));
+    // The folded leaf is part of what the fold frees, and a pre-compaction
+    // anchor is priced by the history it would restore.
+    const savings =
+      estimateAdmissionTokens(sm) -
+      estimateAtEntry(sm, allEntries, targetId, byId);
+    if (savings < MIN_REWIND_SAVINGS_TOKENS) {
+      return {
+        error: buildMinSavingsRejection(
+          rewindTo,
+          newLabel,
+          savings,
+          sm,
+          host.model?.contextWindow ?? 0,
+          allEntries,
+          byId,
+          precedesLatestCompaction(sm.getBranch(), targetId),
+        ),
+      };
+    }
+    const captured = capturedSystems.get(request.sessionId);
+    const inContext =
+      captured &&
+      host.model &&
+      captured.modelKey === `${host.model.provider}/${host.model.id}`
+        ? buildInContextMessages(
+            captured.messages,
+            buildContextMessages(sm),
+            anchorMessageIndex(
+              {
+                entries: projectHandoffs(
+                  buildSessionProjection(allEntries, leafId),
+                  allEntries,
+                ).entries.map((entry) => ({
+                  ...entry,
+                  messages: entry.messages.filter(
+                    (message) => message.role !== "system",
+                  ),
+                })),
+              },
+              targetId,
+            ),
+          )
+        : undefined;
+    return {
+      leafId,
+      targetId,
+      segment: buildFoldSegment(allEntries, leafId, targetId),
+      inContext,
+      parent: {
+        mode: parentModes.get(request.sessionId) ?? "full",
+        childCount: entries.filter((entry) => entry.type === "branch_summary")
+          .length,
+      },
+      continuitySection: continuityRequestSection(sm, {
+        target: targetId,
+        rewindTo,
+      }),
+    };
+  }
+
+  /** Commit a summary the engine wrote: late input stays out of the fold and follows the summary. */
+  async function commitEngineFold(
+    host: FoldHost,
+    request: FoldRequest,
+    prepared: FoldPrepared,
+    summaryText: string,
+  ): Promise<FoldCommitResult<FoldLanded>> {
+    const { sm } = host;
+    let idle = true;
+    try {
+      idle = host.isIdle?.() ?? true;
+    } catch {
+      idle = false;
+    }
+    if (!idle) {
+      return {
+        ok: false,
+        reason: "the agent started working during the fold",
+      };
+    }
+    const contextWindow = host.model?.contextWindow ?? 0;
+    const contextBefore = estimateAdmissionTokens(sm);
+    const outcome = await commitFold(sm, {
+      targetId: prepared.targetId,
+      rewindTo: request.rewindTo,
+      newLabel: request.newLabel,
+      summaryText,
+      handoffMode: prepared.parent?.mode ?? "full",
+      contextWindow,
+      foldPointId: prepared.leafId,
+      foldPointFolded: true,
+      branchLabelEntryId: prepared.leafId,
+      excludeFromFileLists: [],
+      continuationText: (afterTokens) =>
+        buildRewindDoneText(
+          {
+            rewindTo: request.rewindTo,
+            newLabel: request.newLabel,
+            beforeTokens: contextBefore,
+            contextWindow,
+          },
+          afterTokens,
+        ),
+      writeLabel: (entryId, label) => writeLabel(sm, entryId, label),
+    });
+    if (!outcome.ok) return outcome;
+    return {
+      ...outcome,
+      targetId: prepared.targetId,
+      contextBefore,
+      contextWindow,
+    };
+  }
+
+  /** One engine per run: its admission policy reads the window of the model this run uses. */
+  async function runFold(
+    host: FoldHost,
+    request: FoldRequest,
+    options: FoldRunOptions = {},
+  ): Promise<FoldResult> {
+    const { sessionId } = request;
+    if (runningFolds.has(sessionId)) return { status: "busy" };
+    runningFolds.add(sessionId);
+    try {
+      return await createFoldEngine<FoldLanded>({
+        prepare: (req) => prepareFold(host, req),
+        runner: (req) => {
+          const { model, registry, thinking } = host;
+          if (!model) return { error: "no model is selected" };
+          if (!registry.hasConfiguredAuth(model)) {
+            return {
+              error: `no authentication is configured for ${model.provider}/${model.id}`,
+            };
+          }
+          return createFoldSummaryRunner({
+            registry,
+            model,
+            thinking,
+            sessionId: req.sessionId,
+          });
+        },
+        admit: foldAdmission(host.model?.contextWindow ?? 0),
+        commit: (req, prepared, summary) =>
+          commitEngineFold(host, req, prepared, summary.text),
+      }).run(request, options);
+    } finally {
+      runningFolds.delete(sessionId);
+    }
+  }
+
+  /** What a fold reads from the live context; read before the first await (stale-ctx contract). */
+  function foldHostOf(
+    ctx: Pick<ExtensionContext, "sessionManager" | "model" | "modelRegistry">,
+  ): FoldHost {
+    return {
+      sm: ctx.sessionManager as SessionManager,
+      model: ctx.model,
+      registry: ctx.modelRegistry,
+      thinking:
+        typeof pi.getThinkingLevel === "function"
+          ? pi.getThinkingLevel()
+          : "off",
+    };
+  }
+
+  const gateFailed = (reason: string, detail: string): FoldResult => ({
+    status: "failed",
+    stage: "gate",
+    reason,
+    detail,
+    usage: [],
+  });
+
+  /**
+   * A fold for the session's next `turn_end` (a running agent). An in-band
+   * rewind owns the boundaries while it is pending, so a fold is refused then
+   * and a queued fold waits until none is pending; a fold waits behind a
+   * forced rewind too. One fold per session is queued or running at a time.
+   */
+  function queueFold(
+    sessionId: string,
+    request: FoldRequestInput,
+  ): { ok: true } | { ok: false; reason: string } {
+    if (pendingRewinds.has(sessionId) || forcedActive(sessionId)) {
+      return { ok: false, reason: "an in-band rewind is pending" };
+    }
+    if (queuedFolds.has(sessionId) || runningFolds.has(sessionId)) {
+      return {
+        ok: false,
+        reason: "a fold is already queued or running for this session",
+      };
+    }
+    queuedFolds.set(sessionId, { ...request, sessionId });
+    return { ok: true };
+  }
+
+  /** Persist a fold's receipt as a message that starts no turn; the session is idle. */
+  function appendFoldMessage(
+    sm: SessionManager,
+    draft: RewindMessageDraft,
+  ): void {
+    try {
+      pi.sendMessage(
+        {
+          customType: draft.customType,
+          content: draft.content,
+          display: draft.display,
+          details: draft.details,
+        },
+        { triggerTurn: false },
+      );
+    } catch {
+      try {
+        sm.appendCustomMessageEntry(
+          draft.customType,
+          draft.content,
+          draft.display,
+          draft.details,
+        );
+      } catch {
+        // Fail-open: the fold itself has landed.
+      }
+    }
+  }
+
+  /** Fold an idle session now: nothing is written before the commit, then the continuation is appended. */
+  async function runFoldNow(
+    ctx: Pick<
+      ExtensionContext,
+      "sessionManager" | "model" | "modelRegistry" | "isIdle"
+    >,
+    request: FoldRequestInput,
+    options: FoldRunOptions = {},
+  ): Promise<FoldResult> {
+    let host: FoldHost;
+    let full: FoldRequest;
+    try {
+      host = foldHostOf(ctx);
+      host.isIdle = () => ctx.isIdle();
+      full = { ...request, sessionId: host.sm.getSessionId() };
+      if (livePending(host.sm, full.sessionId) || forcedActive(full.sessionId))
+        return gateFailed("pending-rewind", "an in-band rewind is pending");
+    } catch (error) {
+      return gateFailed(
+        "exception",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    const outcome = await runFold(host, full, options);
+    if (outcome.status === "done")
+      appendFoldMessage(host.sm, foldDoneDraft(full, outcome));
+    return outcome;
+  }
+
+  foldApis.set(pi, { queueFold, runFoldNow });
+
+  /**
+   * The queued fold at a `turn_end` boundary, after this turn's tool results
+   * are on the branch: its receipt is a boundary draft. Esc cancels it; a
+   * landed fold continues the run; a failed one continues only when the
+   * model asked for it. Undefined when the ctx is stale (the fold stays
+   * queued).
+   */
+  async function runQueuedFold(
+    sm: SessionManager,
+    sessionId: string,
+    request: FoldRequest,
+    message: { stopReason?: string },
+    event: { entries?: SessionBoundaryDraft[] },
+    ctx: ExtensionContext,
+  ): Promise<
+    { entries: SessionBoundaryDraft[]; continue?: boolean } | undefined
+  > {
+    let host: FoldHost;
+    let signal: AbortSignal | undefined;
+    try {
+      host = foldHostOf(ctx);
+      signal = ctx.signal;
+    } catch {
+      return undefined;
+    }
+    queuedFolds.delete(sessionId);
+    rewindTurns.add(message);
+    const deliver = (draft: RewindMessageDraft, cont?: boolean) => ({
+      entries: keepValidDrafts<SessionBoundaryDraft>(sm, [
+        ...(event.entries ?? []),
+        draft,
+      ]),
+      ...(cont && { continue: true }),
+    });
+    if (signal?.aborted || message.stopReason === "aborted") {
+      return deliver(
+        foldFailedDraft(request, { status: "cancelled", usage: [] }),
+      );
+    }
+    let outcome: FoldResult;
+    try {
+      // The folded span's user input belongs in the ledger the fold starts from.
+      await captureContinuity(sm, sessionId, ctx, message);
+      outcome = await runFold(host, request, { signal });
+    } catch (error) {
+      outcome = gateFailed(
+        "exception",
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    if (outcome.status === "done")
+      return deliver(foldDoneDraft(request, outcome), true);
+    return deliver(
+      foldFailedDraft(request, outcome),
+      request.origin === "agent",
+    );
+  }
+
   // While a rewind waits for its summary, every tool call is blocked: the
   // next turn must be the summary itself. The blocked attempt is hidden from
   // the model (#90).
@@ -3672,6 +4229,26 @@ export default function (pi: ExtensionAPI) {
         ],
         false,
       );
+    }
+    // A queued independent fold (E12) runs here, after this turn's tool
+    // results are committed. It waits while an in-band rewind or a forced
+    // rewind owns the boundaries, and across an error turn pi retries.
+    const queuedFold = queuedFolds.get(sessionId);
+    if (
+      queuedFold &&
+      !pending &&
+      !forcedActive(sessionId) &&
+      message.stopReason !== "error"
+    ) {
+      const folded = await runQueuedFold(
+        sm,
+        sessionId,
+        queuedFold,
+        message,
+        event,
+        ctx,
+      );
+      if (folded) return folded;
     }
     // Rewind-driven compaction (#101, D2): a `length` / silent overflow is
     // handled here, so the model never retries the oversized call; an
@@ -4183,6 +4760,8 @@ export default function (pi: ExtensionAPI) {
       forcedRewinds.delete(sessionId);
       outputBudgets.delete(sessionId);
       requestBudgetFailures.delete(sessionId);
+      capturedSystems.delete(sessionId);
+      queuedFolds.delete(sessionId);
       autoNavigateStateBySession.delete(sessionId);
     } catch {
       // Fail-open: session_start clears it too.
@@ -4433,6 +5012,8 @@ export default function (pi: ExtensionAPI) {
     forcedRewinds.delete(sessionId);
     outputBudgets.delete(sessionId);
     requestBudgetFailures.delete(sessionId);
+    capturedSystems.delete(sessionId);
+    queuedFolds.delete(sessionId);
     // O8 (#90): a rewind that died mid-flight (restart, crash) left its
     // instruction in context with nothing waiting for it — end it.
     resolveOrphanRewinds(sm);
@@ -4577,6 +5158,9 @@ export default function (pi: ExtensionAPI) {
   pi.on("context_with_system", (event, ctx) => {
     const sm = ctx.sessionManager as SessionManager;
     const sessionId = sm.getSessionId();
+    // Before the guard's early returns: every request refreshes the head a
+    // later fold replays.
+    captureSystemHead(sm, sessionId, ctx.model, event.messages);
     const at = rewindCompactionTarget(sm, sessionId, ctx.model);
     if (!at || !ctx.signal || ctx.signal.aborted) return;
     const inputEstimate = requestAccounting(sm, event.messages).tokens;
@@ -5648,6 +6232,10 @@ export const __testHooks = {
   captureSession,
   countBackgroundMessages,
   findInFlightAssistantToolCalls,
+  /** The independent-fold entry points of the extension instance registered on `pi`. */
+  foldApi(pi: ExtensionAPI): FoldApi | undefined {
+    return foldApis.get(pi);
+  },
   /** Read-only view of captured-session ref count for reaping assertions. */
   sessionRefCount(): number {
     return sessionInstances.length;

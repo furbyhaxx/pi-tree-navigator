@@ -33,6 +33,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import {
+  type AssistantMessage,
+  type Context,
+  createAssistantMessageEventStream,
+  type SimpleStreamOptions,
+} from "@earendil-works/pi-ai";
 import { streamSimple as streamGoogle } from "@earendil-works/pi-ai/api/google-generative-ai";
 import { streamSimple } from "@earendil-works/pi-ai/api/openai-completions";
 import { normalizeContext } from "@earendil-works/pi-ai/utils/transcript";
@@ -13245,5 +13251,608 @@ describe("continuity capture", () => {
         },
       );
     });
+  });
+});
+
+// =============================================================================
+// Independent folds from the extension (engine host)
+//
+// A fold is summarized by registry side calls, never by a main-agent turn, so
+// it works for a session whose next main request the admission guard would
+// refuse. Nothing is written before the commit.
+// =============================================================================
+
+describe("independent folds through the engine host", () => {
+  const WINDOW = 100_000;
+  /** The guard refuses a request unless it leaves the minimum output plus the headroom. */
+  const GUARD_RESERVE = 1_024 + 4_096;
+  const SYSTEM_MESSAGE = {
+    role: "system",
+    content: "You are the pi agent.",
+    timestamp: 0,
+  };
+  const FOLD = {
+    origin: "manual",
+    rewindTo: "start",
+    newLabel: "folded",
+    focus:
+      "Continue the parser fix; the user's last instruction was to keep the tests green.",
+  } as const;
+
+  interface RegistryCall {
+    model: unknown;
+    context: Context;
+    options: SimpleStreamOptions;
+  }
+
+  function reply(
+    text: string,
+    stopReason: "stop" | "error" | "aborted" = "stop",
+    errorMessage?: string,
+  ): AssistantMessage {
+    return {
+      role: "assistant",
+      content: [{ type: "text", text }],
+      api: "anthropic",
+      provider: "claude",
+      model: "claude-sonnet-4-5",
+      stopReason,
+      errorMessage,
+      timestamp: Date.now(),
+      usage: usageOf(10),
+    } as unknown as AssistantMessage;
+  }
+
+  /** A fake `modelRegistry` recording every side call; `respond` scripts the answer. */
+  function fakeRegistry(
+    respond: (
+      call: RegistryCall,
+      index: number,
+    ) => AssistantMessage | Promise<AssistantMessage> = () =>
+      reply(SUMMARY_TEXT),
+  ) {
+    const calls: RegistryCall[] = [];
+    const registry = {
+      hasConfiguredAuth: () => true,
+      streamSimple(
+        model: unknown,
+        context: Context,
+        options: SimpleStreamOptions,
+      ) {
+        const call = { model, context, options };
+        const index = calls.push(call) - 1;
+        const stream = createAssistantMessageEventStream();
+        void Promise.resolve(respond(call, index)).then((message) =>
+          stream.end(message),
+        );
+        return stream;
+      },
+    };
+    return { calls, registry };
+  }
+
+  /**
+   * An anchored session of five heavy turns. `leafTokens` is the usage the
+   * newest assistant reports: 99k leaves the next main request over the guard.
+   */
+  async function foldSetup(leafTokens: number) {
+    const fixture = makeConfigFixture();
+    writeGlobalConfig(
+      fixture,
+      JSON.stringify({ rewindHintReserveTokens: 20_000 }),
+    );
+    const f = setup({ contextWindow: WINDOW });
+    (f.ctx.model as { maxTokens?: number }).maxTokens = 64_000;
+    f.ctx.cwd = fixture.projectDir;
+    await runSessionStart(f.pi, f.ctx, fixture);
+    const first = appendTurn(f.sm, "u1", "a1", 5_000);
+    f.pi.pi.setLabel(first.assistantId, "anchor:start");
+    let leafId = first.assistantId;
+    for (const [i, tokens] of [
+      12_000,
+      24_000,
+      36_000,
+      48_000,
+      leafTokens,
+    ].entries()) {
+      leafId = appendTurn(
+        f.sm,
+        `u${i + 2}`,
+        `a${i + 2}`,
+        tokens,
+        true,
+      ).assistantId;
+    }
+    // pi persists a message sent while idle, without starting a turn.
+    const hooks = f.pi.pi as unknown as Record<string, unknown>;
+    hooks.sendMessage = (...args: unknown[]) => {
+      f.pi.sendMessageCalls.push(args);
+      const [m] = args as [
+        {
+          customType: string;
+          content: string;
+          display: boolean;
+          details: unknown;
+        },
+      ];
+      f.sm.appendCustomMessageEntry(
+        m.customType,
+        m.content,
+        m.display,
+        m.details,
+      );
+    };
+    hooks.getThinkingLevel = () => "medium";
+    const api = __testHooks.foldApi(f.pi.pi);
+    assert.ok(api, "the factory exposes its fold entry points");
+    return { ...f, fixture, api, anchorId: first.assistantId, leafId };
+  }
+  type FoldFixture = Awaited<ReturnType<typeof foldSetup>>;
+
+  const foldCtx = (f: { ctx: FakeCtx }, registry: object, extra: object = {}) =>
+    ({
+      ...f.ctx,
+      modelRegistry: registry,
+      isIdle: () => true,
+      ...extra,
+    }) as FakeCtx & {
+      modelRegistry: object;
+      isIdle(): boolean;
+    };
+
+  const snapshotOf = (sm: SessionManager) => ({
+    entries: sm.getEntries().map((entry) => entry.id),
+    leaf: sm.getLeafId(),
+  });
+
+  /** Fire the admission guard as the next main request would; true when it aborts the request. */
+  async function guardAborts(f: FoldFixture, ctx: FakeCtx): Promise<boolean> {
+    const aborter = new AbortController();
+    const messages = [SYSTEM_MESSAGE, ...fireContext(f.pi, ctx)];
+    for (const handler of f.pi.onCalls.get("context_with_system") ?? []) {
+      await handler(
+        { type: "context_with_system", messages } as never,
+        {
+          ...ctx,
+          signal: aborter.signal,
+          abort: () => aborter.abort(),
+        } as never,
+      );
+    }
+    return aborter.signal.aborted;
+  }
+
+  /** The summary landed as a new branch from the anchor, and the old leaf is marked. */
+  function assertFolded(f: FoldFixture) {
+    const summary = f.sm.getBranch().find((e) => e.type === "branch_summary");
+    assert.ok(summary, "a branch_summary is on the active branch");
+    assert.equal(summary.parentId, f.anchorId);
+    assert.equal(f.sm.getLabel(f.leafId), "branch:folded");
+    assert.equal(f.sm.getLabel(summary.id), "anchor:folded");
+    assert.ok(!f.sm.getBranch().some((e) => e.id === f.leafId));
+    assert.ok(
+      estimateAdmissionTokens(f.sm) + GUARD_RESERVE <= WINDOW,
+      "the next main request is admitted",
+    );
+    return summary;
+  }
+
+  /** No in-band machinery ran: no instruction message, no user message, no turn started. */
+  function assertNoSummaryTurn(f: FoldFixture, registryCalls: RegistryCall[]) {
+    assert.ok(
+      f.sm
+        .getEntries()
+        .every(
+          (e) =>
+            !(
+              e.type === "custom_message" &&
+              e.customType === SUMMARY_REQUEST_CUSTOM_TYPE
+            ),
+        ),
+    );
+    assert.equal(f.pi.sendUserMessageCalls.length, 0);
+    for (const args of f.pi.sendMessageCalls) {
+      assert.deepEqual(args[1], { triggerTurn: false });
+    }
+    assert.ok(registryCalls.length > 0);
+    for (const call of registryCalls) {
+      assert.equal(call.options.toolChoice, "none");
+      assert.equal(call.options.sessionId, f.sm.getSessionId());
+    }
+  }
+
+  const leafMessage = (f: FoldFixture) => {
+    const entry = f.sm.getEntry(f.leafId);
+    assert.equal(entry?.type, "message");
+    return (entry as { message: unknown }).message;
+  };
+
+  const receiptsOf = (sm: SessionManager) =>
+    sm
+      .getEntries()
+      .flatMap((entry) =>
+        entry.type === "custom_message" &&
+        entry.customType === REWIND_CUSTOM_TYPE
+          ? [entry]
+          : [],
+      );
+
+  it("folds an idle session whose next main request the guard refuses, with side calls only", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      const registry = fakeRegistry();
+      const ctx = foldCtx(f, registry.registry);
+      assert.equal(
+        await guardAborts(f, ctx),
+        true,
+        "the guard refuses the next request",
+      );
+      const before = snapshotOf(f.sm);
+
+      const outcome = await f.api.runFoldNow(ctx as never, FOLD);
+
+      assert.equal(outcome.status, "done", JSON.stringify(outcome));
+      if (outcome.status !== "done") return;
+      assert.equal(
+        outcome.strategy,
+        "chunked",
+        "the live request cannot be admitted",
+      );
+      assertFolded(f);
+      assertNoSummaryTurn(f, registry.calls);
+      assert.equal(registry.calls[0].options.reasoning, "medium");
+      const receipt = receiptsOf(f.sm).at(-1);
+      assert.equal(
+        f.sm.getLeafId(),
+        receipt?.id,
+        "the continuation ends the new branch",
+      );
+      assert.equal((receipt?.details as { status?: string }).status, "done");
+      assert.deepEqual(
+        before.entries,
+        snapshotOf(f.sm).entries.slice(0, before.entries.length),
+        "the abandoned branch is kept on disk",
+      );
+      assert.equal(await guardAborts(f, ctx), false, "the next request fits");
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("folds at the next turn_end boundary of a running session and continues the run", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      assert.ok(estimateAdmissionTokens(f.sm) + GUARD_RESERVE > WINDOW);
+      const registry = fakeRegistry();
+      const ctx = foldCtx(f, registry.registry);
+      assert.deepEqual(f.api.queueFold(f.sm.getSessionId(), FOLD), {
+        ok: true,
+      });
+      assert.equal(
+        registry.calls.length,
+        0,
+        "nothing runs before the boundary",
+      );
+
+      const result = await fireTurnEndAll(f.pi, ctx, leafMessage(f));
+
+      assert.equal(result.continue, true);
+      assertFolded(f);
+      assertNoSummaryTurn(f, registry.calls);
+      assert.equal(
+        f.pi.sendMessageCalls.length,
+        0,
+        "the receipt is a boundary entry",
+      );
+      const [done] = result.entries.filter(
+        (d) => d.customType === REWIND_CUSTOM_TYPE,
+      );
+      assert.equal(done.details.status, "done");
+      assert.equal(f.sm.getLeafId(), receiptsOf(f.sm).at(-1)?.id);
+      assert.equal(await guardAborts(f, ctx), false, "the next request fits");
+
+      const again = await fireTurnEndAll(
+        f.pi,
+        ctx,
+        assistantMessage([], "stop", 0),
+      );
+      assert.deepEqual(again.entries, [], "the fold ran once");
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("replays the captured system head in context (Strategy A) when the request is admitted", async () => {
+    const f = await foldSetup(40_000);
+    try {
+      const registry = fakeRegistry();
+      const ctx = foldCtx(f, registry.registry);
+      assert.equal(await guardAborts(f, ctx), false);
+      const liveMessages = __testHooks.buildContextMessages(f.sm).length;
+
+      const outcome = await f.api.runFoldNow(ctx as never, FOLD);
+
+      assert.equal(outcome.status, "done", JSON.stringify(outcome));
+      if (outcome.status !== "done") return;
+      assert.equal(outcome.strategy, "in-context");
+      assert.equal(registry.calls.length, 1);
+      const { messages } = registry.calls[0].context;
+      assert.equal(messages[0], SYSTEM_MESSAGE);
+      const last = messages.at(-1);
+      assert.equal(last?.role, "user");
+      assert.match(
+        JSON.stringify(last),
+        /^\{"role":"user","content":\[\{"type":"text","text":"\[navigate_tree\]/,
+      );
+      assert.equal(messages.length, 1 + liveMessages + 1);
+      assert.match(
+        JSON.stringify(last),
+        /messages 3 onwards/,
+        "the system head is not numbered; the anchor ends message 2",
+      );
+      assertFolded(f);
+      assertNoSummaryTurn(f, registry.calls);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("chunks the evidence (Strategy B) without a captured system head, and after a session start", async () => {
+    for (const captured of [false, true]) {
+      const f = await foldSetup(40_000);
+      try {
+        const registry = fakeRegistry();
+        const ctx = foldCtx(f, registry.registry);
+        if (captured) {
+          await guardAborts(f, ctx);
+          await runSessionStart(f.pi, f.ctx, f.fixture, "resume");
+        }
+        const outcome = await f.api.runFoldNow(ctx as never, FOLD);
+        assert.equal(outcome.status, "done", JSON.stringify(outcome));
+        if (outcome.status !== "done") return;
+        assert.equal(outcome.strategy, "chunked");
+        assert.ok(outcome.calls >= 2, "a map call and the reduce");
+        assertFolded(f);
+        assertNoSummaryTurn(f, registry.calls);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    }
+  });
+
+  it("leaves the history exactly as found when the provider fails, on both paths", async () => {
+    const failing = () => fakeRegistry(() => reply("", "error", "overloaded"));
+    {
+      const f = await foldSetup(99_000);
+      try {
+        const registry = failing();
+        const before = snapshotOf(f.sm);
+        const outcome = await f.api.runFoldNow(
+          foldCtx(f, registry.registry) as never,
+          FOLD,
+        );
+        assert.equal(outcome.status, "failed");
+        if (outcome.status !== "failed") return;
+        assert.equal(outcome.stage, "summary");
+        assert.equal(outcome.reason, "provider-error");
+        assert.deepEqual(snapshotOf(f.sm), before);
+        assert.equal(f.pi.sendMessageCalls.length, 0);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    }
+    const f = await foldSetup(99_000);
+    try {
+      const registry = failing();
+      const ctx = foldCtx(f, registry.registry);
+      const before = snapshotOf(f.sm);
+      f.api.queueFold(f.sm.getSessionId(), { ...FOLD, origin: "agent" });
+      const result = await fireTurnEndAll(f.pi, ctx, leafMessage(f));
+      assert.equal(
+        result.continue,
+        true,
+        "the model that asked hears about it",
+      );
+      const [receipt] = result.entries;
+      assert.equal(receipt.details.status, "failed");
+      assert.equal(receipt.details.stage, "summary");
+      assert.equal(receipt.details.reason, "provider-error");
+      assert.match(receipt.content, /Nothing was collapsed/);
+      const after = snapshotOf(f.sm);
+      assert.deepEqual(
+        after.entries.slice(0, before.entries.length),
+        before.entries,
+      );
+      assert.equal(
+        after.entries.length,
+        before.entries.length + 1,
+        "only the receipt was added",
+      );
+      assert.equal(
+        f.sm.getBranch().some((e) => e.type === "branch_summary"),
+        false,
+      );
+      assert.equal(f.sm.getLabel(f.leafId), undefined);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("cancels before the commit and leaves the history as found", async () => {
+    {
+      const f = await foldSetup(99_000);
+      try {
+        const controller = new AbortController();
+        const registry = fakeRegistry(() => {
+          controller.abort();
+          return reply("", "aborted");
+        });
+        const before = snapshotOf(f.sm);
+        const outcome = await f.api.runFoldNow(
+          foldCtx(f, registry.registry) as never,
+          FOLD,
+          { signal: controller.signal },
+        );
+        assert.equal(outcome.status, "cancelled");
+        assert.deepEqual(snapshotOf(f.sm), before);
+        assert.equal(f.pi.sendMessageCalls.length, 0);
+      } finally {
+        cleanupConfigFixture(f.fixture);
+      }
+    }
+    // Esc during the run: the queued fold is cancelled at the boundary, with no side call.
+    const f = await foldSetup(99_000);
+    try {
+      const registry = fakeRegistry();
+      const controller = new AbortController();
+      controller.abort();
+      const ctx = foldCtx(f, registry.registry, { signal: controller.signal });
+      const before = snapshotOf(f.sm);
+      f.api.queueFold(f.sm.getSessionId(), FOLD);
+      const result = await fireTurnEndAll(f.pi, ctx, leafMessage(f));
+      assert.equal(registry.calls.length, 0);
+      const [receipt] = result.entries;
+      assert.equal(receipt.details.status, "failed");
+      assert.equal(receipt.details.reason, "cancelled");
+      assert.deepEqual(
+        snapshotOf(f.sm).entries.slice(0, before.entries.length),
+        before.entries,
+      );
+      assert.equal(
+        f.sm.getBranch().some((e) => e.type === "branch_summary"),
+        false,
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("re-appends input that arrives during the summary instead of folding it away", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      const registry = fakeRegistry((_call, index) => {
+        if (index === 0) {
+          f.sm.appendMessage({
+            role: "user",
+            content: [{ type: "text", text: "late steer" }],
+            timestamp: Date.now(),
+          } as never);
+        }
+        return reply(SUMMARY_TEXT);
+      });
+      const outcome = await f.api.runFoldNow(
+        foldCtx(f, registry.registry) as never,
+        FOLD,
+      );
+      assert.equal(outcome.status, "done", JSON.stringify(outcome));
+      if (outcome.status !== "done") return;
+      assert.equal(outcome.commit.reappended, 1);
+      const tail = f.sm.getBranch().slice(-4);
+      assert.deepEqual(
+        tail.map((e) => e.type),
+        ["branch_summary", "label", "message", "custom_message"],
+      );
+      assert.match(JSON.stringify(tail[2]), /late steer/);
+      assert.ok(
+        JSON.stringify(tail[3]).includes(
+          JSON.stringify(buildLateEntriesNote(1)).slice(1, -1),
+        ),
+        "the continuation names the late message as unanswered",
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("refuses a missing or pre-compaction anchor before any side call", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      const registry = fakeRegistry();
+      const ctx = foldCtx(f, registry.registry);
+      const before = snapshotOf(f.sm);
+      const outcome = await f.api.runFoldNow(ctx as never, {
+        ...FOLD,
+        rewindTo: "nowhere",
+      });
+      assert.equal(outcome.status, "failed");
+      if (outcome.status !== "failed") return;
+      assert.equal(outcome.stage, "gate");
+      assert.match(outcome.detail, /no label 'nowhere' on the active branch/);
+      assert.equal(registry.calls.length, 0);
+      assert.deepEqual(snapshotOf(f.sm), before);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+
+    const g = setup({ contextWindow: WINDOW });
+    const early = appendTurn(g.sm, "u1", "a1", 0);
+    g.pi.pi.setLabel(early.assistantId, "anchor:early");
+    for (const n of [2, 3, 4]) appendTurn(g.sm, `u${n}`, `a${n}`, 0, true);
+    const cut = appendTurn(g.sm, "u5", "a5", 0, true);
+    g.pi.pi.setLabel(cut.assistantId, "anchor:before-cut");
+    g.sm.appendCompaction("Compacted summary", cut.userId, 0);
+    appendTurn(g.sm, "u6", "a6", 0, true);
+    const registry = fakeRegistry();
+    const before = snapshotOf(g.sm);
+    const outcome = await __testHooks
+      .foldApi(g.pi.pi)
+      ?.runFoldNow(foldCtx(g, registry.registry) as never, {
+        ...FOLD,
+        rewindTo: "before-cut",
+      });
+    assert.equal(outcome?.status, "failed");
+    if (outcome?.status !== "failed") return;
+    assert.match(outcome.detail, /lies before the latest compaction/);
+    assert.equal(registry.calls.length, 0);
+    assert.deepEqual(snapshotOf(g.sm), before);
+  });
+
+  it("serializes folds per session and defers to a pending in-band rewind", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const registry = fakeRegistry(async (_call, index) => {
+        if (index === 0) await gate;
+        return reply(SUMMARY_TEXT);
+      });
+      const ctx = foldCtx(f, registry.registry);
+      const sessionId = f.sm.getSessionId();
+      const first = f.api.runFoldNow(ctx as never, FOLD);
+      assert.deepEqual(
+        await f.api.runFoldNow(ctx as never, { ...FOLD, newLabel: "other" }),
+        {
+          status: "busy",
+        },
+      );
+      assert.deepEqual(f.api.queueFold(sessionId, FOLD), {
+        ok: false,
+        reason: "a fold is already queued or running for this session",
+      });
+      release();
+      assert.equal((await first).status, "done");
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+
+    const g = await foldSetup(99_000);
+    try {
+      await requestRewind(g, { ...REWIND_ARGS, newLabel: "inband" });
+      const registry = fakeRegistry();
+      assert.deepEqual(g.api.queueFold(g.sm.getSessionId(), FOLD), {
+        ok: false,
+        reason: "an in-band rewind is pending",
+      });
+      const outcome = await g.api.runFoldNow(
+        foldCtx(g, registry.registry) as never,
+        FOLD,
+      );
+      assert.equal(outcome.status, "failed");
+      assert.equal(registry.calls.length, 0);
+    } finally {
+      cleanupConfigFixture(g.fixture);
+    }
   });
 });
