@@ -1,5 +1,8 @@
 import type { ClassifierContext } from "@earendil-works/pi-ai";
-import type { MilestoneRecord } from "../../extensions/navigate-tree/milestone-classifier.ts";
+import type {
+  MilestoneRecord,
+  MilestoneStructure,
+} from "../../extensions/navigate-tree/milestone-classifier.ts";
 
 /** The independent decisions measured by this benchmark. */
 export type EvalTask =
@@ -34,6 +37,8 @@ export type EvalInput =
       type: "milestone";
       lastAnchor?: string;
       records: MilestoneRecord[];
+      /** Session structure shown with the records; absent in the base request. */
+      structure?: MilestoneStructure;
     };
 
 /** A synthetic evaluation case; expected answers must never enter a model request. */
