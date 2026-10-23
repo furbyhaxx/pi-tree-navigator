@@ -4433,72 +4433,78 @@ export default function (pi: ExtensionAPI) {
       refuse(cut.detail);
       return;
     }
-    const focus = defaultFoldFocus(sm);
-    const candidates = priceFoldCandidates(sm, {
-      model,
-      handoffMode: parentModes.get(sessionId) ?? "full",
-      captured: capturedSystems.get(sessionId),
-      focus,
-      suggestLabel: (name) => suggestFoldLabel(sm, name),
-      foldPointId: cut.foldPointId,
-    });
-    const selected = selectFoldTarget(
-      candidates,
-      foldRecommendationBudget(
-        contextWindow,
-        resolveRewindHintReserve(
-          {
-            rewindHintReserveTokens,
-            rewindHintModelReserveTokens: hintByModel,
-          },
-          `${model.provider}/${model.id}`,
+    try {
+      const focus = defaultFoldFocus(sm);
+      const candidates = priceFoldCandidates(sm, {
+        model,
+        handoffMode: parentModes.get(sessionId) ?? "full",
+        captured: capturedSystems.get(sessionId),
+        focus,
+        suggestLabel: (name) => suggestFoldLabel(sm, name),
+        foldPointId: cut.foldPointId,
+      });
+      const selected = selectFoldTarget(
+        candidates,
+        foldRecommendationBudget(
+          contextWindow,
+          resolveRewindHintReserve(
+            {
+              rewindHintReserveTokens,
+              rewindHintModelReserveTokens: hintByModel,
+            },
+            `${model.provider}/${model.id}`,
+          ),
         ),
-      ),
-    );
-    if (!selected.ok) {
-      refuse(selected.reasons.join("; "));
-      return;
-    }
-    const request: FoldRequest = {
-      sessionId,
-      origin: "recovery",
-      rewindTo: selected.candidate.name,
-      newLabel: selected.candidate.suggestedLabel,
-      focus,
-    };
-    recoveryCuts.set(sessionId, cut.foldPointId);
-    let outcome: FoldResult;
-    try {
-      outcome = await runFold(host, request, { signal });
-    } finally {
-      recoveryCuts.delete(sessionId);
-    }
-    if (signal?.aborted || outcome.status === "cancelled") return;
-    if (outcome.status !== "done") {
+      );
+      if (!selected.ok) {
+        refuse(selected.reasons.join("; "));
+        return;
+      }
+      const request: FoldRequest = {
+        sessionId,
+        origin: "recovery",
+        rewindTo: selected.candidate.name,
+        newLabel: selected.candidate.suggestedLabel,
+        focus,
+      };
+      recoveryCuts.set(sessionId, cut.foldPointId);
+      let outcome: FoldResult;
+      try {
+        outcome = await runFold(host, request, { signal });
+      } finally {
+        recoveryCuts.delete(sessionId);
+      }
+      if (signal?.aborted || outcome.status === "cancelled") return;
+      if (outcome.status !== "done") {
+        refuse(
+          outcome.status === "failed"
+            ? `${outcome.reason}: ${outcome.detail}`
+            : outcome.status,
+        );
+        return;
+      }
+      const draft = foldDoneDraft(request, outcome);
+      try {
+        sm.appendCustomMessageEntry(
+          draft.customType,
+          draft.content,
+          draft.display,
+          draft.details,
+        );
+      } catch {
+        // The fold landed; the returned projection still carries the request.
+      }
+      refreshAgentMessages(sm);
+      try {
+        return { messages: [...systemHead, ...buildContextMessages(sm)] };
+      } catch {
+        refuse("the recovered projection could not be built");
+        return;
+      }
+    } catch (error) {
       refuse(
-        outcome.status === "failed"
-          ? `${outcome.reason}: ${outcome.detail}`
-          : outcome.status,
+        `independent recovery failed: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return;
-    }
-    const draft = foldDoneDraft(request, outcome);
-    try {
-      sm.appendCustomMessageEntry(
-        draft.customType,
-        draft.content,
-        draft.display,
-        draft.details,
-      );
-    } catch {
-      // The fold landed; the returned projection still carries the request.
-    }
-    refreshAgentMessages(sm);
-    try {
-      return { messages: [...systemHead, ...buildContextMessages(sm)] };
-    } catch {
-      refuse("the recovered projection could not be built");
-      return;
     }
   });
 

@@ -368,6 +368,32 @@ describe("production preflight recovery", () => {
     );
   });
 
+  it("contains candidate-pricing failures without dispatching an oversized request", async () => {
+    await withSession("recover", async ({ sm, prompt, calls }) => {
+      sm.getLabel = () => {
+        throw new Error("candidate labels unavailable");
+      };
+      await prompt(REQUEST);
+      assert.equal(
+        calls.filter((call) => !call.side && !call.aborted).length,
+        0,
+      );
+      assert.equal(
+        sm.getBranch().some((entry) => entry.type === "branch_summary"),
+        false,
+      );
+      const receipts = sm
+        .getBranch()
+        .filter(
+          (entry) =>
+            entry.type === "custom_message" &&
+            entry.customType === "navigate-tree-rewind",
+        );
+      assert.equal(receipts.length, 1);
+      assert.match(JSON.stringify(receipts[0]), /candidate labels unavailable/);
+    });
+  });
+
   it("persists one receipt and does not call the main model when no anchor is valid", async () => {
     await withSession("no-anchor", async ({ sm, prompt, calls }) => {
       await prompt(REQUEST);
