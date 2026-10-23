@@ -29,12 +29,15 @@ const observation = (
 ): EvalObservation => ({
   caseId: fixture.id,
   model: "fixture/model",
+  adapter: "decisions",
   repetition: 0,
   status: "ok",
   answers: { action: { choice: "wait", confidence: 0.6 } },
   durationMs: 20,
   costUsd: 0.001,
   costBoundUsd: 0.002,
+  costSource: "generation",
+  startedAt: "2026-10-23T00:00:00.000Z",
   ...overrides,
 });
 
