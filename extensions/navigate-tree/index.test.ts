@@ -38,6 +38,7 @@ import { streamSimple } from "@earendil-works/pi-ai/api/openai-completions";
 import { normalizeContext } from "@earendil-works/pi-ai/utils/transcript";
 import {
   type AgentSession,
+  buildSessionContext,
   CONFIG_DIR_NAME,
   type ContextUsage,
   type ExtensionAPI,
@@ -52,7 +53,10 @@ import {
   START_ANCHOR_MIN_TURNS,
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
-import { splitContextEstimate } from "./context-tokens.ts";
+import {
+  estimateContentTokens,
+  splitContextEstimate,
+} from "./context-tokens.ts";
 import { renderBriefing } from "./continuity-briefing.ts";
 import {
   LEDGER_DETAILS_KEY,
@@ -65,7 +69,7 @@ import {
   readBranchLedger,
   type StoredOp,
 } from "./continuity-store.ts";
-import { MAX_NAME_LENGTH, TOOL_NAME } from "./helpers.ts";
+import { formatPct1, MAX_NAME_LENGTH, TOOL_NAME } from "./helpers.ts";
 import navigateTree, {
   __testHooks,
   ANCHOR_MANDATE,
@@ -10101,6 +10105,37 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
+  it("auto_navigate withholds a rewind steer to an anchor before the latest compaction", async () => {
+    let rewindTo = "planned";
+    const f = await autoFixture(
+      async () =>
+        JSON.stringify({
+          action: "rewind",
+          rewind_to: rewindTo,
+          new_label: "folded-work",
+          summary_focus:
+            "The user asked to continue. Work is complete and verified; preserve its facts and proceed with the remaining task.",
+        }),
+      { check_every_turns: 1 },
+    );
+    const steers = (boundary: BoundaryResult) =>
+      boundary.entries.filter(
+        (e) => e.customType === "navigate-tree-auto-rewind",
+      );
+    try {
+      const planned = appendTurn(f.sm, "old work", "ready", 90_000);
+      f.pi.pi.setLabel(planned.assistantId, "anchor:planned");
+      f.sm.appendCompaction("Compacted summary", planned.userId, 90_000);
+      const fresh = appendTurn(f.sm, "new work", "ready", 20_000);
+      f.pi.pi.setLabel(fresh.assistantId, "anchor:fresh");
+      assert.deepEqual(steers(await autoTurn(f, 92_000)), []);
+      rewindTo = "fresh";
+      assert.equal(steers(await autoTurn(f, 93_000)).length, 1);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("auto_navigate discards a decision after new input arrives during its request", async () => {
     let release: (text: string) => void = () => {};
     let started: () => void = () => {};
@@ -10254,35 +10289,177 @@ Active anchors (root → leaf, % of 100k):
     }
   });
 
-  it("allows rewinding to a pre-compaction anchor without false negative savings", async () => {
-    const { sm, pi, tool, ctx } = setup({ contextWindow: 1_000_000 });
-    const t1 = appendTurn(sm, "u1", "a1", 200_000);
-    pi.pi.setLabel(t1.assistantId, "anchor:plan-published");
-    const t2 = appendTurn(sm, "u2", "a2", 280_000);
-    sm.appendCompaction("Compacted summary", t2.userId, 280_000);
-    appendTurn(sm, "u3", "a3", 60_000);
-    appendTurn(sm, "u4", "a4", 65_000);
-    const res = await tool.execute(
-      "tc-post-compact",
-      {
-        action: "rewind",
-        rewindTo: "plan-published",
-        newLabel: "wave-done",
-        summaryFocus:
-          "1. User instruction verbatim: approved, go ahead. 2. Done: completed wave 1 units. 3. Next: finish wave 2.",
-      },
-      undefined,
-      undefined,
-      ctx,
-    );
-    assert.equal(res.isError, undefined);
-    assert.ok(
-      (res.details as { contextBefore: number; tokensAtTarget: number })
-        .contextBefore -
-        (res.details as { contextBefore: number; tokensAtTarget: number })
-          .tokensAtTarget >=
-        4_000,
-    );
+  describe("anchors before a compaction", () => {
+    const WINDOW = 100_000;
+
+    /**
+     * Five pre-compaction turns (the compaction keeps only the fifth), then two
+     * more. Zero recorded usage by default, so the request-time estimate and the
+     * fold gate price the same characters.
+     */
+    function compactedSession(usageOf = (_turn: number) => 0) {
+      const f = setup({ contextWindow: WINDOW });
+      const early = appendTurn(f.sm, "u1", "a1", usageOf(1));
+      f.pi.pi.setLabel(early.assistantId, "anchor:early");
+      for (const n of [2, 3, 4])
+        appendTurn(f.sm, `u${n}`, `a${n}`, usageOf(n), true);
+      const cut = appendTurn(f.sm, "u5", "a5", usageOf(5), true);
+      f.pi.pi.setLabel(cut.assistantId, "anchor:before-cut");
+      f.sm.appendCompaction("Compacted summary", cut.userId, 0);
+      const late = appendTurn(f.sm, "u6", "a6", usageOf(6), true);
+      f.pi.pi.setLabel(late.assistantId, "anchor:after-cut");
+      appendTurn(f.sm, "u7", "a7", usageOf(7), true);
+      return {
+        ...f,
+        ids: {
+          early: early.assistantId,
+          cut: cut.assistantId,
+          late: late.assistantId,
+        },
+      };
+    }
+
+    /** What a fold at `entryId` leaves before any handoff: Pi's own context at that leaf. */
+    const footprintAt = (sm: SessionManager, entryId: string) =>
+      estimateContentTokens(
+        buildSessionContext(sm.getEntries(), entryId).messages,
+      );
+
+    const parentOf = (sm: SessionManager, entryId: string) => {
+      const parentId = sm.getEntry(entryId)?.parentId;
+      assert.ok(parentId);
+      return parentId;
+    };
+
+    const foldArgs = (rewindTo: string) => ({
+      ...REWIND_ARGS,
+      rewindTo,
+      newLabel: "folded",
+    });
+
+    it("lists a pre-compaction anchor at its un-compacted footprint, not the compaction baseline", async () => {
+      const { sm, tool, ctx, ids } = compactedSession();
+      const res = await tool.execute(
+        "tc-list",
+        { action: "list" },
+        undefined,
+        undefined,
+        ctx,
+      );
+      const text = res.content[0].text;
+      for (const [name, id] of [
+        ["early", ids.early],
+        ["before-cut", ids.cut],
+        ["after-cut", ids.late],
+      ]) {
+        const pct = formatPct1(footprintAt(sm, id), WINDOW).replace(".", "\\.");
+        assert.match(text, new RegExp(`${pct}\\s+${name}\\b`), text);
+      }
+      assert.ok(
+        footprintAt(sm, ids.cut) >
+          estimateContentTokens(sm.buildSessionContext().messages),
+        "the fixture's pre-compaction anchor costs more than the compacted context",
+      );
+    });
+
+    it("flags in /anchor list only the pre-compaction anchors a fold cannot free", async () => {
+      const f = compactedSession();
+      const ctx = makeCtx(f.sm, { contextWindow: WINDOW, hasUI: false });
+      const command = f.pi.commands.get("anchor");
+      assert.ok(command);
+      await command.handler("list", ctx as unknown as ExtensionCommandContext);
+      const lines = ctx.notifyCalls[0][0].split("\n");
+      const row = (name: string) =>
+        lines.find((line) => line.includes(` ${name} `)) ?? "";
+      assert.match(row("before-cut"), /−0 savable {2}\(before compaction\)$/);
+      assert.match(row("early"), /savable$/);
+      assert.match(row("after-cut"), /savable$/);
+    });
+
+    it("refuses a fold to a pre-compaction anchor at request time, before any summary turn", async () => {
+      const f = compactedSession();
+      const { result, callId } = await requestRewind(
+        f,
+        foldArgs("before-cut"),
+        "tc-cut",
+        0,
+      );
+      assert.equal(result.isError, true);
+      assert.equal(result.details.rejected, "min-savings");
+      assert.match(result.content[0].text, /lies before the latest compaction/);
+      assert.equal(
+        result.details.apparentSavings,
+        footprintAt(f.sm, parentOf(f.sm, callId)) -
+          footprintAt(f.sm, f.ids.cut),
+      );
+      assert.ok(Number(result.details.apparentSavings) < 0);
+      assert.deepEqual(
+        f.pi.boundaryResults.flatMap((r) =>
+          r.entries.filter((d) => d.customType === SUMMARY_REQUEST_CUSTOM_TYPE),
+        ),
+        [],
+      );
+      assert.equal(fireToolCall(f.pi, f.ctx), undefined, "no fold is pending");
+    });
+
+    for (const [anchor, key] of [
+      ["after-cut", "late"],
+      ["early", "early"],
+    ] as const) {
+      it(`prices '${anchor}' by the footprint its fold leaves, so the gate agrees`, async () => {
+        const f = compactedSession();
+        const { result, callId } = await requestRewind(
+          f,
+          foldArgs(anchor),
+          "tc-fold",
+          0,
+        );
+        assert.equal(result.isError, undefined);
+        const priced = footprintAt(f.sm, f.ids[key]);
+        const before = footprintAt(f.sm, parentOf(f.sm, callId));
+        assert.equal(result.details.tokensAtTarget, priced);
+        assert.equal(result.details.contextBefore, before);
+
+        await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
+        const done = rewindMessages(f.pi).at(-1)?.message;
+        assert.equal(done?.details.status, "done");
+        assert.equal(done?.details.foldEstimateBefore, before);
+        assert.ok(Number(done?.details.foldEstimateAfter) > priced);
+        const messages = f.sm.buildSessionContext().messages;
+        const handoffAt = messages.findIndex(
+          (m) =>
+            m.role === "custom" && m.customType === "navigate-tree-handoff",
+        );
+        assert.ok(handoffAt > 0);
+        assert.equal(
+          estimateContentTokens(messages.slice(0, handoffAt)),
+          priced,
+        );
+      });
+    }
+
+    it("names the compaction when the gate refuses a pre-compaction target that recorded usage under-priced", async () => {
+      const f = compactedSession((turn) =>
+        turn <= 5 ? 6_000 : turn === 6 ? 20_000 : 30_000,
+      );
+      const { result } = await requestRewind(
+        f,
+        foldArgs("before-cut"),
+        "tc-cut",
+        0,
+      );
+      assert.equal(result.isError, undefined, "usage prices the target low");
+      await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
+      assert.equal(
+        f.sm.getEntries().filter((entry) => entry.type === "branch_summary")
+          .length,
+        0,
+      );
+      assert.match(
+        String(outcomeEntries(f.sm).at(-1)?.reason),
+        /'before-cut' lies before the latest compaction.*\(estimated \d+ -> \d+ tokens\); original history was kept/,
+      );
+    });
   });
 
   it("gate: only a direct rewind passes; blocked calls terminate the batch", async () => {

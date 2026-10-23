@@ -701,66 +701,63 @@ function estimateActiveBranchTokens(sm: SessionManager): number {
   return estimateContextTokens(sm.buildSessionContext().messages);
 }
 
+/**
+ * The messages a branch rooted at `entryId` would carry: what a fold to that
+ * entry leaves behind before its handoff is added. `completeRewind` projects
+ * its preview the same way, so a compaction on the active branch only counts
+ * when `entryId` lies after it.
+ */
+function projectAtEntry(
+  entries: SessionEntry[],
+  entryId: string,
+  byId: Map<string, SessionEntry>,
+): AgentMessage[] {
+  return projectHandoffs(
+    buildSessionProjection(entries, entryId, byId),
+    entries,
+  ).messages;
+}
+
 function estimateAtEntry(
   entries: SessionEntry[],
   entryId: string,
   byId: Map<string, SessionEntry>,
 ): number {
-  return estimateContextTokens(
-    projectHandoffs(buildSessionProjection(entries, entryId, byId), entries)
-      .messages,
-  );
+  return estimateContextTokens(projectAtEntry(entries, entryId, byId));
 }
 
 /**
- * When `targetId` lies before the latest compaction cut on `activeBranch`,
- * the active branch already compressed those older turns into a compaction
- * summary. Estimate `targetId`'s footprint relative to that compaction baseline
- * so rewinding to a pre-compaction anchor does not report negative savings.
+ * Whether `targetId` precedes the latest compaction on `branch`. A fold there
+ * parents its summary at the target, which drops the compaction from the
+ * ancestry and restores the history it had summarized.
  */
-function effectiveTargetTokensOnBranch(
-  activeBranch: readonly SessionEntry[],
-  entries: SessionEntry[],
+function precedesLatestCompaction(
+  branch: readonly SessionEntry[],
   targetId: string,
-  byId: Map<string, SessionEntry>,
-): number {
-  const raw = estimateAtEntry(entries, targetId, byId);
-  const compactionIdx = activeBranch.findLastIndex(
-    (e) => e.type === "compaction",
-  );
-  if (compactionIdx < 0) return raw;
-  const compaction = activeBranch[compactionIdx];
-  if (compaction.type !== "compaction") return raw;
-  const targetIdx = activeBranch.findIndex((e) => e.id === targetId);
-  if (targetIdx >= 0 && targetIdx <= compactionIdx) {
-    const compactedMessages = projectHandoffs(
-      buildSessionProjection(entries, compaction.id, byId),
-      entries,
-    ).messages;
-    let charEstimate = 0;
-    for (const msg of compactedMessages) {
-      if (msg.role !== "system") charEstimate += estimateTokens(msg);
-    }
-    return Math.min(raw, charEstimate);
-  }
-  return raw;
+): boolean {
+  const at = branch.findIndex((entry) => entry.id === targetId);
+  return at >= 0 && at < branch.findLastIndex((e) => e.type === "compaction");
 }
 
 /** The anchors on the active branch, root → leaf, with the context footprint at each. */
-function collectActiveAnchors(
-  sm: SessionManager,
-): { name: string; tokens: number; hint: string | null }[] {
+function collectActiveAnchors(sm: SessionManager): {
+  name: string;
+  tokens: number;
+  beforeCompaction: boolean;
+  hint: string | null;
+}[] {
   const path = sm.getBranch();
   const allEntries = sm.getEntries();
   const byId = new Map<string, SessionEntry>();
   for (const e of allEntries) byId.set(e.id, e);
-  const anchors: { name: string; tokens: number; hint: string | null }[] = [];
+  const anchors: ReturnType<typeof collectActiveAnchors> = [];
   for (const e of path) {
     const lbl = sm.getLabel(e.id);
     if (!lbl?.startsWith(LABEL_PREFIX)) continue;
     anchors.push({
       name: lbl.slice(LABEL_PREFIX.length),
-      tokens: effectiveTargetTokensOnBranch(path, allEntries, e.id, byId),
+      tokens: estimateAtEntry(allEntries, e.id, byId),
+      beforeCompaction: precedesLatestCompaction(path, e.id),
       hint: findLabelHint(sm, e.id, LIST_HINT_MAX_LENGTH),
     });
   }
@@ -851,10 +848,7 @@ function formatActiveAnchors(
     if (!isValidName(name)) continue;
     names.push(name);
     rows.push({
-      pct: formatPct1(
-        effectiveTargetTokensOnBranch(branch, allEntries, e.id, byId),
-        cw,
-      ),
+      pct: formatPct1(estimateAtEntry(allEntries, e.id, byId), cw),
       name,
     });
   }
@@ -880,8 +874,16 @@ function buildMinSavingsRejection(
   cw: number,
   allEntries: SessionEntry[],
   byId: Map<string, SessionEntry>,
+  beforeCompaction: boolean,
 ): string {
   const anchors = formatActiveAnchors(sm, cw, allEntries, byId);
+  if (beforeCompaction) {
+    const outcome =
+      apparentSavings > 0
+        ? `free only ~${formatPct1(apparentSavings, 0)} tokens`
+        : "not free any context";
+    return `Rewinding to '${rewindTo}' (as '${newLabel}') would ${outcome}: '${rewindTo}' lies before the latest compaction, so a fold there restores the compacted history. Rewind to an anchor created after the compaction, or keep working.\n${anchors.text}`;
+  }
   const guidance =
     anchors.names[0] === rewindTo
       ? "No earlier anchors — keep working and rewind later once more has accumulated above it."
@@ -2058,14 +2060,17 @@ export default function (pi: ExtensionAPI) {
       const sm = ctx.sessionManager as SessionManager;
       const cw = ctx.model?.contextWindow ?? 0;
       const totalTokens = estimateActiveBranchTokens(sm);
-      return collectActiveAnchors(sm).map(({ name, tokens, hint }) => ({
-        name,
-        percent: cw > 0 ? (tokens / cw) * 100 : 0,
-        tokens,
-        savableTokens: Math.max(0, totalTokens - tokens),
-        ...(hint ? { afterPreview: hint } : {}),
-        ...(LABEL_PREFIX + name === START_ANCHOR_LABEL ? { auto: true } : {}),
-      }));
+      return collectActiveAnchors(sm).map(
+        ({ name, tokens, beforeCompaction, hint }) => ({
+          name,
+          percent: cw > 0 ? (tokens / cw) * 100 : 0,
+          tokens,
+          savableTokens: Math.max(0, totalTokens - tokens),
+          ...(beforeCompaction ? { beforeCompaction } : {}),
+          ...(hint ? { afterPreview: hint } : {}),
+          ...(LABEL_PREFIX + name === START_ANCHOR_LABEL ? { auto: true } : {}),
+        }),
+      );
     },
     setAnchor(ctx, name) {
       const sm = ctx.sessionManager as SessionManager;
@@ -3070,8 +3075,15 @@ export default function (pi: ExtensionAPI) {
       prospective.push(continuation);
       foldEstimateAfter = estimateContentTokens(prospective);
       if (foldEstimateAfter >= foldEstimateBefore) {
+        const restoresCompacted =
+          precedesLatestCompaction(sm.getBranch(), pending.target) &&
+          estimateContentTokens(
+            projectAtEntry(sm.getEntries(), pending.target, all),
+          ) >= foldEstimateBefore;
         return fail(
-          `the materialized handoff does not reduce projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`,
+          restoresCompacted
+            ? `'${pending.rewindTo}' lies before the latest compaction, so folding to it restores the compacted history instead of reducing projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`
+            : `the materialized handoff does not reduce projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`,
         );
       }
       if (
@@ -4807,7 +4819,7 @@ export default function (pi: ExtensionAPI) {
       }
     }
     const anchorTokens = newestAnchorId
-      ? effectiveTargetTokensOnBranch(branch, allEntries, newestAnchorId, byId)
+      ? estimateAtEntry(allEntries, newestAnchorId, byId)
       : 0;
     const tokensSinceLastAnchor = Math.max(0, activeTokens - anchorTokens);
     if (state.lastAnchorEntryId !== newestAnchorId) {
@@ -4902,12 +4914,7 @@ export default function (pi: ExtensionAPI) {
         const target = findLabeledEntry(sm, LABEL_PREFIX + decision.rewindTo);
         if (!target || findLabeledEntry(sm, LABEL_PREFIX + decision.newLabel))
           return;
-        const targetTokens = effectiveTargetTokensOnBranch(
-          branch,
-          allEntries,
-          target,
-          byId,
-        );
+        const targetTokens = estimateAtEntry(allEntries, target, byId);
         if (activeTokens - targetTokens < MIN_REWIND_SAVINGS_TOKENS) return;
         state.lastSteerTokens = activeTokens;
         const text = buildAutoNavigateRewindSteerText(decision);
@@ -5365,12 +5372,7 @@ Operations (set \`action\`):
       } else {
         beforeTokens = estimateActiveBranchTokens(sm);
       }
-      const tokensAtTarget = effectiveTargetTokensOnBranch(
-        sm.getBranch(),
-        allEntries,
-        target,
-        byId,
-      );
+      const tokensAtTarget = estimateAtEntry(allEntries, target, byId);
       const contextWindow = ctx.model?.contextWindow ?? 0;
 
       const { entries } = collectEntriesForBranchSummary(sm, oldLeaf, target);
@@ -5394,6 +5396,7 @@ Operations (set \`action\`):
             contextWindow,
             allEntries,
             byId,
+            precedesLatestCompaction(sm.getBranch(), target),
           ),
           { rejected: "min-savings", apparentSavings },
         );
