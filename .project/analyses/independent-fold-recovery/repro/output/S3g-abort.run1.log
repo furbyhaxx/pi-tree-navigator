@@ -1,0 +1,24 @@
+--- S3g-abort: Esc during fold inside session_before_compact(overflow), via session.abort()
+00 +  30ms prompt_start
+01 +  30ms before_agent_start
+02 +  31ms agent_start
+03 +  31ms turn_start
+04 +  31ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  31ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  31ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  31ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  31ms finishTurn_decision {"action":"none","stopReason":"error"}
+09 +  31ms turn_end {"stopReason":"error"}
+10 +  31ms agent_end {"willRetry":false}
+11 +  33ms compaction_start {"reason":"overflow"}
+12 +  33ms ext_before_compact {"reason":"overflow","willRetry":true,"signal":"live"}
+13 +  93ms escape {"why":"session.abort() during compaction"}
+14 +  93ms queue_update {"steering":0,"followUp":0}
+15 +  94ms recovery_end {"sawAbort":true,"signal":"aborted"}
+16 +  94ms compaction_end {"reason":"overflow","aborted":true,"willRetry":false}
+17 +  94ms agent_settled {"aborted":true}
+18 +  94ms abort_resolved
+19 +  94ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:question 2 lorem ipsum lorem | assistant/stop:answer 2 lorem ipsum lorem i | user:question 3 lorem ipsum lorem | assistant/stop:answer 3 lorem ipsum lorem i | user:what now? | assistant/error: | context_edit
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S3g-abort","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}

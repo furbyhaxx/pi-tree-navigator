@@ -1,0 +1,18 @@
+--- S0: control: plain prompt on a seeded history
+00 +  38ms prompt_start
+01 +  38ms before_agent_start
+02 +  38ms agent_start
+03 +  38ms turn_start
+04 +  39ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  39ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  39ms assistant_end {"stopReason":"stop"}
+07 +  39ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  39ms finishTurn_decision {"action":"none","stopReason":"stop"}
+09 +  39ms turn_end {"stopReason":"stop"}
+10 +  39ms agent_end {"willRetry":false}
+11 +  39ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+12 +  39ms agent_settled {"aborted":false}
+13 +  39ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:question 2 lorem ipsum lorem | assistant/stop:answer 2 lorem ipsum lorem i | user:question 3 lorem ipsum lorem | assistant/stop:answer 3 lorem ipsum lorem i | user:what now? | assistant/stop:plain answer
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S0","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"stop":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

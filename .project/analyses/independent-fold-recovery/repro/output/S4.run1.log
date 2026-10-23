@@ -1,0 +1,28 @@
+--- S4: Esc during turn_end fold on a completed turn; handler returns continue:true anyway
+00 +  29ms prompt_start
+01 +  29ms before_agent_start
+02 +  30ms agent_start
+03 +  30ms turn_start
+04 +  30ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  30ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  30ms assistant_end {"stopReason":"stop"}
+07 +  30ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  91ms escape {"why":"user Esc during turn_end fold"}
+09 +  91ms queue_update {"steering":0,"followUp":0}
+10 +  91ms handler_end {"sawAbort":true,"signal":"aborted"}
+11 +  92ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+12 +  92ms finishTurn_decision {"action":"continue","stopReason":"stop"}
+13 +  92ms turn_end {"stopReason":"stop"}
+14 +  92ms turn_start
+15 +  92ms cws {"messages":4,"unpairedToolCalls":0,"signal":"aborted","sameSm":true}
+16 +  93ms assistant_end {"stopReason":"error","errorMessage":"This operation was aborted"}
+17 +  93ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"aborted"}
+18 +  93ms finishTurn_decision {"action":"none","stopReason":"error"}
+19 +  93ms turn_end {"stopReason":"error"}
+20 +  93ms agent_end {"willRetry":false}
+21 +  93ms agent_settled {"aborted":true}
+22 +  93ms abort_resolved
+23 +  93ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | assistant/error:
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S4","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}

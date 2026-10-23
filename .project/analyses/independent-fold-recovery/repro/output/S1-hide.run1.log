@@ -1,0 +1,23 @@
+--- S1-hide: preflight ctx.abort() + turn_end recovery (hide)
+00 +  38ms prompt_start
+01 +  38ms before_agent_start
+02 +  38ms agent_start
+03 +  38ms turn_start
+04 +  38ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  38ms guard_calls_ctx_abort
+06 +  38ms ctx_abort
+07 +  38ms escape {"why":"ctx.abort()"}
+08 +  38ms queue_update {"steering":0,"followUp":0}
+09 +  39ms assistant_end {"stopReason":"error","errorMessage":"This operation was aborted"}
+10 +  39ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"aborted"}
+11 +  39ms turn_end_sees_guard_abort {"outcome":"error","signal":"aborted"}
+12 +  39ms turn_end_returns_continue
+13 +  39ms finishTurn_decision {"action":"continue","stopReason":"error"}
+14 +  39ms turn_end {"stopReason":"error"}
+15 +  39ms agent_end {"willRetry":false}
+16 +  39ms agent_settled {"aborted":true}
+17 +  39ms abort_resolved
+18 +  39ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:question 2 lorem ipsum lorem | assistant/stop:answer 2 lorem ipsum lorem i | user:question 3 lorem ipsum lorem | assistant/stop:answer 3 lorem ipsum lorem i | user:what now? | assistant/error: | context_edit
+provider calls: 
+RESULT {"id":"S1-hide","counts":{"providerCalls":0,"agentCalls":0,"sideCalls":0,"preAborted":0,"sentOnWire":0,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true},"queuedAfter":0}

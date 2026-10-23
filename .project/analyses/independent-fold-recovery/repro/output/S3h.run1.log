@@ -1,0 +1,20 @@
+--- S3h: fold committed at turn_end(error), continue:true, pi compaction enabled
+00 +  35ms prompt_start
+01 +  36ms before_agent_start
+02 +  36ms agent_start
+03 +  36ms turn_start
+04 +  36ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  36ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  36ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  37ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  37ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+09 +  37ms turn_end_returns_continue
+10 +  37ms finishTurn_decision {"action":"continue","stopReason":"error"}
+11 +  37ms turn_end {"stopReason":"error"}
+12 +  37ms agent_end {"willRetry":false}
+13 +  37ms agent_settled {"aborted":false}
+14 +  37ms prompt_rejected {"error":"Entry ab2d7955 is not on the active branch"}
+15 +  37ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S3h","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

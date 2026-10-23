@@ -1,0 +1,21 @@
+--- S2c: Esc during async preflight recovery
+00 +  30ms prompt_start
+01 +  30ms before_agent_start
+02 +  30ms agent_start
+03 +  30ms turn_start
+04 +  30ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  30ms recovery_start {"signal":"live"}
+06 +  91ms escape {"why":"user Esc during preflight recovery"}
+07 +  91ms queue_update {"steering":0,"followUp":0}
+08 +  92ms recovery_end {"sawAbort":true,"signal":"aborted"}
+09 +  92ms assistant_end {"stopReason":"error","errorMessage":"This operation was aborted"}
+10 +  92ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"aborted"}
+11 +  92ms finishTurn_decision {"action":"none","stopReason":"error"}
+12 +  92ms turn_end {"stopReason":"error"}
+13 +  92ms agent_end {"willRetry":false}
+14 +  92ms agent_settled {"aborted":true}
+15 +  92ms abort_resolved
+16 +  92ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:question 2 lorem ipsum lorem | assistant/stop:answer 2 lorem ipsum lorem i | user:question 3 lorem ipsum lorem | assistant/stop:answer 3 lorem ipsum lorem i | user:what now? | assistant/error:
+provider calls: 
+RESULT {"id":"S2c","counts":{"providerCalls":0,"agentCalls":0,"sideCalls":0,"preAborted":0,"sentOnWire":0,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}

@@ -1,0 +1,36 @@
+--- S1-newrun-custom: preflight ctx.abort() + turn_end recovery (newrun-custom)
+00 +  35ms prompt_start
+01 +  35ms before_agent_start
+02 +  35ms agent_start
+03 +  35ms turn_start
+04 +  36ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  36ms guard_calls_ctx_abort
+06 +  36ms ctx_abort
+07 +  36ms escape {"why":"ctx.abort()"}
+08 +  36ms queue_update {"steering":0,"followUp":0}
+09 +  36ms assistant_end {"stopReason":"error","errorMessage":"This operation was aborted"}
+10 +  36ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"aborted"}
+11 +  36ms turn_end_sees_guard_abort {"outcome":"error","signal":"aborted"}
+12 +  37ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+13 +  37ms finishTurn_decision {"action":"none","stopReason":"error"}
+14 +  37ms turn_end {"stopReason":"error"}
+15 +  37ms agent_end {"willRetry":false}
+16 +  37ms agent_settled_resumes {"via":"sendMessage(triggerTurn)"}
+17 +  37ms agent_settled {"aborted":true}
+18 +  37ms before_agent_start
+19 +  37ms agent_start
+20 +  37ms turn_start
+21 +  37ms cws {"messages":5,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+22 +  37ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":5}
+23 +  38ms assistant_end {"stopReason":"stop"}
+24 +  38ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+25 +  38ms finishTurn_decision {"action":"none","stopReason":"stop"}
+26 +  38ms turn_end {"stopReason":"stop"}
+27 +  38ms agent_end {"willRetry":false}
+28 +  38ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+29 +  38ms agent_settled {"aborted":false}
+30 +  38ms abort_resolved
+31 +  38ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | custom:sim-resume | assistant/stop:answer after recovery
+provider calls: #1[agent,5 msgs]
+RESULT {"id":"S1-newrun-custom","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":1,"settled":2,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"queuedAfter":0}

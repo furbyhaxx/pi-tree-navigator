@@ -5,7 +5,7 @@ title: "Independent folding engine: design and units"
 description: "Execution model, interfaces and delivery units for the shared fold engine used by manual, automatic, agent and recovery folds."
 type: "plan"
 created: "2026-10-23T13:42:45+02:00"
-updated: "2026-10-23T17:14:22+02:00"
+updated: "2026-10-23T17:30:18+02:00"
 createdBy: "coding-agent"
 updatedBy: "coding-agent"
 ---
@@ -37,8 +37,12 @@ Safe points:
   message. Trigger a turn only when unanswered user input is preserved (recovery).
 - **Running:** run inside the next `turn_end` boundary handler (awaited, like the
   old summary turn). Commit, return the continuation draft with `continue: true`.
-- **Overflow or pre-request guard abort:** the aborted turn's `turn_end` runs a
-  recovery fold (Strategy B when A cannot be admitted), then continues.
+- **Pre-request pressure:** await the engine in `context_with_system` and return
+  its fresh projection, without aborting a successfully recovered request.
+- **Provider overflow:** run recovery at `agent_before_settle` and request continuation
+  there. An aborted request does not honor `turn_end` continuation; intentional user
+  cancellation must never restart. Local SDK-loop evidence is recorded in
+  `.project/analyses/independent-fold-recovery/lifecycle.md`.
 
 ## Decisions
 
@@ -109,9 +113,9 @@ Safe points:
 | U2 | extract `commitFold` from `completeRewind`, behavior unchanged | merged (fold-point boundary fixed in 38916ac) |
 | U3 | `fold-engine.ts`: request, lock, snapshot, inputs, summarize, commit (DI) | merged |
 | U4a | rewind tool on the engine; delete the in-band summary turn | merged; historical projection/rendering restored in 0480db6 |
-| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | UI search/mouse merged; shared preview extraction in progress, wiring next |
-| M1 | `milestone-policy.ts`: E17 confirm policy, tunable, production builders | merged with recorded-answer replay and live parity; config/host wiring pending |
-| R1 | retirement-verification spike for E18, then preset integration | in progress |
+| U4b | `/anchor fold`: one-screen recommended plan, progress, cancel | shared preview merged; manual wiring in progress |
+| M1 | `milestone-policy.ts`: E17 confirm policy, tunable, production builders | policy and configuration merged; host wiring pending |
+| R1 | retirement-verification spike for E18, then preset integration | benchmark merged; Microsoft specific-item verification of escalated retirements being integrated |
 | U4c | auto controller executes through the engine | later |
 | U4d | overflow and guard-abort recovery through the engine | later |
 | U6 | live acceptance: refused full window, pre-compaction anchor, auto fold, TUI | later |
@@ -120,8 +124,9 @@ Safe points:
 
 - Recovery continuation must be proved through the real SDK loop. Local SDK source
   ignores `turn_end` continuation after an aborted/error assistant; session `abort()`
-  also prevents post-run continuation. A lifecycle reproduction is checking the
-  safe pre-request and post-error seams before U4d implements them.
+  also prevents post-run continuation. Saved real-loop/local-transport experiments
+  establish the awaited preflight and before-settlement seams; production-engine
+  and real-provider acceptance remain to run.
 - The user's current global auto-navigation config has a legacy `controller_model`
   selector. Delivery must migrate that field to the explicitly chosen E17 policy,
   preserving enablement, thresholds, model overrides and disclosure filters. Back up

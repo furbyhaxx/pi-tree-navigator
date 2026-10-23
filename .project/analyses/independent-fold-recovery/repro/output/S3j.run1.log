@@ -1,0 +1,28 @@
+--- S3j: length-stop overflow shape, fold at turn_end + continue:true
+00 +  38ms prompt_start
+01 +  38ms before_agent_start
+02 +  38ms agent_start
+03 +  38ms turn_start
+04 +  39ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  39ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  39ms assistant_end {"stopReason":"length"}
+07 +  39ms ext_turn_end {"outcome":"completed","stopReason":"length","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  39ms recovery_signal {"signal":"live"}
+09 +  40ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+10 +  40ms turn_end_returns_continue
+11 +  40ms finishTurn_decision {"action":"continue","stopReason":"length"}
+12 +  40ms turn_end {"stopReason":"length"}
+13 +  40ms turn_start
+14 +  40ms cws {"messages":4,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+15 +  41ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":4}
+16 +  41ms assistant_end {"stopReason":"stop"}
+17 +  41ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+18 +  41ms finishTurn_decision {"action":"none","stopReason":"stop"}
+19 +  41ms turn_end {"stopReason":"stop"}
+20 +  41ms agent_end {"willRetry":false}
+21 +  41ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+22 +  41ms agent_settled {"aborted":false}
+23 +  41ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | assistant/stop:answer after recovery
+provider calls: #1[agent,10 msgs] #2[agent,4 msgs]
+RESULT {"id":"S3j","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":1,"turnEnd":2,"turnEndByStop":{"stop":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

@@ -1,0 +1,31 @@
+--- S3d: provider overflow with pi compaction enabled, extension only observes
+00 +  34ms prompt_start
+01 +  34ms before_agent_start
+02 +  34ms agent_start
+03 +  34ms turn_start
+04 +  34ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  35ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  35ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  35ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  35ms finishTurn_decision {"action":"none","stopReason":"error"}
+09 +  35ms turn_end {"stopReason":"error"}
+10 +  35ms agent_end {"willRetry":false}
+11 +  36ms compaction_start {"reason":"overflow"}
+12 +  36ms ext_before_compact {"reason":"overflow","willRetry":true,"signal":"live"}
+13 +  37ms provider_call {"n":2,"callKind":"side","preAborted":false,"messages":2}
+14 +  37ms compaction_end {"reason":"overflow","aborted":false,"willRetry":true}
+15 +  38ms agent_start
+16 +  38ms turn_start
+17 +  38ms cws {"messages":5,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+18 +  38ms provider_call {"n":3,"callKind":"agent","preAborted":false,"messages":5}
+19 +  38ms assistant_end {"stopReason":"stop"}
+20 +  38ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+21 +  38ms finishTurn_decision {"action":"none","stopReason":"stop"}
+22 +  38ms turn_end {"stopReason":"stop"}
+23 +  38ms agent_end {"willRetry":false}
+24 +  38ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+25 +  38ms agent_settled {"aborted":false}
+26 +  38ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:question 2 lorem ipsum lorem | assistant/stop:answer 2 lorem ipsum lorem i | user:question 3 lorem ipsum lorem | assistant/stop:answer 3 lorem ipsum lorem i | user:what now? | assistant/error: | context_edit | compaction | assistant/stop:answer after native recovery
+provider calls: #1[agent,10 msgs] #2[side,2 msgs] #3[agent,5 msgs]
+RESULT {"id":"S3d","counts":{"providerCalls":3,"agentCalls":2,"sideCalls":1,"preAborted":0,"sentOnWire":3,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":1,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

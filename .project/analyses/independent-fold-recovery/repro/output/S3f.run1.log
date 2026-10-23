@@ -1,0 +1,24 @@
+--- S3f: Esc during fold at agent_before_settle
+00 +  35ms prompt_start
+01 +  35ms before_agent_start
+02 +  35ms agent_start
+03 +  35ms turn_start
+04 +  36ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  36ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  36ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  36ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  36ms finishTurn_decision {"action":"none","stopReason":"error"}
+09 +  36ms turn_end {"stopReason":"error"}
+10 +  36ms agent_end {"willRetry":false}
+11 +  36ms ext_before_settle {"outcome":"error","continueIn":false,"signal":"undefined"}
+12 +  36ms recovery_start {"signal":"undefined"}
+13 +  97ms escape {"why":"user Esc during before_settle fold"}
+14 +  97ms queue_update {"steering":0,"followUp":0}
+15 + 337ms recovery_end {"sawAbort":false,"signal":"undefined"}
+16 + 338ms recovery_fold_at_before_settle {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+17 + 338ms agent_settled {"aborted":true}
+18 + 338ms abort_resolved
+19 + 338ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S3f","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":1,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}

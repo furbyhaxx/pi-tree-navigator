@@ -1,0 +1,30 @@
+--- S3b: provider overflow, fold + continue at agent_before_settle, pi compaction off
+00 +  32ms prompt_start
+01 +  32ms before_agent_start
+02 +  33ms agent_start
+03 +  33ms turn_start
+04 +  33ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  33ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  33ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  33ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  33ms finishTurn_decision {"action":"none","stopReason":"error"}
+09 +  33ms turn_end {"stopReason":"error"}
+10 +  33ms agent_end {"willRetry":false}
+11 +  34ms ext_before_settle {"outcome":"error","continueIn":false,"signal":"undefined"}
+12 +  34ms recovery_fold_at_before_settle {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+13 +  34ms before_settle_returns_continue
+14 +  34ms agent_start
+15 +  34ms turn_start
+16 +  34ms cws {"messages":4,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+17 +  34ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":4}
+18 +  34ms assistant_end {"stopReason":"stop"}
+19 +  35ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+20 +  35ms finishTurn_decision {"action":"none","stopReason":"stop"}
+21 +  35ms turn_end {"stopReason":"stop"}
+22 +  35ms agent_end {"willRetry":false}
+23 +  35ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+24 +  35ms agent_settled {"aborted":false}
+25 +  35ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | assistant/stop:answer after recovery
+provider calls: #1[agent,10 msgs] #2[agent,4 msgs]
+RESULT {"id":"S3b","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":2,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

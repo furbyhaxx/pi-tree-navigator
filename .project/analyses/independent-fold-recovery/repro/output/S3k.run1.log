@@ -1,0 +1,31 @@
+--- S3k: provider overflow: fold at turn_end(error), continue at agent_before_settle (pi compaction off)
+00 +  36ms prompt_start
+01 +  36ms before_agent_start
+02 +  36ms agent_start
+03 +  36ms turn_start
+04 +  37ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  37ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  37ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  37ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  37ms recovery_start {"signal":"live"}
+09 +  77ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+10 +  78ms finishTurn_decision {"action":"none","stopReason":"error"}
+11 +  78ms turn_end {"stopReason":"error"}
+12 +  78ms agent_end {"willRetry":false}
+13 +  78ms ext_before_settle {"outcome":"error","continueIn":false,"signal":"undefined"}
+14 +  78ms before_settle_returns_continue
+15 +  78ms agent_start
+16 +  78ms turn_start
+17 +  78ms cws {"messages":4,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+18 +  79ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":4}
+19 +  79ms assistant_end {"stopReason":"stop"}
+20 +  79ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+21 +  79ms finishTurn_decision {"action":"none","stopReason":"stop"}
+22 +  79ms turn_end {"stopReason":"stop"}
+23 +  79ms agent_end {"willRetry":false}
+24 +  79ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+25 +  79ms agent_settled {"aborted":false}
+26 +  79ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | assistant/stop:answer after recovery
+provider calls: #1[agent,10 msgs] #2[agent,4 msgs]
+RESULT {"id":"S3k","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":2,"settled":1,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false}}

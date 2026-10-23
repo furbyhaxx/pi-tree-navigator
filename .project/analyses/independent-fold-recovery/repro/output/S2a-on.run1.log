@@ -1,0 +1,35 @@
+--- S2a-on: async context_with_system recovery returning reduced messages, no abort (pi compaction enabled)
+00 +  30ms prompt_start
+01 +  30ms before_agent_start
+02 +  30ms agent_start
+03 +  30ms turn_start
+04 +  30ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  30ms recovery_start {"signal":"live","messagesIn":10}
+06 +  72ms recovery_fold_in_context_with_system {"branchBefore":12,"branchAfter":6,"leafMoved":true,"refresh":true}
+07 +  72ms recovery_returns_reduced {"messagesOut":4}
+08 +  72ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":4}
+09 +  72ms assistant_end {"stopReason":"stop"}
+10 +  72ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+11 +  73ms finishTurn_decision {"action":"none","stopReason":"stop"}
+12 +  73ms turn_end {"stopReason":"stop"}
+13 +  73ms agent_end {"willRetry":false}
+14 +  73ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+15 +  73ms agent_settled {"aborted":false}
+16 +  73ms prompt_returned {"isIdle":true}
+17 + 152ms prompt_start
+18 + 153ms before_agent_start
+19 + 153ms agent_start
+20 + 153ms turn_start
+21 + 153ms cws {"messages":6,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+22 + 153ms provider_call {"n":2,"callKind":"agent","preAborted":false,"messages":6}
+23 + 153ms assistant_end {"stopReason":"stop"}
+24 + 153ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+25 + 153ms finishTurn_decision {"action":"none","stopReason":"stop"}
+26 + 153ms turn_end {"stopReason":"stop"}
+27 + 153ms agent_end {"willRetry":false}
+28 + 153ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+29 + 154ms agent_settled {"aborted":false}
+30 + 154ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | assistant/stop:answer on folded context | user:and then? | assistant/stop:second answer
+provider calls: #1[agent,4 msgs] #2[agent,6 msgs]
+RESULT {"id":"S2a-on","counts":{"providerCalls":2,"agentCalls":2,"sideCalls":0,"preAborted":0,"sentOnWire":2,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":2},"beforeSettle":2,"settled":2,"settledAborted":0,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"afterFirst":{"agentStateMessages":5,"projection":5}}

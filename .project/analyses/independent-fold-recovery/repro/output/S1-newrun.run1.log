@@ -1,0 +1,36 @@
+--- S1-newrun: preflight ctx.abort() + turn_end recovery (newrun)
+00 +  41ms prompt_start
+01 +  41ms before_agent_start
+02 +  41ms agent_start
+03 +  41ms turn_start
+04 +  41ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  41ms guard_calls_ctx_abort
+06 +  41ms ctx_abort
+07 +  41ms escape {"why":"ctx.abort()"}
+08 +  42ms queue_update {"steering":0,"followUp":0}
+09 +  42ms assistant_end {"stopReason":"error","errorMessage":"This operation was aborted"}
+10 +  42ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"aborted"}
+11 +  42ms turn_end_sees_guard_abort {"outcome":"error","signal":"aborted"}
+12 +  42ms recovery_fold_at_turn_end {"branchBefore":13,"branchAfter":6,"leafMoved":true,"refresh":false}
+13 +  43ms finishTurn_decision {"action":"none","stopReason":"error"}
+14 +  43ms turn_end {"stopReason":"error"}
+15 +  43ms agent_end {"willRetry":false}
+16 +  43ms agent_settled_resumes {"via":"sendUserMessage"}
+17 +  43ms agent_settled {"aborted":true}
+18 +  43ms before_agent_start
+19 +  43ms agent_start
+20 +  43ms turn_start
+21 +  43ms cws {"messages":5,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+22 +  43ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":5}
+23 +  43ms assistant_end {"stopReason":"stop"}
+24 +  43ms ext_turn_end {"outcome":"completed","stopReason":"stop","continueIn":false,"canContinue":false,"signal":"live"}
+25 +  44ms finishTurn_decision {"action":"none","stopReason":"stop"}
+26 +  44ms turn_end {"stopReason":"stop"}
+27 +  44ms agent_end {"willRetry":false}
+28 +  44ms ext_before_settle {"outcome":"completed","continueIn":false,"signal":"undefined"}
+29 +  44ms agent_settled {"aborted":false}
+30 +  44ms abort_resolved
+31 +  44ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | branch_summary | user:what now? | custom:sim-fold-continuation | user:continue after fold | assistant/stop:answer after recovery
+provider calls: #1[agent,5 msgs]
+RESULT {"id":"S1-newrun","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":2,"turnEnd":2,"turnEndByStop":{"stop":1,"error":1},"beforeSettle":1,"settled":2,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":false},"queuedAfter":0}

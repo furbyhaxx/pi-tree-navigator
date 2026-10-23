@@ -1,0 +1,22 @@
+--- S3i: Esc during fold at turn_end(error)
+00 +  39ms prompt_start
+01 +  39ms before_agent_start
+02 +  39ms agent_start
+03 +  39ms turn_start
+04 +  39ms cws {"messages":10,"unpairedToolCalls":0,"signal":"live","sameSm":true}
+05 +  39ms provider_call {"n":1,"callKind":"agent","preAborted":false,"messages":10}
+06 +  39ms assistant_end {"stopReason":"error","errorMessage":"prompt is too long: 250000 tokens > 200000 maximum"}
+07 +  39ms ext_turn_end {"outcome":"error","stopReason":"error","continueIn":false,"canContinue":false,"signal":"live"}
+08 +  39ms recovery_start {"signal":"live"}
+09 + 100ms escape {"why":"user Esc during turn_end fold"}
+10 + 100ms queue_update {"steering":0,"followUp":0}
+11 + 101ms recovery_end {"sawAbort":true,"signal":"aborted"}
+12 + 101ms finishTurn_decision {"action":"none","stopReason":"error"}
+13 + 101ms turn_end {"stopReason":"error"}
+14 + 101ms agent_end {"willRetry":false}
+15 + 101ms agent_settled {"aborted":true}
+16 + 101ms abort_resolved
+17 + 101ms prompt_returned {"isIdle":true}
+branch: model_change | thinking_level_change | system: | user:question 0 lorem ipsum lorem | assistant/stop:answer 0 lorem ipsum lorem i | user:question 1 lorem ipsum lorem | assistant/stop:answer 1 lorem ipsum lorem i | user:question 2 lorem ipsum lorem | assistant/stop:answer 2 lorem ipsum lorem i | user:question 3 lorem ipsum lorem | assistant/stop:answer 3 lorem ipsum lorem i | user:what now? | assistant/error:
+provider calls: #1[agent,10 msgs]
+RESULT {"id":"S3i","counts":{"providerCalls":1,"agentCalls":1,"sideCalls":0,"preAborted":0,"sentOnWire":1,"agentEnd":1,"turnEnd":1,"turnEndByStop":{"error":1},"beforeSettle":0,"settled":1,"settledAborted":1,"pendingQueued":0,"isIdleAtEnd":true,"extensionErrors":0,"abortFlagReadOnly":true}}

@@ -5,9 +5,9 @@ title: "Retirement verifier spike for the capture preset (E18)"
 description: "Pre-registered live screen of 19 candidate verifiers on retirement cases, holdout run of the top 3, and an offline end-to-end simulation of chain(microsoft > luna) with a verifier."
 type: "analysis"
 created: "2026-10-23T17:08:03+02:00"
-updated: "2026-10-23T17:08:03+02:00"
+updated: "2026-10-23T17:30:18+02:00"
 createdBy: "worker"
-updatedBy: "worker"
+updatedBy: "coding-agent"
 ---
 
 # Retirement verifier spike (E18)
@@ -113,14 +113,16 @@ Of the 49 proposed retirements, 45 came from microsoft (0 unsafe) and 4 from lun
 Use `decisions:microsoft/microsoft-decision-1` as the verifier, asking only about retirements proposed by the luna
 escalation (E18 as worded), at gate 0.7, failing closed: `no`, abstention or error keeps the item.
 
-- Safety: 0 `yes` on 402 holdout negatives and 120 development negatives (95% upper bound 0.75% on the holdout
-  negatives alone, rule of three). In the replay it stops the one unsafe retirement of the preset (unsafe 1 to 0, all three verifiers do).
+- Observed safety: 0 accepted `yes` on 402 holdout negative observations and 120 development negative observations.
+  The holdout contains 134 distinct negative item cases repeated three times, derived from only 32 supersession
+  messages. These are correlated synthetic cases, so treating 402 as independent trials for a population error bound
+  is not justified. In the replay it stops the one unsafe retirement of the preset (unsafe 1 to 0, all three verifiers do).
 - Quality: it accepted `yes` on 39 of 39 holdout positives and 14 of 14 development positives, so it blocks no true
   replacement in either mode. With the rejection kept as `none`, accepted-exact is 93.8% against 92.7%.
 - Cost: 0.0005 USD per 1,000 decisions and +341 ms p95 on the 4 of 96 decisions that are checked. It is already the
   preset's first-stage model, so no new model or credential is needed. For luna's proposals it is a different model
   than the proposer.
-- `verify every retirement` is not supported: the 45 microsoft proposals held no unsafe answer, it costs 0.0061 USD
+- `verify every retirement` goes beyond the chosen E18 policy: the 45 microsoft proposals held no observed unsafe answer, it costs 0.0061 USD
   per 1,000 and +375 ms on 51% of decisions, and with `d1` or `jev-1.13` it blocks 4 true replacements. With
   microsoft it rejects 12 ambiguous items only.
 - Alternative when an independent family is wanted: `typesafe/jev-1.13` (0 unsafe of 402, +0.0011 USD per 1,000
@@ -132,6 +134,9 @@ escalation (E18 as worded), at gate 0.7, failing closed: `no`, abstention or err
 - One wrong retirement in 96 decisions (one case, one repetition) is the only unsafe event the replay can remove,
   and luna proposed a retirement in only 4 of the 96 decisions (2 distinct cases). The verifier's safety rests on the
   402 holdout and 120 development negative decisions, not on the replay.
+- The three-candidate shortlist was selected on development data. The final preference for Microsoft among those
+  candidates also uses holdout outcomes; those outcomes are selection evidence, not a fresh unbiased evaluation of
+  the final chosen pipeline.
 - Cases are synthetic and come from the same 48 supersession cases that qualified the preset; positives are scarce
   (13 holdout items). Ambiguous items are scored neutral by construction.
 - The request wording and `otherItems` were frozen before the screen (no A/B). Verifiers saw the other active items.
