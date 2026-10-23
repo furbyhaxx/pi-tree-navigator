@@ -95,6 +95,6 @@ Four models answered nothing usable on every call, as in the earlier development
 | 19 | `decisions:togethercomputer/tev1-4b-experimental` | 8 / 120 | 14 / 14 (100.0%) | 80 / 120 | 2 / 4 | 0 / 138 | 0.0139 | 261 |
 
 Selected for holdout, by the rule above: `decisions:liquid/d1`, `decisions:microsoft/microsoft-decision-1`,
-`decisions:typesafe/jev-1.13`. `jev-1.13` and `jev-1.14` have the same recorded answers and cost per call; the p95 tie-break
+`decisions:typesafe/jev-1.13`. `jev-1.13` and `jev-1.14` chose the same answer on all 138 decisions at the same cost per call (confidences differ slightly on 22); the p95 tie-break
 (286 ms against 294 ms) decides. `microsoft-decision-1` is also the capture preset's first-stage proposer; `gpt-6-luna`
 chat (the escalator) is flagged and ranked 16th on 2 unsafe, so the flag does not change the selection.
