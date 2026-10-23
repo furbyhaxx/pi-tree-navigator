@@ -354,7 +354,7 @@ user message ──capture──▶ ops entry ──replay──▶ ledger ─�
 - **Persistence is branch-local.** The ledger is the replay of `navigate-tree-continuity-ops`
   entries since the last fold; each fold stores a snapshot in `branch_summary.details.continuity`.
   Rewinding to an earlier branch restores that branch's ledger.
-- **Fold.** The in-band summary request lists the binding items and the user messages the
+- **Fold.** The independent summary request lists the binding items and the user messages the
   model may cite. The model may append one `<continuity-delta>` block (completed goals, newly
   ratified facts, supersessions, expired steering). The extension validates it, applies it as an
   agent proposal and embeds the resulting briefing (about 2,500 tokens at most) in the stored
@@ -367,7 +367,7 @@ user message ──capture──▶ ops entry ──replay──▶ ledger ─�
 | key (`tree-navigator.json`) | default | effect |
 |---|---|---|
 | `continuity.capture` | `true` | Turn capture and the agent's ledger writes on or off. |
-| `continuity.intentClassifier` | `null` | Model policy that judges each new user message (below). `null`, `false`, `"off"` or `"disabled"` keep the local heuristics. A model error or a 15 s timeout falls back to the heuristics for the rest of the session. |
+| `continuity.intentClassifier` | `null` | Model policy that judges each new user message (below). `null`, `false`, `"off"` or `"disabled"` keep the local heuristics. Failed stages stop making requests for the session; a failed kind stage or a 15 s capture timeout falls back to heuristics. |
 
 `continuity.intentClassifier` accepts three forms. Every model is a `provider/id` from the Pi
 catalog with configured credentials; a Decisions classifier is preferred, otherwise a chat model
@@ -377,7 +377,11 @@ answers the same questions as strict JSON.
 - `"recommended"`: the benchmarked preset. `openrouter/microsoft/microsoft-decision-1` judges the
   kind and which active item the message replaces; `openrouter/openai/gpt-6-luna` is asked the
   supersession question only when the classifier abstains. The kind is never escalated: in the
-  benchmark, escalating it accepted unsafe answers. Cost was about $0.04 per 1,000 messages.
+  benchmark, escalating it accepted unsafe answers. A retirement proposed by the escalation
+  needs a separate Microsoft decision-model check of that specific item. A refusal, uncertain
+  answer, cancellation or failed check keeps the existing item active. A primary accepted
+  answer or a confident `none` does not trigger this check. Measured supersession-chain cost
+  was about $0.04 per 1,000 decisions; it is not a fixed price for complete message capture.
 - An object that overrides the preset field by field. A stage with `"model": null` is off;
   `instructions` (1-1,000 characters) replaces the question wording.
 
@@ -391,12 +395,18 @@ answers the same questions as strict JSON.
       "kind": { "model": "openrouter/microsoft/microsoft-decision-1" },
       "supersession": {
         "model": "openrouter/microsoft/microsoft-decision-1",
-        "escalation": { "model": null }
+        "escalation": { "model": "openrouter/openai/gpt-6-luna" },
+        "verification": { "model": "openrouter/microsoft/microsoft-decision-1" }
       }
     }
   }
 }
 ```
+
+Set either nested stage's `model` to `null` to disable it, or select another catalogued
+model and override its `instructions`. Disabling verification allows escalation-proposed
+retirements without the extra check. The benchmark observed one wrong retirement in
+96 escalation-chain decisions before verification; zero observed failures is not a guarantee.
 
 Without `preset`, unset stages are off. `heuristics: false` requires a `kind.model`. Answers
 below `minConfidence` abstain; the heuristics then keep explicit markers. Any model policy
