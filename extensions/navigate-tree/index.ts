@@ -62,12 +62,10 @@ import {
   AgentSession,
   buildSessionProjection,
   CONFIG_DIR_NAME,
-  type ContextEditableContent,
   collectEntriesForBranchSummary,
   type ExtensionAPI,
   type ExtensionCommandContext,
   type ExtensionContext,
-  estimateTokens,
   getAgentDir,
   type ModelRegistry,
   prepareBranchEntries,
@@ -101,7 +99,6 @@ import {
 import {
   estimateContentTokens,
   estimateRequestTokens,
-  splitContextEstimate,
 } from "./context-tokens.ts";
 import {
   isVisible,
@@ -201,7 +198,6 @@ import {
   type OpenUserRequest,
   renderOpenUserRequests,
 } from "./open-user-requests.ts";
-import { capRecoveryOutput } from "./output-budget.ts";
 import {
   createProposalModelRunner,
   resolveProposalModel,
@@ -209,20 +205,10 @@ import {
 import type { ProposalOptions } from "./proposal-options.ts";
 import { sha256 } from "./retrospective-plan.ts";
 import {
-  buildForcedRewindText,
   buildNoAnchorText,
   buildReserveGuardWarning,
   buildReserveOrderWarning,
-  buildRewindCompactionFailedText,
   buildRewindHintText,
-  buildWithheldNoticeText,
-  COMPACTION_FAILED_ABORTED,
-  COMPACTION_FAILED_NO_ANCHOR,
-  COMPACTION_FAILED_NO_REWIND,
-  COMPACTION_FAILED_OVERFLOWED_AGAIN,
-  COMPACTION_FAILED_RUN_ENDED,
-  COMPACTION_FAILED_STILL_OVER,
-  FORCED_REWIND_BLOCK_REASON,
   REWIND_COMPACTION_OFF_TEXT,
   REWIND_HINT_CUSTOM_TYPE,
   RewindHintTracker,
@@ -261,8 +247,7 @@ export const START_ANCHOR_LABEL = `${LABEL_PREFIX}start`;
 
 // ---------------------------------------------------------------------------
 // Exported boundary constants below (MAX_SESSION_REFS, MAX_HINT_WALK_DEPTH,
-// MIN_SUMMARY_FOCUS_LENGTH, MIN_REWIND_SAVINGS_TOKENS,
-// MAX_FORCED_REWIND_ATTEMPTS).
+// MIN_SUMMARY_FOCUS_LENGTH, MIN_REWIND_SAVINGS_TOKENS).
 //
 // Stability: these are internal tunables. Exported only so the test suite
 // can pin boundary cases by constant rather than literal. Re-tuning is
@@ -302,13 +287,8 @@ export const MIN_SUMMARY_FOCUS_LENGTH = 20;
 // rewind pays for a summary, forks a junk branch_summary, consumes
 // a milestone label, and GROWS live context.
 export const MIN_REWIND_SAVINGS_TOKENS = 4000;
-const RECOVERY_MAX_OUTPUT_TOKENS = 32_768;
 const RECOVERY_MIN_OUTPUT_TOKENS = 1_024;
 const RECOVERY_HEADROOM_TOKENS = 4_096;
-// Turns a forced rewind (#101) gets to issue an accepted `rewind` before it
-// ends with the final error; a turn that does anything else is hidden and the
-// same messages are re-sent.
-export const MAX_FORCED_REWIND_ATTEMPTS = 3;
 // Hint length cap for the per-row hint shown in `list` output. 50 chars
 // fits one terminal column without wrapping in typical 80-column TUIs.
 const LIST_HINT_MAX_LENGTH = 50;
@@ -735,8 +715,8 @@ function suggestFoldLabel(sm: SessionManager, anchorName: string): string {
 /**
  * Every active anchor — chronological root→leaf, same walk order as `list`
  * — with its cumulative context percentage, rendered as the shared anchor
- * table (#101, D19). Shared by the min-savings rejection, the rewind hint
- * and the forced-rewind message so all name the same targets the same way. A manual
+ * table (#101, D19). Shared by min-savings rejections and rewind hints.
+ * A manual
  * `/tree` label `anchor:x` CAN put the same name on two entries —
  * duplicates print twice, exactly as `list` prints them. Names `rewindTo`
  * would reject (e.g. an empty `anchor:` label) are skipped: both callers
@@ -975,251 +955,6 @@ export function estimateAdmissionTokens(sm: SessionManager): number {
   ]).tokens;
 }
 
-/** What withholding tool results plans (#101, D3/D4). */
-interface WithholdPlan {
-  drafts: SessionBoundaryDraft[];
-  withheld: number;
-  proposedWithheld: number;
-  beforeTokens: number;
-  afterTokens: number;
-  target: number;
-  fits: boolean;
-}
-
-/**
- * The provider's real size of the overflowed request (#101, A): input +
- * cache read + cache write of a `length` or silent `stop` reply that carries
- * usage. An explicit error, or no usage, gives `undefined`: the estimate is
- * then used as is (ratio 1).
- */
-function parseErrorOverflowTokens(errorMessage: string | undefined): {
-  promptTokens?: number;
-  outputReservedTokens?: number;
-} {
-  if (!errorMessage) return {};
-  const openrouterMatch =
-    /requested about (\d+) tokens \((\d+) of text input,\s*(\d+) of tool input,\s*(\d+) in the output\)/i.exec(
-      errorMessage,
-    );
-  if (openrouterMatch) {
-    const textInput = Number(openrouterMatch[2]);
-    const toolInput = Number(openrouterMatch[3]);
-    const outputReserved = Number(openrouterMatch[4]);
-    return {
-      ...(Number.isFinite(textInput + toolInput) && textInput + toolInput > 0
-        ? { promptTokens: textInput + toolInput }
-        : {}),
-      ...(Number.isFinite(outputReserved) && outputReserved > 0
-        ? { outputReservedTokens: outputReserved }
-        : {}),
-    };
-  }
-  const inputAndOutput =
-    /(\d+)\s+input tokens.*?(\d+)\s+(?:output|max_tokens|completion)/i.exec(
-      errorMessage,
-    );
-  if (inputAndOutput) {
-    const promptTokens = Number(inputAndOutput[1]);
-    const outputReservedTokens = Number(inputAndOutput[2]);
-    return {
-      ...(Number.isFinite(promptTokens) && promptTokens > 0
-        ? { promptTokens }
-        : {}),
-      ...(Number.isFinite(outputReservedTokens) && outputReservedTokens > 0
-        ? { outputReservedTokens }
-        : {}),
-    };
-  }
-  return {};
-}
-
-function overflowRequestTokens(
-  sm: SessionManager,
-  entryId: string,
-): number | undefined {
-  const entry = sm.getEntry(entryId);
-  if (entry?.type !== "message" || entry.message.role !== "assistant") {
-    return undefined;
-  }
-  const reply = entry.message as {
-    stopReason?: string;
-    errorMessage?: string;
-    usage?: { input?: number; cacheRead?: number; cacheWrite?: number };
-  };
-  if (reply.stopReason === "error") {
-    return parseErrorOverflowTokens(reply.errorMessage).promptTokens;
-  }
-  if (reply.stopReason !== "length" && reply.stopReason !== "stop") {
-    return undefined;
-  }
-  const usage = reply.usage;
-  const total =
-    (usage?.input ?? 0) + (usage?.cacheRead ?? 0) + (usage?.cacheWrite ?? 0);
-  return total > 0 ? total : undefined;
-}
-
-function effectiveOverflowTarget(
-  sm: SessionManager,
-  entryId: string,
-  baseTarget: number,
-  contextWindow: number,
-): number {
-  const entry = sm.getEntry(entryId);
-  if (entry?.type !== "message" || entry.message.role !== "assistant") {
-    return baseTarget;
-  }
-  const reply = entry.message as {
-    stopReason?: string;
-    errorMessage?: string;
-  };
-  if (reply.stopReason !== "error") return baseTarget;
-  const parsed = parseErrorOverflowTokens(reply.errorMessage);
-  if (
-    parsed.outputReservedTokens &&
-    contextWindow > parsed.outputReservedTokens
-  ) {
-    return Math.min(baseTarget, contextWindow - parsed.outputReservedTokens);
-  }
-  return baseTarget;
-}
-
-/**
- * Withhold the tool results that overflowed (#101, D3): walk back from
- * `fromEntryId` (excluded) through every older turn, and replace their
- * content newest-first with the D4 notice until the estimate fits `target`.
- * Membership in the canonical projection defines the eligible retained range,
- * including ancestors before branch summaries and retained compaction entries.
- * User and custom messages are never
- * withheld; a navigate_tree result, a result already hidden or replaced, and
- * a result not in the projection are skipped. The estimate is the projection without
- * `hiddenIds`, with every proposed edit reprojected before estimating.
- *
- * #101, A: `realTokens` calibrates the original tail under the surviving
- * usage baseline. Candidate edits can invalidate that baseline, so calibration
- * uses original tool bodies with the candidate's usage validity. The complete
- * request estimate is an additional lower bound.
- */
-function planWithhold(
-  sm: SessionManager,
-  fromEntryId: string,
-  hiddenIds: readonly string[],
-  target: number,
-  realTokens?: number,
-  continuation?: AgentMessage,
-): WithholdPlan {
-  const branch = sm.getBranch();
-  const lastEdit = new Map<string, unknown>();
-  for (const entry of branch) {
-    if (entry.type === "context_edit") {
-      lastEdit.set(entry.targetId, entry.replacement);
-    }
-  }
-  const previewEntries = sm.getEntries();
-  let previewLeaf = sm.getLeafId();
-  const previewEdit = (
-    targetId: string,
-    replacement: { content: ContextEditableContent } | null,
-  ) => {
-    const id = randomUUID();
-    previewEntries.push({
-      type: "context_edit",
-      id,
-      parentId: previewLeaf,
-      timestamp: new Date().toISOString(),
-      targetId,
-      replacement,
-    });
-    previewLeaf = id;
-  };
-  const branchIds = new Set(branch.map((entry) => entry.id));
-  for (const id of hiddenIds) if (branchIds.has(id)) previewEdit(id, null);
-  const project = () =>
-    projectHandoffs(
-      buildSessionProjection(previewEntries, previewLeaf),
-      previewEntries,
-    ).entries;
-  let entries = project();
-  const eligible = new Set(
-    entries
-      .filter((entry) => entry.messages.length > 0)
-      .map((entry) => entry.sourceEntry.id),
-  );
-  const originalBodies = new Map(
-    entries.flatMap((entry) =>
-      entry.sourceEntry.type === "message" &&
-      entry.sourceEntry.message.role === "toolResult"
-        ? [[entry.sourceEntry.id, entry.messages] as const]
-        : [],
-    ),
-  );
-  const estimate = () => {
-    const messages = entries.flatMap((entry) => entry.messages);
-    const effective = requestAccounting(sm, messages).messages;
-    const { baseline, tail } = splitContextEstimate(effective);
-    const originalTail = splitContextEstimate(
-      requestAccounting(
-        sm,
-        entries.flatMap(
-          (entry) => originalBodies.get(entry.sourceEntry.id) ?? entry.messages,
-        ),
-      ).messages,
-    ).tail;
-    const ratio =
-      realTokens === undefined || originalTail <= 0
-        ? 1
-        : Math.max(1, (realTokens - baseline) / originalTail);
-    return Math.max(
-      baseline +
-        ratio * tail +
-        (continuation ? estimateTokens(continuation) : 0),
-      requestAccounting(
-        sm,
-        continuation ? [...messages, continuation] : messages,
-      ).tokens,
-      originalTail <= 0 ? (realTokens ?? 0) : 0,
-    );
-  };
-  const beforeTokens = estimate();
-  const drafts: SessionBoundaryDraft[] = [];
-  const start = branch.findIndex((e) => e.id === fromEntryId);
-  // Projection membership, not a summary marker, determines the retained range.
-  for (let i = start - 1; i >= 0 && estimate() > target; i--) {
-    const entry = branch[i];
-    if (entry.type !== "message" || entry.message.role !== "toolResult") {
-      continue;
-    }
-    if (
-      !eligible.has(entry.id) ||
-      lastEdit.has(entry.id) ||
-      entry.message.toolName === TOOL_NAME
-    ) {
-      continue;
-    }
-    const original = estimateTokens(entry.message);
-    const text = buildWithheldNoticeText(original);
-    const content = [{ type: "text" as const, text }];
-    const saving = original - estimateTokens({ ...entry.message, content });
-    if (saving <= 0) continue;
-    previewEdit(entry.id, { content });
-    entries = project();
-    drafts.push({
-      type: "context_edit",
-      targetId: entry.id,
-      replacement: { content },
-    });
-  }
-  const fits = estimate() <= target;
-  return {
-    drafts: fits ? drafts : [],
-    withheld: fits ? drafts.length : 0,
-    proposedWithheld: drafts.length,
-    beforeTokens,
-    afterTokens: estimate(),
-    target,
-    fits,
-  };
-}
-
 /** `context_edit` drafts hiding `ids` (a failed attempt). */
 function hideDrafts(ids: readonly string[]): SessionBoundaryDraft[] {
   return ids.map((targetId) => ({
@@ -1231,9 +966,6 @@ function hideDrafts(ids: readonly string[]): SessionBoundaryDraft[] {
 
 /** customType of the rewind continuation and receipt messages. */
 export const REWIND_CUSTOM_TYPE = "navigate-tree-rewind";
-
-/** pi-codemode's tool name: a forced rewind (#101) lets its scripts through to rewind. */
-const CODEMODE_TOOL_NAME = "codemode";
 
 /** The rewind's tool result: the fold is queued and lands after this turn's tool results. */
 export function buildRewindAcceptedText(
@@ -1392,7 +1124,7 @@ function rewindStaleReason(
  */
 export type LateEntry =
   | {
-      kind: "user";
+      kind: "user" | "assistant";
       message: Extract<SessionEntry, { type: "message" }>["message"];
     }
   | {
@@ -1430,6 +1162,7 @@ function toolEnvelopeIds(message: AgentMessage): {
 /** Read-only fold boundary in the current canonical context, preserving unanswered input. */
 export function recoveryCutOf(
   sm: SessionManager,
+  incompleteReplyId?: string,
 ): { ok: true; foldPointId: string } | { ok: false; detail: string } {
   try {
     const allEntries = sm.getEntries();
@@ -1498,7 +1231,8 @@ export function recoveryCutOf(
         (order.get(b.sourceEntry.id) ?? -1),
     );
     for (const { sourceEntry, messages } of chronological) {
-      if (messages.length === 0) continue;
+      if (messages.length === 0 || sourceEntry.id === incompleteReplyId)
+        continue;
       if (isPreservedLateEntry(sourceEntry)) unansweredInput = true;
       if (
         pending.size > 0 &&
@@ -1556,6 +1290,7 @@ export function recoveryCutOf(
 function collectLateEntries(
   sm: SessionManager,
   afterEntryId: string,
+  recoveryEvidenceId?: string,
 ): LateEntry[] {
   let branch: SessionEntry[];
   try {
@@ -1567,6 +1302,34 @@ function collectLateEntries(
   if (start < 0) return [];
   const late: LateEntry[] = [];
   for (const entry of branch.slice(start + 1)) {
+    if (
+      entry.id === recoveryEvidenceId &&
+      entry.type === "message" &&
+      entry.message.role === "assistant"
+    ) {
+      // Replayed evidence is neither a fresh usage baseline nor a second billed call.
+      late.push({
+        kind: "assistant",
+        message: {
+          ...entry.message,
+          usage: {
+            input: 0,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 0,
+            cost: {
+              input: 0,
+              output: 0,
+              cacheRead: 0,
+              cacheWrite: 0,
+              total: 0,
+            },
+          },
+        },
+      });
+      continue;
+    }
     if (!isPreservedLateEntry(entry)) continue;
     if (entry.type === "message" && entry.message.role === "user") {
       late.push({ kind: "user", message: entry.message });
@@ -1626,6 +1389,8 @@ export interface FoldPreviewInput {
   contextWindow: number;
   /** The last folded entry: input after it is late, kept out of the fold and re-appended after it. */
   foldPointId: string;
+  /** Successful overflow evidence retained after the pending input. */
+  recoveryEvidenceId?: string;
   /** Gets the `branch:<newLabel>` completion marker before the branch is written. */
   branchLabelEntryId?: string;
   /** The continuation's lead text for a post-fold request of `afterTokens`. */
@@ -1725,7 +1490,11 @@ export function previewFoldCommit(
   // about to be abandoned. It is new input, not collapsed work: it is
   // re-appended onto the new branch, in order, ahead of the continuation
   // (which flags it as unanswered).
-  const lateEntries = collectLateEntries(sm, foldPointId);
+  const lateEntries = collectLateEntries(
+    sm,
+    foldPointId,
+    input.recoveryEvidenceId,
+  );
   try {
     const { entries } = collectEntriesForBranchSummary(sm, oldLeafId, targetId);
     const { fileOps } = prepareBranchEntries(entries, Number.MAX_SAFE_INTEGER);
@@ -1809,7 +1578,7 @@ export function previewFoldCommit(
       prospectiveEntries,
     ).messages;
     const lateMessages: AgentMessage[] = lateEntries.map((late) =>
-      late.kind === "user"
+      late.kind !== "custom"
         ? late.message
         : {
             role: "custom",
@@ -1975,7 +1744,7 @@ export async function commitFold(
   let reappended = 0;
   for (const late of lateEntries) {
     try {
-      if (late.kind === "user") {
+      if (late.kind !== "custom") {
         sm.appendMessage(
           late.message as Parameters<SessionManager["appendMessage"]>[0],
         );
@@ -2041,6 +1810,7 @@ interface FoldHost {
   thinking: ThinkingLevel | "off";
   /** Set for an idle run: its commit refuses once the agent is working again. */
   isIdle?: () => boolean;
+  recoveryEvidenceId?: string;
 }
 
 /** What a landed engine fold reports on top of `commitFold`'s own result. */
@@ -2059,8 +1829,7 @@ export type FoldRequestInput = Omit<FoldRequest, "sessionId">;
 export interface FoldApi {
   /**
    * Queue a fold for the session's next `turn_end` boundary (a running agent).
-   * Refused while another fold is queued or running; only an `agent` fold is
-   * accepted during a forced rewind.
+   * Refused while another fold is queued or running.
    */
   queueFold(
     sessionId: string,
@@ -2407,7 +2176,6 @@ export function priceFoldCandidates(
 function foldDoneDraft(
   request: FoldRequest,
   done: Extract<FoldResult, { status: "done" }>,
-  forced = false,
 ): RewindMessageDraft {
   const landed = done.commit;
   return rewindMessageDraft(landed.continuation, {
@@ -2431,7 +2199,6 @@ function foldDoneDraft(
     modifiedFiles: landed.modifiedFiles,
     reappendedLateMessages: landed.reappended,
     openUserRequests: landed.openUserRequests,
-    ...(forced && { forced: true }),
     ...(landed.continuityReport && { continuity: landed.continuityReport }),
   });
 }
@@ -2629,34 +2396,13 @@ export default function (pi: ExtensionAPI) {
   >();
   const queuedFolds = new Map<string, FoldRequest>();
   const runningFolds = new Set<string>();
-  // Codemode calls with a refused nested navigate_tree (#103): a refusal
-  // counts as a direct one (D7), so a forced rewind's turn_end does not count
-  // it as an attempt. An abort can leave a call with no tool_result, so the
-  // set is cleared when the run settles.
-  const refusedNestedCallers = new Set<string>();
-
-  // Turns the rewind handler owned (the rewind call's turn, a forced-rewind
-  // attempt): the hint and the auto start anchor skip them, so neither lands
-  // on a fold in progress or on a hidden attempt.
+  // Hints and automatic start anchors skip turns owned by a fold or recovery.
   const rewindTurns = new WeakSet<object>();
   // Turns that overflowed the window (#101, D14): marked by the rewind handler,
   // whether or not rewind-driven compaction is on, so the start anchor skips
   // them.
   const overflowedTurns = new WeakSet<object>();
 
-  // A forced rewind (#101, rewind-driven compaction), keyed by session id:
-  // set when the forced-rewind message goes out, deleted when the rewind
-  // lands. A final error (D8) inside a run marks it `ended` instead (the gate
-  // lifts, no second forced rewind in the same run, no start anchor) and
-  // `agent_settled` deletes it.
-  const forcedRewinds = new Map<
-    string,
-    { attempts: number; ended?: boolean }
-  >();
-  const outputBudgets = new Map<
-    string,
-    Map<string, { canClamp: boolean; cap?: number; retried?: boolean }>
-  >();
   const requestBudgetFailures = new Map<
     string,
     {
@@ -2692,67 +2438,6 @@ export default function (pi: ExtensionAPI) {
         ...(failure.detail ? { detail: failure.detail } : {}),
       },
     );
-
-  pi.on("before_provider_request", (event, ctx) => {
-    let sm: SessionManager;
-    let model: typeof ctx.model;
-    let sessionId: string;
-    try {
-      sm = ctx.sessionManager as SessionManager;
-      sessionId = sm.getSessionId();
-      model = ctx.model;
-    } catch {
-      return;
-    }
-    if (!model) return;
-    // Some adapters ignore cancellation until after opening their stream.
-    if (requestBudgetFailures.has(sessionId)) return {};
-    const prior = outputBudgets
-      .get(sessionId)
-      ?.get(`${model.provider}/${model.id}`);
-    if (prior) prior.canClamp = false;
-    const payload = event.payload;
-    const body =
-      payload !== null && typeof payload === "object"
-        ? (payload as { model?: unknown })
-        : undefined;
-    const otherModel =
-      body !== undefined && "model" in body && body.model !== model.id;
-    if (otherModel) return;
-    const at = rewindCompactionTarget(sm, sessionId, model);
-    if (!at) return;
-    if (
-      model.api !== "openai-completions" &&
-      model.api !== "openai-responses" &&
-      model.api !== "azure-openai-responses"
-    )
-      return;
-    if (
-      model.compat &&
-      "thinkingTokenBudgetField" in model.compat &&
-      model.compat.thinkingTokenBudgetField
-    )
-      return;
-    let budgets = outputBudgets.get(sessionId);
-    if (!budgets) {
-      budgets = new Map();
-      outputBudgets.set(sessionId, budgets);
-    }
-    const state = budgets.get(at.modelKey) ?? { canClamp: false };
-    state.canClamp = capRecoveryOutput(event.payload, 16) !== undefined;
-    budgets.set(at.modelKey, state);
-    const recoveryCap = Math.max(
-      RECOVERY_MIN_OUTPUT_TOKENS,
-      Math.min(
-        RECOVERY_MAX_OUTPUT_TOKENS,
-        at.contextWindow - at.target - RECOVERY_HEADROOM_TOKENS,
-      ),
-    );
-    const cap =
-      state.cap ?? (forcedActive(sessionId) ? recoveryCap : undefined);
-    if (cap === undefined) return;
-    return capRecoveryOutput(payload, cap);
-  });
 
   // Where pi's settings are read from (#101, S4): the session's cwd, agent
   // dir and project trust, set at `session_start`. `null` = cannot tell.
@@ -2794,233 +2479,6 @@ export default function (pi: ExtensionAPI) {
       // Invalid settings: pi's own compaction throws on them too.
       return null;
     }
-  }
-
-  /**
-   * The window and target of rewind-driven compaction for `model`, or
-   * `null` when it is off (#101, S2/S3): the model has a hint reserve,
-   * `navigate_tree` is active for the session, and pi's auto-compaction is
-   * off.
-   */
-  function rewindCompactionTarget(
-    sm: SessionManager,
-    sessionId: string,
-    model: OverflowModel | undefined,
-  ): { contextWindow: number; target: number; modelKey: string } | null {
-    if (!model || !(model.contextWindow && model.contextWindow > 0)) {
-      return null;
-    }
-    if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) {
-      return null;
-    }
-    const reserve = resolveRewindHintReserve(
-      {
-        rewindHintReserveTokens,
-        rewindHintModelReserveTokens: hintByModel,
-      },
-      `${model.provider}/${model.id}`,
-    );
-    if (reserve === null) return null;
-    const pc = piCompaction(sm, model);
-    if (!pc || pc.enabled) return null;
-    return {
-      contextWindow: model.contextWindow,
-      target: model.contextWindow - pc.reserveTokens,
-      modelKey: `${model.provider}/${model.id}`,
-    };
-  }
-
-  /**
-   * End rewind-driven compaction with the final error (#101, D8): the record
-   * is marked ended (created if absent) and the D8 message is returned as a
-   * boundary draft. The caller returns no `continue`.
-   */
-  function compactionFailed(
-    sessionId: string,
-    reason: string,
-    plan?: WithholdPlan,
-  ): SessionBoundaryDraft[] {
-    const record = forcedRewinds.get(sessionId) ?? { attempts: 0 };
-    record.ended = true;
-    forcedRewinds.set(sessionId, record);
-    return [
-      rewindMessageDraft(buildRewindCompactionFailedText(reason), {
-        status: "failed",
-        reason,
-        ...(plan
-          ? {
-              proposedWithheld: plan.proposedWithheld,
-              appliedWithheld: 0,
-              estimatedBefore: plan.beforeTokens,
-              estimatedAfterProposed: plan.afterTokens,
-              target: plan.target,
-            }
-          : {}),
-      }),
-    ];
-  }
-
-  /** Esc during a forced rewind ends it with the D8 row (#101, D16). */
-  function abortedForced(sessionId: string): SessionBoundaryDraft[] {
-    return forcedActive(sessionId)
-      ? compactionFailed(sessionId, COMPACTION_FAILED_ABORTED)
-      : [];
-  }
-
-  /** True while a forced rewind gates the session (#101, D6). */
-  function forcedActive(sessionId: string): boolean {
-    const record = forcedRewinds.get(sessionId);
-    return !!record && !record.ended;
-  }
-
-  /**
-   * Rewind-driven compaction (#101, D2–D5, D14, S6): the one entry
-   * point of both boundaries, after an overflow. `failedEntryId` is the
-   * overflowed assistant (the withholding walk starts above it), `failedIds`
-   * the entries of the failed attempt to hide. Returns the boundary drafts
-   * and `continue`, or `null` to stand down.
-   */
-  function startRewindCompaction(
-    sm: SessionManager,
-    sessionId: string,
-    at: { contextWindow: number; target: number; modelKey: string },
-    failedEntryId: string,
-    failedIds: readonly string[],
-  ): { drafts: SessionBoundaryDraft[]; continue: boolean } | null {
-    const record = forcedRewinds.get(sessionId);
-    // A final error already ended it in this run: pi ends the run.
-    if (record?.ended) return null;
-    const realTokens = overflowRequestTokens(sm, failedEntryId);
-    const budget = outputBudgets.get(sessionId)?.get(at.modelKey);
-    const entry = sm.getEntry(failedEntryId);
-    const parsed =
-      entry?.type === "message" &&
-      entry.message.role === "assistant" &&
-      entry.message.stopReason === "error"
-        ? parseErrorOverflowTokens(entry.message.errorMessage)
-        : {};
-    if (
-      !record &&
-      budget?.canClamp &&
-      parsed.promptTokens !== undefined &&
-      parsed.outputReservedTokens !== undefined &&
-      parsed.promptTokens <= at.target &&
-      parsed.promptTokens + parsed.outputReservedTokens > at.contextWindow
-    ) {
-      const cap = Math.min(
-        RECOVERY_MAX_OUTPUT_TOKENS,
-        at.contextWindow - parsed.promptTokens - RECOVERY_HEADROOM_TOKENS,
-      );
-      if (
-        !budget.retried &&
-        cap >= RECOVERY_MIN_OUTPUT_TOKENS &&
-        cap < parsed.outputReservedTokens
-      ) {
-        budget.cap = cap;
-        budget.retried = true;
-        return { drafts: hideDrafts(failedIds), continue: true };
-      }
-      if (budget.retried) {
-        return {
-          drafts: [
-            ...hideDrafts(failedIds),
-            ...compactionFailed(sessionId, COMPACTION_FAILED_OVERFLOWED_AGAIN),
-          ],
-          continue: false,
-        };
-      }
-    }
-    if (budget?.canClamp) {
-      budget.cap = Math.max(
-        RECOVERY_MIN_OUTPUT_TOKENS,
-        Math.min(
-          budget.cap ?? RECOVERY_MAX_OUTPUT_TOKENS,
-          at.contextWindow - at.target - RECOVERY_HEADROOM_TOKENS,
-        ),
-      );
-    }
-    const effTarget = Math.min(
-      at.target,
-      at.contextWindow - RECOVERY_MIN_OUTPUT_TOKENS - RECOVERY_HEADROOM_TOKENS,
-      budget?.canClamp
-        ? at.target
-        : effectiveOverflowTarget(
-            sm,
-            failedEntryId,
-            at.target,
-            at.contextWindow,
-          ),
-    );
-    // S6: one recovery per overflow.
-    if (record) {
-      return {
-        drafts: [
-          ...hideDrafts(failedIds),
-          ...compactionFailed(sessionId, COMPACTION_FAILED_OVERFLOWED_AGAIN),
-        ],
-        continue: false,
-      };
-    }
-    // A fresh forced rewind.
-    const allEntries = sm.getEntries();
-    const byId = new Map<string, SessionEntry>();
-    for (const e of allEntries) byId.set(e.id, e);
-    const anchors = formatActiveAnchors(sm, at.contextWindow, allEntries, byId);
-    // D14: nothing to rewind to.
-    if (anchors.names.length === 0) {
-      return {
-        drafts: [
-          ...hideDrafts(failedIds),
-          ...compactionFailed(sessionId, COMPACTION_FAILED_NO_ANCHOR),
-        ],
-        continue: false,
-      };
-    }
-    const forcedNotice: AgentMessage = {
-      role: "custom",
-      customType: REWIND_CUSTOM_TYPE,
-      content: buildForcedRewindText(
-        at.contextWindow,
-        sm.getBranch().length,
-        anchors.text,
-      ),
-      display: true,
-      timestamp: 0,
-    };
-    const plan = planWithhold(
-      sm,
-      failedEntryId,
-      failedIds,
-      effTarget,
-      realTokens,
-      forcedNotice,
-    );
-    if (!plan.fits) {
-      return {
-        drafts: [
-          ...hideDrafts(failedIds),
-          ...compactionFailed(sessionId, COMPACTION_FAILED_STILL_OVER, plan),
-        ],
-        continue: false,
-      };
-    }
-    forcedRewinds.set(sessionId, { attempts: 0 });
-    hintTracker.markSpent();
-    return {
-      drafts: [
-        ...hideDrafts(failedIds),
-        ...plan.drafts,
-        rewindMessageDraft(
-          buildForcedRewindText(at.contextWindow, plan.withheld, anchors.text),
-          {
-            status: "forced",
-            withheld: plan.withheld,
-            contextWindow: at.contextWindow,
-          },
-        ),
-      ],
-      continue: true,
-    };
   }
 
   /** Best-effort label write: `pi.setLabel`, else the captured manager. */
@@ -3189,6 +2647,7 @@ export default function (pi: ExtensionAPI) {
       handoffMode: prepared.parent?.mode ?? "full",
       contextWindow,
       foldPointId: prepared.leafId,
+      recoveryEvidenceId: host.recoveryEvidenceId,
       branchLabelEntryId: prepared.leafId,
       continuationText: (afterTokens) =>
         buildRewindDoneText(
@@ -3270,7 +2729,10 @@ export default function (pi: ExtensionAPI) {
     if (!model || contextWindow <= 0)
       return { status: "failed", detail: "no operating window is available" };
     const captured = capturedSystems.get(sessionId);
-    const systemHead = captured?.messages ?? [];
+    const systemHead = effectiveRequestMessages(
+      sm,
+      captured?.messages ?? sm.buildSessionContext().messages,
+    ).filter((message) => message.role === "system");
     const modelKey = `${model.provider}/${model.id}`;
     if (
       accountRequest(systemHead).tokens +
@@ -3291,7 +2753,7 @@ export default function (pi: ExtensionAPI) {
       `${ctx.model?.provider}/${ctx.model?.id}` === modelKey &&
       ctx.model?.contextWindow === contextWindow &&
       capturedSystems.get(sessionId) === captured;
-    const cut = recoveryCutOf(sm);
+    const cut = recoveryCutOf(sm, host.recoveryEvidenceId);
     if (!cut.ok) {
       return { status: "failed", detail: cut.detail };
     }
@@ -3380,16 +2842,12 @@ export default function (pi: ExtensionAPI) {
 
   /**
    * A fold for the session's next `turn_end` (a running agent). One fold per
-   * session is queued or running at a time. A forced rewind (#101) gates the
-   * session on the model's own rewind, so only an `agent` fold is queued then.
+   * session is queued or running at a time.
    */
   function queueFold(
     sessionId: string,
     request: FoldRequestInput,
   ): { ok: true } | { ok: false; reason: string } {
-    if (forcedActive(sessionId) && request.origin !== "agent") {
-      return { ok: false, reason: "a forced rewind is in progress" };
-    }
     if (queuedFolds.has(sessionId) || runningFolds.has(sessionId)) {
       return {
         ok: false,
@@ -3444,8 +2902,6 @@ export default function (pi: ExtensionAPI) {
       host = foldHostOf(ctx);
       host.isIdle = () => ctx.isIdle();
       full = { ...request, sessionId: host.sm.getSessionId() };
-      if (forcedActive(full.sessionId))
-        return gateFailed("forced-rewind", "a forced rewind is in progress");
     } catch (error) {
       return gateFailed(
         "exception",
@@ -3562,10 +3018,8 @@ export default function (pi: ExtensionAPI) {
    * The queued fold at a `turn_end` boundary, after this turn's tool results
    * are on the branch: its receipt is a boundary draft. Esc cancels it; a
    * landed fold continues the run; a failed one continues only when the
-   * model asked for it and the run was not cancelled. A forced rewind (#101) ends with the fold: landing
-   * lifts its gate, a fold that did not land ends it with the final error
-   * (D8) and the run. Undefined when the ctx is stale (the fold stays
-   * queued).
+   * model asked for it and the run was not cancelled. Undefined when the ctx
+   * is stale (the fold stays queued).
    */
   async function runQueuedFold(
     sm: SessionManager,
@@ -3587,35 +3041,18 @@ export default function (pi: ExtensionAPI) {
     }
     queuedFolds.delete(sessionId);
     rewindTurns.add(message);
-    const forced = forcedActive(sessionId);
-    const deliver = (
-      draft: RewindMessageDraft,
-      cont: boolean,
-      ended: SessionBoundaryDraft[] = [],
-    ) => ({
+    const deliver = (draft: RewindMessageDraft, cont: boolean) => ({
       entries: keepValidDrafts<SessionBoundaryDraft>(sm, [
         ...(event.entries ?? []),
         draft,
-        ...ended,
       ]),
-      ...((cont || ended.length > 0) && { continue: cont }),
+      ...(cont && { continue: true }),
     });
     const notLanded = (outcome: Exclude<FoldResult, { status: "done" }>) =>
-      forced
-        ? deliver(
-            foldFailedDraft(request, outcome),
-            false,
-            compactionFailed(
-              sessionId,
-              outcome.status === "cancelled"
-                ? COMPACTION_FAILED_ABORTED
-                : `the fold did not land (${outcome.status === "failed" ? outcome.reason : outcome.status})`,
-            ),
-          )
-        : deliver(
-            foldFailedDraft(request, outcome),
-            request.origin === "agent" && outcome.status !== "cancelled",
-          );
+      deliver(
+        foldFailedDraft(request, outcome),
+        request.origin === "agent" && outcome.status !== "cancelled",
+      );
     if (signal?.aborted || message.stopReason === "aborted") {
       return notLanded({ status: "cancelled", usage: [] });
     }
@@ -3631,43 +3068,8 @@ export default function (pi: ExtensionAPI) {
       );
     }
     if (outcome.status !== "done") return notLanded(outcome);
-    forcedRewinds.delete(sessionId);
-    return deliver(foldDoneDraft(request, outcome, forced), true);
+    return deliver(foldDoneDraft(request, outcome), true);
   }
-
-  // The forced-rewind gate (#101, D6). pi-codemode scripts issue nested calls
-  // that reach it as tool calls with a `parentToolCallId`: the top-level
-  // `codemode` call passes so its script can rewind, and every other nested
-  // call but a rewind is blocked, so the gate still means "rewind only".
-  pi.on("tool_call", (event, ctx) => {
-    const isRewind =
-      event.toolName === TOOL_NAME &&
-      (event.input as { action?: unknown } | undefined)?.action === "rewind";
-    const parentId =
-      typeof event.parentToolCallId === "string" &&
-      event.parentToolCallId.length > 0
-        ? event.parentToolCallId
-        : undefined;
-    let sessionId: string;
-    try {
-      sessionId = ctx.sessionManager.getSessionId();
-    } catch {
-      return undefined;
-    }
-    // A forced rewind (#101, D6): `terminate` so a turn of blocked calls
-    // ends the run unless `turn_end` re-sends (an ending's `continue: false`
-    // must hold).
-    const topLevelCodemode =
-      event.toolName === CODEMODE_TOOL_NAME && parentId === undefined;
-    if (forcedActive(sessionId) && !isRewind && !topLevelCodemode) {
-      return {
-        block: true,
-        reason: FORCED_REWIND_BLOCK_REASON,
-        terminate: true,
-      };
-    }
-    return undefined;
-  });
 
   // Continuity capture: the user's instructions on the active branch become
   // ledger ops, persisted as one `navigate-tree-continuity-ops` entry. Config
@@ -3891,9 +3293,7 @@ export default function (pi: ExtensionAPI) {
     return undefined;
   }
 
-  // The rewind turn: a queued fold runs here, and a forced rewind's attempts
-  // are checked. Registered before the hint / start-anchor handler so a landed
-  // fold is already on the branch when that handler reads the context usage.
+  // Fold and recovery commits precede hint / start-anchor context measurements.
   pi.on("turn_end", async (event, ctx) => {
     let sm: SessionManager;
     let sessionId: string;
@@ -3947,107 +3347,58 @@ export default function (pi: ExtensionAPI) {
       );
       if (folded) return folded;
     }
-    // Rewind-driven compaction (#101, D2): a `length` / silent overflow is
-    // handled here, so the model never retries the oversized call; an
-    // explicit error ends the loop and is handled at `agent_before_settle`.
-    // Another extension's `continue` owns the turn.
+    // Another extension's continuation owns this boundary.
     if (!event.continue && messageEntryId && overflowed(message, ctx.model)) {
       overflowedTurns.add(message);
-      const at = rewindCompactionTarget(sm, sessionId, ctx.model);
-      if (at) {
-        rewindTurns.add(message);
-        if (message.stopReason === "error") return;
-        // A silent `stop` reply stays visible (§9.1); a squeezed reply and
-        // its failed calls are hidden.
-        const failedIds = message.stopReason === "length" ? turnIds : [];
-        const result = startRewindCompaction(
-          sm,
-          sessionId,
-          at,
-          messageEntryId,
-          failedIds,
-        );
-        if (result) return deliverRaw(result.drafts, result.continue);
-      }
-    }
-    if (!forcedActive(sessionId)) {
-      if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
-        await captureContinuity(sm, sessionId, ctx, message);
-      }
-      const auto = await maybeRunAutoNavigate(
-        sm,
-        sessionId,
-        message,
-        event,
-        ctx,
-      );
-      if (auto) return auto;
-      let signal: AbortSignal | undefined;
-      try {
-        signal = ctx.signal;
-      } catch {
-        // Stale ctx: no nudge.
+      if (message.stopReason === "error") return;
+      if (
+        ctx.signal?.aborted ||
+        nativeRetryOwned.has(sessionId) ||
+        (toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+        piCompaction(sm, ctx.model)?.enabled !== false
+      )
         return;
+      rewindTurns.add(message);
+      // A truncated tool envelope must not enter the next request.
+      if (message.stopReason === "length") {
+        for (const id of turnIds) sm.appendContextEdit(id, null);
+        refreshAgentMessages(sm);
       }
-      const nudge = continueNudgeDraft(sm, sessionId, message, event, signal);
-      return nudge ? deliverRaw([nudge], true) : undefined;
+      const host = foldHostOf(ctx);
+      if (message.stopReason === "stop")
+        host.recoveryEvidenceId = messageEntryId;
+      const outcome = await recoverIndependently(ctx, host, ctx.signal);
+      if (ctx.signal?.aborted || outcome.status === "cancelled") return;
+      if (outcome.status === "failed") {
+        const failure = {
+          inputEstimate: estimateAdmissionTokens(sm),
+          contextWindow: host.model?.contextWindow ?? 0,
+          receiptId: randomUUID(),
+          detail: outcome.detail,
+          providerOverflow: true,
+        };
+        requestBudgetFailures.set(sessionId, failure);
+        return deliverRaw([requestBudgetFailureDraft(failure)], false);
+      }
+      refreshAgentMessages(sm);
+      return deliverRaw([outcome.draft], true);
     }
-    // A forced-rewind attempt (#101, D6): anything but an accepted `rewind`
-    // (whose fold ran above) is hidden and re-sent.
-    rewindTurns.add(message);
-    let aborted = message.stopReason === "aborted";
+    if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
+      await captureContinuity(sm, sessionId, ctx, message);
+    }
+    const auto = await maybeRunAutoNavigate(sm, sessionId, message, event, ctx);
+    if (auto) return auto;
+    let signal: AbortSignal | undefined;
     try {
-      aborted ||= ctx.signal?.aborted === true;
+      signal = ctx.signal;
     } catch {
-      // Stale ctx: treat as not aborted.
+      return;
     }
-    // Esc ends the gate here (D16): the attempt is hidden, one D8 row.
-    // An error: pi's retry, or `agent_settled`.
-    if (aborted) {
-      return deliverRaw(
-        [
-          ...hideDrafts(turnIds),
-          ...compactionFailed(sessionId, COMPACTION_FAILED_ABORTED),
-        ],
-        false,
-      );
-    }
-    if (message.stopReason === "error") return;
-    // A refused `rewind` is not an attempt (D7): it stays visible.
-    // A nested refusal (#103) is recorded under its codemode call.
-    const results = (event.toolResults ?? []) as Array<{
-      toolName?: string;
-      toolCallId?: string;
-      details?: unknown;
-    }>;
-    const refused = results.some(
-      (result) =>
-        refusedNestedCallers.has(result.toolCallId ?? "") ||
-        (result.toolName === TOOL_NAME &&
-          (result.details as { refusal?: unknown } | undefined)?.refusal ===
-            true),
-    );
-    for (const result of results) {
-      refusedNestedCallers.delete(result.toolCallId ?? "");
-    }
-    if (refused) return;
-    const record = forcedRewinds.get(sessionId);
-    if (!record) return;
-    record.attempts++;
-    if (record.attempts < MAX_FORCED_REWIND_ATTEMPTS) {
-      return deliverRaw(hideDrafts(turnIds), true);
-    }
-    return deliverRaw(
-      [
-        ...hideDrafts(turnIds),
-        ...compactionFailed(sessionId, COMPACTION_FAILED_NO_REWIND),
-      ],
-      false,
-    );
+    const nudge = continueNudgeDraft(sm, sessionId, message, event, signal);
+    return nudge ? deliverRaw([nudge], true) : undefined;
   });
 
-  // The run would settle: recover an explicit overflow error (#101) and end
-  // a forced rewind that Esc cut off.
+  // Explicit provider errors end the loop before turn_end can continue it.
   pi.on("agent_before_settle", async (event, ctx) => {
     let sm: SessionManager;
     let sessionId: string;
@@ -4145,50 +3496,9 @@ export default function (pi: ExtensionAPI) {
         };
       }
     }
-    // Esc during a forced rewind (#101, D16): the D8 row.
-    if (event.outcome === "aborted" && forcedActive(sessionId)) {
-      return {
-        entries: keepValidDrafts(sm, [
-          ...(event.entries ?? []),
-          ...abortedForced(sessionId),
-        ]),
-        continue: false,
-      };
-    }
   });
 
-  // The last assistant reply ended with Esc (stopReason "aborted", #101, D16).
-  function lastReplyAborted(sm: SessionManager): boolean {
-    try {
-      const last = sm
-        .getBranch()
-        .findLast(
-          (e) => e.type === "message" && e.message.role === "assistant",
-        );
-      return (
-        last?.type === "message" &&
-        (last.message as { stopReason?: string }).stopReason === "aborted"
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  // Fully settled: nothing is in flight, so a forced rewind that is still
-  // gating the session ends here.
-  pi.on("agent_settled", (event, ctx) => {
-    // Nothing is in flight once settled: drop any nested-call leftovers.
-    refusedNestedCallers.clear();
-    // Esc ended the run (#101, D16). The event flag exists on pi >= 1.1.0;
-    // on older pi the reply Esc cut short says it (peer floor 0.87.0).
-    let aborted = event.aborted === true;
-    try {
-      aborted ||= lastReplyAborted(ctx.sessionManager as SessionManager);
-    } catch {
-      // Stale ctx: the event flag decides.
-    }
-    // A forced rewind still gating the session (#101, D16): lift the gate
-    // and say so. An ended one already said it (D8).
+  pi.on("agent_settled", (_event, ctx) => {
     let sm: SessionManager;
     let sessionId: string;
     try {
@@ -4203,9 +3513,6 @@ export default function (pi: ExtensionAPI) {
     // unrelated later turn, and block every rewind until then.
     if (queuedFolds.get(sessionId)?.origin === "agent")
       queuedFolds.delete(sessionId);
-    const record = forcedRewinds.get(sessionId);
-    forcedRewinds.delete(sessionId);
-    outputBudgets.delete(sessionId);
     const budgetFailure = requestBudgetFailures.get(sessionId);
     if (budgetFailure) {
       const delivered = sm
@@ -4224,37 +3531,12 @@ export default function (pi: ExtensionAPI) {
       requestBudgetFailures.delete(sessionId);
       return;
     }
-    if (!record || record.ended) return;
-    const reason = aborted
-      ? COMPACTION_FAILED_ABORTED
-      : COMPACTION_FAILED_RUN_ENDED;
-    const content = buildRewindCompactionFailedText(reason);
-    const details = { status: "failed", reason };
-    try {
-      // Idle: a plain append, no turn started.
-      pi.sendMessage({
-        customType: REWIND_CUSTOM_TYPE,
-        content,
-        display: true,
-        details,
-      });
-    } catch {
-      try {
-        sm.appendCustomMessageEntry(REWIND_CUSTOM_TYPE, content, true, details);
-      } catch {
-        // Fail-open: the gate is lifted either way.
-      }
-    }
   });
 
-  // The session is going away (quit, reload, new, resume, fork): a forced
-  // rewind cannot outlive it (#101).
+  // Recovery and queued folds cannot outlive the session.
   pi.on("session_shutdown", (_event, ctx) => {
-    refusedNestedCallers.clear();
     try {
       const sessionId = ctx.sessionManager.getSessionId();
-      forcedRewinds.delete(sessionId);
-      outputBudgets.delete(sessionId);
       requestBudgetFailures.delete(sessionId);
       capturedSystems.delete(sessionId);
       preflightAttempted.delete(sessionId);
@@ -4420,9 +3702,6 @@ export default function (pi: ExtensionAPI) {
     // clear this session's gate. Absent = fail-open until a gate is set.
     if (toolActiveBySession.get(sessionId) === false) return;
     if (anchorStartSettled.has(sessionId)) return;
-    // Never at the context limit (#101, D14): not during a forced rewind,
-    // nor after its final error in the same run.
-    if (forcedRewinds.has(sessionId)) return;
     // Per-session threshold (#55): two sessions started with different
     // project configs must not share one closure value.
     const startAfterTurns =
@@ -4502,8 +3781,6 @@ export default function (pi: ExtensionAPI) {
     const agentDir = getAgentDir();
     // pi's settings as this session reads them (#101, S4).
     piSettingsSource = { cwd, agentDir, projectTrusted };
-    forcedRewinds.delete(sessionId);
-    outputBudgets.delete(sessionId);
     requestBudgetFailures.delete(sessionId);
     capturedSystems.delete(sessionId);
     preflightAttempted.delete(sessionId);
@@ -4712,7 +3989,6 @@ export default function (pi: ExtensionAPI) {
     // session's auto-anchor gate.
     try {
       const sessionId = ctx.sessionManager.getSessionId();
-      outputBudgets.delete(sessionId);
       requestBudgetFailures.delete(sessionId);
       preflightAttempted.delete(sessionId);
       nativeRetryOwned.delete(sessionId);
@@ -4736,8 +4012,6 @@ export default function (pi: ExtensionAPI) {
     if (event.toolName !== TOOL_NAME) return undefined;
     const details = event.details as { refusal?: boolean } | undefined;
     if (details?.refusal === true) {
-      if (event.parentToolCallId)
-        refusedNestedCallers.add(event.parentToolCallId);
       return { isError: true };
     }
     return undefined;
@@ -4766,7 +4040,7 @@ export default function (pi: ExtensionAPI) {
     // the pre-increment. (The turn's entry ids, `messageEntryId` /
     // `toolResultEntryIds`, exist since pi 0.87; the rewind handler reads
     // them, this one needs only `turnIndex` and `message`.) A turn a rewind
-    // owns is skipped: a forced-rewind attempt may be hidden, and the rewind
+    // owns is skipped: a recovery reply may be hidden, and the rewind
     // turn's leaf is the abandoned branch's.
     const rewindOwned =
       !!event.message &&
@@ -4819,8 +4093,8 @@ export default function (pi: ExtensionAPI) {
       },
       modelKey,
     );
-    // A rewind owns this turn (its call, or a forced-rewind attempt): a
-    // rewind hint would be stale or push a second rewind. The crossing stays
+    // During a fold or recovery a hint would be stale or push a second rewind.
+    // The crossing stays
     // unspent for the next turn.
     if (
       event.message &&
@@ -5107,7 +4381,6 @@ export default function (pi: ExtensionAPI) {
         sm.getLeafId() !== leafId ||
         autoNavigateStateBySession.get(sessionId) !== state ||
         `${ctx.model?.provider}/${ctx.model?.id}` !== modelKey ||
-        forcedActive(sessionId) ||
         (toolActiveBySession.get(sessionId) ?? toolActive) === false
       )
         return;
