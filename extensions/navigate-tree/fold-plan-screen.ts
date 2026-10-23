@@ -173,16 +173,14 @@ function candidateRow(
   candidate: FoldPlanCandidate,
   recommended: boolean,
 ): FrameRow {
-  const hints = [candidate.auto && "auto", recommended && "recommended"]
-    .filter(Boolean)
-    .join(", ");
+  // The value column is never clipped by long anchor names, so the recommendation lives there.
   return {
     label: `◆ ${candidate.name}`,
-    labelHint: hints ? `(${hints})` : undefined,
+    labelHint: candidate.auto ? "(auto)" : undefined,
     value: candidate.valid
-      ? `−${formatTokens(Math.max(0, candidate.beforeTokens - candidate.projectedAfterTokens))} tok`
+      ? `−${formatTokens(Math.max(0, candidate.beforeTokens - candidate.projectedAfterTokens))} tok${recommended ? " · recommended" : ""}`
       : "not foldable",
-    tone: candidate.valid ? "text" : "muted",
+    tone: candidate.valid ? (recommended ? "accent" : "text") : "muted",
     detail: candidate.afterPreview
       ? `after: “${candidate.afterPreview}”`
       : undefined,
@@ -415,8 +413,14 @@ class FoldPlanPanel implements Component, Focusable {
         this.controller?.abort();
       }
     } else if (mode.kind === "finished") {
-      if (leaving || this.matches(data, "tui.select.confirm", Key.enter))
+      const confirm = this.matches(data, "tui.select.confirm", Key.enter);
+      if (confirm && mode.exit === "back") {
+        // Back to the plan with the outcome kept: retry, or pick another anchor.
+        this.status = { tone: mode.tone, text: mode.text };
+        this.mode = { kind: "plan" };
+      } else if (leaving || confirm) {
         this.options.done({ kind: "close", result: mode.exit });
+      }
     } else if (
       this.matches(data, "tui.select.confirm", Key.enter) &&
       this.list.isSearching
@@ -588,7 +592,12 @@ class FoldPlanPanel implements Component, Focusable {
         : [{ key: "esc", action: "cancel", priority: "essential" }];
     }
     if (mode.kind === "finished")
-      return [{ key: "enter/esc", action: "close", priority: "essential" }];
+      return mode.exit === "back"
+        ? [
+            { key: "enter", action: "back to plan", priority: "essential" },
+            { key: "esc", action: "close", priority: "essential" },
+          ]
+        : [{ key: "enter/esc", action: "close", priority: "essential" }];
     const choose: FrameKeybinding = {
       key: "↑↓",
       action: "choose anchor",
