@@ -10,8 +10,9 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `config.ts`: layered global/trusted-project/runtime configuration.
 - `runtime-config.ts`: session-ID-scoped in-memory overrides, cleared at session
   start/reload; shared by settings, live navigation and clone proposals.
-- `context-tokens.ts`, `rewind-hint.ts`: baseline-safe context estimates, effective
-  system-state accounting, rewind hints and recovery diagnostics.
+- `context-tokens.ts`, `rewind-hint.ts`: the single admission estimate (newest
+  valid usage plus the scaled tail, else the whole request) shared by the request
+  guard, hints, anchor rows and controller; rewind hints and recovery diagnostics.
 - `output-budget.ts`: conservative wire-level output caps for overflow recovery;
   request metadata is scoped to the session/model/run, never persisted.
 - `summary-prompt.ts`: summary instructions, stored-summary preamble and file lists.

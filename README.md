@@ -247,8 +247,12 @@ Recovery reacts to a real overflow, detected with pi's own checks (`isContextOve
 
 With rewind-driven compaction enabled, a final request check also estimates the
 complete model-facing transcript, including the restored system prompt and tool
-declarations. Its conservative estimate uses Pi's content heuristic adjusted for
-the SDK's denser text estimate, with recorded usage as an additional lower bound.
+declarations. Like the SDK's own pre-request estimate, it takes the newest valid
+recorded usage plus the messages after it, scaled from Pi's four characters per
+token to the SDK's 3.5. Without a valid baseline (after a compaction, context
+edit, system-state or model change) it estimates the whole request that way.
+The same estimate drives the hint, `list`, the `/anchor` rows and the automatic
+controller, so a percentage shown there is the one this check applies.
 The captured final forced prompt replaces persisted system state for this check.
 If the estimate leaves fewer than 1,024 output tokens
 plus 4,096 headroom in the operating window, the operation is aborted before
@@ -321,7 +325,7 @@ There is no limit after a landing: if the rewind freed too little and the contex
 
 **Headless sessions (subagents).** A headless session with the hint set and pi's compaction on (pi's default, or enabled by a project or agent) runs silently without the hint and without rewind-driven compaction: there is no UI for the error.
 
-**Reserve ordering.** The hint must fire before rewind-driven compaction's target: `rewindHintReserveTokens` ≥ the active model's `compaction.reserveTokens` (`compaction.modelOverrides["<provider>/<modelId>"].reserveTokens`, else `compaction.reserveTokens`, default 16384). Size it well above that to leave room for the persist and summary turns. With compaction off, session start warns per model when it is below (both still run), e.g.: `rewindHintReserveTokens (10000) is below pi's compaction.reserveTokens (16384) for anthropic/claude-haiku-5-5: rewind-driven compaction may fire before the hint, giving the model no time to prepare and persist what matters to files.`
+**Reserve ordering.** The hint must fire before rewind-driven compaction's target: `rewindHintReserveTokens` ≥ the active model's `compaction.reserveTokens` (`compaction.modelOverrides["<provider>/<modelId>"].reserveTokens`, else `compaction.reserveTokens`, default 16384). Size it well above that to leave room for the persist and summary turns. It must also exceed the 5,120 tokens (1,024 output plus 4,096 headroom) the request check keeps free; otherwise a request can be refused before the hint fires, and session start warns. With compaction off, session start warns per model when it is below pi's reserve (both still run), e.g.: `rewindHintReserveTokens (10000) is below pi's compaction.reserveTokens (16384) for anthropic/claude-haiku-5-5: rewind-driven compaction may fire before the hint, giving the model no time to prepare and persist what matters to files.`
 
 **Room for the forced turns.** The target `contextWindow − compaction.reserveTokens` must hold the forced message, the rewind call, the summary instruction and the summary, thinking included. At high thinking levels size pi's reserve per model, e.g.:
 
