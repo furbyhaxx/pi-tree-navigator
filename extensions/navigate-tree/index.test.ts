@@ -430,7 +430,7 @@ function appendTurn(
     api: "anthropic",
     provider: "claude",
     model: "claude-sonnet-4-5",
-    stopReason: "endTurn",
+    stopReason: "stop",
     timestamp: Date.now(),
     usage: usageOf(totalTokens),
   } as never);
@@ -2997,6 +2997,7 @@ describe("rewind: completion", () => {
       readFiles: [],
       modifiedFiles: [],
       reappendedLateMessages: 0,
+      openUserRequests: [],
     });
     // Collapsed: the anchor's label-change entry, u2..a4 (6), the rewind
     // call and its result, all left on the abandoned branch.
@@ -4177,6 +4178,228 @@ describe("commitFold: engine shape", () => {
       `folded to ${outcome.afterTokens}\n\n${buildLateEntriesNote(1)}`,
     );
     assert.equal(run.lead.length, 2, "prospective estimate, then final");
+  });
+
+  it("preserves additive requests across a second fold without nesting continuations", async () => {
+    const f = setup();
+    const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
+    const firstText = "First open request.\n  Exact whitespace.\n";
+    const firstId = f.sm.appendMessage({
+      role: "user",
+      content: firstText,
+      timestamp: 1,
+    });
+    const secondText = "Also do the second request.";
+    const secondId = f.sm.appendMessage({
+      role: "user",
+      content: secondText,
+      timestamp: 2,
+    });
+    f.sm.appendMessage(
+      assistantMessage(
+        [{ type: "toolCall", id: "work", name: "read", arguments: {} }],
+        "toolUse",
+      ) as never,
+    );
+    f.sm.appendMessage({
+      role: "toolResult",
+      toolCallId: "work",
+      toolName: "read",
+      content: [{ type: "text", text: "evidence" }],
+      isError: false,
+      timestamp: 3,
+    });
+    f.sm.appendMessage(
+      assistantMessage(
+        [{ type: "text", text: "failed response" }],
+        "error",
+      ) as never,
+    );
+    f.sm.appendMessage(assistantMessage([], "stop") as never);
+    f.sm.appendMessage(
+      assistantMessage(
+        [
+          { type: "text", text: "still using tools" },
+          { type: "toolCall", id: "more", name: "read", arguments: {} },
+        ],
+        "stop",
+      ) as never,
+    );
+    f.sm.appendMessage({
+      role: "toolResult",
+      toolCallId: "more",
+      toolName: "read",
+      content: [{ type: "text", text: "more evidence" }],
+      isError: false,
+      timestamp: 4,
+    });
+    f.sm.appendCustomMessageEntry(
+      REWIND_CUSTOM_TYPE,
+      "historical continuation without typed requests",
+      true,
+    );
+    f.sm.appendCustomMessageEntry("notification", "new notification", true);
+    const run = engineFold(f, anchorId);
+    const lateText = "Late input is reappended, not quoted.";
+    f.sm.appendMessage({ role: "user", content: lateText, timestamp: 4 });
+    const expected = [
+      { sourceEntryId: firstId, text: firstText },
+      { sourceEntryId: secondId, text: secondText },
+    ];
+    const first = await commitFold(f.sm, run.input);
+    assert.ok(first.ok, JSON.stringify(first));
+    assert.deepEqual(first.openUserRequests, expected);
+    assert.ok(!first.continuation.includes(lateText));
+    f.sm.appendCustomMessageEntry(
+      REWIND_CUSTOM_TYPE,
+      first.continuation,
+      true,
+      { status: "done", openUserRequests: first.openUserRequests },
+    );
+    f.sm.appendCustomMessageEntry(
+      REWIND_CUSTOM_TYPE,
+      "duplicate receipt",
+      true,
+      {
+        openUserRequests: first.openUserRequests,
+      },
+    );
+    f.sm.appendCustomMessageEntry(
+      "evidence",
+      "extra work ".repeat(5_000),
+      false,
+    );
+    const second = await commitFold(
+      f.sm,
+      engineFold(f, anchorId, { newLabel: "end-two" }).input,
+    );
+    assert.ok(second.ok, JSON.stringify(second));
+    assert.deepEqual(second.openUserRequests.slice(0, 2), expected);
+    assert.equal(
+      second.openUserRequests.length,
+      3,
+      "late input becomes collapsed on the second fold",
+    );
+    assert.equal(second.continuation.split(firstText).length, 2);
+    assert.ok(!second.continuation.includes(first.continuation));
+    const summary = f.sm.getEntry(second.summaryId);
+    assert.ok(summary?.type === "branch_summary");
+    assert.ok(!summary.summary.includes(firstText));
+    f.sm.appendCustomMessageEntry(
+      REWIND_CUSTOM_TYPE,
+      second.continuation,
+      true,
+      {
+        openUserRequests: second.openUserRequests,
+      },
+    );
+    f.sm.appendMessage(
+      assistantMessage(
+        [{ type: "text", text: "requests fulfilled" }],
+        "stop",
+      ) as never,
+    );
+    f.sm.appendCustomMessageEntry(
+      "evidence",
+      "more work ".repeat(5_000),
+      false,
+    );
+    const third = await commitFold(
+      f.sm,
+      engineFold(f, anchorId, { newLabel: "end-three" }).input,
+    );
+    assert.ok(third.ok, JSON.stringify(third));
+    assert.deepEqual(third.openUserRequests, []);
+    assert.ok(!third.continuation.includes(firstText));
+  });
+
+  it("uses current edited user bytes and clears open requests only after a successful final reply", async () => {
+    for (const final of [false, true]) {
+      const f = setup();
+      const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
+      const sourceEntryId = f.sm.appendMessage({
+        role: "user",
+        content: "original discarded text",
+        timestamp: 1,
+      });
+      f.sm.appendContextEdit(sourceEntryId, {
+        content: "edited current request\n",
+      });
+      const hiddenId = f.sm.appendMessage({
+        role: "user",
+        content: "hidden request",
+        timestamp: 2,
+      });
+      f.sm.appendContextEdit(hiddenId, null);
+      if (final)
+        f.sm.appendMessage(
+          assistantMessage(
+            [{ type: "text", text: "completed answer" }],
+            "stop",
+          ) as never,
+        );
+      f.sm.appendCustomMessageEntry("notification", "late notification", true);
+      const result = await commitFold(f.sm, engineFold(f, anchorId).input);
+      assert.ok(result.ok, JSON.stringify(result));
+      assert.deepEqual(
+        result.openUserRequests,
+        final ? [] : [{ sourceEntryId, text: "edited current request\n" }],
+      );
+      assert.ok(!result.continuation.includes("original discarded text"));
+      assert.ok(!result.continuation.includes("hidden request"));
+    }
+  });
+
+  it("does not quote an open user request in the retained prefix", async () => {
+    const f = setup();
+    const id = f.sm.appendMessage({
+      role: "user",
+      content: "retained instruction",
+      timestamp: 1,
+    });
+    f.pi.pi.setLabel(id, "anchor:start");
+    f.sm.appendCustomMessageEntry(
+      "work",
+      "large evidence ".repeat(6_000),
+      false,
+    );
+    const result = await commitFold(f.sm, engineFold(f, id).input);
+    assert.ok(result.ok, JSON.stringify(result));
+    assert.deepEqual(result.openUserRequests, []);
+    assert.ok(!result.continuation.includes("retained instruction"));
+  });
+
+  it("prices all preserved user bytes and refuses an oversized request without mutation", async () => {
+    const f = setup();
+    const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
+    const text = "unanswered user bytes ".repeat(10_000);
+    const sourceEntryId = f.sm.appendMessage({
+      role: "user",
+      content: text,
+      timestamp: 1,
+    });
+    const run = engineFold(f, anchorId);
+    const preview = previewFoldCommit(f.sm, run.input);
+    assert.ok(preview.ok, JSON.stringify(preview));
+    assert.deepEqual(preview.openUserRequests, [{ sourceEntryId, text }]);
+    assert.ok(
+      preview.foldEstimateAfter >
+        estimateContentTokens([{ role: "user", content: text, timestamp: 1 }]),
+    );
+    const before = {
+      leaf: f.sm.getLeafId(),
+      entries: f.sm.getEntries(),
+      label: f.sm.getLabel(run.leaf),
+    };
+    const result = await commitFold(f.sm, {
+      ...run.input,
+      contextWindow: preview.projectedAfterTokens + 1_024 + 4_096 - 1,
+    });
+    assert.ok(!result.ok);
+    assert.match(result.reason, /insufficient request headroom/);
+    assert.equal(f.sm.getLeafId(), before.leaf);
+    assert.deepEqual(f.sm.getEntries(), before.entries);
+    assert.equal(f.sm.getLabel(run.leaf), before.label);
   });
 
   it("counts the folded leaf in the pre-fold estimate when one large turn is folded", async () => {
@@ -12036,6 +12259,48 @@ describe("independent folds through the engine host", () => {
         assistantMessage([], "stop", 0),
       );
       assert.deepEqual(again.entries, [], "the fold ran once");
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("preserves the open user request outside an omitting summary at the queued boundary", async () => {
+    const f = await foldSetup(40_000);
+    try {
+      const text =
+        "Rewind now, then reply ACCEPTANCE-CONTINUED-unique-73.\n  Keep these bytes.\n";
+      const sourceEntryId = f.sm.appendMessage({
+        role: "user",
+        content: [{ type: "text", text }],
+        timestamp: 100,
+      });
+      f.sm.appendCustomMessageEntry("new-notification", "audit finished", true);
+      const registry = fakeRegistry(() => reply(SUMMARY_TEXT));
+      assert.ok(!SUMMARY_TEXT.includes("ACCEPTANCE-CONTINUED-unique-73"));
+      const ctx = foldCtx(f, registry.registry);
+      assert.deepEqual(
+        f.api.queueFold(f.sm.getSessionId(), { ...FOLD, origin: "agent" }),
+        { ok: true },
+      );
+      const result = await fireTurnEndAll(f.pi, ctx, leafMessage(f));
+      assert.equal(result.continue, true);
+      const done = result.entries.find(
+        (d) => d.customType === REWIND_CUSTOM_TYPE,
+      );
+      assert.ok(done);
+      assert.ok(String(done.content).includes(text), JSON.stringify(done));
+      assert.ok(String(done.content).includes(sourceEntryId));
+      assert.match(
+        String(done.content),
+        /rewind is completed; do not repeat it/i,
+      );
+      assert.match(String(done.content), /fulfill the remaining request/i);
+      assert.deepEqual(done.details.openUserRequests, [
+        { sourceEntryId, text },
+      ]);
+      const summary = f.sm.getBranch().find((e) => e.type === "branch_summary");
+      assert.ok(summary?.type === "branch_summary");
+      assert.ok(!summary.summary.includes(text));
     } finally {
       cleanupConfigFixture(f.fixture);
     }
