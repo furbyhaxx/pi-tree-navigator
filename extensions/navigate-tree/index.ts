@@ -177,6 +177,15 @@ import {
   toOneLine,
 } from "./helpers.ts";
 import { registerHistoryOutline } from "./history-outline.ts";
+import {
+  collectLegacyRewindOutcomes,
+  LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
+  LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
+  legacyRewindOutcomeRow,
+  legacySummaryRequestRow,
+  sanitizeLegacyText,
+  withLegacyOutcome,
+} from "./legacy-rewind.ts";
 import { capRecoveryOutput } from "./output-budget.ts";
 import {
   createProposalModelRunner,
@@ -449,6 +458,7 @@ function findOwningSession(sm: SessionManager): AgentSession | null {
  */
 export function buildContextMessages(sm: {
   buildContextEntries(): SessionEntry[];
+  getBranch?(): SessionEntry[];
   buildSessionProjection?(): {
     entries?: Array<{ sourceEntry: SessionEntry; messages: AgentMessage[] }>;
     messages: AgentMessage[];
@@ -476,6 +486,14 @@ export function buildContextMessages(sm: {
     sourceEntry: entry,
     messages: sessionEntryToContextMessages(entry),
   }));
+  let legacyOutcomes = new Map<string, string>();
+  try {
+    if (sm.getBranch) {
+      legacyOutcomes = collectLegacyRewindOutcomes(sm.getBranch());
+    }
+  } catch {
+    // Projection-only callers may not expose an active branch.
+  }
   // Withholding can append edits after the entries a stale usage covers.
   entries = invalidateStaleUsage(entries, model);
   // Sessions written before the independent engine carry summary
@@ -494,7 +512,11 @@ export function buildContextMessages(sm: {
         e.sourceEntry?.type === "branch_summary" &&
         e.sourceEntry.fromHook === true &&
         sm.getLabel?.(e.sourceEntry.id)?.startsWith(LABEL_PREFIX) === true;
-      return handoffContext(e.sourceEntry, e.messages, legacyOwned);
+      const messages = withLegacyOutcome(
+        e.messages,
+        legacyOutcomes.get(e.sourceEntry?.id ?? ""),
+      );
+      return handoffContext(e.sourceEntry, messages, legacyOwned);
     });
   return messages.filter((message) => message.role !== "system");
 }
@@ -1184,13 +1206,6 @@ function hideDrafts(ids: readonly string[]): SessionBoundaryDraft[] {
 /** customType of the rewind continuation and receipt messages. */
 export const REWIND_CUSTOM_TYPE = "navigate-tree-rewind";
 
-/**
- * customType of the summary instruction the removed in-band turn wrote.
- * Sessions on disk still carry it; it is hidden from the model's context and
- * never written.
- */
-const LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE = "navigate-tree-summary-request";
-
 /** pi-codemode's tool name: a forced rewind (#101) lets its scripts through to rewind. */
 const CODEMODE_TOOL_NAME = "codemode";
 
@@ -1263,11 +1278,18 @@ class StyledLines {
   private readonly lines: string[];
   private readonly style: (line: string) => string;
   private readonly padX: number;
+  private readonly wrap: boolean;
 
-  constructor(lines: string[], style: (line: string) => string, padX = 1) {
+  constructor(
+    lines: string[],
+    style: (line: string) => string,
+    padX = 1,
+    wrap = true,
+  ) {
     this.lines = lines;
     this.style = style;
     this.padX = padX;
+    this.wrap = wrap;
   }
 
   render(width: number): string[] {
@@ -1275,7 +1297,10 @@ class StyledLines {
     const pad = " ".repeat(Math.max(0, Math.min(this.padX, width - 1)));
     const out: string[] = [];
     for (const line of this.lines) {
-      for (const piece of wrapPlainLine(line, inner)) {
+      const pieces = this.wrap
+        ? wrapPlainLine(line, inner)
+        : [truncateToWidth(line, inner, "…")];
+      for (const piece of pieces) {
         const row = pad + this.style(piece);
         // Final guard: pi-tui throws on a line wider than the terminal.
         out.push(
@@ -3432,6 +3457,41 @@ export default function (pi: ExtensionAPI) {
 
   // TUI rows: local components styled through `theme`.
   pi.registerEntryRenderer(CONTINUITY_OPS_CUSTOM_TYPE, renderContinuityOps);
+  pi.registerMessageRenderer(
+    LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
+    (message, options, theme) => {
+      const lines = [legacySummaryRequestRow(message.details)];
+      if (options.expanded) {
+        lines.push(
+          "",
+          ...sanitizeLegacyText(extractTextContent(message.content)).split(
+            "\n",
+          ),
+        );
+      }
+      return new StyledLines(
+        lines,
+        (line) => theme.fg("customMessageText", line),
+        options.outputPad ?? 1,
+        options.expanded,
+      );
+    },
+  );
+  pi.registerEntryRenderer(
+    LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
+    (entry, _options, theme) => {
+      const row = legacyRewindOutcomeRow(entry.data);
+      if (!row) return undefined;
+      const status = (entry.data as { status?: unknown } | undefined)?.status;
+      const failed = status === "failed";
+      return new StyledLines(
+        [`${failed ? "✗" : "⚠"} ${row}`],
+        (line) => theme.fg(failed ? "error" : "warning", line),
+        1,
+        false,
+      );
+    },
+  );
   // The final error of rewind-driven compaction (#101, D8): one
   // error-styled row, full text, nothing to expand. The continue nudge is
   // one line, expandable. Every other rewind message (the continuation, the

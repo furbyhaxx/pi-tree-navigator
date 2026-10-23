@@ -34,6 +34,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import { stripVTControlCharacters } from "node:util";
 import {
   type AssistantMessage,
   type Context,
@@ -96,6 +97,10 @@ import navigateTree, {
   START_ANCHOR_LABEL,
   wrapPlainLine,
 } from "./index.ts";
+import {
+  LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
+  LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
+} from "./legacy-rewind.ts";
 import {
   buildForcedRewindText,
   buildNoAnchorText,
@@ -971,9 +976,6 @@ function rewindMessages(
   );
 }
 
-/** The customType the removed in-band turn wrote; nothing may write it now. */
-const LEGACY_SUMMARY_REQUEST_TYPE = "navigate-tree-summary-request";
-
 /** Ids hidden (last `context_edit` null) on the active branch. */
 function hiddenIds(sm: SessionManager): Set<string> {
   const last = new Map<string, unknown>();
@@ -1104,6 +1106,96 @@ describe("context event handler", () => {
       "the raw entry walk still contains the omitted entry",
     );
     assert.equal(projected.length, sm.buildSessionContext().messages.length);
+  });
+
+  it("projects active-branch legacy rewind failures and aborts without mutating results", () => {
+    const { sm } = setup();
+    const resultId = appendToolResult(
+      sm,
+      "legacy-rewind-call",
+      TOOL_NAME,
+      "Rewind accepted.",
+    );
+    const failure = "Summarization failed: the branch could not be written.";
+    sm.appendCustomEntry(LEGACY_REWIND_OUTCOME_CUSTOM_TYPE, {
+      status: "failed",
+      toolResultEntryId: resultId,
+      text: failure,
+    });
+    const abortedResultId = appendToolResult(
+      sm,
+      "legacy-aborted-rewind-call",
+      TOOL_NAME,
+      "Rewind accepted.",
+    );
+    const aborted = "The historical rewind was aborted.";
+    sm.appendCustomEntry(LEGACY_REWIND_OUTCOME_CUSTOM_TYPE, {
+      status: "aborted",
+      toolResultEntryId: abortedResultId,
+      text: aborted,
+    });
+    sm.appendCustomMessageEntry(
+      LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
+      "Historical summary instruction must remain hidden.",
+      true,
+    );
+
+    const original = sm.getEntry(resultId);
+    const originalAborted = sm.getEntry(abortedResultId);
+    assert.ok(original?.type === "message");
+    assert.ok(originalAborted?.type === "message");
+    const originalMessage = structuredClone(original.message);
+    const originalAbortedMessage = structuredClone(originalAborted.message);
+    assert.equal(original.message.role, "toolResult");
+    assert.equal(original.message.isError, false);
+    assert.equal(originalAborted.message.role, "toolResult");
+    assert.equal(originalAborted.message.isError, false);
+
+    const projected = __testHooks.buildContextMessages(sm);
+    const results = projected.filter(
+      (message) => message.role === "toolResult",
+    );
+    assert.deepEqual(
+      results.map((message) => ({
+        isError: message.isError,
+        content: message.content,
+      })),
+      [
+        { isError: true, content: [{ type: "text", text: failure }] },
+        { isError: true, content: [{ type: "text", text: aborted }] },
+      ],
+    );
+    assert.ok(
+      !JSON.stringify(projected).includes("Historical summary instruction"),
+      "legacy summary requests remain hidden from model context",
+    );
+    assert.deepEqual(original.message, originalMessage);
+    assert.deepEqual(originalAborted.message, originalAbortedMessage);
+  });
+
+  it("ignores legacy rewind outcomes on an abandoned branch", () => {
+    const { sm } = setup();
+    const resultId = appendToolResult(
+      sm,
+      "legacy-rewind-call",
+      TOOL_NAME,
+      "Rewind accepted.",
+    );
+    const outcomeId = sm.appendCustomEntry(LEGACY_REWIND_OUTCOME_CUSTOM_TYPE, {
+      status: "failed",
+      toolResultEntryId: resultId,
+      text: "failure from an abandoned attempt",
+    });
+    sm.branch(resultId);
+    assert.ok(!sm.getBranch().some((entry) => entry.id === outcomeId));
+
+    const projected = __testHooks.buildContextMessages(sm);
+    const result = projected.find((message) => message.role === "toolResult");
+    assert.ok(result);
+    assert.equal(result.isError, false);
+    assert.deepEqual(result.content, [
+      { type: "text", text: "Rewind accepted." },
+    ]);
   });
 
   it("withheld results zero the usage of the assistants after them (#101)", async () => {
@@ -2544,7 +2636,7 @@ describe("dispatch: rewind queues an engine fold", () => {
           (e) =>
             !(
               e.type === "custom_message" &&
-              e.customType === LEGACY_SUMMARY_REQUEST_TYPE
+              e.customType === LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE
             ),
         ),
       "no summary request is written",
@@ -3527,6 +3619,95 @@ describe("rewind: TUI renderers", () => {
           );
           assert.ok(!line.includes("\t"), `${JSON.stringify(line)} has a tab`);
         }
+      }
+    }
+  });
+
+  it("registers compact historical rewind renderers and expands the old instruction", () => {
+    const f = setup();
+    const summaryRenderer = f.pi.messageRenderers.get(
+      LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
+    ) as (...args: unknown[]) => { render(width: number): string[] };
+    const outcomeRenderer = f.pi.entryRenderers.get(
+      LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
+    ) as (
+      ...args: unknown[]
+    ) => { render(width: number): string[] } | undefined;
+    assert.ok(summaryRenderer);
+    assert.ok(outcomeRenderer);
+    const theme = {
+      fg: (color: string, text: string) =>
+        `\x1b[${color === "error" ? "31" : color === "warning" ? "33" : "36"}m${text}\x1b[39m`,
+    };
+    const instruction = `Summarize historical work only.\n${"Preserve the original instruction in full. ".repeat(8)}`;
+    const message = {
+      role: "custom",
+      customType: LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
+      content: `${instruction}\nDo not show this escape: \x1b[2J hidden.\x01`,
+      display: true,
+      details: {
+        rewindTo: "a",
+        newLabel: "b",
+        contextBefore: 80_000,
+        tokensAtTarget: 40_000,
+        contextWindow: 100_000,
+      },
+      timestamp: 0,
+    };
+    for (const width of [60, 130]) {
+      const collapsed = summaryRenderer(
+        message,
+        { expanded: false, outputPad: 1 },
+        theme,
+      ).render(width);
+      assert.equal(collapsed.length, 1);
+      assert.ok(visibleWidth(collapsed[0] ?? "") <= width);
+      assert.match(
+        stripVTControlCharacters(collapsed[0] ?? ""),
+        /summary requested/,
+      );
+
+      const expanded = summaryRenderer(
+        message,
+        { expanded: true, outputPad: 1 },
+        theme,
+      ).render(width);
+      assert.ok(expanded.length > 1);
+      assert.ok(expanded.every((line) => visibleWidth(line) <= width));
+      const expandedText = stripVTControlCharacters(expanded.join("\n"));
+      assert.ok(
+        expandedText
+          .replace(/\s+/gu, " ")
+          .includes(instruction.replace(/\s+/gu, " ")),
+        `the full instruction is retained at ${width} columns`,
+      );
+      assert.ok(
+        !expandedText.includes("[2J") && !expandedText.includes("\x01"),
+        "historical escapes and controls are removed",
+      );
+
+      for (const [status, color] of [
+        ["failed", "31"],
+        ["aborted", "33"],
+      ] as const) {
+        const rendered = outcomeRenderer(
+          {
+            data: {
+              status,
+              rewindTo: "a",
+              newLabel: "b",
+              reason: `branch failed \x1b[2J hidden`,
+            },
+          },
+          { expanded: false, outputPad: 1 },
+          theme,
+        );
+        assert.ok(rendered);
+        const row = rendered.render(width);
+        assert.equal(row.length, 1);
+        assert.ok(visibleWidth(row[0] ?? "") <= width);
+        assert.ok(row[0]?.includes(`\x1b[${color}m`));
+        assert.ok(!stripVTControlCharacters(row[0] ?? "").includes("[2J"));
       }
     }
   });
@@ -11399,7 +11580,7 @@ describe("independent folds through the engine host", () => {
           (e) =>
             !(
               e.type === "custom_message" &&
-              e.customType === LEGACY_SUMMARY_REQUEST_TYPE
+              e.customType === LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE
             ),
         ),
     );

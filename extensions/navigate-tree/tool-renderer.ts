@@ -147,6 +147,7 @@ function summarize(
   details: Record<string, unknown>,
   text: string,
 ): string | undefined {
+  if (details.status === "queued") return "accepted · folding after this turn";
   if (details.status === "summary-requested") return "accepted · summarizing";
   const id = oneLine(details.id);
   if (id && typeof details.effect === "string") {
