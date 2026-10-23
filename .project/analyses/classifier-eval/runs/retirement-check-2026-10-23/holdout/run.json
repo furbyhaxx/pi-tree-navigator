@@ -1,0 +1,183 @@
+{
+  "runId": "run-2026-10-23T14-55-43.228Z-eb9c",
+  "createdAt": "2026-10-23T14:55:43.228Z",
+  "gitSha": "d0d66d1f93f8ca6aae3d9328d8f2b6ba7f3cd8f6",
+  "gitDirty": true,
+  "casesSha256": "55d9c02b4327328c058d589acbae835732dd6cd7dfbae4ed32a819c66b943288",
+  "caseCount": 221,
+  "ledgerPath": "/tmp/ledger-scratch.jsonl",
+  "capUsd": 2.108729782,
+  "routePrices": {
+    "retrievedAt": "2026-10-23",
+    "source": [
+      ".project/research/classifier-evaluation/openrouter-decision-full-context-reserves.csv",
+      ".project/research/classifier-evaluation/openrouter-chat-alternatives.csv"
+    ]
+  },
+  "models": [
+    {
+      "label": "decisions:liquid/d1",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.02,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 65536
+    },
+    {
+      "label": "decisions:microsoft/microsoft-decision-1",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 32768
+    },
+    {
+      "label": "decisions:typesafe/jev-1.13",
+      "adapter": "decisions",
+      "promptUsdPerM": 0.042,
+      "completionUsdPerM": 0,
+      "routeData": true,
+      "contextWindow": 262144
+    }
+  ],
+  "sessions": [
+    {
+      "id": "run-2026-10-23T14-55-43.228Z-eb9c.s1",
+      "startedAt": "2026-10-23T14:55:43.229Z",
+      "models": [
+        {
+          "label": "decisions:liquid/d1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.02,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 65536
+        }
+      ],
+      "excluded": [],
+      "split": "holdout",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 3,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 66.479196635,
+        "usageDaily": 24.367909703,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 67.761438039,
+        "usageDaily": 25.650151107,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T14:58:17.863Z",
+      "counts": {
+        "ok": 456,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.616218149,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.22643373
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-55-43.228Z-eb9c.s2",
+      "startedAt": "2026-10-23T14:58:19.751Z",
+      "models": [
+        {
+          "label": "decisions:microsoft/microsoft-decision-1",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 32768
+        }
+      ],
+      "excluded": [],
+      "split": "holdout",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 3,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 67.978832149,
+        "usageDaily": 25.867545217,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 68.628001977,
+        "usageDaily": 26.516715045,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T15:01:00.262Z",
+      "counts": {
+        "ok": 456,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.621676217,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.220975662
+      }
+    },
+    {
+      "id": "run-2026-10-23T14-55-43.228Z-eb9c.s3",
+      "startedAt": "2026-10-23T15:01:02.186Z",
+      "models": [
+        {
+          "label": "decisions:typesafe/jev-1.13",
+          "adapter": "decisions",
+          "promptUsdPerM": 0.042,
+          "completionUsdPerM": 0,
+          "routeData": true,
+          "contextWindow": 262144
+        }
+      ],
+      "excluded": [],
+      "split": "holdout",
+      "tasks": [
+        "retirement-check"
+      ],
+      "repetitions": 3,
+      "concurrency": 4,
+      "keyUsageBefore": {
+        "usage": 68.628001977,
+        "usageDaily": 26.516715045,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "keyUsageAfter": {
+        "usage": 69.914704183,
+        "usageDaily": 27.803417251,
+        "limit": null,
+        "limitRemaining": null
+      },
+      "endedAt": "2026-10-23T15:04:57.791Z",
+      "counts": {
+        "ok": 456,
+        "error": 0,
+        "unsupported": 0
+      },
+      "interrupted": 0,
+      "ledgerAfter": {
+        "limitUsd": 2.108729782,
+        "spentUsd": 0.634000277,
+        "heldUsd": 0.266077903,
+        "remainingUsd": 1.208651602
+      }
+    }
+  ]
+}

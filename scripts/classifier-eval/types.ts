@@ -9,7 +9,8 @@ export type EvalTask =
   | "intent"
   | "supersession"
   | "milestone-status"
-  | "milestone-boundary";
+  | "milestone-boundary"
+  | "retirement-check";
 
 /** Shared choice question, translated into the selected provider's contract. */
 export interface EvalQuestion {
@@ -32,6 +33,14 @@ export type EvalInput =
       message: string;
       activeAnchor?: string;
       activeItems: { id: string; kind: string; text: string }[];
+    }
+  | {
+      type: "retirement";
+      /** The user's raw message, exactly as typed; no annotator commentary. */
+      message: string;
+      /** The ledger item whose retirement is proposed. */
+      item: { id: string; kind: string; text: string };
+      otherItems?: { id: string; kind: string; text: string }[];
     }
   | {
       type: "milestone";

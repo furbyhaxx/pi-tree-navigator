@@ -1,6 +1,7 @@
 import type { ClassifierContext } from "@earendil-works/pi-ai";
 import { buildIntentClassifierContext } from "../../extensions/navigate-tree/continuity-capture.ts";
 import { buildMilestoneClassifierContext } from "../../extensions/navigate-tree/milestone-classifier.ts";
+import { buildRetirementCheckContext } from "../../extensions/navigate-tree/retirement-check.ts";
 import type { EvalCase, EvalQuestion, PreparedCase } from "./types.ts";
 
 /** The choice questions of a request; any other question type is a benchmark error. */
@@ -32,7 +33,9 @@ export function prepareCase(fixture: EvalCase): PreparedCase {
           }),
           activeItems: fixture.input.activeItems,
         })
-      : buildMilestoneClassifierContext(fixture.input);
+      : fixture.input.type === "retirement"
+        ? buildRetirementCheckContext(fixture.input)
+        : buildMilestoneClassifierContext(fixture.input);
   const questions = choiceQuestions(fixture.id, context);
   for (const [id, expected] of Object.entries(fixture.expected)) {
     const question = questions[id];

@@ -84,6 +84,7 @@ const TASKS: readonly EvalTask[] = [
   "supersession",
   "milestone-status",
   "milestone-boundary",
+  "retirement-check",
 ];
 const DEFAULT_LEDGER = ".project/analyses/classifier-eval/budget-ledger.jsonl";
 const MAX_PENDING_PER_WORKER = 8;

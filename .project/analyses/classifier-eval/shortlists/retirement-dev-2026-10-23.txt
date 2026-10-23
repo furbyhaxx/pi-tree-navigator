@@ -1,0 +1,23 @@
+# Retirement-check development screen: every decision model in the Pi OpenRouter catalog
+# with a positive price, plus gpt-6-luna chat (correlated with the escalator it would verify).
+# Dropped as not in the Pi catalog: liquid/d1-ultra, nace-ai/drex-max, perplexity/pplx-decider-v1.2,
+# perplexity/pplx-decider-flash-v1.2, respan/span-02.
+decisions:cloudflare/clef
+decisions:cloudflare/clef-flash
+decisions:cloudflare/clef-omni
+decisions:inception/mercury-decide
+decisions:jaredpalmer/kev-4b
+decisions:liquid/d1
+decisions:microsoft/microsoft-decision-1
+decisions:nace-ai/drex-v1.5
+decisions:nace-ai/drex-v2.0
+decisions:openai/gpt-6-luna-decisions
+decisions:perplexity/pplx-decider-v1.1-27b
+decisions:respan/span-01
+decisions:scaledown/classify-1
+decisions:togethercomputer/tev1-4b-experimental
+decisions:typesafe/jev-1.13
+decisions:typesafe/jev-1.14
+decisions:upstage/solar-decide
+decisions:upstage/solar-decide-flash
+chat:openai/gpt-6-luna
