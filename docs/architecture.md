@@ -18,7 +18,11 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `fold-inputs.ts`: current projected evidence restricted to the folded ancestry;
   Strategy A request construction and Strategy B evidence records.
 - `fold-summarizer.ts`: independent registry calls, cache-prefix strategy and bounded
-  map-reduce strategy, explicit evidence coverage and call limits.
+  map-reduce strategy, explicit evidence coverage and call limits; reasoning
+  allowance on top of answer caps and one reasoning-off retry after a `length` stop.
+- `auto-fold-planner.ts`: turn-boundary decisions for opt-in automatic folding:
+  deterministic pressure folds at `rewind_at_tokens` (no classifier), milestone
+  anchors from the classifier policy below it, cadence and stale-state gates.
 - `summary-prompt.ts`: byte-pinned r5d instruction, stored-summary shape and file lists.
 - `legacy-rewind.ts`: read-only projection and rendering of historical in-band
   instructions and failed outcomes; no legacy execution.
@@ -62,7 +66,7 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `auto-milestone.ts`: projected, disclosure-filtered milestone evidence and stable
   entry mapping.
 - `milestone-policy.ts`: tunable, benchmarked parallel confirmation of phase status
-  and boundary; failures and disagreement abstain.
+  and boundary; failures and disagreement abstain. Decisions place anchors only.
 - `handoff.ts`: report metadata, full/synthesized materialization, unique recorded
   statistics and honest model-facing work context.
 - `handoff-renderer.ts`: guarded native summary-card and tree-row patches.

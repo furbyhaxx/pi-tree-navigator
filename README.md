@@ -203,26 +203,35 @@ Different models need different budgets: a model that writes long summaries or g
 }
 ```
 
-When `auto_navigate.enabled` is true, the extension evaluates projected,
-disclosure-filtered evidence from the current phase with the configured
-`milestone` policy. The recommended policy asks two models in parallel and
-accepts a status or boundary only when both agree above the confidence threshold.
-Classifiers judge completion; deterministic engine checks decide whether a fold
-is safe. No user prompt or rewind steer is injected.
+When `auto_navigate.enabled` is true, two things happen at each turn boundary:
 
-Checks run on a pressure crossing or after `check_every_turns` completed turns
-or `min_tokens_since_anchor` fresh estimated tokens. Results are discarded when
-the branch, active model, policy or cancellation state changes while the requests
-run. Existing labels are never overwritten. A boundary inside older completed work
-may be anchored, but unfinished work after it is not silently included in a
-milestone fold.
+- **Pressure fold (deterministic).** When the estimated context reaches
+  `rewind_at_tokens` in `anchor-and-rewind` mode, the independent engine folds
+  without asking a classifier. Target selection follows the recovery rules: the
+  canonical cut, the shared materialized preview, the newest anchor whose result
+  lands under `rewind_at_tokens`, else the oldest valid anchor. Unfinished work is
+  folded too; still-open user requests are kept verbatim after the handoff. Another
+  pressure fold needs `min_tokens_since_anchor` fresh estimated tokens, so a fold
+  that cannot get below the threshold does not repeat every turn.
+- **Milestone anchors (classifier).** Below the threshold, after
+  `check_every_turns` completed turns or `min_tokens_since_anchor` fresh tokens,
+  the configured `milestone` policy judges projected, disclosure-filtered evidence
+  from the current phase. The recommended policy asks two models in parallel and
+  accepts only when both agree above the confidence threshold. An accepted
+  boundary becomes an `anchor:` label, a better fold target later; classifiers
+  never trigger a fold.
 
-When the completed phase reaches the active tail and pressure exceeds
-`rewind_at_tokens`, the controller selects a target using the shared materialized
-preview and invokes the independent engine at the turn boundary.
-`anchor-only` mode records milestones without folding. An unavailable model,
-abstention, disagreement or provider error makes no semantic decision; warnings
-explain operational failures.
+No user prompt or rewind steer is injected. Results are discarded when the
+branch, active model, policy or cancellation state changes while a check runs.
+Existing labels are never overwritten. When a pressure fold cannot run (no valid
+anchor, an unanswered tool call, a pre-compaction target, a non-reducing handoff),
+a visible `navigate-tree-auto-warning` names the reason; the history is kept.
+`anchor-only` mode places milestone anchors and never folds. An unavailable model,
+abstention, disagreement or provider error makes no semantic decision.
+
+Fold summary side calls run at the session's thinking level capped at `low`, with
+room for reasoning on top of the answer budget; a `length` stop is retried once
+with reasoning off.
 
 `milestone` accepts `"recommended"`, `null` (disabled), or a tunable object:
 `{minConfidence?, classifier?: {model?}, confirmer?: {model?}, status?: {instructions?}, boundary?: {instructions?}}`.

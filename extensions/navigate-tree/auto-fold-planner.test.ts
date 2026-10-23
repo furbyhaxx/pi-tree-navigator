@@ -17,7 +17,7 @@ const config = {
   ...DEFAULT_AUTO_NAVIGATE_CONFIG,
   enabled: true,
   milestonePolicy: POLICY,
-  rewindAtTokens: 10_000,
+  rewindAtTokens: 100_000,
   minTokensSinceAnchor: 1_000,
   checkEveryTurns: 3,
 };
@@ -170,16 +170,106 @@ test("an older accepted milestone never folds an unfinished exposed suffix", asy
   }
 });
 
-test("accepted complete projected tail folds under pressure despite metadata and deleted suffix", async () => {
+test("an accepted milestone with a complete tail only places an anchor", async () => {
   const f = fixture();
   const hidden = f.sm.appendMessage(user("Removed by context edit"));
   f.sm.appendContextEdit(hidden, null);
   f.sm.appendCustomEntry("metadata", { ignored: true });
   const out = await planAutomaticFold(f.options());
-  assert.deepEqual(out.action, { kind: "fold", boundaryEntryId: f.boundary });
+  assert.deepEqual(out.action, {
+    kind: "anchor",
+    entryId: f.boundary,
+    suggestedName: "adapter-verified",
+  });
   assert.equal(out.state.lastActionTokens, 10_000);
   assert.equal(f.sent.length, 2);
   assert.equal(out.evaluation?.status.kind, "accept");
+});
+
+test("crossing rewind_at_tokens folds deterministically without asking a classifier", async () => {
+  const f = fixture();
+  f.disagree();
+  const out = await planAutomaticFold({
+    ...f.options(),
+    activeTokens: 100_000,
+  });
+  assert.deepEqual(out.action, { kind: "pressure-fold" });
+  assert.equal(out.state.lastPressureTokens, 100_000);
+  assert.equal(f.sent.length, 0);
+});
+
+test("a pressure fold that did not get below the threshold waits for fresh tokens, even after its own new anchor", async () => {
+  const f = fixture();
+  f.disagree();
+  let out = await planAutomaticFold({
+    ...f.options(),
+    activeTokens: 120_000,
+  });
+  assert.equal(out.action.kind, "pressure-fold");
+  out = await planAutomaticFold({
+    ...f.options(),
+    state: out.state,
+    activeTokens: 110_000,
+    newestAnchorId: f.boundary,
+    anchorTokens: 105_000,
+  });
+  assert.notEqual(out.action.kind, "pressure-fold");
+  out = await planAutomaticFold({
+    ...f.options(),
+    state: out.state,
+    activeTokens: 110_500,
+    newestAnchorId: f.boundary,
+    anchorTokens: 105_000,
+  });
+  assert.notEqual(out.action.kind, "pressure-fold");
+  out = await planAutomaticFold({
+    ...f.options(),
+    state: out.state,
+    activeTokens: 111_000,
+    newestAnchorId: f.boundary,
+    anchorTokens: 105_000,
+  });
+  assert.equal(out.action.kind, "pressure-fold");
+});
+
+test("after a fold reduced the context, the next pressure fold fires on the next crossing", async () => {
+  const f = fixture();
+  f.disagree();
+  let out = await planAutomaticFold({
+    ...f.options(),
+    activeTokens: 100_000,
+  });
+  assert.equal(out.action.kind, "pressure-fold");
+  out = await planAutomaticFold({
+    ...f.options(),
+    state: out.state,
+    activeTokens: 30_000,
+  });
+  assert.notEqual(out.action.kind, "pressure-fold");
+  out = await planAutomaticFold({
+    ...f.options(),
+    state: out.state,
+    activeTokens: 100_000,
+  });
+  assert.equal(out.action.kind, "pressure-fold");
+});
+
+test("anchor-only mode, a disabled controller and a stale check never pressure-fold", async () => {
+  const f = fixture();
+  f.disagree();
+  for (const options of [
+    { config: { ...config, mode: "anchor-only" as const } },
+    { config: { ...config, enabled: false } },
+    { isCurrent: () => false },
+  ]) {
+    const out = await planAutomaticFold({
+      ...f.options(),
+      activeTokens: 150_000,
+      ...options,
+    });
+    assert.notEqual(out.action.kind, "pressure-fold");
+    assert.equal(out.state.lastPressureTokens, undefined);
+  }
 });
 
 test("anchor-only mode and below-pressure checks only suggest anchors", async () => {
@@ -227,10 +317,10 @@ test("stale and aborted checks cannot yield an action, including late input duri
   );
 });
 
-test("crossing fires once, action waits for fresh work and new anchors do not recount old work", async () => {
+test("an anchor action waits for fresh work and new anchors do not recount old work", async () => {
   const f = fixture();
   let out = await planAutomaticFold(f.options());
-  assert.equal(out.action.kind, "fold");
+  assert.equal(out.action.kind, "anchor");
   for (let i = 0; i < 8; i++) {
     out = await planAutomaticFold({ ...f.options(), state: out.state });
     assert.equal(out.action.kind, "none");
@@ -241,7 +331,7 @@ test("crossing fires once, action waits for fresh work and new anchors do not re
     state: out.state,
     activeTokens: 11_000,
   });
-  assert.equal(out.action.kind, "fold");
+  assert.equal(out.action.kind, "anchor");
   assert.equal(f.sent.length, 4);
   const state: AutoFoldState = out.state;
   out = await planAutomaticFold({
@@ -289,7 +379,7 @@ test("navigate_tree turns install counters without semantic calls; effective mod
   });
   assert.equal(out.state.turnsSinceCheck, 0);
   assert.equal(out.state.lastCheckTokens, 10_000);
-  assert.equal(out.state.aboveRewindThreshold, true);
+  assert.equal(out.state.aboveRewindThreshold, false);
   assert.equal(f.sent.length, 0);
   out = await planAutomaticFold({ ...f.options(), state: out.state });
   assert.equal(f.sent.length, 0);
