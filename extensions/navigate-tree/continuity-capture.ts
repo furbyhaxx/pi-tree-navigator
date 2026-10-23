@@ -37,6 +37,11 @@ import {
   type StageAnswer,
   type StageAsk,
 } from "./intent-policy.ts";
+import {
+  buildRetirementCheckContext,
+  RETIREMENT_QUESTION,
+  retirementConfirmed,
+} from "./retirement-check.ts";
 
 export const INTENT_KINDS = [
   "objective",
@@ -436,10 +441,15 @@ async function resolveAsks(
  * of the escalation stage. A model abstains on low confidence or an answer it
  * did not offer. When the kind stage abstains the heuristic verdict stands if
  * it found a rule, decision, objective or excerpts, else the message is
- * ephemeral; an abstention never supersedes. After a stage model's first
- * error the instance stops calling it and reports the failure once through
- * `IntentVerdict.warning`; a failed kind stage answers with the heuristic
- * classifier so no explicit rule is lost during an outage. Create a new
+ * ephemeral; an abstention never supersedes. A retirement named by escalation
+ * applies only when the verification stage confirms that one item; a primary
+ * acceptance and a confident `none` are not re-checked. A no, low-confidence,
+ * malformed, missing, cancelled or failed check keeps the item and the
+ * captured kind. After a stage model's first error the instance stops calling
+ * it and reports the failure once through `IntentVerdict.warning`; a failed
+ * kind stage answers with the heuristic classifier so no explicit rule is lost
+ * during an outage. A failed verification stage stops confirming retirements
+ * and leaves them unapplied, without disabling the other stages. Create a new
  * instance to retry.
  */
 export async function createModelClassifier(
@@ -458,6 +468,7 @@ export async function createModelClassifier(
         policy.kind.model,
         policy.supersession.model,
         policy.escalation.model,
+        policy.verification.model,
       ].filter((selector) => selector !== null),
     ),
   ];
@@ -470,6 +481,7 @@ export async function createModelClassifier(
   const minConfidence =
     opts.minConfidence ?? policy.minConfidence ?? DEFAULT_MIN_CONFIDENCE;
   const failed = new Set<string>();
+  const verificationDown = new Set<string>();
   const kindModel = policy.kind.model;
 
   const ask = async (
@@ -566,25 +578,85 @@ export async function createModelClassifier(
       }
       return acceptedContradiction(out.answers, items, minConfidence);
     };
+    const confirmRetirement = async (
+      model: string,
+      item: (typeof items)[number],
+    ): Promise<boolean> => {
+      if (verificationDown.has(model) || signal?.aborted) return false;
+      const asker = resolved.get(model);
+      if (asker === undefined) {
+        verificationDown.add(model);
+        warnings.push(
+          `navigate_tree: continuity classifier ${model} is not available; the proposed retirement is not applied.`,
+        );
+        return false;
+      }
+      const { context } = buildRetirementCheckContext({
+        message: input.text,
+        item,
+        otherItems: items.filter((other) => other.id !== item.id),
+      });
+      const text = policy.verification.instructions;
+      const question = context.questions[RETIREMENT_QUESTION];
+      const asked =
+        text === undefined || question === undefined
+          ? context
+          : {
+              ...context,
+              questions: {
+                ...context.questions,
+                [RETIREMENT_QUESTION]: { ...question, instructions: text },
+              },
+            };
+      try {
+        const answers = await asker(asked, signal);
+        if (signal?.aborted) return false;
+        return retirementConfirmed(answers, minConfidence);
+      } catch (error) {
+        if (signal?.aborted) return false;
+        verificationDown.add(model);
+        const reason = error instanceof Error ? error.message : String(error);
+        warnings.push(
+          `navigate_tree: continuity classifier ${model} failed (${reason}); the proposed retirement is not applied.`,
+        );
+        return false;
+      }
+    };
     let contradicts: string | undefined;
+    let escalated = false;
     if (items.length > 0) {
-      contradicts = shared
+      const primary = shared
         ? acceptedContradiction(shared, items, minConfidence)
         : await askContradicts(supersession, policy.supersession.instructions);
-      contradicts ??= await askContradicts(
-        policy.escalation.model,
-        policy.escalation.instructions,
-      );
+      if (primary !== undefined) {
+        contradicts = primary;
+      } else {
+        contradicts = await askContradicts(
+          policy.escalation.model,
+          policy.escalation.instructions,
+        );
+        escalated = contradicts !== undefined;
+      }
       if (signal?.aborted) return ephemeral();
     }
     const named = items.some((item) => item.id === contradicts)
       ? contradicts
       : undefined;
-    return {
+    const finish = (supersedes?: string): IntentVerdict => ({
       ...base,
-      ...(named !== undefined && { supersedes: [named] }),
+      ...(supersedes !== undefined && { supersedes: [supersedes] }),
       ...(warnings.length > 0 && { warning: warnings.join(" ") }),
-    };
+    });
+    const proposed =
+      named === undefined
+        ? undefined
+        : items.find((candidate) => candidate.id === named);
+    const verifier = policy.verification.model;
+    if (!escalated || proposed === undefined || verifier === null) {
+      return finish(named);
+    }
+    if (!(await confirmRetirement(verifier, proposed))) return finish();
+    return finish(named);
   };
 }
 
