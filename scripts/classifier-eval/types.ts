@@ -1,8 +1,19 @@
 /** JSON evidence supplied to a classifier, never the expected answer. */
-export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 
 /** The independent decisions measured by this benchmark. */
-export type EvalTask = "intent" | "supersession" | "milestone" | "fold-readiness" | "authority";
+export type EvalTask =
+  | "intent"
+  | "supersession"
+  | "milestone"
+  | "fold-readiness"
+  | "authority";
 
 /** Shared choice question, translated into the selected provider's contract. */
 export interface EvalQuestion {
@@ -10,7 +21,7 @@ export interface EvalQuestion {
   choices: Record<string, string>;
 }
 
-/** A reviewed acceptable answer set and explicitly unsafe alternatives. */
+/** A reference answer set and explicitly unsafe alternatives. */
 export interface ExpectedAnswer {
   choices: string[];
   unsafeChoices: string[];
