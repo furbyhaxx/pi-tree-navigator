@@ -4,6 +4,8 @@
  *
  *   node scripts/classifier-eval/run.ts --models decisions:typesafe/jev-1.14,chat:google/gemini-2.5-flash-lite,heuristic \
  *     --split development --out .project/analyses/classifier-eval/run-1 [--dry-run]
+ *   node scripts/classifier-eval/run.ts --models chat:openai/gpt-6-luna --variants base,granular+tree-luna \
+ *     --tasks milestone-status,milestone-boundary --split development --out <dir>
  *
  * Every paid call reserves its worst case in the ledger before dispatch and
  * settles from OpenRouter billing after it. Exit codes: 0 complete, 1 failure,
@@ -32,7 +34,7 @@ import { parseArgs } from "node:util";
 import type { ClassifierApi, ClassifierModel } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import {
-  type AdapterResult,
+  type AnswerOptions,
   answer,
   type Candidate,
   chatCandidate,
@@ -56,6 +58,19 @@ import {
   worstCaseUsd,
 } from "./billing.ts";
 import { BudgetError, BudgetLedger, type BudgetSnapshot } from "./budget.ts";
+import {
+  addCarried,
+  generateStructure,
+  parseVariant,
+  planVariant,
+  STRUCTURE_MAX_OUTPUT_TOKENS,
+  STRUCTURE_MODEL,
+  type StructureObservation,
+  structureRequest,
+  type Variant,
+  type VariantResult,
+  variantCandidate,
+} from "./milestone-variants.ts";
 import { prepareCase } from "./prepare.ts";
 import type {
   EvalCase,
@@ -102,6 +117,7 @@ interface Options {
   uncatalogued: string[];
   split: "development" | "holdout" | "all";
   tasks: readonly EvalTask[];
+  variants: Variant[];
   repetitions: number;
   concurrency: number;
   timeoutMs: number;
@@ -129,6 +145,9 @@ const USAGE = `usage: node scripts/classifier-eval/run.ts --models <spec,...> (-
                           the committed ones; the catalog price still sets the floor
   --split <s>             development (or dev) | holdout | all (default all)
   --tasks <t,...>         ${TASKS.join(" | ")} (default all)
+  --variants <v,...>      milestone request variants, each model runs once per variant as <model>#<variant>:
+                            base | instructions | granular | tree-heuristic | tree-luna, or parts joined
+                            with + (granular+tree-luna); tree-luna adds one ${STRUCTURE_MODEL} structure call per case
   --repetitions <n>       default 1
   --concurrency <n>       default 4
   --timeout-ms <n>        per request, default 60000
@@ -159,6 +178,7 @@ function parseOptions(argv: readonly string[]): Options | "help" {
         uncatalogued: { type: "string", multiple: true },
         split: { type: "string", default: "all" },
         tasks: { type: "string" },
+        variants: { type: "string" },
         repetitions: { type: "string", default: "1" },
         concurrency: { type: "string", default: "4" },
         "timeout-ms": { type: "string", default: "60000" },
@@ -191,6 +211,20 @@ function parseOptions(argv: readonly string[]): Options | "help" {
               throw new UsageError(`unknown task ${task}`);
             return task as EvalTask;
           });
+  const variants: Variant[] = [];
+  for (const spec of parsed.variants === undefined
+    ? []
+    : String(parsed.variants).split(",")) {
+    try {
+      const variant = parseVariant(spec);
+      if (!variants.some((known) => known.id === variant.id))
+        variants.push(variant);
+    } catch (error) {
+      throw new UsageError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  }
   const cap = Number(parsed.cap);
   if (!Number.isFinite(cap) || cap <= 0)
     throw new UsageError("--cap must be a positive number");
@@ -210,6 +244,7 @@ function parseOptions(argv: readonly string[]): Options | "help" {
     uncatalogued,
     split,
     tasks,
+    variants,
     repetitions: integer(String(parsed.repetitions), "repetitions"),
     concurrency: integer(String(parsed.concurrency), "concurrency", 64),
     timeoutMs: integer(String(parsed["timeout-ms"]), "timeout-ms"),
@@ -412,11 +447,46 @@ function resolveCandidates(
 
 interface PlannedCall {
   prepared: PreparedCase;
+  /** Labelled `<model>#<variant>` for a variant. */
   candidate: Candidate;
+  variant?: Variant;
   repetition: number;
   plan: RequestPlan;
   reservationUsd: number;
+  run(options: AnswerOptions): Promise<VariantResult>;
 }
+
+/** A model to run, once per variant when variants are selected. */
+interface Contender {
+  source: Candidate;
+  /** The source candidate, relabelled for its variant. */
+  candidate: Candidate;
+  variant?: Variant;
+}
+
+function expandVariants(
+  candidates: readonly Candidate[],
+  variants: readonly Variant[],
+): Contender[] {
+  return variants.length === 0
+    ? candidates.map((candidate) => ({ source: candidate, candidate }))
+    : candidates.flatMap((source) =>
+        variants.map((variant) => ({
+          source,
+          candidate: variantCandidate(source, variant),
+          variant,
+        })),
+      );
+}
+
+const reservationOf = (candidate: Candidate, plan: RequestPlan) =>
+  plan.kind === "request" && candidate.adapter !== "heuristic"
+    ? worstCaseUsd(
+        plan.bodyBytes,
+        plan.maxOutputTokens,
+        candidate.pricing.rates,
+      )
+    : 0;
 
 const workKey = (model: string, caseId: string, repetition: number) =>
   JSON.stringify([model, caseId, repetition]);
@@ -424,35 +494,92 @@ const workKey = (model: string, caseId: string, repetition: number) =>
 /** Calls in repetition-major order, so a partial run covers every model evenly. */
 function planCalls(
   cases: readonly PreparedCase[],
-  candidates: readonly Candidate[],
+  contenders: readonly Contender[],
   repetitions: number,
   completed: ReadonlySet<string>,
+  structures: ReadonlyMap<string, StructureObservation>,
 ): { calls: PlannedCall[]; skipped: number } {
   const calls: PlannedCall[] = [];
   let skipped = 0;
   for (let repetition = 0; repetition < repetitions; repetition++)
     for (const prepared of cases)
-      for (const candidate of candidates) {
+      for (const { source, candidate, variant } of contenders) {
         if (completed.has(workKey(candidate.label, prepared.id, repetition))) {
           skipped++;
           continue;
         }
-        const plan = planRequest(prepared, candidate);
-        const reservationUsd =
-          plan.kind === "request" && candidate.adapter !== "heuristic"
-            ? worstCaseUsd(
-                plan.bodyBytes,
-                plan.maxOutputTokens,
-                candidate.pricing.rates,
-              )
-            : 0;
+        const planned = variant
+          ? planVariant(prepared, source, variant, structures)
+          : undefined;
+        const plan = planRequest(planned?.prepared ?? prepared, candidate);
+        const reservationUsd = reservationOf(candidate, plan);
         if (plan.kind === "request" && !(reservationUsd > 0))
           throw new Error(
             `${candidate.label} on ${prepared.id} planned a request without a positive reservation`,
           );
-        calls.push({ prepared, candidate, repetition, plan, reservationUsd });
+        calls.push({
+          prepared,
+          candidate,
+          ...(variant && { variant }),
+          repetition,
+          plan,
+          reservationUsd,
+          run:
+            planned?.run ?? ((options) => answer(prepared, candidate, options)),
+        });
       }
   return { calls, skipped };
+}
+
+/** The chat model that writes structures, relabelled so its reservations never collide with a plain run of it. */
+function structureCandidate(
+  registry: RunRegistry,
+  table: RouteTable,
+): Extract<Candidate, { adapter: "chat" }> {
+  const model = registry.getModelOfType("chat", "openrouter", STRUCTURE_MODEL);
+  if (!model)
+    throw new UsageError(
+      `structure model chat:${STRUCTURE_MODEL} is not in the OpenRouter catalog`,
+    );
+  const candidate = chatCandidate(model, table);
+  if (candidate.adapter !== "chat" || candidate.pricing.refusal !== undefined)
+    throw new UsageError(
+      `structure model chat:${STRUCTURE_MODEL} has no safe price: ${candidate.adapter === "chat" ? candidate.pricing.refusal : "not a chat model"}`,
+    );
+  return { ...candidate, label: `${candidate.label}#structure` };
+}
+
+/** The `tree-luna` structure calls still missing: one per case, shared by every model and repetition. */
+function planStructureCalls(
+  calls: readonly PlannedCall[],
+  generator: Extract<Candidate, { adapter: "chat" }> | undefined,
+  structures: ReadonlyMap<string, StructureObservation>,
+): PlannedCall[] {
+  const wanted = new Map(
+    calls
+      .filter((call) => call.variant?.tree === "luna")
+      .map((call) => [call.prepared.id, call.prepared]),
+  );
+  if (wanted.size === 0) return [];
+  if (!generator) throw new Error("no structure model was resolved");
+  return [...wanted.values()]
+    .filter((prepared) => !structures.get(prepared.id)?.structure)
+    .map((prepared) => {
+      const { bodyBytes } = structureRequest(prepared, generator);
+      const plan: RequestPlan = {
+        kind: "request",
+        bodyBytes,
+        maxOutputTokens: STRUCTURE_MAX_OUTPUT_TOKENS,
+      };
+      return {
+        prepared,
+        candidate: generator,
+        repetition: 0,
+        plan,
+        reservationUsd: reservationOf(generator, plan),
+        run: (options) => generateStructure(prepared, generator, options),
+      };
+    });
 }
 
 function dryRunReport(
@@ -461,9 +588,12 @@ function dryRunReport(
   budget: BudgetSnapshot,
   options: Options,
   resolution: Resolution,
+  candidates: readonly Candidate[],
 ): { text: string; total: number; refused: boolean } {
-  const rows = resolution.candidates.map((candidate) => {
-    const own = calls.filter((call) => call.candidate === candidate);
+  const rows = candidates.map((candidate) => {
+    const own = calls.filter(
+      (call) => call.candidate.label === candidate.label,
+    );
     const rates =
       candidate.adapter === "heuristic"
         ? ""
@@ -562,9 +692,12 @@ async function execute(run: Execution): Promise<Outcome> {
   async function settle(
     call: PlannedCall,
     reservationId: string,
-    result: AdapterResult,
+    result: VariantResult,
   ) {
-    const settlement = await run.billing.settle(result.evidence, run.signal);
+    const settlement = addCarried(
+      await run.billing.settle(result.evidence, run.signal),
+      result.carried,
+    );
     try {
       run.ledger.settle(reservationId, settlement.costUsd);
     } catch (error) {
@@ -573,7 +706,12 @@ async function execute(run: Execution): Promise<Outcome> {
     }
     if (run.signal.aborted && result.observation.status === "error")
       outcome.interrupted++;
-    else record(result.observation, settlement, call.reservationUsd);
+    else
+      record(
+        result.observation,
+        settlement,
+        call.reservationUsd + (result.carried?.boundUsd ?? 0),
+      );
   }
 
   async function worker() {
@@ -591,7 +729,7 @@ async function execute(run: Execution): Promise<Outcome> {
         secrets: run.secrets,
       };
       if (call.plan.kind !== "request") {
-        const local = await answer(call.prepared, call.candidate, options);
+        const local = await call.run(options);
         record(local.observation, { costUsd: 0, costSource: "local" }, 0);
         continue;
       }
@@ -603,7 +741,7 @@ async function execute(run: Execution): Promise<Outcome> {
         halt(`${error.code}: ${error.message}`);
         return;
       }
-      const result = await answer(call.prepared, call.candidate, options);
+      const result = await call.run(options);
       const settling: Promise<void> = settle(
         call,
         reservationId,
@@ -634,6 +772,7 @@ async function execute(run: Execution): Promise<Outcome> {
 interface ModelMeta {
   label: string;
   adapter: Candidate["adapter"];
+  variant?: string;
   uncatalogued?: true;
   /** The effective rates: the higher of the catalog and the route table. */
   promptUsdPerM?: number;
@@ -652,11 +791,14 @@ interface SessionMeta {
   excluded: Array<Pick<Exclusion, "label" | "reason">>;
   split: Options["split"];
   tasks: readonly EvalTask[];
+  variants?: string[];
   repetitions: number;
   concurrency: number;
   keyUsageBefore?: KeyUsage | { error: string };
   keyUsageAfter?: KeyUsage | { error: string };
   counts?: Outcome["counts"];
+  /** Outcomes of the `tree-luna` structure calls, which are logged in structures.jsonl. */
+  structureCounts?: Outcome["counts"];
   interrupted?: number;
   stopped?: string;
   ledgerAfter?: BudgetSnapshot;
@@ -676,12 +818,13 @@ interface RunMeta {
   sessions: SessionMeta[];
 }
 
-function modelMeta(candidate: Candidate): ModelMeta {
+function modelMeta({ candidate, variant }: Contender): ModelMeta {
   if (candidate.adapter === "heuristic")
     return { label: candidate.label, adapter: "heuristic" };
   return {
     label: candidate.label,
     adapter: candidate.adapter,
+    ...(variant && { variant: variant.id }),
     ...(candidate.adapter === "decisions" &&
       candidate.uncatalogued && { uncatalogued: true as const }),
     promptUsdPerM: candidate.pricing.rates.promptUsdPerM,
@@ -775,6 +918,13 @@ async function runBenchmark(options: Options, deps: Deps): Promise<number> {
     .map(prepareCase);
   if (prepared.length === 0)
     throw new UsageError("no cases match --split and --tasks");
+  if (
+    options.variants.length > 0 &&
+    prepared.some((fixture) => fixture.input.type !== "milestone")
+  )
+    throw new UsageError(
+      "--variants applies to milestone cases only; pass --tasks milestone-status,milestone-boundary",
+    );
 
   const outDir = resolve(options.resume ?? options.out ?? ".");
   const scratch = mkdtempSync(join(tmpdir(), "classifier-eval-"));
@@ -799,20 +949,54 @@ async function runBenchmark(options: Options, deps: Deps): Promise<number> {
       registry,
       table,
     );
+    if (
+      options.variants.length > 0 &&
+      resolution.candidates.some(
+        (candidate) => candidate.adapter === "heuristic",
+      )
+    )
+      throw new UsageError("the heuristic has no milestone variants");
+    const contenders = expandVariants(resolution.candidates, options.variants);
+    const existing = options.resume || (options.dryRun && options.out);
     const completed = finishedKeys(
-      options.resume || (options.dryRun && options.out)
-        ? readObservations(join(outDir, "observations.jsonl"))
-        : [],
+      existing ? readObservations(join(outDir, "observations.jsonl")) : [],
+    );
+    const structures = new Map<string, StructureObservation>(
+      (existing
+        ? (readObservations(
+            join(outDir, "structures.jsonl"),
+          ) as StructureObservation[])
+        : []
+      )
+        .filter((entry) => entry.status === "ok" && entry.structure)
+        .map((entry) => [entry.caseId, entry]),
     );
     const { calls, skipped } = planCalls(
       prepared,
-      resolution.candidates,
+      contenders,
       options.repetitions,
       completed,
+      structures,
     );
+    const generator = options.variants.some(
+      (variant) => variant.tree === "luna",
+    )
+      ? structureCandidate(registry, table)
+      : undefined;
+    const structureCalls = planStructureCalls(calls, generator, structures);
     if (options.dryRun) {
       const budget = ledgerSnapshot(options.ledger, options.cap);
-      const report = dryRunReport(calls, skipped, budget, options, resolution);
+      const report = dryRunReport(
+        [...structureCalls, ...calls],
+        skipped,
+        budget,
+        options,
+        resolution,
+        [
+          ...(generator && structureCalls.length > 0 ? [generator] : []),
+          ...contenders.map(({ candidate }) => candidate),
+        ],
+      );
       deps.stdout(report.text);
       return report.refused || report.total > budget.remainingUsd ? 3 : 0;
     }
@@ -839,8 +1023,11 @@ async function runBenchmark(options: Options, deps: Deps): Promise<number> {
       deps,
       registry,
       resolution,
+      contenders,
       table,
       calls,
+      structureCalls,
+      structures,
       outDir,
       casesSha256: createHash("sha256")
         .update(JSON.stringify(allCases))
@@ -857,8 +1044,12 @@ interface LiveRun {
   deps: Deps;
   registry: RunRegistry;
   resolution: Resolution;
+  contenders: readonly Contender[];
   table: RouteTable;
   calls: readonly PlannedCall[];
+  structureCalls: readonly PlannedCall[];
+  /** Generated structures by case id; the structure stage fills it before the calls that use it. */
+  structures: Map<string, StructureObservation>;
   outDir: string;
   casesSha256: string;
   caseCount: number;
@@ -888,7 +1079,8 @@ function newRunMeta(
 }
 
 async function runLive(live: LiveRun): Promise<number> {
-  const { options, deps, registry, resolution, calls, outDir } = live;
+  const { options, deps, registry, resolution, calls, structureCalls, outDir } =
+    live;
   const runMetaPath = join(outDir, "run.json");
   const billing = createBilling({
     getApiKey: () => registry.getApiKeyForProvider("openrouter"),
@@ -896,7 +1088,12 @@ async function runLive(live: LiveRun): Promise<number> {
     ...(deps.billingDelaysMs && { delaysMs: deps.billingDelaysMs }),
   });
   const apiKey = await registry.getApiKeyForProvider("openrouter");
-  if (calls.some((call) => call.plan.kind === "request") && !apiKey)
+  if (
+    [...structureCalls, ...calls].some(
+      (call) => call.plan.kind === "request",
+    ) &&
+    !apiKey
+  )
     throw new Error("no OpenRouter API key is configured");
   const secrets = apiKey ? [apiKey] : [];
 
@@ -910,13 +1107,16 @@ async function runLive(live: LiveRun): Promise<number> {
   const session: SessionMeta = {
     id: `${meta.runId}.s${meta.sessions.length + 1}`,
     startedAt: new Date().toISOString(),
-    models: resolution.candidates.map(modelMeta),
+    models: live.contenders.map(modelMeta),
     excluded: resolution.excluded.map(({ label, reason }) => ({
       label,
       reason,
     })),
     split: options.split,
     tasks: options.tasks,
+    ...(options.variants.length > 0 && {
+      variants: options.variants.map((variant) => variant.id),
+    }),
     repetitions: options.repetitions,
     concurrency: options.concurrency,
   };
@@ -927,6 +1127,10 @@ async function runLive(live: LiveRun): Promise<number> {
 
   const ledger = BudgetLedger.open(options.ledger, options.cap);
   const log = openLog(join(outDir, "observations.jsonl"));
+  const structureLog =
+    structureCalls.length > 0
+      ? openLog(join(outDir, "structures.jsonl"))
+      : undefined;
   const controller = new AbortController();
   let interrupts = 0;
   const onSignal = () => {
@@ -948,19 +1152,37 @@ async function runLive(live: LiveRun): Promise<number> {
     writeJson(runMetaPath, meta);
     session.keyUsageBefore = await usageOf(billing, secrets, controller.signal);
     writeJson(runMetaPath, meta);
-    const outcome = await execute({
-      calls,
-      ledger,
-      billing,
-      registry,
-      fetch: deps.fetch,
-      timeoutMs: options.timeoutMs,
-      concurrency: options.concurrency,
-      signal: controller.signal,
-      sessionId: session.id,
-      secrets,
-      write: log.write,
-    });
+    const stage = (
+      stageCalls: readonly PlannedCall[],
+      write: Execution["write"],
+    ) =>
+      execute({
+        calls: stageCalls,
+        ledger,
+        billing,
+        registry,
+        fetch: deps.fetch,
+        timeoutMs: options.timeoutMs,
+        concurrency: options.concurrency,
+        signal: controller.signal,
+        sessionId: session.id,
+        secrets,
+        write,
+      });
+    const structured =
+      structureCalls.length > 0
+        ? await stage(structureCalls, (observation) => {
+            structureLog?.write(observation);
+            const entry = observation as StructureObservation;
+            if (entry.status === "ok" && entry.structure)
+              live.structures.set(entry.caseId, entry);
+          })
+        : undefined;
+    if (structured) session.structureCounts = structured.counts;
+    const outcome =
+      structured && (structured.stopped || structured.failure)
+        ? structured
+        : await stage(calls, log.write);
     session.keyUsageAfter = await usageOf(billing, secrets);
     session.endedAt = new Date().toISOString();
     session.counts = outcome.counts;
@@ -983,6 +1205,7 @@ async function runLive(live: LiveRun): Promise<number> {
     }
     deps.interrupt?.removeEventListener("abort", onSignal);
     log.close();
+    structureLog?.close();
     ledger.close();
   }
 }
@@ -1005,8 +1228,14 @@ function summary(
       ? `key usage ${before.usage} -> ${after.usage} (delta ${(after.usage - before.usage).toFixed(9)} USD)`
       : "key usage unavailable";
   const ledger = session.ledgerAfter;
+  const structures = session.structureCounts;
   const lines = [
     `${outDir}: ${ok + error + unsupported} observations (ok ${ok}, error ${error}, unsupported ${unsupported})`,
+    ...(structures
+      ? [
+          `structures: ${structures.ok + structures.error + structures.unsupported} calls (ok ${structures.ok}, error ${structures.error})`,
+        ]
+      : []),
     ...(ledger
       ? [
           `ledger: cap ${ledger.limitUsd}, spent ${ledger.spentUsd}, held ${ledger.heldUsd}, remaining ${ledger.remainingUsd}`,
