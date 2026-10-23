@@ -78,6 +78,7 @@ import {
   readBranchLedger,
   type StoredOp,
 } from "./continuity-store.ts";
+import { DEFAULT_REDUCE_OUTPUT_TOKENS } from "./fold-summarizer.ts";
 import { formatPct1, MAX_NAME_LENGTH, TOOL_NAME } from "./helpers.ts";
 import navigateTree, {
   __testHooks,
@@ -90,12 +91,17 @@ import navigateTree, {
   estimateAdmissionTokens,
   type FoldCommitInput,
   type FoldPreviewInput,
+  foldPlaceholderSummary,
+  foldRecommendationBudget,
+  foldSummaryPlaceholderTokens,
   MAX_HINT_WALK_DEPTH,
   MAX_SESSION_REFS,
   MIN_REWIND_SAVINGS_TOKENS,
   MIN_SUMMARY_FOCUS_LENGTH,
   previewFoldCommit,
+  priceFoldCandidates,
   REWIND_CUSTOM_TYPE,
+  recommendFoldIndex,
   START_ANCHOR_LABEL,
   wrapPlainLine,
 } from "./index.ts";
@@ -12295,6 +12301,356 @@ describe("independent folds through the engine host", () => {
       });
       release();
       assert.equal((await first).status, "done");
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("recommends the newest valid anchor inside the hint budget, else the oldest", () => {
+    const candidates = [
+      { name: "old", valid: true, projectedAfterTokens: 40 },
+      { name: "mid", valid: true, projectedAfterTokens: 70 },
+      { name: "new", valid: true, projectedAfterTokens: 90 },
+    ];
+    assert.equal(foldRecommendationBudget(100, null), 75);
+    assert.equal(
+      recommendFoldIndex(candidates, foldRecommendationBudget(100, 20)),
+      1,
+    );
+    assert.equal(
+      recommendFoldIndex(candidates, foldRecommendationBudget(100, null)),
+      1,
+    );
+    assert.equal(
+      recommendFoldIndex(candidates, foldRecommendationBudget(100, 50)),
+      0,
+    );
+    assert.equal(
+      recommendFoldIndex(candidates, foldRecommendationBudget(100, 70)),
+      0,
+    );
+  });
+
+  const PLAN_WIDTH = 120;
+  const planTheme = {
+    fg: (_color: string, text: string) => text,
+    bold: (text: string) => text,
+    italic: (text: string) => text,
+  };
+  interface PlanScreen {
+    handleInput(data: string): void;
+    render(width: number): string[];
+  }
+
+  async function shown(screen: PlanScreen, includes: string): Promise<string> {
+    for (let i = 0; i < 80; i++) {
+      const text = screen.render(PLAN_WIDTH).join("\n");
+      if (text.includes(includes)) return text;
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    throw new Error(
+      `screen never showed ${JSON.stringify(includes)}\n${screen.render(PLAN_WIDTH).join("\n")}`,
+    );
+  }
+
+  async function driveAnchor(
+    f: FoldFixture,
+    ctx: ReturnType<typeof foldCtx>,
+    args: string,
+    scripts: Array<(screen: PlanScreen) => Promise<void>>,
+  ) {
+    const pending = [...scripts];
+    const command = f.pi.commands.get("anchor");
+    assert.ok(command);
+    await command.handler(args, {
+      ...ctx,
+      hasUI: true,
+      ui: {
+        ...ctx.ui,
+        notify(message: string, type?: "info" | "warning" | "error") {
+          ctx.notifyCalls.push([message, type]);
+        },
+        custom(factory: (...factoryArgs: unknown[]) => PlanScreen) {
+          const script = pending.shift();
+          assert.ok(script, "unexpected extra screen");
+          return new Promise((resolve, reject) => {
+            const screen = factory(
+              {
+                terminal: { rows: 40, columns: PLAN_WIDTH },
+                requestRender() {},
+              },
+              planTheme,
+              undefined,
+              resolve,
+            );
+            screen.render(PLAN_WIDTH);
+            script(screen).catch(reject);
+          });
+        },
+      },
+    } as never);
+    assert.equal(pending.length, 0);
+  }
+
+  function assertCommandFolded(f: FoldFixture, label = "start-folded") {
+    const summary = f.sm.getBranch().find((e) => e.type === "branch_summary");
+    assert.ok(summary, "a branch_summary is on the active branch");
+    assert.equal(summary.parentId, f.anchorId);
+    assert.equal(f.sm.getLabel(f.leafId), `branch:${label}`);
+    assert.equal(f.sm.getLabel(summary.id), `anchor:${label}`);
+    assert.ok(!f.sm.getBranch().some((e) => e.id === f.leafId));
+  }
+
+  it("folds an idle session from /anchor fold without a user message, even when the guard would refuse", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      const registry = fakeRegistry();
+      const ctx = foldCtx(f, registry.registry);
+      assert.equal(await guardAborts(f, ctx), true);
+      await driveAnchor(f, ctx, "fold", [
+        async (screen) => {
+          assert.match(screen.render(PLAN_WIDTH).join("\n"), /chunked/);
+          screen.handleInput("\r");
+          await shown(screen, "folded as");
+          screen.handleInput("\r");
+        },
+      ]);
+      assertCommandFolded(f);
+      assertNoSummaryTurn(f, registry.calls);
+      assert.match(
+        JSON.stringify(registry.calls.at(-1)?.context.messages.at(-1)),
+        /Latest request: u6/,
+      );
+      assert.equal(await guardAborts(f, ctx), false);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("queues /anchor fold while the agent is working and does not branch before the boundary", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      const registry = fakeRegistry();
+      const ctx = foldCtx(f, registry.registry, { isIdle: () => false });
+      const before = snapshotOf(f.sm);
+      await driveAnchor(f, ctx, "fold", [
+        async (screen) => {
+          assert.match(screen.render(PLAN_WIDTH).join("\n"), /agent working/);
+          screen.handleInput("\r");
+          await shown(screen, "queued");
+          screen.handleInput("\r");
+        },
+      ]);
+      assert.equal(registry.calls.length, 0);
+      assert.equal(f.pi.sendUserMessageCalls.length, 0);
+      assert.deepEqual(snapshotOf(f.sm), before);
+      const result = await fireTurnEndAll(f.pi, ctx, leafMessage(f));
+      assert.equal(result.continue, true);
+      assertCommandFolded(f);
+      assertNoSummaryTurn(f, registry.calls);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("cancels /anchor fold before the commit and keeps the branch", async () => {
+    const f = await foldSetup(99_000);
+    try {
+      const registry = fakeRegistry(
+        (call) =>
+          new Promise((resolve) => {
+            const signal = call.options.signal;
+            const finish = () => resolve(reply("", "aborted"));
+            if (!signal || signal.aborted) finish();
+            else signal.addEventListener("abort", finish, { once: true });
+          }),
+      );
+      const ctx = foldCtx(f, registry.registry);
+      const before = snapshotOf(f.sm);
+      await driveAnchor(f, ctx, "fold", [
+        async (screen) => {
+          screen.handleInput("\r");
+          for (let i = 0; i < 50 && registry.calls.length === 0; i++)
+            await new Promise((resolve) => setImmediate(resolve));
+          assert.ok(registry.calls.length > 0, "the sidecar call started");
+          screen.handleInput("\x1b");
+          await shown(screen, "cancelled");
+          screen.handleInput("\r");
+        },
+      ]);
+      assert.deepEqual(snapshotOf(f.sm), before);
+      assert.equal(
+        f.sm.getBranch().some((e) => e.type === "branch_summary"),
+        false,
+      );
+      assert.equal(f.pi.sendUserMessageCalls.length, 0);
+      assert.equal(f.pi.sendMessageCalls.length, 0);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("refuses a pre-compaction anchor on the plan with the preview reason", async () => {
+    const g = setup({ contextWindow: WINDOW });
+    (g.ctx.model as { maxTokens?: number }).maxTokens = 64_000;
+    const early = appendTurn(g.sm, "u1", "a1", 0);
+    g.pi.pi.setLabel(early.assistantId, "anchor:early");
+    for (const n of [2, 3, 4]) appendTurn(g.sm, `u${n}`, `a${n}`, 0, true);
+    const cut = appendTurn(g.sm, "u5", "a5", 0, true);
+    g.pi.pi.setLabel(cut.assistantId, "anchor:before-cut");
+    g.sm.appendCompaction("Compacted summary", cut.userId, 0);
+    appendTurn(g.sm, "u6", "a6", 0, true);
+    const before = snapshotOf(g.sm);
+    const ctx = foldCtx(g, fakeRegistry().registry);
+    await driveAnchor(g as FoldFixture, ctx, "fold", [
+      async (screen) => {
+        screen.handleInput("\x1b[A");
+        const text = screen.render(PLAN_WIDTH).join("\n");
+        assert.match(text, /before-cut/);
+        assert.match(text, /not foldable/);
+        assert.match(text, /lies before the latest compaction/);
+        screen.handleInput("\x1b");
+      },
+    ]);
+    assert.deepEqual(snapshotOf(g.sm), before);
+    assert.equal(g.pi.sendUserMessageCalls.length, 0);
+  });
+
+  it("prices a full child handoff as the commit materializes it", async () => {
+    const f = setup({ contextWindow: 1_000_000 });
+    (f.ctx.model as { maxTokens?: number }).maxTokens = 64_000;
+    const root = appendTurn(f.sm, "u1 keep the parser", "a1", 6_000);
+    f.pi.pi.setLabel(root.assistantId, "anchor:start");
+    for (const n of [2, 3, 4, 5])
+      appendTurn(f.sm, `u${n}`, `a${n}`, 12_000, true);
+    const marker = "CHILD-HANDOFF-MARKER";
+    const childLeaf = f.sm.getLeafId();
+    assert.ok(childLeaf);
+    f.sm.branchWithSummary(
+      childLeaf,
+      `${SUMMARY_TEXT}\n${marker} ${"evidence ".repeat(4_000)}`,
+      {},
+      true,
+    );
+    for (const n of [6, 7, 8]) appendTurn(f.sm, `u${n}`, `a${n}`, 20_000, true);
+    const model = {
+      provider: "claude",
+      id: "claude-sonnet-4-5",
+      contextWindow: 1_000_000,
+      maxTokens: 64_000,
+    };
+    const focus = "Continue the parser work that is still open on this branch.";
+    assert.equal(
+      foldPlaceholderSummary(foldSummaryPlaceholderTokens(model.maxTokens))
+        .length,
+      DEFAULT_REDUCE_OUTPUT_TOKENS * 4,
+    );
+    assert.equal(foldSummaryPlaceholderTokens(100), 100);
+    const prices = priceFoldCandidates(f.sm, {
+      model,
+      handoffMode: "full",
+      focus,
+      suggestLabel: (name) => (name === "start" ? "parent" : `${name}-folded`),
+    });
+    const start = prices.find((price) => price.name === "start");
+    assert.ok(start?.valid, start?.reason);
+    if (!start?.valid) return;
+    const leafId = f.sm.getLeafId();
+    assert.ok(leafId);
+    const preview = previewFoldCommit(f.sm, {
+      targetId: start.targetId,
+      rewindTo: "start",
+      newLabel: start.suggestedLabel,
+      summaryText: foldPlaceholderSummary(
+        foldSummaryPlaceholderTokens(model.maxTokens),
+      ),
+      handoffMode: "full",
+      contextWindow: model.contextWindow,
+      foldPointId: leafId,
+      continuationText: (afterTokens) =>
+        buildRewindDoneText(
+          {
+            rewindTo: "start",
+            newLabel: start.suggestedLabel,
+            beforeTokens: start.beforeTokens,
+            contextWindow: model.contextWindow,
+          },
+          afterTokens,
+        ),
+    });
+    assert.ok(preview.ok, preview.ok ? "" : preview.reason);
+    if (!preview.ok) return;
+    assert.equal(start.projectedAfterTokens, preview.projectedAfterTokens);
+    assert.ok(preview.materialized.includes(marker));
+    const anchorOnly =
+      estimateRequestTokens(
+        buildSessionContext(f.sm.getEntries(), start.targetId).messages,
+      ) + Math.ceil(ANCHOR_MANDATE.length / 3.5);
+    assert.notEqual(
+      start.projectedAfterTokens,
+      start.beforeTokens - anchorOnly,
+    );
+    assert.ok(start.projectedAfterTokens > anchorOnly);
+    const outcome = await commitFold(f.sm, {
+      targetId: start.targetId,
+      rewindTo: "start",
+      newLabel: start.suggestedLabel,
+      summaryText: foldPlaceholderSummary(
+        foldSummaryPlaceholderTokens(model.maxTokens),
+      ),
+      handoffMode: "full",
+      contextWindow: model.contextWindow,
+      foldPointId: leafId,
+      branchLabelEntryId: leafId,
+      continuationText: (afterTokens) =>
+        buildRewindDoneText(
+          {
+            rewindTo: "start",
+            newLabel: start.suggestedLabel,
+            beforeTokens: start.beforeTokens,
+            contextWindow: model.contextWindow,
+          },
+          afterTokens,
+        ),
+      writeLabel: (entryId, label) => {
+        f.sm.appendLabelChange(entryId, label);
+        return true;
+      },
+    });
+    assert.ok(outcome.ok, outcome.ok ? "" : outcome.reason);
+    if (!outcome.ok) return;
+    const summary = f.sm.getEntry(outcome.summaryId);
+    assert.ok(summary && summary.type === "branch_summary");
+    assert.equal(summary.summary, preview.materialized);
+    assert.deepEqual(summary.details, preview.details);
+  });
+
+  it("preselects the anchor chosen with r in the list", async () => {
+    const f = await foldSetup(40_000);
+    try {
+      const assistants = f.sm
+        .getBranch()
+        .filter(
+          (entry) =>
+            entry.type === "message" && entry.message.role === "assistant",
+        );
+      f.pi.pi.setLabel(assistants[2].id, "anchor:mid");
+      const ctx = foldCtx(f, fakeRegistry().registry);
+      await driveAnchor(f, ctx, "list", [
+        async (screen) => {
+          screen.handleInput("r");
+        },
+        async (screen) => {
+          const text = screen.render(PLAN_WIDTH).join("\n");
+          assert.match(text, /rewind to start/);
+          assert.doesNotMatch(text, /rewind to mid/);
+          screen.handleInput("\x1b");
+        },
+        async (screen) => {
+          screen.handleInput("\x1b");
+        },
+      ]);
+      assert.equal(f.pi.sendUserMessageCalls.length, 0);
     } finally {
       cleanupConfigFixture(f.fixture);
     }
