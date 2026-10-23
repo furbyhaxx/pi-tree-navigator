@@ -9141,15 +9141,18 @@ describe("rewind-driven compaction (#101)", () => {
     );
   }
 
-  it("auto_navigate checks once on threshold crossing, then respects cadence", async () => {
+  it("auto_navigate classifies on its cadence below rewind_at_tokens and never folds", async () => {
     const f = await autoFixture(async () => ({ status: "continue" }));
     try {
-      await autoTurn(f, 90_000);
+      await autoTurn(f, 50_000);
+      await autoTurn(f, 51_000);
+      assert.equal(f.questions.length, 0);
+      await autoTurn(f, 52_000);
       assert.equal(f.questions.length, 1);
-      await autoTurn(f, 91_000);
-      await autoTurn(f, 92_000);
+      await autoTurn(f, 53_000);
+      await autoTurn(f, 54_000);
       assert.equal(f.questions.length, 1);
-      await autoTurn(f, 93_000);
+      await autoTurn(f, 55_000);
       assert.equal(f.questions.length, 2);
       assert.equal(f.summaries.calls.length, 0);
     } finally {
@@ -9170,76 +9173,111 @@ describe("rewind-driven compaction (#101)", () => {
         "# Earlier milestone",
         20_000,
       ).assistantId;
-      const boundary = await autoTurn(f, 90_000);
+      const boundary = await autoTurn(f, 50_000);
       assert.equal(f.sm.getLabel(target), "anchor:earlier-milestone");
       assert.equal(f.summaries.calls.length, 0);
       assertNoAutoSteer(f, boundary);
       assert.ok(
         !f.sm.getEntries().some((entry) => entry.type === "branch_summary"),
       );
-      await autoTurn(f, 91_000);
+      await autoTurn(f, 51_000);
       assert.equal(f.questions.length, 1);
     } finally {
       cleanupConfigFixture(f.fixture);
     }
   });
 
-  it("auto_navigate directly commits an engine fold and continues without an old steer", async () => {
-    const f = await autoFixture(async (context) => ({
-      status: "milestone",
-      boundary: newestBoundary(context),
-    }));
+  it("auto_navigate folds at rewind_at_tokens through the engine without asking a classifier", async () => {
+    const f = await autoFixture(async () => {
+      throw new Error("a classifier must not decide a pressure fold");
+    });
     try {
       const boundary = await autoTurn(f, 90_000);
       assert.equal(boundary.continue, true);
       const [done] = forcedDrafts(boundary);
-      assert.equal(done.details.status, "done");
+      assert.equal(done?.details.status, "done", JSON.stringify(boundary));
       assert.equal(done.details.origin, "auto");
+      assert.equal(done.details.rewindTo, "start");
+      assert.equal(f.questions.length, 0);
       assert.ok(f.summaries.calls.length > 0);
       assert.ok(
         f.sm.getBranch().some((entry) => entry.type === "branch_summary"),
       );
       assertNoAutoSteer(f, boundary);
-      await autoTurn(f, 5_000);
+      const calls = f.summaries.calls.length;
+      await autoTurn(f, 85_000);
       assert.equal(
-        f.questions.length,
-        1,
-        "a successful action needs fresh work",
+        f.summaries.calls.length,
+        calls,
+        "another pressure fold needs min_tokens_since_anchor fresh tokens",
       );
+      assert.equal(f.questions.length, 0);
     } finally {
       cleanupConfigFixture(f.fixture);
     }
   });
 
-  it("auto_navigate anchors a safe boundary when no target meets the full preview budget", async () => {
-    const f = await autoFixture(
-      async (context) => ({
-        status: "milestone",
-        boundary: newestBoundary(context),
-      }),
-      { check_every_turns: 1 },
-    );
+  it("auto_navigate persists a visible warning when a pressure fold has no valid target", async () => {
+    const f = await autoFixture(async () => ({ status: "continue" }));
     try {
       const base = f.sm
         .getBranch()
         .find((entry) => f.sm.getLabel(entry.id) === "anchor:start");
       assert.ok(base);
       f.pi.pi.setLabel(base.id, undefined);
-      const recent = appendTurn(f.sm, "recent", "ready", 90_000);
-      f.pi.pi.setLabel(recent.assistantId, "anchor:recent");
-      const boundary = await autoTurn(f, 92_000);
+      const boundary = await autoTurn(f, 90_000);
+      const warnings = boundary.entries.filter(
+        (entry) => entry.customType === "navigate-tree-auto-warning",
+      );
+      assert.equal(warnings.length, 1, JSON.stringify(boundary));
+      assert.match(
+        String(warnings[0].content),
+        /crossed rewind_at_tokens .* but no fold ran/,
+      );
+      assert.ok(
+        f.ctx.notifyCalls.some(
+          ([text, level]) =>
+            level === "warning" && text.includes("no fold ran"),
+        ),
+      );
+      assert.equal(boundary.continue, false);
+      assert.equal(f.questions.length, 0);
       assert.equal(f.summaries.calls.length, 0);
       assert.ok(
-        f.sm
-          .getBranch()
-          .some((entry) => f.sm.getLabel(entry.id) === "anchor:milestone"),
-        JSON.stringify({
-          boundary,
-          labels: f.sm
-            .getBranch()
-            .map((entry) => [entry.id, f.sm.getLabel(entry.id)]),
-          questions: f.questions,
-        }),
+        !f.sm.getEntries().some((entry) => entry.type === "branch_summary"),
+      );
+      assertNoAutoSteer(f, boundary);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate keeps an unanswered request verbatim through a pressure fold", async () => {
+    const f = await autoFixture(async () => ({ status: "continue" }));
+    try {
+      const done = appendTurn(f.sm, "completed task", "# Done", 90_000);
+      const entry = f.sm.getEntry(done.assistantId);
+      assert.ok(entry?.type === "message");
+      const request = "A new unanswered request: also update the changelog.";
+      f.sm.appendMessage({ role: "user", content: request, timestamp: 1 });
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, entry.message);
+      const [result] = forcedDrafts(boundary);
+      assert.equal(result?.details.status, "done", JSON.stringify(boundary));
+      const branch = f.sm.getBranch();
+      const summaryAt = branch.findIndex(
+        (value) => value.type === "branch_summary",
+      );
+      assert.ok(summaryAt >= 0);
+      assert.ok(
+        branch
+          .slice(summaryAt)
+          .some(
+            (value) =>
+              value.type === "message" &&
+              value.message.role === "user" &&
+              value.message.content === request,
+          ),
+        "the open request stays a user message after the handoff",
       );
       assertNoAutoSteer(f, boundary);
     } finally {
@@ -9248,13 +9286,7 @@ describe("rewind-driven compaction (#101)", () => {
   });
 
   it("auto_navigate never partially folds an unsafe pending tool envelope", async () => {
-    const f = await autoFixture(
-      async (context) => ({
-        status: "milestone",
-        boundary: newestBoundary(context),
-      }),
-      { check_every_turns: 1 },
-    );
+    const f = await autoFixture(async () => ({ status: "continue" }));
     try {
       const pending = appendToolCallAssistant(
         f.sm,
@@ -9266,7 +9298,14 @@ describe("rewind-driven compaction (#101)", () => {
       assert.ok(
         !f.sm.getEntries().some((entry) => entry.type === "branch_summary"),
       );
-      assert.equal(f.sm.getLabel(pending.id), "anchor:milestone");
+      assert.ok(f.sm.getBranch().some((entry) => entry.id === pending.id));
+      const [warning] = boundary.entries.filter(
+        (entry) => entry.customType === "navigate-tree-auto-warning",
+      );
+      assert.match(
+        String(warning?.content),
+        /no fold ran: .*tool call without its result/,
+      );
       assertNoAutoSteer(f, boundary);
     } finally {
       cleanupConfigFixture(f.fixture);
@@ -9274,32 +9313,34 @@ describe("rewind-driven compaction (#101)", () => {
   });
 
   it("auto_navigate rejects pre-compaction targets and folds to a feasible fresh anchor", async () => {
-    const f = await autoFixture(
-      async (context) => ({
-        status: "milestone",
-        boundary: newestBoundary(context),
-      }),
-      { check_every_turns: 1 },
-    );
+    const f = await autoFixture(async () => ({ status: "continue" }), {
+      min_tokens_since_anchor: 10_000,
+    });
     try {
       const old = appendTurn(f.sm, "old", "old answer", 90_000);
       f.sm.appendCompaction("Compacted summary", old.userId, 90_000);
-      await autoTurn(f, 92_000);
-      assert.ok(f.questions.length > 0);
-      assertNoAutoSteer(f, f.pi.boundaryResults.at(-1) as BoundaryResult);
+      const refused = await autoTurn(f, 92_000);
       assert.equal(f.summaries.calls.length, 0);
       assert.ok(
-        f.sm
-          .getBranch()
-          .some((entry) => f.sm.getLabel(entry.id) === "anchor:milestone"),
+        refused.entries.some(
+          (entry) => entry.customType === "navigate-tree-auto-warning",
+        ),
+        JSON.stringify(refused),
       );
+      assert.ok(
+        !f.sm.getEntries().some((entry) => entry.type === "branch_summary"),
+      );
+      assertNoAutoSteer(f, refused);
       const fresh = appendTurn(f.sm, "new work", "ready", 20_000);
       f.pi.pi.setLabel(fresh.assistantId, "anchor:fresh");
-      appendTurn(f.sm, "new work", "working", 40_000, true);
-      const complete = appendTurn(f.sm, "finish", "verified", 93_000, true);
-      const entry = f.sm.getEntry(complete.assistantId);
-      assert.ok(entry?.type === "message");
-      const boundary = await fireTurnEndAll(f.pi, f.ctx, entry.message);
+      const workTurn = async (tokens: number) => {
+        const turn = appendTurn(f.sm, "new work", "working", tokens, true);
+        const entry = f.sm.getEntry(turn.assistantId);
+        assert.ok(entry?.type === "message");
+        return fireTurnEndAll(f.pi, f.ctx, entry.message);
+      };
+      await workTurn(40_000);
+      const boundary = await workTurn(93_000);
       const [done] = forcedDrafts(boundary);
       assert.equal(done?.details.status, "done", JSON.stringify(boundary));
       assert.equal(done.details.rewindTo, "fresh");
@@ -9319,13 +9360,16 @@ describe("rewind-driven compaction (#101)", () => {
     const reply = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const f = await autoFixture(async (context) => {
-      started();
-      await reply;
-      return { status: "milestone", boundary: newestBoundary(context) };
-    });
+    const f = await autoFixture(
+      async (context) => {
+        started();
+        await reply;
+        return { status: "milestone", boundary: newestBoundary(context) };
+      },
+      { check_every_turns: 1 },
+    );
     try {
-      const pending = autoTurn(f, 90_000);
+      const pending = autoTurn(f, 50_000);
       await ready;
       const oldLeaf = f.sm.getLeafId();
       f.sm.appendMessage({
@@ -9337,7 +9381,7 @@ describe("rewind-driven compaction (#101)", () => {
       await pending;
       assert.equal(f.sm.getLabel(oldLeaf as string), undefined);
       assert.equal(f.summaries.calls.length, 0);
-      await autoTurn(f, 91_000);
+      await autoTurn(f, 51_000);
       assert.equal(
         f.questions.length,
         2,
@@ -9409,11 +9453,14 @@ describe("rewind-driven compaction (#101)", () => {
       "queued",
     ] as const) {
       let mutate: () => Promise<void> = async () => {};
-      const f = await autoFixture(async (context) => {
-        const boundary = newestBoundary(context);
-        await mutate();
-        return { status: "milestone", boundary };
-      });
+      const f = await autoFixture(
+        async (context) => {
+          const boundary = newestBoundary(context);
+          await mutate();
+          return { status: "milestone", boundary };
+        },
+        { check_every_turns: 1 },
+      );
       try {
         mutate = async () => {
           if (change === "model" && f.ctx.model) f.ctx.model.id = "changed";
@@ -9443,8 +9490,17 @@ describe("rewind-driven compaction (#101)", () => {
             );
           }
         };
-        const boundary = await autoTurn(f, 90_000);
+        const boundary = await autoTurn(f, 50_000);
+        assert.equal(f.questions.length, 1, change);
         assert.equal(f.summaries.calls.length, 0, change);
+        assert.ok(
+          !f.sm
+            .getBranch()
+            .some((entry) =>
+              /^anchor:(?!start$)/.test(f.sm.getLabel(entry.id) ?? ""),
+            ),
+          `${change}: a stale decision must not place an anchor`,
+        );
         assert.ok(
           !f.sm.getEntries().some((entry) => entry.type === "branch_summary"),
           change,
@@ -9459,12 +9515,15 @@ describe("rewind-driven compaction (#101)", () => {
 
   it("auto_navigate preserves an unanswered suffix and anchors only the accepted milestone", async () => {
     let target = "";
-    const f = await autoFixture(async () => ({
-      status: "milestone",
-      boundary: target,
-    }));
+    const f = await autoFixture(
+      async () => ({
+        status: "milestone",
+        boundary: target,
+      }),
+      { check_every_turns: 1 },
+    );
     try {
-      target = appendTurn(f.sm, "completed task", "# Done", 90_000).assistantId;
+      target = appendTurn(f.sm, "completed task", "# Done", 50_000).assistantId;
       const entry = f.sm.getEntry(target);
       assert.ok(entry?.type === "message");
       const userId = f.sm.appendMessage({
@@ -9594,11 +9653,14 @@ describe("rewind-driven compaction (#101)", () => {
   });
 
   it("auto_navigate persists bounded operational warnings without claiming completion", async () => {
-    const f = await autoFixture(async () => {
-      throw new Error("offline failure");
-    });
+    const f = await autoFixture(
+      async () => {
+        throw new Error("offline failure");
+      },
+      { check_every_turns: 1 },
+    );
     try {
-      const boundary = await autoTurn(f, 90_000);
+      const boundary = await autoTurn(f, 50_000);
       const warnings = boundary.entries.filter(
         (entry) => entry.customType === "navigate-tree-auto-warning",
       );
@@ -11465,7 +11527,11 @@ describe("independent folds through the engine host", () => {
       );
       assertFolded(f);
       assertNoSummaryTurn(f, registry.calls);
-      assert.equal(registry.calls[0].options.reasoning, "medium");
+      assert.equal(
+        registry.calls[0].options.reasoning,
+        "low",
+        "fold summaries cap the session's medium thinking at low",
+      );
       const receipt = receiptsOf(f.sm).at(-1);
       assert.equal(
         f.sm.getLeafId(),
@@ -12015,6 +12081,8 @@ describe("independent folds through the engine host", () => {
           screen.handleInput("\x1b");
           await shown(screen, "cancelled");
           screen.handleInput("\r");
+          await shown(screen, "chunked");
+          screen.handleInput("\x1b");
         },
       ]);
       assert.deepEqual(snapshotOf(f.sm), before);
