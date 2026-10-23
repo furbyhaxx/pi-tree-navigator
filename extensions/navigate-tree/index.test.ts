@@ -15,10 +15,11 @@
  *     object on the module-internal `sessionInstances` array via
  *     `__testHooks.captureSession` (the prototype patch is restored between
  *     tests via `__testHooks.resetPrototype()` in `afterEach`).
- *   - `rewind` is in-band (#80): the tool call only returns the summary
- *     instruction; tests then append the model's summary turn to the
- *     SessionManager and fire the registered `turn_end` handlers, exactly as
- *     the agent loop would. No LLM call exists anywhere in the flow.
+ *   - `rewind` queues an independent fold (fold engine): the tool call only
+ *     returns "accepted"; tests then fire the registered `turn_end` handlers,
+ *     exactly as the agent loop would, and the fold lands there. The summary
+ *     is written by registry side calls, answered by a fake `modelRegistry`
+ *     on the fake ctx.
  */
 
 import * as assert from "node:assert/strict";
@@ -83,28 +84,17 @@ import navigateTree, {
   buildLateEntriesNote,
   buildRewindAcceptedText,
   buildRewindDoneText,
-  buildRewindFailedText,
-  buildRewindOutcomeRow,
-  buildSummaryFailedText,
-  buildSummaryRequestRow,
   CONTINUE_NUDGE_TEXT,
   commitFold,
   estimateAdmissionTokens,
-  extractSummaryText,
   type FoldCommitInput,
+  MAX_FORCED_REWIND_ATTEMPTS,
   MAX_HINT_WALK_DEPTH,
   MAX_SESSION_REFS,
-  MAX_SUMMARY_ATTEMPTS,
   MIN_REWIND_SAVINGS_TOKENS,
   MIN_SUMMARY_FOCUS_LENGTH,
-  NESTED_REWIND_REFUSAL,
-  REWIND_ABORTED_TEXT,
   REWIND_CUSTOM_TYPE,
-  REWIND_OUTCOME_CUSTOM_TYPE,
-  SOLO_REWIND_REFUSAL,
   START_ANCHOR_LABEL,
-  SUMMARY_PENDING_BLOCK_REASON,
-  SUMMARY_REQUEST_CUSTOM_TYPE,
   wrapPlainLine,
 } from "./index.ts";
 import {
@@ -125,10 +115,7 @@ import {
   REWIND_COMPACTION_OFF_TEXT,
   REWIND_HINT_CUSTOM_TYPE,
 } from "./rewind-hint.ts";
-import {
-  buildSummaryInstruction,
-  buildSummaryRequestText,
-} from "./summary-prompt.ts";
+import { extractSummaryText } from "./summary-prompt.ts";
 
 afterEach(() => {
   __testHooks.resetPrototype();
@@ -321,6 +308,10 @@ interface FakeCtx {
   setContextUsage(usage: ContextUsage | undefined): void;
   /** The current abort signal (pi: undefined when not streaming). */
   signal: AbortSignal | undefined;
+  /** The registry a fold's side calls go through (see `fakeRegistry`). */
+  modelRegistry: ReturnType<typeof fakeRegistry>["registry"];
+  /** Every side call the default registry saw. */
+  registryCalls: RegistryCall[];
 }
 
 function makeCtx(
@@ -345,7 +336,10 @@ function makeCtx(
   let usage = opts.contextUsage;
   const notifyCalls: Array<[string, "info" | "warning" | "error" | undefined]> =
     [];
+  const registry = fakeRegistry();
   return {
+    modelRegistry: registry.registry,
+    registryCalls: registry.calls,
     sessionManager: sm,
     model,
     hasUI: opts.hasUI ?? true,
@@ -506,6 +500,57 @@ function appendToolResult(
 const SUMMARY_TEXT =
   "## Goal\nTest the rewind happy path.\n\n## Progress\n### Done\n- [x] Appended turns.\n\n## Next Steps\n1. Verify the branch_summary.";
 
+interface RegistryCall {
+  model: unknown;
+  context: Context;
+  options: SimpleStreamOptions;
+}
+
+function reply(
+  text: string,
+  stopReason: "stop" | "error" | "aborted" = "stop",
+  errorMessage?: string,
+): AssistantMessage {
+  return {
+    role: "assistant",
+    content: [{ type: "text", text }],
+    api: "anthropic",
+    provider: "claude",
+    model: "claude-sonnet-4-5",
+    stopReason,
+    errorMessage,
+    timestamp: Date.now(),
+    usage: usageOf(10),
+  } as unknown as AssistantMessage;
+}
+
+/** A fake `modelRegistry` recording every side call; `respond` scripts the answer. */
+function fakeRegistry(
+  respond: (
+    call: RegistryCall,
+    index: number,
+  ) => AssistantMessage | Promise<AssistantMessage> = () => reply(SUMMARY_TEXT),
+) {
+  const calls: RegistryCall[] = [];
+  const registry = {
+    hasConfiguredAuth: () => true,
+    streamSimple(
+      model: unknown,
+      context: Context,
+      options: SimpleStreamOptions,
+    ) {
+      const call = { model, context, options };
+      const index = calls.push(call) - 1;
+      const stream = createAssistantMessageEventStream();
+      void Promise.resolve(respond(call, index)).then((message) =>
+        stream.end(message),
+      );
+      return stream;
+    },
+  };
+  return { calls, registry };
+}
+
 /**
  * Register the navigate-tree tool against a fresh fake pi + SessionManager
  * and return the captured tool plus the helpers tests need.
@@ -617,7 +662,7 @@ function setupAutonomousSpan(
 }
 
 // -----------------------------------------------------------------------------
-// In-band rewind drivers (#80)
+// Rewind drivers
 // -----------------------------------------------------------------------------
 
 /**
@@ -888,16 +933,17 @@ const REWIND_ARGS = {
 } as const;
 
 /**
- * Phase 1 exactly as the agent loop runs it: the model's assistant turn
- * declaring the rewind call is persisted, `execute` returns the summary
- * instruction, pi persists the tool_result, and the turn ends (the handler
- * must skip that turn — it carries the rewind's own toolCallId).
+ * The rewind call exactly as the agent loop runs it: the model's assistant
+ * turn declaring the call is persisted, `execute` queues the fold, pi
+ * persists the tool_result, and the turn ends. The fold lands inside that
+ * `turn_end`; `leafBeforeFold` is the abandoned branch's last entry.
  */
 async function requestRewind(
   f: { sm: SessionManager; pi: FakePi; ctx: FakeCtx; tool: CapturedTool },
   args: Record<string, unknown> = REWIND_ARGS,
   toolCallId = "tc-rewind",
   totalTokens?: number,
+  turn: { entries?: BoundaryDraft[]; commit?: boolean } = {},
 ) {
   const call = appendToolCallAssistant(
     f.sm,
@@ -918,30 +964,9 @@ async function requestRewind(
     result.content[0].text,
     result.details,
   );
-  await fireTurnEndAll(f.pi, f.ctx, call.message);
-  return { result, callId: call.id };
-}
-
-/**
- * The model's summary turn: persist the assistant message (as pi does on
- * `message_end`) and fire `turn_end` with it.
- */
-async function summaryTurn(
-  f: { sm: SessionManager; pi: FakePi; ctx: FakeCtx },
-  text: string = SUMMARY_TEXT,
-  stopReason = "stop",
-  opts: { commit?: boolean } = {},
-): Promise<{
-  entryId: string;
-  message: AssistantTurn;
-  boundary: BoundaryResult;
-}> {
-  const message = assistantMessage([{ type: "text", text }], stopReason, 100);
-  const entryId = f.sm.appendMessage(message as never);
-  const boundary = await fireTurnEndAll(f.pi, f.ctx, message, {
-    commit: opts.commit ?? false,
-  });
-  return { entryId, message, boundary };
+  const leafBeforeFold = f.sm.getLeafId() as string;
+  const boundary = await fireTurnEndAll(f.pi, f.ctx, call.message, turn);
+  return { result, callId: call.id, boundary, leafBeforeFold };
 }
 
 /**
@@ -967,25 +992,8 @@ function rewindMessages(
   );
 }
 
-/** The latest summary-instruction draft returned by a boundary (#90). */
-function summaryRequestDraftOf(pi: FakePi): BoundaryDraft {
-  const drafts = pi.boundaryResults.flatMap((r) =>
-    r.entries.filter((d) => d.customType === SUMMARY_REQUEST_CUSTOM_TYPE),
-  );
-  const draft = drafts.at(-1);
-  assert.ok(draft, "a summary instruction draft was returned");
-  return draft;
-}
-
-/** Outcome entries (`navigate-tree-rewind-outcome`) on the active branch. */
-function outcomeEntries(sm: SessionManager): Array<Record<string, unknown>> {
-  return sm
-    .getBranch()
-    .filter(
-      (e) => e.type === "custom" && e.customType === REWIND_OUTCOME_CUSTOM_TYPE,
-    )
-    .map((e) => (e as { data: Record<string, unknown> }).data);
-}
+/** The customType the removed in-band turn wrote; nothing may write it now. */
+const LEGACY_SUMMARY_REQUEST_TYPE = "navigate-tree-summary-request";
 
 /** Ids hidden (last `context_edit` null) on the active branch. */
 function hiddenIds(sm: SessionManager): Set<string> {
@@ -997,49 +1005,23 @@ function hiddenIds(sm: SessionManager): Set<string> {
 }
 
 /**
- * A failed summary attempt that calls tools: persist the assistant, the
- * blocked tool results pi records for it, and fire `turn_end`.
- */
-async function toolCallAttempt(
-  f: { sm: SessionManager; pi: FakePi; ctx: FakeCtx },
-  ids: string[] = ["tc-read"],
-  stopReason = "toolUse",
-): Promise<{ entryId: string; resultIds: string[]; boundary: BoundaryResult }> {
-  const message = assistantMessage(
-    ids.map((id) => ({
-      type: "toolCall",
-      id,
-      name: "read",
-      arguments: { path: `src/${id}.ts` },
-    })),
-    stopReason,
-    100,
-  );
-  const entryId = f.sm.appendMessage(message as never);
-  const resultIds = ids.map((id) =>
-    appendToolResult(f.sm, id, "read", SUMMARY_PENDING_BLOCK_REASON),
-  );
-  const boundary = await fireTurnEndAll(f.pi, f.ctx, message);
-  return { entryId, resultIds, boundary };
-}
-
-/**
- * Full in-band rewind: canonical fixture, phase 1, summary turn. Returns the
- * fixture plus the phase-1 result and the continuation message.
+ * Full rewind: canonical fixture and the rewind call, whose fold lands at its
+ * `turn_end`. Returns the fixture plus the call's result and the continuation
+ * message.
  */
 async function rewindFixture(
-  opts: { capture?: boolean; summary?: string; commit?: boolean } = {},
+  opts: { capture?: boolean; summary?: string } = {},
 ) {
   const f = setup();
+  if (opts.summary !== undefined) {
+    const summary = opts.summary;
+    f.ctx.modelRegistry = fakeRegistry(() => reply(summary)).registry;
+  }
   const { fake, anchorId } = setupRewindable(f.sm, f.pi, {
     capture: opts.capture ?? true,
   });
   const oldLeafBeforeCall = f.sm.getLeafId();
-  const { result } = await requestRewind(f);
-  const leafBeforeSummary = f.sm.getLeafId();
-  const summary = await summaryTurn(f, opts.summary ?? SUMMARY_TEXT, "stop", {
-    commit: opts.commit,
-  });
+  const { result, leafBeforeFold } = await requestRewind(f);
   const messages = rewindMessages(f.pi);
   return {
     ...f,
@@ -1047,8 +1029,7 @@ async function rewindFixture(
     anchorId,
     result,
     oldLeafBeforeCall,
-    leafBeforeSummary,
-    summaryEntryId: summary.entryId,
+    leafBeforeFold,
     done: messages[messages.length - 1],
   };
 }
@@ -1303,96 +1284,6 @@ describe("context event handler", () => {
     assert.equal(estimate.usageTokens, 5_000);
   });
 
-  it("the frozen summary view zeroes usage made stale by edits after the instruction (#101)", async () => {
-    // An overflow while a rewind waits for its summary withholds a result
-    // before the rewind call, but the edit lands after the instruction, where
-    // the frozen view is cut. The rewind call's usage still counted the
-    // withheld result, so pi's clamp left the retried summary ~1.6k output
-    // tokens and it was cut off again at a fraction of the window.
-    const { sm } = setup();
-    const at = Date.now();
-    const model = {
-      api: "anthropic",
-      provider: "claude",
-      model: "claude-sonnet-4-5",
-    };
-    sm.appendMessage({
-      role: "user",
-      content: [{ type: "text", text: "read it" }],
-      timestamp: at,
-    } as never);
-    sm.appendMessage({
-      role: "assistant",
-      content: [{ type: "toolCall", id: "c1", name: "read", arguments: {} }],
-      ...model,
-      stopReason: "toolUse",
-      timestamp: at,
-      usage: usageOf(10),
-    } as never);
-    const resultId = sm.appendMessage({
-      role: "toolResult",
-      toolCallId: "c1",
-      toolName: "read",
-      content: [{ type: "text", text: "x".repeat(40_000) }],
-      isError: false,
-      timestamp: at,
-    } as never);
-    sm.appendMessage({
-      role: "assistant",
-      content: [
-        {
-          type: "toolCall",
-          id: "r1",
-          name: TOOL_NAME,
-          arguments: { action: "rewind" },
-        },
-      ],
-      ...model,
-      stopReason: "toolUse",
-      timestamp: at,
-      usage: usageOf(95_000),
-    } as never);
-    sm.appendMessage({
-      role: "toolResult",
-      toolCallId: "r1",
-      toolName: TOOL_NAME,
-      content: [{ type: "text", text: "accepted" }],
-      isError: false,
-      timestamp: at,
-    } as never);
-    const instructionId = sm.appendCustomMessageEntry(
-      "navigate-tree-summary-request",
-      [{ type: "text", text: "summarize" }],
-      true,
-    );
-    const attemptId = sm.appendMessage({
-      role: "assistant",
-      content: [{ type: "text", text: "## Goal" }],
-      ...model,
-      stopReason: "length",
-      timestamp: at,
-      usage: usageOf(96_000),
-    } as never);
-    sm.appendContextEdit(attemptId, null);
-    sm.appendContextEdit(resultId, {
-      content: [{ type: "text", text: "[navigate_tree] Output withheld" }],
-    } as never);
-
-    const projected = __testHooks.buildContextMessages(sm, instructionId);
-    assert.deepEqual(
-      projected.flatMap((m) =>
-        m.role === "assistant" ? [m.usage.totalTokens] : [],
-      ),
-      [10, 0],
-    );
-    const estimate = await piAiEstimateContextTokens(projected);
-    assert.equal(estimate.usageTokens, 10);
-    assert.ok(
-      estimate.trailingTokens < 1_000,
-      `trailing estimate should be chars/3.5, got ${estimate.trailingTokens}`,
-    );
-  });
-
   it("without context_edits the projection keeps every assistant's usage (#101)", () => {
     const { sm } = setup();
     appendTurn(sm, "u1", "a1", 100);
@@ -1439,14 +1330,12 @@ describe("context event handler", () => {
   });
 
   it("post-rewind: handler returns anchor chain + branch_summary + continuation, none of the abandoned segment", async () => {
-    // The headline invariant (#80 shape): after the summary turn lands, the
-    // next LLM call (the very next context event) must see the chain up to
-    // the anchor, the branch_summary, and the continuation message — and
-    // none of the collapsed turns, the rewind tool call, its instruction
-    // result, or the summary turn itself (all on the abandoned branch).
-    // `commit`: pi persists the boundary entry as a custom_message entry
-    // right after the turn_end handlers, before the next LLM call.
-    const f = await rewindFixture({ commit: true });
+    // The headline invariant (#80 shape): after the fold lands, the next LLM
+    // call (the very next context event) must see the chain up to the
+    // anchor, the branch_summary, and the continuation message — and none of
+    // the collapsed turns, the rewind tool call or its result (all on the
+    // abandoned branch).
+    const f = await rewindFixture();
     assert.ok(f.done, "the rewind must deliver its continuation message");
 
     const handlers = f.pi.onCalls.get("context");
@@ -2617,8 +2506,16 @@ describe("dispatch: refusal results surface as failed tool calls", () => {
 // numbering, and the no-mutation contract.
 // =============================================================================
 
-describe("dispatch: rewind phase 1 (summary request)", () => {
-  it("returns only the byte-exact 'accepted' text and the request details (#90 S2)", async () => {
+// =============================================================================
+// dispatch: rewind queues an independent fold
+//
+// The rewind tool call neither summarizes nor mutates anything: it validates,
+// queues the fold and answers "accepted". The fold runs at the turn's
+// `turn_end`, after every tool result of the turn is on the branch.
+// =============================================================================
+
+describe("dispatch: rewind queues an engine fold", () => {
+  it("returns only the byte-exact 'accepted' text and the queued details", async () => {
     const { sm, pi, tool, ctx } = setup();
     const { anchorId } = setupRewindable(sm, pi);
     appendToolCallAssistant(sm, [
@@ -2635,19 +2532,17 @@ describe("dispatch: rewind phase 1 (summary request)", () => {
     assert.equal(result.content.length, 1);
     assert.equal(
       result.content[0].text,
-      "[navigate_tree] Rewind to 'start' accepted (collapse as 'end'). Follow the navigate_tree message below to complete it.",
+      "[navigate_tree] Rewind to 'start' accepted (collapse as 'end'). The fold runs after this turn's tool results; the continuation follows in the same run.",
     );
     assert.equal(
       result.content[0].text,
       buildRewindAcceptedText("start", "end"),
     );
-    // u1 + a1 are background → the collapsed segment starts at message 3.
     assert.deepEqual(result.details, {
-      status: "summary-requested",
+      status: "queued",
       rewindTo: "start",
       newLabel: "end",
       targetId: anchorId,
-      first: 3,
       contextBefore: result.details.contextBefore,
       tokensAtTarget: result.details.tokensAtTarget,
       contextWindow: 1_000_000,
@@ -2656,79 +2551,63 @@ describe("dispatch: rewind phase 1 (summary request)", () => {
     assert.equal(typeof result.details.tokensAtTarget, "number");
   });
 
-  it("the rewind turn's turn_end returns the instruction custom message + continue (#90 S1/S3)", async () => {
+  it("the rewind turn's turn_end folds through side calls, continues the run and writes no summary request", async () => {
     const f = setup();
     setupAutonomousSpan(f.sm, f.pi);
-    const { result } = await requestRewind(f);
-    const boundary = f.pi.boundaryResults.at(-1);
-    assert.ok(boundary);
+    const { boundary } = await requestRewind(f);
     assert.equal(boundary.continue, true);
     assert.equal(boundary.entries.length, 1);
     const draft = boundary.entries[0];
     assert.equal(draft.type, "custom_message");
-    assert.equal(draft.customType, SUMMARY_REQUEST_CUSTOM_TYPE);
-    assert.equal(draft.display, true);
-    assert.equal(
-      draft.content,
-      `[navigate_tree]\n${buildSummaryInstruction(3, REWIND_ARGS.summaryFocus)}`,
+    assert.equal(draft.customType, REWIND_CUSTOM_TYPE);
+    assert.equal(draft.details.status, "done");
+    assert.equal(draft.details.origin, "agent");
+    assert.ok(f.ctx.registryCalls.length > 0, "summarized by side calls");
+    for (const call of f.ctx.registryCalls) {
+      assert.equal(call.options.toolChoice, "none");
+      assert.equal(call.options.sessionId, f.sm.getSessionId());
+    }
+    assert.ok(
+      f.sm
+        .getEntries()
+        .every(
+          (e) =>
+            !(
+              e.type === "custom_message" &&
+              e.customType === LEGACY_SUMMARY_REQUEST_TYPE
+            ),
+        ),
+      "no summary request is written",
     );
-    assert.equal(
-      draft.content,
-      buildSummaryRequestText(3, REWIND_ARGS.summaryFocus),
-    );
-    assert.deepEqual(draft.details, {
-      toolCallId: "tc-rewind",
-      rewindTo: "start",
-      newLabel: "end",
-      contextBefore: result.details.contextBefore,
-      tokensAtTarget: result.details.tokensAtTarget,
-      contextWindow: 1_000_000,
-      first: 3,
-    });
-    // Committed right after the rewind's tool result.
-    const leaf = f.sm.getEntry(f.sm.getLeafId() as string);
-    assert.ok(leaf && leaf.type === "custom_message");
-    assert.equal(leaf.customType, SUMMARY_REQUEST_CUSTOM_TYPE);
-    const parent = f.sm.getEntry(leaf.parentId as string);
-    assert.ok(parent && parent.type === "message");
-    assert.equal(parent.message.role, "toolResult");
+    assert.equal(f.pi.sendMessageCalls.length, 0);
+    assert.equal(f.pi.sendUserMessageCalls.length, 0);
+    assert.ok(f.sm.getBranch().some((e) => e.type === "branch_summary"));
+    assert.equal(f.sm.getLeafId(), f.sm.getBranch().at(-1)?.id);
+    assert.equal(f.sm.getEntry(f.sm.getLeafId() as string)?.type, "custom_message");
   });
 
-  it("Esc during the rewind turn ends it aborted: no instruction, no continue (#90 O6)", async () => {
+  it("Esc during the rewind turn cancels the queued fold: a receipt, no side call, no continue", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi);
     const controller = new AbortController();
     controller.abort();
     f.ctx.signal = controller.signal;
-    await requestRewind(f);
-    const boundary = f.pi.boundaryResults.at(-1);
-    assert.ok(boundary);
+    const before = f.sm.getEntries().length;
+    const { boundary } = await requestRewind(f);
     assert.equal(boundary.continue, false);
+    assert.equal(boundary.entries.length, 1);
+    assert.equal(boundary.entries[0].details.status, "failed");
+    assert.equal(boundary.entries[0].details.reason, "cancelled");
+    assert.equal(f.ctx.registryCalls.length, 0);
+    assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
     assert.ok(
-      !boundary.entries.some(
-        (d) => d.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
-      ),
+      f.sm.getEntries().length > before,
+      "only the call, its result and the receipt were added",
     );
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(outcome[0].status, "aborted");
-    assert.equal(
-      outcome[0].text,
-      "Summarization aborted. Nothing was collapsed.",
-    );
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined, "nothing pending");
-    // The tool result now reads as the abort, as an error.
-    f.ctx.signal = undefined;
-    const sent = fireContext(f.pi, f.ctx);
-    const toolResult = sent.find((m) => m.role === "toolResult");
-    assert.ok(toolResult);
-    assert.equal(toolResult.isError, true);
-    assert.deepEqual(toolResult.content, [
-      { type: "text", text: "Summarization aborted. Nothing was collapsed." },
-    ]);
+    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
   });
 
-  it("does not mutate the tree, send a message, or write a label", async () => {
+  it("does not mutate the tree, send a message, or write a label at call time", async () => {
     const { sm, pi, tool, ctx } = setup();
     setupRewindable(sm, pi, { capture: true });
     appendToolCallAssistant(sm, [{ id: "tc-rewind", name: TOOL_NAME }]);
@@ -2747,28 +2626,31 @@ describe("dispatch: rewind phase 1 (summary request)", () => {
     assert.equal(sm.getEntries().length, entriesBefore);
     assert.ok(
       !sm.getEntries().some((e) => e.type === "branch_summary"),
-      "phase 1 must not branch",
+      "the call must not branch",
     );
     assert.equal(pi.setLabelCalls.length, labelCallsBefore);
     assert.equal(pi.sendMessageCalls.length, 0);
+    assert.equal(ctx.registryCalls.length, 0);
   });
 
-  it("needs no model or auth: contextWindow falls back to 0", async () => {
-    const { sm, pi, tool, ctx } = setup({ noModel: true });
-    setupRewindable(sm, pi);
-    const result = await tool.execute(
-      "tc-rewind",
-      REWIND_ARGS,
-      undefined,
-      undefined,
-      ctx,
-    );
+  it("is accepted without a model, then fails at the boundary with a receipt the model reads", async () => {
+    const f = setup({ noModel: true });
+    setupRewindable(f.sm, f.pi);
+    const before = f.sm.getEntries().length;
+    const { result, boundary } = await requestRewind(f);
     assert.equal(result.isError, undefined);
-    assert.equal(result.details.status, "summary-requested");
+    assert.equal(result.details.status, "queued");
     assert.equal(result.details.contextWindow, 0);
+    assert.equal(boundary.continue, true, "the model hears about it");
+    assert.equal(boundary.entries[0].details.status, "failed");
+    assert.equal(boundary.entries[0].details.stage, "gate");
+    assert.match(boundary.entries[0].content, /no model is selected/);
+    assert.match(boundary.entries[0].content, /Nothing was collapsed/);
+    assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
+    assert.equal(f.sm.getEntries().length, before + 3);
   });
 
-  it("interpolates the focus verbatim into the instruction (no truncation, no {first} left over)", async () => {
+  it("hands the focus to the summary request verbatim (no truncation, no {first} left over)", async () => {
     const f = setup();
     setupAutonomousSpan(f.sm, f.pi);
     const focus = `user said: ship it. ${"detail ".repeat(400)}`.trim();
@@ -2777,199 +2659,196 @@ describe("dispatch: rewind phase 1 (summary request)", () => {
       summaryFocus: focus,
     });
     assert.equal(result.isError, undefined);
-    const draft = summaryRequestDraftOf(f.pi);
-    assert.ok(draft.content.endsWith(`Additional focus: ${focus}`));
-    assert.doesNotMatch(draft.content, /\{first\}/);
+    const last = f.ctx.registryCalls.at(-1)?.context.messages.at(-1);
+    const text = JSON.stringify(last);
+    assert.ok(
+      text.includes(JSON.stringify(`Additional focus: ${focus}`).slice(1, -1)),
+    );
+    assert.doesNotMatch(text, /\{first\}/);
   });
 
-  it("numbers {first} from the context-edited projection, not the raw entry walk", async () => {
-    const { sm, pi, tool, ctx } = setup();
-    // A failed attempt BEFORE the anchor, omitted by pi / the fallback
-    // provider via a null-replacement context_edit. The raw entry walk
-    // counts it as background and would report `{first}=4`; the projection
-    // the model sees drops it, so the branch start stays message 3.
-    const failedId = sm.appendMessage(
-      assistantMessage([{ type: "text", text: "partial" }], "error") as never,
+  it("a refused rewind queues nothing: the next turn_end folds nothing and a later rewind is accepted", async () => {
+    const f = setup();
+    appendTurn(f.sm, "u", "a");
+    const { result, boundary } = await requestRewind(f);
+    assert.equal(result.isError, true);
+    assert.equal(boundary.entries.length, 0);
+    assert.equal(f.ctx.registryCalls.length, 0);
+    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
+    setupRewindable(f.sm, f.pi, { rewindToName: "start" });
+    const second = await requestRewind(f, REWIND_ARGS, "tc-2");
+    assert.equal(second.result.isError, undefined);
+    assert.equal(second.boundary.entries[0].details.status, "done");
+  });
+
+  it("refuses a second rewind while one is queued, with the engine's reason", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi);
+    appendToolCallAssistant(f.sm, [
+      { id: "tc-1", name: TOOL_NAME, arguments: REWIND_ARGS },
+      {
+        id: "tc-2",
+        name: TOOL_NAME,
+        arguments: { ...REWIND_ARGS, newLabel: "other" },
+      },
+    ]);
+    const first = await f.tool.execute(
+      "tc-1",
+      REWIND_ARGS,
+      undefined,
+      undefined,
+      f.ctx,
     );
-    sm.appendContextEdit(failedId, null);
-    setupRewindable(sm, pi);
-    const result = await tool.execute(
+    const second = await f.tool.execute(
+      "tc-2",
+      { ...REWIND_ARGS, newLabel: "other" },
+      undefined,
+      undefined,
+      f.ctx,
+    );
+    assert.equal(first.isError, undefined);
+    assert.equal(second.isError, true);
+    assert.equal(second.details.refusal, true);
+    assert.match(second.content[0].text, /already queued or running/);
+  });
+
+  it("a rewind may share its message with other tool calls: all run, and their results are in the folded segment", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi, { capture: true });
+    const call = appendToolCallAssistant(f.sm, [
+      { id: "tc-read", name: "read", arguments: { path: "src/a.ts" } },
+      { id: "tc-rewind", name: TOOL_NAME, arguments: REWIND_ARGS },
+      { id: "tc-bash", name: "bash", arguments: { command: "true" } },
+    ]);
+    // pi runs the batch in order; the rewind only queues its fold.
+    appendToolResult(f.sm, "tc-read", "read", "READ-RESULT-MARKER");
+    const result = await f.tool.execute(
       "tc-rewind",
       REWIND_ARGS,
       undefined,
       undefined,
-      ctx,
-    );
-    assert.equal(result.details.first, 3);
-  });
-
-  it("numbers {first} past provider-invisible empty assistants (aborted attempt)", async () => {
-    const { sm, pi, tool, ctx } = setup();
-    // A persisted assistant with no text/thinking/toolCall blocks is dropped
-    // by the provider serializer, so it must not consume a `{first}` number.
-    sm.appendMessage(assistantMessage([], "aborted") as never);
-    setupRewindable(sm, pi);
-    const result = await tool.execute(
-      "tc-rewind",
-      REWIND_ARGS,
-      undefined,
-      undefined,
-      ctx,
-    );
-    assert.equal(result.details.first, 3);
-  });
-
-  it("counts visible background before the anchor (system messages excluded)", async () => {
-    const { sm, pi, tool, ctx } = setup();
-    sm.appendMessage({ role: "system", content: "PERSISTED HEAD" } as never);
-    appendTurn(sm, "u0", "a0", 1_000);
-    setupRewindable(sm, pi);
-    const result = await tool.execute(
-      "tc-rewind",
-      REWIND_ARGS,
-      undefined,
-      undefined,
-      ctx,
-    );
-    // u0, a0, u1, a1 → first = 5; the system head is not numbered.
-    assert.equal(result.details.first, 5);
-  });
-
-  it("numbers from 1 when a compaction cut drops the target from the projection", async () => {
-    const { sm, pi, tool, ctx } = setup();
-    setupRewindable(sm, pi);
-    // Keep only from u3 onwards: the anchor (a1) is older than the cut, so
-    // every message the summary turn sees is collapsed evidence.
-    const kept = sm
-      .getBranch()
-      .find(
-        (e) =>
-          e.type === "message" &&
-          e.message.role === "user" &&
-          JSON.stringify(e.message.content).includes('"u3"'),
-      );
-    assert.ok(kept);
-    sm.appendCompaction("COMPACTED", kept.id, 20_000);
-    appendTurn(sm, "u5", "a5", 30_000);
-    const result = await tool.execute(
-      "tc-rewind",
-      REWIND_ARGS,
-      undefined,
-      undefined,
-      ctx,
+      f.ctx,
     );
     assert.equal(result.isError, undefined);
-    assert.equal(result.details.first, 1);
-  });
+    appendToolResult(f.sm, "tc-rewind", TOOL_NAME, result.content[0].text);
+    appendToolResult(f.sm, "tc-bash", "bash", "BASH-RESULT-MARKER");
+    const leafBeforeFold = f.sm.getLeafId() as string;
+    assert.equal(f.sm.getLabel(leafBeforeFold), undefined);
 
-  it("countBackgroundMessages stops at the target entry", () => {
-    const projected = [
-      {
-        sourceEntry: { id: "x" },
-        messages: [
-          { role: "user", content: "a", timestamp: 0 },
-          assistantMessage([{ type: "text", text: "b" }], "stop"),
-        ],
-      },
-      {
-        sourceEntry: { id: "target" },
-        messages: [{ role: "user", content: "c", timestamp: 0 }],
-      },
-      {
-        sourceEntry: { id: "after" },
-        messages: [{ role: "user", content: "d", timestamp: 0 }],
-      },
-    ];
-    assert.equal(
-      __testHooks.countBackgroundMessages(projected as never, "target"),
-      3,
+    const boundary = await fireTurnEndAll(f.pi, f.ctx, call.message);
+
+    assert.equal(boundary.continue, true);
+    assert.equal(boundary.entries[0].details.status, "done");
+    assert.equal(f.sm.getLabel(leafBeforeFold), "branch:end");
+    assert.ok(!f.sm.getBranch().some((e) => e.id === leafBeforeFold));
+    const summarized = JSON.stringify(
+      f.ctx.registryCalls.map((c) => c.context.messages),
     );
+    assert.match(summarized, /READ-RESULT-MARKER/);
+    assert.match(summarized, /BASH-RESULT-MARKER/);
+    assert.deepEqual(boundary.entries[0].details.readFiles, ["src/a.ts"]);
   });
 
-  it("a refused rewind leaves nothing pending (the gate stays open)", async () => {
-    const { sm, pi, tool, ctx } = setup();
-    appendTurn(sm, "u", "a");
-    const result = await tool.execute(
-      "tc-rewind",
+  it("accepts a codemode script's rewind at any position among its nested calls", async () => {
+    const f = setup();
+    setupRewindable(f.sm, f.pi, { capture: true });
+    const call = appendToolCallAssistant(f.sm, [
+      { id: "tc-code", name: "codemode", arguments: { code: "script" } },
+    ]);
+    const gate = f.pi.onCalls.get("tool_call");
+    assert.ok(gate);
+    const nested = (id: string, action: string) =>
+      gate[0](
+        {
+          type: "tool_call",
+          toolCallId: id,
+          parentToolCallId: "tc-code",
+          toolName: TOOL_NAME,
+          input: { action },
+        } as never,
+        f.ctx as never,
+      );
+    assert.equal(nested("tc-code/1", "list"), undefined);
+    const list = await f.tool.execute(
+      "tc-code/1",
+      { action: "list" },
+      undefined,
+      undefined,
+      f.ctx,
+    );
+    assert.equal(list.isError, undefined);
+    assert.equal(nested("tc-code/2", "rewind"), undefined);
+    const result = await f.tool.execute(
+      "tc-code/2",
       REWIND_ARGS,
       undefined,
       undefined,
-      ctx,
+      f.ctx,
     );
-    assert.equal(result.isError, true);
-    assert.equal(fireToolCall(pi, ctx), undefined);
-  });
-});
+    assert.equal(result.isError, undefined);
+    assert.equal(result.details.status, "queued");
+    appendToolResult(f.sm, "tc-code", "codemode", "script finished");
+    const leafBeforeFold = f.sm.getLeafId() as string;
 
-// =============================================================================
-// rewind: tool_call gate while the summary is pending (#80)
-// =============================================================================
+    const boundary = await fireTurnEndAll(f.pi, f.ctx, call.message);
 
-describe("rewind: tool_call gate while pending", () => {
-  it("does not block before any rewind", () => {
-    const { pi, ctx } = setup();
-    assert.equal(fireToolCall(pi, ctx), undefined);
+    assert.equal(boundary.continue, true);
+    assert.equal(boundary.entries[0].details.status, "done");
+    assert.equal(f.sm.getLabel(leafBeforeFold), "branch:end");
+    assert.ok(f.sm.getBranch().some((e) => e.type === "branch_summary"));
   });
 
-  it("blocks every tool call (including navigate_tree) while the summary is pending", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi);
-    await requestRewind(f);
-    const expected = { block: true, reason: SUMMARY_PENDING_BLOCK_REASON };
-    assert.deepEqual(fireToolCall(f.pi, f.ctx), expected);
-    assert.deepEqual(
-      fireToolCall(f.pi, f.ctx, TOOL_NAME, { action: "list" }),
-      expected,
-    );
+  it("never blocks a tool call outside a forced rewind, even with a fold queued", async () => {
+    const { sm, pi, tool, ctx } = setup();
+    setupRewindable(sm, pi);
+    assert.equal(fireToolCall(pi, ctx), undefined);
+    appendToolCallAssistant(sm, [{ id: "tc-rewind", name: TOOL_NAME }]);
+    await tool.execute("tc-rewind", REWIND_ARGS, undefined, undefined, ctx);
+    assert.equal(fireToolCall(pi, ctx), undefined);
     assert.equal(
-      SUMMARY_PENDING_BLOCK_REASON,
-      "navigate_tree: blocked: the model tried to call a tool instead of summarizing.",
+      fireToolCall(pi, ctx, TOOL_NAME, { action: "list" }),
+      undefined,
     );
   });
 
-  it("does not block another session's tool calls", async () => {
+  it("does not run another session's queued fold, and fails open when the session id cannot be read", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi);
-    await requestRewind(f);
+    appendToolCallAssistant(f.sm, [{ id: "tc-rewind", name: TOOL_NAME }]);
+    await f.tool.execute("tc-rewind", REWIND_ARGS, undefined, undefined, f.ctx);
     const otherSm = SessionManager.inMemory("/tmp");
-    assert.notEqual(otherSm.getSessionId(), f.sm.getSessionId());
-    assert.equal(fireToolCall(f.pi, makeCtx(otherSm)), undefined);
-  });
-
-  it("re-opens once the rewind completes", async () => {
-    const f = await rewindFixture();
-    assert.equal(f.done.message.details.status, "done");
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-  });
-
-  it("fails open when the session id cannot be read", () => {
-    const { pi } = setup();
-    const ctx = {
+    const other = makeCtx(otherSm);
+    await fireTurnEndAll(
+      f.pi,
+      other,
+      assistantMessage([{ type: "text", text: "hi" }], "stop"),
+    );
+    await fireTurnEndAll(f.pi, f.ctx, {
+      role: "user",
+      content: [{ type: "text", text: "hi" }],
+    });
+    await fireTurnEndAll(f.pi, f.ctx, undefined);
+    assert.equal(rewindMessages(f.pi).length, 0);
+    assert.equal(f.ctx.registryCalls.length, 0);
+    const stale = {
       get sessionManager(): SessionManager {
         throw new Error("stale ctx");
       },
     } as unknown as FakeCtx;
-    assert.equal(fireToolCall(pi, ctx), undefined);
+    assert.equal(fireToolCall(f.pi, stale), undefined);
+    // The queued fold still runs at its own session's boundary.
+    const message = assistantMessage([{ type: "text", text: "next" }], "stop");
+    f.sm.appendMessage(message as never);
+    const boundary = await fireTurnEndAll(f.pi, f.ctx, message);
+    assert.equal(boundary.entries[0].details.status, "done");
   });
 });
 
 // =============================================================================
-// rewind phase 2 — completion on the summary turn's turn_end (#80)
+// rewind: the landed fold, at the rewind turn's turn_end
 // =============================================================================
 
-describe("rewind phase 2: completion", () => {
-  it("skips the phase-1 turn (it carries the rewind's own toolCallId)", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi);
-    await requestRewind(f);
-    assert.equal(rewindMessages(f.pi).length, 0);
-    assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
-    // Still pending, and no attempt was spent: the summary turn completes
-    // on the first try.
-    assert.ok(fireToolCall(f.pi, f.ctx));
-    await summaryTurn(f);
-    assert.equal(rewindMessages(f.pi)[0].message.details.summaryAttempts, 1);
-  });
+describe("rewind: completion", () => {
 
   it("branches from the anchor with a work handoff, labels it, and moves the leaf", async () => {
     const f = await rewindFixture();
@@ -2990,17 +2869,18 @@ describe("rewind phase 2: completion", () => {
     // Extension-provided summary, as pi's navigateTree marks it.
     assert.equal(entry.fromHook, true);
     assert.equal(f.sm.getLabel(summaryId), "anchor:end");
-    // The leaf is the label-change entry `setLabel` appends on the summary
-    // (same shape as pi's own `/tree` label write).
-    const leaf = f.sm.getEntry(f.sm.getLeafId() as string);
-    assert.ok(leaf && leaf.type === "label");
-    assert.equal(leaf.parentId, summaryId, "the leaf moved onto the summary");
-    assert.notEqual(f.leafBeforeSummary, summaryId);
-    // The abandoned branch keeps the rewind call, its result and the
-    // summary turn.
-    const summaryTurnEntry = f.sm.getEntry(f.summaryEntryId);
-    assert.ok(summaryTurnEntry);
-    assert.ok(!f.sm.getBranch().some((e) => e.id === f.summaryEntryId));
+    // The summary is followed by its label change (the same shape as pi's
+    // own `/tree` label write) and then the committed continuation.
+    const branch = f.sm.getBranch();
+    const at = branch.findIndex((e) => e.id === summaryId);
+    assert.equal(branch[at + 1].type, "label");
+    assert.equal(branch[at + 2].type, "custom_message");
+    assert.equal(f.sm.getLeafId(), branch[at + 2].id);
+    // The abandoned branch keeps the rewind call and its result, marked as
+    // finished.
+    assert.equal(f.sm.getLabel(f.leafBeforeFold), "branch:end");
+    assert.ok(f.sm.getEntry(f.leafBeforeFold));
+    assert.ok(!branch.some((e) => e.id === f.leafBeforeFold));
   });
 
   it("delivers the continuation as a boundary entry: buildRewindDoneText content, continue, done details", async () => {
@@ -3019,7 +2899,7 @@ describe("rewind phase 2: completion", () => {
         {
           rewindTo: "start",
           newLabel: "end",
-          beforeTokens: f.result.details.contextBefore as number,
+          beforeTokens: d.contextBefore as number,
           contextWindow: 1_000_000,
         },
         d.contextAfter as number,
@@ -3032,10 +2912,12 @@ describe("rewind phase 2: completion", () => {
       targetId: f.anchorId,
       summaryId: d.summaryId,
       collapsedEntries: d.collapsedEntries,
-      contextBefore: f.result.details.contextBefore,
+      contextBefore: d.contextBefore,
       contextAfter: d.contextAfter,
       contextWindow: 1_000_000,
-      summaryAttempts: 1,
+      origin: "agent",
+      summaryStrategy: "chunked",
+      summaryCalls: d.summaryCalls,
       foldEstimateBefore: d.foldEstimateBefore,
       foldEstimateAfter: d.foldEstimateAfter,
       agentMessagesRefreshed: true,
@@ -3045,9 +2927,9 @@ describe("rewind phase 2: completion", () => {
       reappendedLateMessages: 0,
     });
     // Collapsed: the anchor's label-change entry, u2..a4 (6), the rewind
-    // call, its result, the instruction message, and the summary turn — all
-    // left on the abandoned branch.
-    assert.equal(d.collapsedEntries, 11);
+    // call and its result, all left on the abandoned branch.
+    assert.equal(d.collapsedEntries, 9);
+    assert.ok(Number(d.summaryCalls) >= 2, "a map call and the reduce");
     assert.ok(
       (d.contextBefore as number) > (d.contextAfter as number),
       "the rewound chain must be smaller",
@@ -3099,9 +2981,12 @@ describe("rewind phase 2: completion", () => {
     const f = await rewindFixture();
     assert.ok(f.fake);
     assert.equal(f.done.message.details.agentMessagesRefreshed, true);
-    assert.deepEqual(
-      f.fake.agent.state.messages,
-      f.sm.buildSessionContext().messages,
+    // pi commits the receipt after the handlers, once the state is refreshed.
+    const chain = f.sm.buildSessionContext().messages;
+    assert.deepEqual(f.fake.agent.state.messages, chain.slice(0, -1));
+    assert.equal(
+      (chain.at(-1) as { customType?: string }).customType,
+      REWIND_CUSTOM_TYPE,
     );
   });
 
@@ -3144,7 +3029,6 @@ describe("rewind phase 2: completion", () => {
     }
     appendTurn(f.sm, "u3", "a3", 24_000, true);
     await requestRewind(f);
-    await summaryTurn(f);
     const { details } = rewindMessages(f.pi)[0].message;
     assert.deepEqual(details.readFiles, ["src/a.ts"]);
     assert.deepEqual(details.modifiedFiles, ["src/b.ts", "src/c.ts"]);
@@ -3182,17 +3066,23 @@ describe("rewind phase 2: completion", () => {
       },
     };
     __testHooks.captureSession(fake as unknown as AgentSession);
-    await requestRewind(f);
-    assert.equal(events.length, 0, "phase 1 must not emit");
-    const { entryId } = await summaryTurn(f);
+    const { leafBeforeFold } = await requestRewind(f);
 
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.historyRewriteNotified, true);
     assert.equal(events.length, 1);
     const event = events[0];
     assert.equal(event.type, "session_tree");
-    assert.equal(event.oldLeafId, entryId, "old leaf = the summary turn");
-    assert.equal(event.newLeafId, f.sm.getLeafId());
+    assert.equal(
+      event.oldLeafId,
+      leafBeforeFold,
+      "old leaf = the abandoned branch's last entry",
+    );
+    assert.equal(
+      f.sm.getEntry(f.sm.getLeafId() as string)?.parentId,
+      event.newLeafId,
+      "the receipt follows the new leaf",
+    );
     assert.equal(
       f.sm.getEntry(event.newLeafId as string)?.parentId,
       done.details.summaryId,
@@ -3228,7 +3118,6 @@ describe("rewind phase 2: completion", () => {
     };
     __testHooks.captureSession(fake as unknown as AgentSession);
     await requestRewind(f);
-    await summaryTurn(f);
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.status, "done");
     assert.equal(done.details.historyRewriteNotified, false);
@@ -3243,14 +3132,11 @@ describe("rewind phase 2: completion", () => {
     ).sendMessage = () => {
       throw new Error("stale session runtime");
     };
-    await requestRewind(f);
-    const { boundary } = await summaryTurn(f, SUMMARY_TEXT, "stop", {
-      commit: true,
-    });
+    const { boundary } = await requestRewind(f);
     assert.equal(boundary.continue, true);
     assert.equal(boundary.entries.length, 1);
     assert.equal(boundary.entries[0].details.status, "done");
-    // Committed by pi (replicated by `commit`) after the branch_summary.
+    // Committed by pi (replicated by `fireTurnEndAll`) after the branch_summary.
     const leaf = f.sm.getEntry(f.sm.getLeafId() as string);
     assert.ok(leaf && leaf.type === "custom_message");
     assert.equal(leaf.customType, REWIND_CUSTOM_TYPE);
@@ -3262,17 +3148,17 @@ describe("rewind phase 2: completion", () => {
     );
   });
 
-  it("setLabel throw falls back to appendLabelChange for the new label", async () => {
+  it("setLabel throw falls back to appendLabelChange for both labels", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
     (f.pi.pi as { setLabel: typeof f.pi.pi.setLabel }).setLabel = () => {
       throw new Error("stale session runtime");
     };
-    await summaryTurn(f);
+    const { leafBeforeFold } = await requestRewind(f);
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.status, "done");
     assert.equal(f.sm.getLabel(done.details.summaryId as string), "anchor:end");
+    assert.equal(f.sm.getLabel(leafBeforeFold), "branch:end");
   });
 
   it("chained rewinds: a→b then b→c keeps prior labels and re-anchors the new summary", async () => {
@@ -3286,7 +3172,6 @@ describe("rewind phase 2: completion", () => {
     );
 
     await requestRewind(f, { ...REWIND_ARGS, rewindTo: "a", newLabel: "b" });
-    await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
     const first = rewindMessages(f.pi)[0].message;
     assert.equal(first.details.status, "done");
     const sumB = first.details.summaryId as string;
@@ -3304,7 +3189,6 @@ describe("rewind phase 2: completion", () => {
       "tc-2",
     );
     assert.equal(r2.details.targetId, sumB);
-    await summaryTurn(f);
     const second = rewindMessages(f.pi)[1].message;
     assert.equal(second.details.status, "done");
     const sumC = second.details.summaryId as string;
@@ -3316,32 +3200,37 @@ describe("rewind phase 2: completion", () => {
       "the b-summary's anchor:b label must survive the second rewind",
     );
     assert.equal(f.sm.getLabel(tA.assistantId), "anchor:a");
-    assert.equal(f.sm.getEntry(f.sm.getLeafId() as string)?.parentId, sumC);
+    const leaf = f.sm.getEntry(f.sm.getLeafId() as string);
+    assert.equal(
+      f.sm.getEntry(leaf?.parentId as string)?.parentId,
+      sumC,
+      "the continuation follows the c-summary's label",
+    );
   });
 
   it("refuses a growing materialized summary without writing a branch or completion label", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi);
-    await requestRewind(f);
-    const summary = await summaryTurn(
-      f,
-      `${SUMMARY_TEXT}\n${"detail ".repeat(20_000)}`,
-      "stop",
-      { commit: true },
-    );
+    f.ctx.modelRegistry = fakeRegistry(() =>
+      reply(`${SUMMARY_TEXT}\n${"detail ".repeat(20_000)}`),
+    ).registry;
+    const { boundary, leafBeforeFold } = await requestRewind(f);
     assert.equal(
       f.sm.getEntries().filter((entry) => entry.type === "branch_summary")
         .length,
       0,
     );
-    assert.equal(f.sm.getLabel(summary.entryId), undefined);
+    assert.equal(f.sm.getLabel(leafBeforeFold), undefined);
     assert.ok(
       !f.sm
         .getBranch()
         .some((entry) => f.sm.getLabel(entry.id) === "anchor:end"),
     );
+    assert.equal(boundary.continue, true, "the model reads the refusal");
+    assert.equal(boundary.entries[0].details.status, "failed");
+    assert.equal(boundary.entries[0].details.stage, "commit");
     assert.match(
-      String(outcomeEntries(f.sm).at(-1)?.reason),
+      String(boundary.entries[0].details.detail),
       /does not reduce projected context/,
     );
     assert.equal(fireToolCall(f.pi, f.ctx), undefined);
@@ -3350,13 +3239,10 @@ describe("rewind phase 2: completion", () => {
   it("compares fold content on the same heuristic despite low recorded usage", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { tokenCounts: [6000, 8000, 10000, 11000] });
+    f.ctx.modelRegistry = fakeRegistry(() =>
+      reply(`${SUMMARY_TEXT}\n${"evidence ".repeat(4500)}`),
+    ).registry;
     await requestRewind(f);
-    await summaryTurn(
-      f,
-      `${SUMMARY_TEXT}\n${"evidence ".repeat(4500)}`,
-      "stop",
-      { commit: true },
-    );
     const done = rewindMessages(f.pi).at(-1)?.message;
     assert.equal(done?.details.status, "done");
     assert.ok(
@@ -3368,19 +3254,24 @@ describe("rewind phase 2: completion", () => {
   it("checks the currently edited view rather than the old pre-withholding measurement", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi);
-    await requestRewind(f);
-    for (const entry of f.sm.getBranch()) {
-      if (entry.type === "message" && entry.message.role === "user")
-        f.sm.appendContextEdit(entry.id, { content: "short" });
-    }
-    await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
+    // The context is edited while the summary is being written.
+    f.ctx.modelRegistry = fakeRegistry((_call, index) => {
+      if (index === 0) {
+        for (const entry of f.sm.getBranch()) {
+          if (entry.type === "message" && entry.message.role === "user")
+            f.sm.appendContextEdit(entry.id, { content: "short" });
+        }
+      }
+      return reply(SUMMARY_TEXT);
+    }).registry;
+    const { boundary } = await requestRewind(f);
     assert.equal(
       f.sm.getEntries().filter((entry) => entry.type === "branch_summary")
         .length,
       0,
     );
     assert.match(
-      String(outcomeEntries(f.sm).at(-1)?.reason),
+      String(boundary.entries[0].details.detail),
       /does not reduce projected context/,
     );
   });
@@ -3396,50 +3287,40 @@ describe("rewind phase 2: completion", () => {
       {},
       true,
     );
-    await requestRewind(f);
+    f.ctx.modelRegistry = fakeRegistry(() =>
+      reply(`${SUMMARY_TEXT}\n${"report ".repeat(16_000)}`),
+    ).registry;
     const beforeCount = f.sm
       .getEntries()
       .filter((entry) => entry.type === "branch_summary").length;
-    await summaryTurn(
-      f,
-      `${SUMMARY_TEXT}\n${"report ".repeat(16_000)}`,
-      "stop",
-      { commit: true },
-    );
+    const { boundary } = await requestRewind(f);
     assert.equal(
       f.sm.getEntries().filter((entry) => entry.type === "branch_summary")
         .length,
       beforeCount,
     );
     assert.match(
-      String(outcomeEntries(f.sm).at(-1)?.reason),
+      String(boundary.entries[0].details.detail),
       /does not reduce projected context/,
     );
   });
 
   it("folds an earlier child handoff into a parent once and projects honest work context", async () => {
-    const f = await rewindFixture({ commit: true });
+    const f = await rewindFixture();
     const childId = f.done.message.details.summaryId as string;
     appendTurn(f.sm, "parent-work", "parent-delivery", 24000, true);
     appendTurn(f.sm, "parent-verification", "parent-result", 30000, true);
+    const parentReport =
+      "## Goal\nParent scope\n\n## Progress\nParent final outcome\n\n## Next Steps\nContinue.";
+    const parentRegistry = fakeRegistry(() => reply(parentReport));
+    f.ctx.modelRegistry = parentRegistry.registry;
     await requestRewind(
       f,
       { ...REWIND_ARGS, rewindTo: "start", newLabel: "parent" },
       "tc-parent",
     );
-    const requests = f.sm
-      .getEntries()
-      .filter(
-        (entry) =>
-          entry.type === "custom_message" &&
-          entry.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
-      );
-    const instruction = requests.at(-1);
-    assert.ok(instruction?.type === "custom_message");
-    assert.match(String(instruction.content), /no fixed 4000-character cap/);
-    const parentReport =
-      "## Goal\nParent scope\n\n## Progress\nParent final outcome\n\n## Next Steps\nContinue.";
-    await summaryTurn(f, parentReport, "stop", { commit: true });
+    const instruction = parentRegistry.calls.at(-1)?.context.messages.at(-1);
+    assert.match(JSON.stringify(instruction), /no fixed 4000-character cap/);
     const latest = rewindMessages(f.pi).at(-1);
     assert.ok(latest);
     const parent = f.sm.getEntry(latest.message.details.summaryId as string);
@@ -3497,7 +3378,6 @@ describe("rewind phase 2: completion", () => {
       makeFakeSession(f.sm) as unknown as AgentSession,
     );
     await requestRewind(f, { ...REWIND_ARGS, newLabel: "parent" });
-    await summaryTurn(f);
     const done = rewindMessages(f.pi).at(-1);
     assert.ok(done);
     const entry = f.sm.getEntry(done.message.details.summaryId as string);
@@ -3509,15 +3389,16 @@ describe("rewind phase 2: completion", () => {
     assert.equal(details.treeNavigator.stats.cost, 7);
   });
 
-  it("immediate re-rewind of a just-landed summary is refused and leaves nothing pending", async () => {
+  it("immediate re-rewind of a just-landed summary is refused and queues nothing", async () => {
     const f = await rewindFixture();
-    const { result } = await requestRewind(
+    const { result, boundary } = await requestRewind(
       f,
       { ...REWIND_ARGS, rewindTo: "end", newLabel: "again" },
       "tc-2",
     );
     assert.equal(result.isError, true);
     assert.equal(result.details.rejected, "min-savings");
+    assert.equal(boundary.entries.length, 0);
     assert.equal(fireToolCall(f.pi, f.ctx), undefined);
   });
 
@@ -3531,7 +3412,6 @@ describe("rewind phase 2: completion", () => {
   it("keeps entries from a handler earlier in the chain: [foreign, ours]", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
     const foreign: BoundaryDraft = {
       type: "custom_message",
       customType: "other-extension",
@@ -3539,13 +3419,7 @@ describe("rewind phase 2: completion", () => {
       display: false,
       details: { from: "other" },
     };
-    const message = assistantMessage(
-      [{ type: "text", text: SUMMARY_TEXT }],
-      "stop",
-      100,
-    );
-    f.sm.appendMessage(message as never);
-    const boundary = await fireTurnEndAll(f.pi, f.ctx, message, {
+    const { boundary } = await requestRewind(f, REWIND_ARGS, "tc-rewind", undefined, {
       entries: [foreign],
     });
     assert.equal(boundary.continue, true);
@@ -3565,16 +3439,20 @@ describe("rewind phase 2: completion", () => {
       .getBranch()
       .find((e) => f.sm.getLabel(e.id) === "anchor:start")?.id;
     assert.ok(anchorId);
-    await requestRewind(f);
-    const message = assistantMessage(
-      [{ type: "text", text: SUMMARY_TEXT }],
-      "stop",
-      100,
+    const call = appendToolCallAssistant(f.sm, [
+      { id: "tc-rewind", name: TOOL_NAME, arguments: REWIND_ARGS },
+    ]);
+    const result = await f.tool.execute(
+      "tc-rewind",
+      REWIND_ARGS,
+      undefined,
+      undefined,
+      f.ctx,
     );
-    const summaryTurnId = f.sm.appendMessage(message as never);
+    appendToolResult(f.sm, "tc-rewind", TOOL_NAME, result.content[0].text);
     const staleEdit = {
       type: "context_edit",
-      targetId: summaryTurnId,
+      targetId: call.id,
       replacement: { content: "x" },
     };
     // pi never validates a compaction's firstKeptEntryId, so compaction
@@ -3582,7 +3460,7 @@ describe("rewind phase 2: completion", () => {
     const staleCompaction = {
       type: "compaction",
       summary: "s",
-      firstKeptEntryId: summaryTurnId,
+      firstKeptEntryId: call.id,
     };
     const selfCompaction = {
       type: "compaction",
@@ -3601,7 +3479,7 @@ describe("rewind phase 2: completion", () => {
       display: true,
       details: {},
     };
-    const boundary = await fireTurnEndAll(f.pi, f.ctx, message, {
+    const boundary = await fireTurnEndAll(f.pi, f.ctx, call.message, {
       entries: [
         staleEdit,
         staleCompaction,
@@ -3619,7 +3497,7 @@ describe("rewind phase 2: completion", () => {
     assert.equal(boundary.entries.at(-1)?.customType, REWIND_CUSTOM_TYPE);
   });
 
-  it("returns nothing on turns without a pending rewind", async () => {
+  it("returns nothing on turns without a queued fold", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi);
     const handlers = f.pi.onCalls.get("turn_end");
@@ -3641,1285 +3519,18 @@ describe("rewind phase 2: completion", () => {
     assert.equal(result, undefined);
   });
 
-  it("ignores turn_end from another session and non-assistant messages", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi);
-    await requestRewind(f);
-    const otherSm = SessionManager.inMemory("/tmp");
-    await fireTurnEndAll(
-      f.pi,
-      makeCtx(otherSm),
-      assistantMessage([{ type: "text", text: SUMMARY_TEXT }], "stop"),
-    );
-    await fireTurnEndAll(f.pi, f.ctx, {
-      role: "user",
-      content: [{ type: "text", text: SUMMARY_TEXT }],
-    });
-    await fireTurnEndAll(f.pi, f.ctx, undefined);
-    assert.equal(rewindMessages(f.pi).length, 0);
-    assert.ok(fireToolCall(f.pi, f.ctx), "still pending");
-    await summaryTurn(f);
-    assert.equal(rewindMessages(f.pi)[0].message.details.summaryAttempts, 1);
-  });
 });
 
 // =============================================================================
-// rewind phase 2 — failed summary turns, cancellation, abort (#80)
+// TUI renderers
 // =============================================================================
 
-describe("rewind phase 2: failed attempts are hidden and re-sent (#90)", () => {
-  async function pending() {
-    const f = setup();
-    const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
-    const { callId } = await requestRewind(f);
-    return { ...f, anchorId, callId };
-  }
-
-  function assertNotBranched(sm: SessionManager): void {
-    assert.ok(
-      !sm.getEntries().some((e) => e.type === "branch_summary"),
-      "no branch_summary may land",
-    );
-  }
-
-  /** A committed text attempt (pi persists it, then commits the drafts). */
-  function attempt(
-    f: { sm: SessionManager; pi: FakePi; ctx: FakeCtx },
-    text: string,
-    stopReason = "stop",
-  ) {
-    return summaryTurn(f, text, stopReason, { commit: true });
-  }
-
-  function rewindResultEntryId(sm: SessionManager): string {
-    const entry = sm
-      .getBranch()
-      .find(
-        (e) =>
-          e.type === "message" &&
-          e.message.role === "toolResult" &&
-          e.message.toolCallId === "tc-rewind",
-      );
-    assert.ok(entry);
-    return entry.id;
-  }
-
-  function instructionEntryId(sm: SessionManager): string {
-    const entry = sm
-      .getBranch()
-      .find(
-        (e) =>
-          e.type === "custom_message" &&
-          e.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
-      );
-    assert.ok(entry);
-    return entry.id;
-  }
-
-  /**
-   * §15.2/§15.4: once a rewind has ended, what pi stores (the projection
-   * that `{first}`, estimates and compaction read) and what the `context`
-   * handler sends agree, except the `isError` flag on the rewind's result.
-   */
-  function assertProjectionAgrees(f: {
-    sm: SessionManager;
-    pi: FakePi;
-    ctx: FakeCtx;
-  }): void {
-    const stored = f.sm
-      .buildSessionProjection()
-      .messages.filter((m) => m.role !== "system")
-      .map((m) =>
-        m.role === "toolResult" && m.toolCallId === "tc-rewind"
-          ? { ...m, isError: true }
-          : m,
-      );
-    assert.deepEqual(fireContext(f.pi, f.ctx), stored);
-  }
-
-  it("a text attempt without '## Goal' hides only that assistant and re-sends, nothing appended", async () => {
-    const f = await pending();
-    const before = fireContext(f.pi, f.ctx);
-    const { entryId, boundary } = await attempt(f, "Okay, I'll summarize now.");
-    assert.equal(boundary.continue, true);
-    assert.deepEqual(boundary.entries, [
-      { type: "context_edit", targetId: entryId, replacement: null },
-    ]);
-    assert.deepEqual([...hiddenIds(f.sm)], [entryId]);
-    assert.equal(outcomeEntries(f.sm).length, 0);
-    assertNotBranched(f.sm);
-    assert.ok(fireToolCall(f.pi, f.ctx), "still pending");
-    assert.deepEqual(fireContext(f.pi, f.ctx), before, "identical retry");
-  });
-
-  it("a tool-call attempt hides the assistant and ALL its tool results together", async () => {
-    const f = await pending();
-    const { entryId, resultIds, boundary } = await toolCallAttempt(f, [
-      "tc-a",
-      "tc-b",
-    ]);
-    assert.equal(boundary.continue, true);
-    assert.deepEqual(
-      boundary.entries.map((d) => [d.type, d.targetId, d.replacement]),
-      [entryId, ...resultIds].map((id) => ["context_edit", id, null]),
-    );
-    assertNotBranched(f.sm);
-  });
-
-  it("identical retries: a user steer and an extension message mid-pending never reach the request", async () => {
-    const f = await pending();
-    const before = fireContext(f.pi, f.ctx);
-    // Steer drained after the instruction + another extension's message.
-    f.sm.appendMessage({
-      role: "user",
-      content: [{ type: "text", text: "also check X" }],
-      timestamp: Date.now(),
-    } as never);
-    f.sm.appendCustomMessageEntry("subagent-result", "done", true);
-    assert.deepEqual(fireContext(f.pi, f.ctx), before, "attempt 1 request");
-    await toolCallAttempt(f);
-    assert.deepEqual(fireContext(f.pi, f.ctx), before, "attempt 2 request");
-    await attempt(f, "no heading");
-    assert.deepEqual(fireContext(f.pi, f.ctx), before, "attempt 3 request");
-    // The request ends at the instruction.
-    const last = before.at(-1) as { role?: string; customType?: string };
-    assert.equal(last.role, "custom");
-    assert.equal(last.customType, SUMMARY_REQUEST_CUSTOM_TYPE);
-  });
-
-  const causes: Array<{
-    name: string;
-    run: (f: Awaited<ReturnType<typeof pending>>) => Promise<unknown>;
-    text: string;
-    reason: string;
-  }> = [
-    {
-      name: "cut off",
-      run: (f) => attempt(f, SUMMARY_TEXT, "length"),
-      text: "Summarization failed: no summary after 3 attempts (last: cut off). Nothing was collapsed. Try again with a tighter summaryFocus.",
-      reason: "no summary after 3 attempts (last: cut off)",
-    },
-    {
-      name: "called a tool",
-      run: (f) => toolCallAttempt(f, [`tc-${Math.random()}`]),
-      text: "Summarization failed: no summary after 3 attempts (last: called a tool). Nothing was collapsed. Try again; the reply after the rewind must be only the summary.",
-      reason: "no summary after 3 attempts (last: called a tool)",
-    },
-    {
-      name: "no '## Goal' summary",
-      run: (f) => attempt(f, "Sure, summarizing."),
-      text: "Summarization failed: no summary after 3 attempts (last: no '## Goal' summary). Nothing was collapsed. Try again; the reply after the rewind must be only the summary.",
-      reason: "no summary after 3 attempts (last: no '## Goal' summary)",
-    },
-  ];
-  for (const c of causes) {
-    it(`3rd failure (last: ${c.name}) ends the rewind as a failed tool call (O5)`, async () => {
-      const f = await pending();
-      const resultId = rewindResultEntryId(f.sm);
-      const instructionId = instructionEntryId(f.sm);
-      // Attempts 1-2 use another cause: the LAST attempt names the ending.
-      await attempt(f, "first try");
-      await toolCallAttempt(f, ["tc-2"]);
-      await c.run(f);
-      const boundary = f.pi.boundaryResults.at(-1);
-      assert.ok(boundary);
-      assert.equal(boundary.continue, true);
-      assert.equal(c.text, buildSummaryFailedText(c.name as never));
-      const outcome = outcomeEntries(f.sm);
-      assert.equal(outcome.length, 1);
-      assert.equal(outcome[0].status, "failed");
-      assert.equal(outcome[0].text, c.text);
-      assert.equal(outcome[0].reason, c.reason);
-      assert.equal(outcome[0].toolCallId, "tc-rewind");
-      assert.equal(outcome[0].toolResultEntryId, resultId);
-      assert.ok(hiddenIds(f.sm).has(instructionId), "instruction hidden");
-      // The tool result now reads as the failure, as an error (clone).
-      const sent = fireContext(f.pi, f.ctx);
-      const result = sent.find(
-        (m) => m.role === "toolResult" && m.toolCallId === "tc-rewind",
-      );
-      assert.ok(result);
-      assert.equal(result.isError, true);
-      assert.deepEqual(result.content, [{ type: "text", text: c.text }]);
-      assert.ok(
-        !sent.some(
-          (m) =>
-            (m as { customType?: string }).customType ===
-            SUMMARY_REQUEST_CUSTOM_TYPE,
-        ),
-      );
-      assert.ok(
-        !sent.some(
-          (m, i) => i > sent.indexOf(result) && m.role === "assistant",
-        ),
-        "every attempt hidden",
-      );
-      // The session's own message objects are never mutated.
-      const stored = f.sm.getEntry(resultId);
-      assert.ok(stored && stored.type === "message");
-      assert.equal((stored.message as { isError?: boolean }).isError, false);
-      assertProjectionAgrees(f);
-      assertNotBranched(f.sm);
-      assert.equal(fireToolCall(f.pi, f.ctx), undefined, "gate re-opened");
-      // A later valid summary turn no longer completes anything.
-      await attempt(f, SUMMARY_TEXT);
-      assertNotBranched(f.sm);
-    });
-  }
-
-  it("a cut-off reply that also calls a tool counts as 'cut off'", async () => {
-    const f = await pending();
-    await attempt(f, "x");
-    await attempt(f, "y");
-    await toolCallAttempt(f, ["tc-cut"], "length");
-    assert.equal(
-      outcomeEntries(f.sm)[0].text,
-      buildSummaryFailedText("cut off"),
-    );
-  });
-
-  it("a summary plus a tool call is a failure ('called a tool')", async () => {
-    const f = await pending();
-    const message = assistantMessage(
-      [
-        { type: "text", text: SUMMARY_TEXT },
-        { type: "toolCall", id: "tc-x", name: "bash", arguments: {} },
-      ],
-      "toolUse",
-    );
-    const entryId = f.sm.appendMessage(message as never);
-    const resultId = appendToolResult(f.sm, "tc-x", "bash", "blocked");
-    await fireTurnEndAll(f.pi, f.ctx, message);
-    assertNotBranched(f.sm);
-    assert.deepEqual(hiddenIds(f.sm), new Set([entryId, resultId]));
-    assert.ok(fireToolCall(f.pi, f.ctx));
-  });
-
-  it("late input becomes visible again after a failure, right after the failed result (O1b)", async () => {
-    const f = await pending();
-    const steerId = f.sm.appendMessage({
-      role: "user",
-      content: [{ type: "text", text: "also check X" }],
-      timestamp: Date.now(),
-    } as never);
-    for (let i = 0; i < MAX_SUMMARY_ATTEMPTS; i++) await attempt(f, `a${i}`);
-    const sent = fireContext(f.pi, f.ctx);
-    const resultAt = sent.findIndex(
-      (m) => m.role === "toolResult" && m.toolCallId === "tc-rewind",
-    );
-    const steerAt = sent.findIndex(
-      (m) =>
-        m.role === "user" && JSON.stringify(m.content).includes("also check X"),
-    );
-    assert.ok(resultAt >= 0 && steerAt === resultAt + 1);
-    assert.ok(!hiddenIds(f.sm).has(steerId));
-  });
-
-  it("an aborted attempt ends the rewind aborted: attempt hidden, no continue", async () => {
-    const f = await pending();
-    const { entryId, boundary } = await attempt(
-      f,
-      "## Goal\npartial",
-      "aborted",
-    );
-    assert.equal(boundary.continue, false);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(outcome[0].status, "aborted");
-    assert.equal(outcome[0].text, REWIND_ABORTED_TEXT);
-    assert.equal(
-      REWIND_ABORTED_TEXT,
-      "Summarization aborted. Nothing was collapsed.",
-    );
-    assert.ok(hiddenIds(f.sm).has(entryId));
-    assertProjectionAgrees(f);
-    assertNotBranched(f.sm);
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-  });
-
-  it("an error turn keeps the rewind pending without spending an attempt", async () => {
-    const f = await pending();
-    const { boundary } = await attempt(f, "", "error");
-    assert.deepEqual(boundary.entries, []);
-    assert.ok(fireToolCall(f.pi, f.ctx), "still pending after an error");
-    await summaryTurn(f);
-    const done = rewindMessages(f.pi)[0].message;
-    assert.equal(done.details.status, "done");
-    assert.equal(done.details.summaryAttempts, 1);
-  });
-
-  it("pi-fallback-provider coexistence: its null edit on the errored attempt + ours stay valid; not counted", async () => {
-    const f = await pending();
-    const errored = await attempt(f, "", "error");
-    // The fallback provider hides the errored attempt at agent_before_settle
-    // and continues on another model.
-    const settle = await fireAgentBeforeSettle(f.pi, f.ctx, {
-      outcome: "error",
-      continue: true,
-      entries: [
-        {
-          type: "context_edit",
-          targetId: errored.entryId,
-          replacement: null,
-        } as BoundaryDraft,
-      ],
-    });
-    assert.equal(settle.continue, true);
-    assert.equal(settle.entries.length, 1, "the fallback's edit survives");
-    assert.ok(hiddenIds(f.sm).has(errored.entryId));
-    assert.ok(fireToolCall(f.pi, f.ctx), "still pending");
-    const failed = await attempt(f, "no heading");
-    // Same target hidden again by both: still a valid list.
-    const both = await fireTurnEndAll(f.pi, f.ctx, failed.message, {
-      entries: [
-        {
-          type: "context_edit",
-          targetId: failed.entryId,
-          replacement: null,
-        } as BoundaryDraft,
-      ],
-    });
-    assert.equal(both.entries.length, 2);
-    await summaryTurn(f);
-    const done = rewindMessages(f.pi).at(-1)?.message;
-    assert.equal(done?.details.status, "done");
-  });
-
-  it("agent_end keeps a pending rewind (agent_before_settle decides)", async () => {
-    const f = await pending();
-    fireAgentEnd(f.pi, f.ctx);
-    assert.ok(fireToolCall(f.pi, f.ctx), "still pending");
-  });
-
-  it("agent_before_settle ends a pending rewind: 'the run ended before the summary', continue", async () => {
-    const f = await pending();
-    const result = await fireAgentBeforeSettle(f.pi, f.ctx);
-    assert.equal(result.continue, true);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(outcome[0].status, "failed");
-    assert.equal(
-      outcome[0].text,
-      "Summarization failed: the run ended before the summary. Nothing was collapsed. Try again.",
-    );
-    assert.equal(
-      outcome[0].text,
-      buildRewindFailedText("the run ended before the summary"),
-    );
-    assert.ok(hiddenIds(f.sm).has(instructionEntryId(f.sm)));
-    assertProjectionAgrees(f);
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-  });
-
-  it("agent_before_settle leaves it pending on an error outcome or an explicit continue", async () => {
-    const f = await pending();
-    await fireAgentBeforeSettle(f.pi, f.ctx, { outcome: "error" });
-    assert.ok(fireToolCall(f.pi, f.ctx));
-    await fireAgentBeforeSettle(f.pi, f.ctx, { continue: true });
-    assert.ok(fireToolCall(f.pi, f.ctx));
-    assert.equal(outcomeEntries(f.sm).length, 0);
-  });
-
-  it("Esc while a blocked attempt's tools resolve ends it aborted, not failed (O6)", async () => {
-    const f = await pending();
-    const controller = new AbortController();
-    controller.abort();
-    f.ctx.signal = controller.signal;
-    const { entryId, resultIds, boundary } = await toolCallAttempt(f);
-    f.ctx.signal = undefined;
-    assert.equal(boundary.continue, false);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(outcome[0].status, "aborted");
-    assert.equal(outcome[0].text, REWIND_ABORTED_TEXT);
-    for (const id of [entryId, ...resultIds]) {
-      assert.ok(hiddenIds(f.sm).has(id), "the aborted attempt is hidden");
-    }
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-  });
-
-  it("agent_before_settle on an aborted outcome ends it aborted without continue", async () => {
-    const f = await pending();
-    const result = await fireAgentBeforeSettle(f.pi, f.ctx, {
-      outcome: "aborted",
-    });
-    assert.equal(result.continue, false);
-    assert.equal(outcomeEntries(f.sm)[0].status, "aborted");
-  });
-
-  it("agent_settled with the rewind still pending (errored, no retry) ends it aborted outside a boundary", async () => {
-    const f = await pending();
-    const errored = await attempt(f, "", "error");
-    await fireAgentBeforeSettle(f.pi, f.ctx, { outcome: "error" });
-    await fireAgentSettled(f.pi, f.ctx);
-    assert.equal(f.pi.appendEntryCalls.length, 1);
-    assert.equal(f.pi.appendEntryCalls[0][0], REWIND_OUTCOME_CUSTOM_TYPE);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome[0].status, "aborted");
-    assert.equal(outcome[0].text, REWIND_ABORTED_TEXT);
-    assert.ok(hiddenIds(f.sm).has(instructionEntryId(f.sm)));
-    // The errored attempt is pi's to hide; ours are exact ids only.
-    assert.ok(!hiddenIds(f.sm).has(errored.entryId));
-    const replaced = f.sm
-      .getBranch()
-      .find(
-        (e) =>
-          e.type === "context_edit" && e.targetId === rewindResultEntryId(f.sm),
-      );
-    assert.ok(replaced, "the tool result rewrite is persisted");
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-  });
-
-  it("agent_settled names the reason: aborted run vs an error with no retry", async () => {
-    const f = await pending();
-    await attempt(f, "", "error");
-    await fireAgentSettled(f.pi, f.ctx, true);
-    assert.equal(outcomeEntries(f.sm)[0].reason, "aborted");
-    assert.equal(outcomeEntries(f.sm)[0].text, REWIND_ABORTED_TEXT);
-    const g = await pending();
-    await attempt(g, "", "error");
-    await fireAgentSettled(g.pi, g.ctx, false);
-    assert.equal(
-      outcomeEntries(g.sm)[0].reason,
-      "the run ended after an error",
-    );
-  });
-
-  it("before_agent_start (a new prompt) ends a pending rewind aborted", async () => {
-    const f = await pending();
-    await attempt(f, "", "error");
-    await fireBeforeAgentStart(f.pi, f.ctx, undefined);
-    assert.equal(outcomeEntries(f.sm)[0].status, "aborted");
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-    await summaryTurn(f);
-    assertNotBranched(f.sm);
-  });
-
-  it("session_compact while pending ends it before the next request (O7)", async () => {
-    const f = await pending();
-    await fireSessionCompact(f.pi, f.ctx, f.anchorId);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(
-      outcome[0].text,
-      "Summarization failed: the context was compacted. Nothing was collapsed. Try again.",
-    );
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-  });
-
-  it("a compaction entry after the rewind call ends it at the next request / turn_end", async () => {
-    const f = await pending();
-    f.sm.appendCompaction("COMPACTED", f.anchorId, 20_000);
-    fireContext(f.pi, f.ctx);
-    assert.equal(outcomeEntries(f.sm)[0].reason, "the context was compacted");
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-  });
-
-  it("a compaction seen first at the attempt's turn_end ends it there", async () => {
-    const f = await pending();
-    f.sm.appendCompaction("COMPACTED", f.anchorId, 20_000);
-    const { boundary } = await attempt(f, SUMMARY_TEXT);
-    assert.equal(boundary.continue, true);
-    assert.equal(outcomeEntries(f.sm)[0].reason, "the context was compacted");
-    assertNotBranched(f.sm);
-  });
-
-  it("instruction never committed: the request ends it 'could not be delivered' (§15.5)", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    // Another handler's invalid draft drops the whole list (instruction too).
-    const call = appendToolCallAssistant(f.sm, [
-      { id: "tc-rewind", name: TOOL_NAME, arguments: REWIND_ARGS },
-    ]);
-    const result = await f.tool.execute(
-      "tc-rewind",
-      REWIND_ARGS,
-      undefined,
-      undefined,
-      f.ctx,
-    );
-    appendToolResult(f.sm, "tc-rewind", TOOL_NAME, result.content[0].text);
-    await fireTurnEndAll(f.pi, f.ctx, call.message, { commit: false });
-    assert.ok(fireToolCall(f.pi, f.ctx), "pending");
-    const sent = fireContext(f.pi, f.ctx);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(
-      outcome[0].text,
-      "Summarization failed: the summary request could not be delivered. Nothing was collapsed. Try again.",
-    );
-    const toolResult = sent.find(
-      (m) => m.role === "toolResult" && m.toolCallId === "tc-rewind",
-    );
-    assert.equal(toolResult?.isError, true);
-  });
-
-  it("instruction never committed and no request seen: the attempt's turn_end ends it", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    const call = appendToolCallAssistant(f.sm, [
-      { id: "tc-rewind", name: TOOL_NAME, arguments: REWIND_ARGS },
-    ]);
-    const result = await f.tool.execute(
-      "tc-rewind",
-      REWIND_ARGS,
-      undefined,
-      undefined,
-      f.ctx,
-    );
-    appendToolResult(f.sm, "tc-rewind", TOOL_NAME, result.content[0].text);
-    await fireTurnEndAll(f.pi, f.ctx, call.message, { commit: false });
-    const { entryId } = await attempt(f, SUMMARY_TEXT);
-    assert.equal(
-      outcomeEntries(f.sm)[0].reason,
-      "the summary request could not be delivered",
-    );
-    assert.ok(hiddenIds(f.sm).has(entryId));
-    assertNotBranched(f.sm);
-  });
-
-  it("ends when the rewind call is no longer on the active branch", async () => {
-    const f = await pending();
-    const a4 = f.sm
-      .getBranch()
-      .find(
-        (e) =>
-          e.type === "message" &&
-          e.message.role === "assistant" &&
-          JSON.stringify(e.message.content).includes('"a4"'),
-      );
-    assert.ok(a4);
-    f.sm.branch(a4.id);
-    await summaryTurn(f);
-    const drafts = f.pi.boundaryResults.at(-1)?.entries ?? [];
-    const outcome = drafts.find(
-      (d) => d.customType === REWIND_OUTCOME_CUSTOM_TYPE,
-    );
-    assert.equal(
-      outcome?.data?.reason,
-      "the rewind call is no longer on the active branch",
-    );
-    assertNotBranched(f.sm);
-  });
-
-  it("a throwing branchWithSummary ends it failed and clears the branch: label", async () => {
-    const f = await pending();
-    (f.sm as unknown as { branchWithSummary: () => string }).branchWithSummary =
-      () => {
-        throw new Error("disk full");
-      };
-    const { entryId, boundary } = await attempt(f, SUMMARY_TEXT);
-    assert.equal(boundary.continue, true);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(
-      outcome[0].text,
-      "Summarization failed: the branch could not be written (disk full). Nothing was collapsed. Try again.",
-    );
-    assert.equal(f.sm.getLabel(entryId), undefined, "branch: label cleared");
-    assert.ok(hiddenIds(f.sm).has(entryId), "the summary turn is hidden too");
-    assertNotBranched(f.sm);
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined, "gate reopened");
-  });
-
-  it("a branch_summary disk write that throws after pi moved the leaf restores the leaf before failing", async () => {
-    const f = await pending();
-    // pi's branchWithSummary moves the leaf and appends in memory, THEN the
-    // file append throws (session-manager `_appendEntry` \u2192 `_persist`).
-    const internals = f.sm as unknown as { _persist: (e: unknown) => void };
-    const origPersist = internals._persist.bind(f.sm);
-    internals._persist = (entry: unknown) => {
-      if ((entry as { type?: string }).type === "branch_summary") {
-        throw new Error("ENOSPC");
-      }
-      origPersist(entry);
-    };
-    const { entryId, boundary } = await attempt(f, SUMMARY_TEXT);
-    assert.equal(boundary.continue, true);
-    const branch = f.sm.getBranch();
-    assert.ok(
-      !branch.some((e) => e.type === "branch_summary"),
-      "the active branch is not collapsed",
-    );
-    assert.ok(
-      branch.some((e) => e.id === entryId),
-      "the leaf is back on the summary turn's branch",
-    );
-    assert.ok(
-      branch.some(
-        (e) =>
-          e.type === "label" &&
-          e.targetId === entryId &&
-          e.label === "branch:end",
-      ),
-      "restored to the leaf right before the branch call (label entry kept)",
-    );
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(
-      outcome[0].text,
-      "Summarization failed: the branch could not be written (ENOSPC). Nothing was collapsed. Try again.",
-    );
-    assert.ok(hiddenIds(f.sm).has(entryId), "the summary turn is hidden");
-    assert.ok(hiddenIds(f.sm).has(instructionEntryId(f.sm)));
-    assert.equal(f.sm.getLabel(entryId), undefined, "branch: label cleared");
-  });
-
-  it("ends when the anchor no longer resolves to the same entry", async () => {
-    const f = await pending();
-    f.pi.pi.setLabel(f.anchorId, undefined);
-    await attempt(f, SUMMARY_TEXT);
-    assert.equal(
-      outcomeEntries(f.sm)[0].text,
-      "Summarization failed: 'start' is no longer on the active branch. Nothing was collapsed. Try again.",
-    );
-    assertNotBranched(f.sm);
-  });
-
-  it("ends when the anchor label moved to a different entry", async () => {
-    const f = await pending();
-    f.pi.pi.setLabel(f.sm.getLeafId() as string, "anchor:start");
-    await attempt(f, SUMMARY_TEXT);
-    assert.equal(outcomeEntries(f.sm)[0].status, "failed");
-    assertNotBranched(f.sm);
-  });
-
-  it("ends when newLabel was taken before completion", async () => {
-    const f = await pending();
-    f.pi.pi.setLabel(f.sm.getLeafId() as string, "anchor:end");
-    await attempt(f, SUMMARY_TEXT);
-    assert.equal(
-      outcomeEntries(f.sm)[0].reason,
-      "a label 'end' now exists on the active branch",
-    );
-    assertNotBranched(f.sm);
-  });
-
-  it("success after hidden attempts: their blocked calls stay out of the file lists (O3-B)", async () => {
-    const f = await pending();
-    await toolCallAttempt(f, ["tc-ghost"]);
-    await summaryTurn(f);
-    const done = rewindMessages(f.pi)[0].message;
-    assert.equal(done.details.status, "done");
-    assert.equal(done.details.summaryAttempts, 2);
-    assert.deepEqual(done.details.readFiles, []);
-    const summary = f.sm.getEntry(done.details.summaryId as string);
-    assert.ok(summary && summary.type === "branch_summary");
-    assert.doesNotMatch(summary.summary, /tc-ghost/);
-  });
-});
-
-describe("rewind: an ending dropped by pi (#90)", () => {
-  // Another extension's invalid draft (e.g. a later handler's) makes pi drop
-  // the whole boundary list, our ending included (`commit: false`): it must
-  // be re-applied outside the boundary.
-
-  it("a dropped agent_before_settle ending is re-applied at the next request", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    await fireAgentBeforeSettle(f.pi, f.ctx, { commit: false });
-    assert.equal(outcomeEntries(f.sm).length, 0, "pi dropped the list");
-    const sent = fireContext(f.pi, f.ctx);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(
-      outcome[0].text,
-      "Summarization failed: the run ended before the summary. Nothing was collapsed. Try again.",
-    );
-    const instruction = f.sm
-      .getBranch()
-      .find(
-        (e) =>
-          e.type === "custom_message" &&
-          e.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
-      );
-    assert.ok(instruction && hiddenIds(f.sm).has(instruction.id));
-    const result = sent.find(
-      (m) => m.role === "toolResult" && m.toolCallId === "tc-rewind",
-    );
-    assert.equal(result?.isError, true);
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined, "gate reopened");
-    // Not written twice.
-    fireContext(f.pi, f.ctx);
-    assert.equal(outcomeEntries(f.sm).length, 1);
-  });
-
-  it("a dropped turn_end ending is re-applied at agent_settled", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    const message = assistantMessage([], "aborted", 100);
-    const entryId = f.sm.appendMessage(message as never);
-    await fireTurnEndAll(f.pi, f.ctx, message, { commit: false });
-    assert.equal(outcomeEntries(f.sm).length, 0, "pi dropped the list");
-    await fireAgentSettled(f.pi, f.ctx, true);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(outcome[0].status, "aborted");
-    assert.equal(outcome[0].text, REWIND_ABORTED_TEXT);
-    assert.ok(hiddenIds(f.sm).has(entryId), "the aborted attempt is hidden");
-  });
-
-  it("a dropped exhausted-attempts ending is re-applied at agent_before_settle with continue", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    await summaryTurn(f, "no goal 1", "stop", { commit: true });
-    await summaryTurn(f, "no goal 2", "stop", { commit: true });
-    // Attempt 3 exhausts the attempts; pi drops its turn_end list
-    // (another extension's invalid draft): entries [], continue false.
-    const third = await summaryTurn(f, "no goal 3", "stop", {
-      commit: false,
-    });
-    assert.equal(third.boundary.continue, true, "our ending asked to continue");
-    assert.equal(outcomeEntries(f.sm).length, 0, "pi dropped the list");
-    const result = await fireAgentBeforeSettle(f.pi, f.ctx);
-    const outcome = outcomeEntries(f.sm);
-    assert.equal(outcome.length, 1);
-    assert.equal(outcome[0].status, "failed");
-    assert.ok(hiddenIds(f.sm).has(third.entryId), "attempt 3 is hidden");
-    assert.equal(
-      result.continue,
-      true,
-      "the model reads the failure in the same run",
-    );
-  });
-
-  it("a dropped failed ending re-applied at an aborted / errored settle does not continue", async () => {
-    for (const outcome of ["aborted", "error"] as const) {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      await requestRewind(f);
-      await summaryTurn(f, "no goal 1", "stop", { commit: true });
-      await summaryTurn(f, "no goal 2", "stop", { commit: true });
-      await summaryTurn(f, "no goal 3", "stop", { commit: false });
-      const result = await fireAgentBeforeSettle(f.pi, f.ctx, { outcome });
-      assert.equal(outcomeEntries(f.sm)[0].status, "failed");
-      assert.equal(result.continue, false, outcome);
-    }
-  });
-
-  it("a committed ending is not re-applied", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    await fireAgentBeforeSettle(f.pi, f.ctx);
-    fireContext(f.pi, f.ctx);
-    await fireAgentSettled(f.pi, f.ctx);
-    assert.equal(outcomeEntries(f.sm).length, 1);
-    assert.equal(f.pi.appendEntryCalls.length, 0);
-  });
-});
-
-describe("rewind: reused tool-call ids (#90)", () => {
-  // OpenAI-compatible servers may send "" or reuse ids: everything a
-  // rewind keys on is its own entry ids, never the toolCallId alone.
-  for (const id of ["X", ""]) {
-    it(`two rewinds sharing toolCallId ${JSON.stringify(id)}: frozen view, rewrite and ending follow each rewind's own entries`, async () => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      await requestRewind(f, REWIND_ARGS, id);
-      await fireAgentBeforeSettle(f.pi, f.ctx);
-      assert.equal(outcomeEntries(f.sm).length, 1);
-      appendTurn(f.sm, "u9", "a9", 30_000);
-      await requestRewind(f, { ...REWIND_ARGS, newLabel: "end2" }, id);
-      assert.ok(fireToolCall(f.pi, f.ctx), "the second rewind is pending");
-      const instructions = f.sm
-        .getBranch()
-        .filter(
-          (e) =>
-            e.type === "custom_message" &&
-            e.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
-        );
-      assert.equal(instructions.length, 2);
-      const sent = fireContext(f.pi, f.ctx);
-      // Frozen at the SECOND instruction (the first one is hidden).
-      assert.equal(
-        (sent.at(-1) as { details?: { newLabel?: string } }).details?.newLabel,
-        "end2",
-      );
-      assert.ok(
-        sent.some((m) => JSON.stringify(m.content).includes('"a9"')),
-        "work after the first rewind is still sent",
-      );
-      const results = () =>
-        fireContext(f.pi, f.ctx).filter(
-          (m) => m.role === "toolResult" && m.toolCallId === id,
-        );
-      // Only the first (ended) rewind's result reads as failed.
-      let r = results();
-      assert.equal(r.length, 2);
-      assert.equal(r[0].isError, true);
-      assert.notEqual(r[1].isError, true);
-      assert.match(JSON.stringify(r[1].content), /accepted/);
-      // The second ends aborted: its own result and instruction only.
-      await fireAgentBeforeSettle(f.pi, f.ctx, { outcome: "aborted" });
-      const outcomes = outcomeEntries(f.sm);
-      assert.equal(outcomes.length, 2);
-      assert.notEqual(
-        outcomes[0].toolResultEntryId,
-        outcomes[1].toolResultEntryId,
-      );
-      assert.ok(hiddenIds(f.sm).has(instructions[1].id));
-      r = results();
-      assert.equal(r.length, 2);
-      assert.equal(
-        (r[0].content as Array<{ text: string }>)[0].text,
-        "Summarization failed: the run ended before the summary. Nothing was collapsed. Try again.",
-      );
-      assert.equal(
-        (r[1].content as Array<{ text: string }>)[0].text,
-        REWIND_ABORTED_TEXT,
-      );
-      assert.equal(r[1].isError, true);
-    });
-
-    it(`an attempt calling a tool with the rewind's id ${JSON.stringify(id)} is an attempt, not the rewind turn (matched by messageEntryId)`, async () => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      await requestRewind(f, REWIND_ARGS, id);
-      const { entryId, resultIds } = await toolCallAttempt(f, [id]);
-      const instructions = f.sm
-        .getBranch()
-        .filter(
-          (e) =>
-            e.type === "custom_message" &&
-            e.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
-        );
-      assert.equal(instructions.length, 1, "no second instruction");
-      for (const hidden of [entryId, ...resultIds]) {
-        assert.ok(hiddenIds(f.sm).has(hidden), "the attempt is hidden");
-      }
-      assert.equal(outcomeEntries(f.sm).length, 0);
-      assert.ok(fireToolCall(f.pi, f.ctx), "still pending, re-sent");
-    });
-
-    it(`the rewind turn's boundary skipped: a later turn calling ${JSON.stringify(id)} is not taken for it (matched by messageEntryId)`, async () => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      appendToolCallAssistant(f.sm, [
-        { id, name: TOOL_NAME, arguments: REWIND_ARGS },
-      ]);
-      const result = await f.tool.execute(
-        id,
-        REWIND_ARGS,
-        undefined,
-        undefined,
-        f.ctx,
-      );
-      appendToolResult(f.sm, id, TOOL_NAME, result.content[0].text);
-      // pi never fired the rewind turn's turn_end.
-      const { entryId } = await toolCallAttempt(f, [id]);
-      assert.ok(
-        !f.pi.boundaryResults.some((r) =>
-          r.entries.some((d) => d.customType === SUMMARY_REQUEST_CUSTOM_TYPE),
-        ),
-        "no instruction for a turn that did not issue the rewind",
-      );
-      const outcome = outcomeEntries(f.sm);
-      assert.equal(outcome.length, 1);
-      assert.equal(
-        outcome[0].reason,
-        "the summary request could not be delivered",
-      );
-      assert.ok(hiddenIds(f.sm).has(entryId));
-    });
-  }
-});
-
-describe("rewind: restart while pending (#90 O8)", () => {
-  async function withSessionStart(
-    run: (fixture: ConfigFixture) => Promise<void>,
-  ): Promise<void> {
-    const fixture = makeConfigFixture();
-    try {
-      await run(fixture);
-    } finally {
-      cleanupConfigFixture(fixture);
-    }
-  }
-
-  it("an orphan instruction (no branch: label, no outcome) is ended aborted at session_start", async () => {
-    await withSessionStart(async (fixture) => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      await requestRewind(f);
-      const attempt = await summaryTurn(f, "partial", "stop", {
-        commit: false,
-      });
-      // A fresh extension instance (restart / reload): nothing pending.
-      const g = { ...f, pi: makeFakePi(f.sm) };
-      navigateTree(g.pi.pi);
-      await runSessionStart(g.pi, f.ctx, fixture, "resume");
-      const outcome = outcomeEntries(f.sm);
-      assert.equal(outcome.length, 1);
-      assert.equal(outcome[0].status, "aborted");
-      assert.equal(outcome[0].text, REWIND_ABORTED_TEXT);
-      assert.ok(hiddenIds(f.sm).has(attempt.entryId), "the attempt is hidden");
-      // Idempotent: the outcome resolves it.
-      await runSessionStart(g.pi, f.ctx, fixture, "resume");
-      assert.equal(outcomeEntries(f.sm).length, 1);
-    });
-  });
-
-  it("orphan hiding skips a steer typed while pending (it sits before attempt 1); the steer stays visible", async () => {
-    await withSessionStart(async (fixture) => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      await requestRewind(f);
-      const steerId = f.sm.appendMessage({
-        role: "user",
-        content: [{ type: "text", text: "steer" }],
-      } as never);
-      const attempt = await summaryTurn(f, "partial", "stop", {
-        commit: false,
-      });
-      const g = { ...f, pi: makeFakePi(f.sm) };
-      navigateTree(g.pi.pi);
-      await runSessionStart(g.pi, f.ctx, fixture, "resume");
-      const hidden = hiddenIds(f.sm);
-      assert.ok(hidden.has(attempt.entryId), "attempt 1 after the steer");
-      assert.ok(!hidden.has(steerId), "the steer stays visible");
-    });
-  });
-
-  it("orphan hiding stops after MAX_SUMMARY_ATTEMPTS assistant turns", async () => {
-    await withSessionStart(async (fixture) => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      await requestRewind(f);
-      const ids: string[] = [];
-      for (let i = 0; i < 4; i++) {
-        // User messages (steers) between turns do not end the window.
-        f.sm.appendMessage({
-          role: "user",
-          content: [{ type: "text", text: `steer ${i}` }],
-        } as never);
-        ids.push(
-          f.sm.appendMessage(
-            assistantMessage(
-              [{ type: "text", text: `t${i}` }],
-              "stop",
-              100,
-            ) as never,
-          ),
-        );
-      }
-      const g = { ...f, pi: makeFakePi(f.sm) };
-      navigateTree(g.pi.pi);
-      await runSessionStart(g.pi, f.ctx, fixture, "resume");
-      const hidden = hiddenIds(f.sm);
-      for (const id of ids.slice(0, 3)) assert.ok(hidden.has(id));
-      assert.ok(!hidden.has(ids[3]), "a 4th assistant turn was not an attempt");
-    });
-  });
-
-  it("the same session_start in-process also drops the in-memory pending rewind", async () => {
-    await withSessionStart(async (fixture) => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi);
-      await requestRewind(f);
-      await runSessionStart(f.pi, f.ctx, fixture, "reload");
-      assert.equal(fireToolCall(f.pi, f.ctx), undefined);
-      assert.equal(outcomeEntries(f.sm)[0].status, "aborted");
-    });
-  });
-
-  it("success leaves branch:<newLabel> on the summary turn; going back to the old branch is not an orphan", async () => {
-    await withSessionStart(async (fixture) => {
-      const f = await rewindFixture({ commit: true });
-      assert.equal(f.sm.getLabel(f.summaryEntryId), "branch:end");
-      // `list` never shows it.
-      const list = await f.tool.execute(
-        "tc-list",
-        { action: "list" },
-        undefined,
-        undefined,
-        f.ctx,
-      );
-      assert.doesNotMatch(list.content[0].text, /branch:|\bend\b.*branch/);
-      // Back onto the abandoned branch (e.g. /tree), then a restart.
-      f.sm.branch(f.summaryEntryId);
-      await runSessionStart(f.pi, f.ctx, fixture, "resume");
-      assert.equal(outcomeEntries(f.sm).length, 0);
-    });
-  });
-
-  it("a later rewind's outcome with the same toolCallId does not resolve an orphan (matched by instructionEntryId)", async () => {
-    await withSessionStart(async (fixture) => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi, { capture: true });
-      // Rewind 1 (id "X") dies mid-flight: no outcome is ever written.
-      await requestRewind(f, REWIND_ARGS, "X");
-      // A fresh instance (nothing pending) runs rewind 2, reusing "X", and
-      // ends it: its outcome lands after rewind 1's instruction.
-      const g = { ...f, pi: makeFakePi(f.sm) };
-      navigateTree(g.pi.pi);
-      g.tool = g.pi.registered[0];
-      await requestRewind(g, { ...REWIND_ARGS, newLabel: "end2" }, "X");
-      await fireAgentBeforeSettle(g.pi, g.ctx);
-      const instructions = f.sm
-        .getBranch()
-        .filter(
-          (e) =>
-            e.type === "custom_message" &&
-            e.customType === SUMMARY_REQUEST_CUSTOM_TYPE,
-        );
-      assert.equal(instructions.length, 2);
-      assert.equal(outcomeEntries(f.sm).length, 1);
-      assert.equal(
-        outcomeEntries(f.sm)[0].instructionEntryId,
-        instructions[1].id,
-      );
-      // Restart: rewind 1 is still an orphan.
-      const h = { ...f, pi: makeFakePi(f.sm) };
-      navigateTree(h.pi.pi);
-      await runSessionStart(h.pi, f.ctx, fixture, "resume");
-      const outcomes = outcomeEntries(f.sm);
-      assert.equal(outcomes.length, 2, "rewind 1 is ended at restart");
-      assert.equal(outcomes[1].instructionEntryId, instructions[0].id);
-      assert.equal(outcomes[1].status, "aborted");
-      assert.ok(hiddenIds(f.sm).has(instructions[0].id));
-    });
-  });
-
-  it("a failed rewind's outcome resolves its instruction", async () => {
-    await withSessionStart(async (fixture) => {
-      const f = setup();
-      setupRewindable(f.sm, f.pi);
-      await requestRewind(f);
-      await fireAgentBeforeSettle(f.pi, f.ctx);
-      await runSessionStart(f.pi, f.ctx, fixture, "resume");
-      assert.equal(outcomeEntries(f.sm).length, 1);
-    });
-  });
-});
-
-describe("rewind: solo-call guard (#37, restored by #90 S6)", () => {
-  async function rewindIn(batch: Array<{ id: string; name: string }>) {
-    const f = setup();
-    setupRewindable(f.sm, f.pi);
-    appendToolCallAssistant(
-      f.sm,
-      batch.map((c) => ({
-        ...c,
-        arguments: c.id === "tc-rewind" ? REWIND_ARGS : { path: "x" },
-      })),
-    );
-    const result = await f.tool.execute(
-      "tc-rewind",
-      REWIND_ARGS,
-      undefined,
-      undefined,
-      f.ctx,
-    );
-    return { ...f, result };
-  }
-
-  it("refuses a rewind batched with other calls; nothing is recorded", async () => {
-    const f = await rewindIn([
-      { id: "tc-read", name: "read" },
-      { id: "tc-rewind", name: TOOL_NAME },
-    ]);
-    assert.equal(f.result.isError, true);
-    assert.equal(
-      f.result.content[0].text,
-      "rewind must be the only tool call in its message — re-issue only the rewind, alone. The other calls in this message ran normally.",
-    );
-    assert.equal(f.result.content[0].text, SOLO_REWIND_REFUSAL);
-    assert.deepEqual(f.result.details.batchedToolCalls, ["read", TOOL_NAME]);
-    assert.equal(fireToolCall(f.pi, f.ctx), undefined, "nothing pending");
-  });
-
-  it("allows a solo rewind", async () => {
-    const f = await rewindIn([{ id: "tc-rewind", name: TOOL_NAME }]);
-    assert.equal(f.result.isError, undefined);
-  });
-
-  it("fails open when getBranch throws", () => {
-    const sm = {
-      getBranch() {
-        throw new Error("boom");
-      },
-    } as unknown as SessionManager;
-    assert.equal(
-      __testHooks.findInFlightAssistantToolCalls(sm, "tc-rewind"),
-      null,
-    );
-  });
-
-  it("finds the declaring assistant by id even with sibling results after it", () => {
-    const sm = SessionManager.inMemory("/tmp");
-    appendToolCallAssistant(sm, [
-      { id: "tc-a", name: "read" },
-      { id: "tc-rewind", name: TOOL_NAME },
-    ]);
-    appendToolResult(sm, "tc-a", "read", "ok");
-    assert.deepEqual(
-      __testHooks.findInFlightAssistantToolCalls(sm, "tc-rewind"),
-      [
-        { id: "tc-a", name: "read" },
-        { id: "tc-rewind", name: TOOL_NAME },
-      ],
-    );
-    assert.equal(__testHooks.findInFlightAssistantToolCalls(sm, "nope"), null);
-  });
-
-  it("accepts a codemode script's rewind only as its first nested call (#103)", () => {
-    const { pi, ctx } = setup();
-    const handlers = pi.onCalls.get("tool_call");
-    assert.ok(handlers);
-    const nested = (id: string, action: string) =>
-      handlers[0](
-        {
-          type: "tool_call",
-          toolCallId: id,
-          parentToolCallId: "tc-code",
-          toolName: TOOL_NAME,
-          input: { action },
-        } as never,
-        ctx as never,
-      );
-    // The first nested call may be the rewind: it lands on tc-code.
-    assert.equal(nested("tc-code/1", "rewind"), undefined);
-    // A second nested rewind is refused.
-    assert.deepEqual(nested("tc-code/2", "rewind"), {
-      block: true,
-      reason: NESTED_REWIND_REFUSAL,
-    });
-  });
-
-  it("refuses a codemode script's rewind after another nested call (#103)", () => {
-    const { pi, ctx } = setup();
-    const handlers = pi.onCalls.get("tool_call");
-    assert.ok(handlers);
-    const nested = (id: string, action: string) =>
-      handlers[0](
-        {
-          type: "tool_call",
-          toolCallId: id,
-          parentToolCallId: "tc-code",
-          toolName: TOOL_NAME,
-          input: { action },
-        } as never,
-        ctx as never,
-      );
-    // A nested list is fine, but then the script's rewind is not its first call.
-    assert.equal(nested("tc-code/1", "list"), undefined);
-    assert.deepEqual(nested("tc-code/2", "rewind"), {
-      block: true,
-      reason: NESTED_REWIND_REFUSAL,
-    });
-  });
-});
-
-describe("rewind: TUI renderers (#90 O1 / O9)", () => {
+describe("rewind: TUI renderers", () => {
   const theme = { fg: (color: string, text: string) => `<${color}>${text}` };
 
-  it("summary request row: byte-exact, with and without a window", () => {
-    assert.equal(
-      buildSummaryRequestRow({
-        rewindTo: "context-gathered",
-        newLabel: "parser-done",
-        contextBefore: 304_000,
-        tokensAtTarget: 120_000,
-        contextWindow: 1_000_000,
-      }),
-      "[rewind to 'context-gathered' · collapse as 'parser-done'] · summarizing · context 30.4% → ~12.0% of 1.0M",
-    );
-    assert.equal(
-      buildSummaryRequestRow({
-        rewindTo: "a",
-        newLabel: "b",
-        contextBefore: 30400,
-        tokensAtTarget: 12000,
-        contextWindow: 0,
-      }),
-      "[rewind to 'a' · collapse as 'b'] · summarizing · tokens 30400 → ~12000",
-    );
-  });
 
-  it("outcome rows: failed with its reason, aborted without", () => {
-    assert.equal(
-      buildRewindOutcomeRow({
-        status: "failed",
-        reason: "no summary after 3 attempts (last: called a tool)",
-        rewindTo: "context-gathered",
-        newLabel: "parser-done",
-      }),
-      "[rewind to 'context-gathered' · collapse as 'parser-done'] · failed: no summary after 3 attempts (last: called a tool) · nothing collapsed",
-    );
-    assert.equal(
-      buildRewindOutcomeRow({
-        status: "aborted",
-        reason: "aborted",
-        rewindTo: "a",
-        newLabel: "b",
-      }),
-      "[rewind to 'a' · collapse as 'b'] · aborted · nothing collapsed",
-    );
-  });
 
-  it("registers a message renderer: collapsed = the row, expanded = row + full text", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi);
-    await requestRewind(f);
-    const renderer = f.pi.messageRenderers.get(SUMMARY_REQUEST_CUSTOM_TYPE);
-    assert.ok(renderer);
-    const draft = summaryRequestDraftOf(f.pi);
-    const message = {
-      role: "custom",
-      customType: draft.customType,
-      content: draft.content,
-      display: true,
-      details: draft.details,
-      timestamp: 0,
-    };
-    const collapsed = (
-      renderer as (...a: unknown[]) => { render(w: number): string[] }
-    )(message, { expanded: false, outputPad: 1 }, theme);
-    const row = buildSummaryRequestRow(draft.details as never);
-    assert.deepEqual(collapsed.render(400), [` <customMessageText>${row}`]);
-    const expanded = (
-      renderer as (...a: unknown[]) => { render(w: number): string[] }
-    )(message, { expanded: true, outputPad: 1 }, theme);
-    const lines = expanded.render(10_000);
-    assert.equal(lines[0], ` <customMessageText>${row}`);
-    assert.ok(lines.some((l) => l.includes("[navigate_tree]")));
-    for (const line of collapsed.render(30)) {
-      assert.ok(line.replace(/<[^>]+>/g, "").length <= 30, "wrapped to width");
-    }
-  });
 
-  it("registers an entry renderer for the outcome, error-styled", () => {
-    const f = setup();
-    const renderer = f.pi.entryRenderers.get(REWIND_OUTCOME_CUSTOM_TYPE) as (
-      ...a: unknown[]
-    ) => { render(w: number): string[] } | undefined;
-    assert.ok(renderer);
-    const out = renderer(
-      {
-        type: "custom",
-        customType: REWIND_OUTCOME_CUSTOM_TYPE,
-        data: {
-          status: "aborted",
-          reason: "aborted",
-          rewindTo: "a",
-          newLabel: "b",
-        },
-      },
-      { expanded: false },
-      theme,
-    );
-    assert.ok(out);
-    assert.deepEqual(out.render(200), [
-      " <error>[rewind to 'a' · collapse as 'b'] · aborted · nothing collapsed",
-    ]);
-    assert.equal(
-      renderer({ type: "custom", data: {} }, { expanded: false }, theme),
-      undefined,
-    );
-  });
 
   it("wrapPlainLine word-wraps and hard-breaks long words", () => {
     assert.deepEqual(wrapPlainLine("aaa bbb ccc", 7), ["aaa bbb", "ccc"]);
@@ -4950,49 +3561,25 @@ describe("rewind: TUI renderers (#90 O1 / O9)", () => {
       fg: (_color: string, text: string) => `\x1b[31m${text}\x1b[39m`,
     };
     const f = setup();
-    setupRewindable(f.sm, f.pi);
-    await requestRewind(f, {
-      ...REWIND_ARGS,
-      newLabel: "cjk-end",
-      summaryFocus:
-        "保持用户指令并继续工作。🚀🔥✅🧪\tTabbed\tfocus\t保持用户指令并继续工作。",
-    });
-    const renderer = f.pi.messageRenderers.get(SUMMARY_REQUEST_CUSTOM_TYPE) as (
+    const renderer = f.pi.messageRenderers.get(REWIND_CUSTOM_TYPE) as (
       ...a: unknown[]
     ) => { render(w: number): string[] };
-    const draft = summaryRequestDraftOf(f.pi);
-    const message = {
+    assert.ok(renderer);
+    const failed = {
       role: "custom",
-      customType: draft.customType,
-      content: draft.content,
+      customType: REWIND_CUSTOM_TYPE,
+      content:
+        "[navigate_tree] Fold to '开始' (collapse as '结束🚀') failed at the commit stage (commit-refused): the branch could not be written (磁盘已满 🚫\tdisk)\n\nNothing was collapsed.",
       display: true,
-      details: draft.details,
+      details: { status: "failed" },
       timestamp: 0,
     };
-    const outcome = f.pi.entryRenderers.get(REWIND_OUTCOME_CUSTOM_TYPE) as (
-      ...a: unknown[]
-    ) => { render(w: number): string[] };
     for (const width of [1, 2, 3, 7, 10, 17, 40, 400]) {
-      const rendered = [
-        ...renderer(message, { expanded: true, outputPad: 1 }, ansi).render(
-          width,
-        ),
-        ...outcome(
-          {
-            type: "custom",
-            customType: REWIND_OUTCOME_CUSTOM_TYPE,
-            data: {
-              status: "failed",
-              reason: "the branch could not be written (磁盘已满 🚫\tdisk)",
-              rewindTo: "开始",
-              newLabel: "结束🚀",
-            },
-          },
-          { expanded: true },
-          ansi,
-        ).render(width),
-      ];
-      for (const line of rendered) {
+      for (const line of renderer(
+        failed,
+        { expanded: true, outputPad: 1 },
+        ansi,
+      ).render(width)) {
         assert.ok(
           visibleWidth(line) <= width,
           `${JSON.stringify(line)} is ${visibleWidth(line)} cells > ${width}`,
@@ -5042,45 +3629,42 @@ describe("extractSummaryText", () => {
   });
 });
 // =============================================================================
-// rewind phase 2: multi-block summary turns and late-entry re-append (#80)
+// fold summary blocks and late-entry re-append (#80)
 // =============================================================================
 
-describe("rewind phase 2: multi-block text and late entries", () => {
-  async function summaryBlocksTurn(
-    f: { sm: SessionManager; pi: FakePi; ctx: FakeCtx },
-    texts: string[],
-  ): Promise<void> {
-    const message = assistantMessage(
-      texts.map((text) => ({ type: "text", text })),
-      "stop",
-      100,
-    );
-    f.sm.appendMessage(message as never);
-    await fireTurnEndAll(f.pi, f.ctx, message);
-  }
+describe("rewind: multi-block summaries and late entries", () => {
+  /** The summary reply as the provider streams it: one text block per entry. */
+  const replyBlocks = (texts: string[]) => ({
+    ...reply(""),
+    content: texts.map((text) => ({ type: "text" as const, text })),
+  });
 
-  it("joins text blocks with a newline: a preamble block before the summary completes", async () => {
+  async function summaryBlocksRewind(texts: string[]) {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
+    f.ctx.modelRegistry = fakeRegistry(() => replyBlocks(texts)).registry;
     await requestRewind(f);
-    await summaryBlocksTurn(f, ["Here is the summary:", SUMMARY_TEXT]);
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.status, "done");
     const entry = f.sm.getEntry(done.details.summaryId as string);
     assert.ok(entry && entry.type === "branch_summary");
+    return entry;
+  }
+
+  it("joins text blocks with a newline: a preamble block before the summary completes", async () => {
+    const entry = await summaryBlocksRewind([
+      "Here is the summary:",
+      SUMMARY_TEXT,
+    ]);
     assert.equal(entry.summary, `# Work handoff: end\n\n${SUMMARY_TEXT}`);
   });
 
   it("a heading split across blocks is joined with a newline, not glued", async () => {
     // `""` join would yield "## GoalShip it." — no `## Goal\b` heading.
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    await summaryBlocksTurn(f, ["## Goal", "Ship it.\n\n## Next Steps\n1. x"]);
-    const done = rewindMessages(f.pi)[0].message;
-    assert.equal(done.details.status, "done");
-    const entry = f.sm.getEntry(done.details.summaryId as string);
-    assert.ok(entry && entry.type === "branch_summary");
+    const entry = await summaryBlocksRewind([
+      "## Goal",
+      "Ship it.\n\n## Next Steps\n1. x",
+    ]);
     assert.equal(
       entry.summary,
       `# Work handoff: end\n\n## Goal\nShip it.\n\n## Next Steps\n1. x`,
@@ -5100,36 +3684,74 @@ describe("rewind phase 2: multi-block text and late entries", () => {
     } as never);
   }
 
-  /** Active-branch entries after the new branch_summary, as compact tags. */
-  function tailAfterSummary(sm: SessionManager): string[] {
+  /**
+   * The rewind call whose fold runs at its `turn_end`; `late` runs while the
+   * first summary side call is in flight, so what it appends arrives after
+   * the fold point.
+   */
+  async function rewindWithLate(
+    f: { sm: SessionManager; pi: FakePi; ctx: FakeCtx; tool: CapturedTool },
+    late: () => void,
+  ) {
+    f.ctx.modelRegistry = fakeRegistry((_call, index) => {
+      if (index === 0) late();
+      return reply(SUMMARY_TEXT);
+    }).registry;
+    return requestRewind(f);
+  }
+
+  /** Active-branch entries from the new branch_summary on, as compact tags. */
+  function tailAfterSummary(sm: SessionManager, withReceipt = false): string[] {
     const branch = sm.getBranch();
     const at = branch.findIndex((e) => e.type === "branch_summary");
     assert.ok(at >= 0, "a branch_summary must be on the active branch");
-    return branch.slice(at).map((e) => {
-      if (e.type === "message") {
-        return `${e.message.role}:${JSON.stringify(
-          (e.message as { content?: unknown }).content,
-        )}`;
-      }
-      if (e.type === "custom_message") {
-        return `custom:${e.customType}:${JSON.stringify(e.content)}`;
-      }
-      return e.type;
-    });
+    return branch
+      .slice(at)
+      .filter(
+        (e) =>
+          withReceipt ||
+          !(e.type === "custom_message" && e.customType === REWIND_CUSTOM_TYPE),
+      )
+      .map((e) => {
+        if (e.type === "message") {
+          return `${e.message.role}:${JSON.stringify(
+            (e.message as { content?: unknown }).content,
+          )}`;
+        }
+        if (e.type === "custom_message") {
+          return `custom:${e.customType}:${JSON.stringify(e.content)}`;
+        }
+        return e.type;
+      });
+  }
+
+  /** The newest active-branch entry before the fold's receipt. */
+  function lastBeforeReceipt(sm: SessionManager) {
+    const branch = sm.getBranch();
+    const receipt = branch.at(-1);
+    assert.ok(
+      receipt?.type === "custom_message" &&
+        receipt.customType === REWIND_CUSTOM_TYPE,
+      "the receipt ends the branch",
+    );
+    return branch.at(-2);
   }
 
   it("re-appends a late user steer and another extension's message, in order, onto the new branch", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    const userId = appendLateUser(f.sm, "steer: also fix the docs");
-    const customId = f.sm.appendCustomMessageEntry(
-      "subagent-result",
-      "subagent finished: 3 files changed",
-      true,
-      { job: 7 },
-    );
-    await summaryTurn(f);
+    const late: string[] = [];
+    await rewindWithLate(f, () => {
+      late.push(appendLateUser(f.sm, "steer: also fix the docs"));
+      late.push(
+        f.sm.appendCustomMessageEntry(
+          "subagent-result",
+          "subagent finished: 3 files changed",
+          true,
+          { job: 7 },
+        ),
+      );
+    });
 
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.status, "done");
@@ -5140,14 +3762,14 @@ describe("rewind phase 2: multi-block text and late entries", () => {
       'user:[{"type":"text","text":"steer: also fix the docs"}]',
       'custom:subagent-result:"subagent finished: 3 files changed"',
     ]);
-    const leaf = f.sm.getEntry(f.sm.getLeafId() as string);
-    assert.ok(leaf && leaf.type === "custom_message");
-    assert.equal(leaf.display, true);
-    assert.deepEqual(leaf.details, { job: 7 });
+    const last = lastBeforeReceipt(f.sm);
+    assert.ok(last && last.type === "custom_message");
+    assert.equal(last.display, true);
+    assert.deepEqual(last.details, { job: 7 });
     // Re-appended copies, not the originals (those stay on the abandoned
     // segment).
     const branchIds = new Set(f.sm.getBranch().map((e) => e.id));
-    for (const id of [userId, customId]) {
+    for (const id of late) {
       assert.ok(f.sm.getEntry(id), "the original stays on disk");
       assert.ok(!branchIds.has(id), "but off the active branch");
     }
@@ -5159,11 +3781,9 @@ describe("rewind phase 2: multi-block text and late entries", () => {
   it("the continuation follows the re-appended entries once delivered", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    appendLateUser(f.sm, "steer");
-    await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
+    await rewindWithLate(f, () => appendLateUser(f.sm, "steer"));
     const done = rewindMessages(f.pi)[0].message;
-    assert.deepEqual(tailAfterSummary(f.sm), [
+    assert.deepEqual(tailAfterSummary(f.sm, true), [
       "branch_summary",
       "label",
       'user:[{"type":"text","text":"steer"}]',
@@ -5174,9 +3794,7 @@ describe("rewind phase 2: multi-block text and late entries", () => {
   it("the late note is byte-exact for one message", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    appendLateUser(f.sm, "steer");
-    await summaryTurn(f);
+    await rewindWithLate(f, () => appendLateUser(f.sm, "steer"));
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.reappendedLateMessages, 1);
     assert.ok(done.content.endsWith(`\n\n${NOTE_ONE}`));
@@ -5188,34 +3806,18 @@ describe("rewind phase 2: multi-block text and late entries", () => {
     );
   });
 
-  it("does not re-append this extension's own instruction message (#90)", async () => {
-    const f = setup();
-    setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    // A failed attempt first: the retry re-sends, nothing appended.
-    await summaryTurn(f, "Okay, summarizing now.", "stop", { commit: true });
-    assert.equal(rewindMessages(f.pi).length, 0);
-    await summaryTurn(f);
-    const done = rewindMessages(f.pi)[0].message;
-    assert.equal(done.details.status, "done");
-    assert.equal(done.details.summaryAttempts, 2);
-    assert.equal(done.details.reappendedLateMessages, 0);
-    assert.deepEqual(tailAfterSummary(f.sm), ["branch_summary", "label"]);
-    assert.ok(!done.content.includes("arrived while the rewind was pending"));
-  });
-
   it("does not re-append a rewind-hint message that landed after the rewind call", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    f.sm.appendCustomMessageEntry(
-      REWIND_HINT_CUSTOM_TYPE,
-      expectedHint(91),
-      true,
-      undefined,
-    );
-    appendLateUser(f.sm, "steer");
-    await summaryTurn(f);
+    await rewindWithLate(f, () => {
+      f.sm.appendCustomMessageEntry(
+        REWIND_HINT_CUSTOM_TYPE,
+        expectedHint(91),
+        true,
+        undefined,
+      );
+      appendLateUser(f.sm, "steer");
+    });
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.status, "done");
     assert.equal(done.details.reappendedLateMessages, 1);
@@ -5229,9 +3831,9 @@ describe("rewind phase 2: multi-block text and late entries", () => {
   it("a re-appended hidden custom message stays hidden (display: false)", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    f.sm.appendCustomMessageEntry("timer", "tick", false, { n: 1 });
-    await summaryTurn(f);
+    await rewindWithLate(f, () => {
+      f.sm.appendCustomMessageEntry("timer", "tick", false, { n: 1 });
+    });
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.reappendedLateMessages, 1);
     assert.deepEqual(tailAfterSummary(f.sm), [
@@ -5239,10 +3841,10 @@ describe("rewind phase 2: multi-block text and late entries", () => {
       "label",
       'custom:timer:"tick"',
     ]);
-    const leaf = f.sm.getEntry(f.sm.getLeafId() as string);
-    assert.ok(leaf && leaf.type === "custom_message");
-    assert.equal(leaf.display, false);
-    assert.deepEqual(leaf.details, { n: 1 });
+    const last = lastBeforeReceipt(f.sm);
+    assert.ok(last && last.type === "custom_message");
+    assert.equal(last.display, false);
+    assert.deepEqual(last.details, { n: 1 });
   });
 
   it("entries before the rewind call are not re-appended", async () => {
@@ -5252,7 +3854,6 @@ describe("rewind phase 2: multi-block text and late entries", () => {
     appendLateUser(f.sm, "early user");
     appendTurn(f.sm, "u9", "a9", 34_000);
     await requestRewind(f);
-    await summaryTurn(f);
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.reappendedLateMessages, 0);
     assert.deepEqual(tailAfterSummary(f.sm), ["branch_summary", "label"]);
@@ -5261,9 +3862,6 @@ describe("rewind phase 2: multi-block text and late entries", () => {
   it("a throwing re-append does not fail the rewind and is not counted", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
-    appendLateUser(f.sm, "lost steer");
-    f.sm.appendCustomMessageEntry("subagent-result", "kept", true, {});
     // Arm the appendMessage throw only once the branch has been written.
     const sm = f.sm as unknown as {
       branchWithSummary: (...a: unknown[]) => string;
@@ -5277,7 +3875,10 @@ describe("rewind phase 2: multi-block text and late entries", () => {
       };
       return id;
     };
-    await summaryTurn(f);
+    await rewindWithLate(f, () => {
+      appendLateUser(f.sm, "lost steer");
+      f.sm.appendCustomMessageEntry("subagent-result", "kept", true, {});
+    });
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.status, "done");
     assert.equal(done.details.reappendedLateMessages, 1);
@@ -5292,7 +3893,6 @@ describe("rewind phase 2: multi-block text and late entries", () => {
   it("an estimator throw after the branch still delivers the continuation with contextAfter 0", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
     const sm = f.sm as unknown as {
       branchWithSummary: (...a: unknown[]) => string;
       buildSessionContext: () => unknown;
@@ -5305,7 +3905,7 @@ describe("rewind phase 2: multi-block text and late entries", () => {
       };
       return id;
     };
-    await summaryTurn(f);
+    await requestRewind(f);
     const done = rewindMessages(f.pi)[0].message;
     assert.equal(done.details.status, "done");
     assert.equal(done.details.contextAfter, 0);
@@ -5317,33 +3917,29 @@ describe("rewind phase 2: multi-block text and late entries", () => {
     );
   });
 
-  it("a throwing getBranch before the write ends it with the completion reason", async () => {
+  it("a throwing getBranch during the fold ends the turn without throwing and leaves the history as found", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
-    await requestRewind(f);
     const sm = f.sm as unknown as { getBranch: () => unknown };
     const origGetBranch = sm.getBranch;
-    sm.getBranch = () => {
-      throw new Error("branch boom");
-    };
-    let boundary: BoundaryResult | undefined;
+    const entryCount = f.sm.getEntries().length;
+    f.ctx.modelRegistry = fakeRegistry(() => {
+      sm.getBranch = () => {
+        throw new Error("branch boom");
+      };
+      return reply(SUMMARY_TEXT);
+    }).registry;
     try {
-      await assert.doesNotReject(async () => {
-        boundary = (await summaryTurn(f)).boundary;
-      });
+      await assert.doesNotReject(() => requestRewind(f));
     } finally {
       sm.getBranch = origGetBranch;
     }
-    assert.ok(boundary);
-    assert.equal(boundary.continue, true);
-    const outcome = boundary.entries.find(
-      (d) => d.customType === REWIND_OUTCOME_CUSTOM_TYPE,
-    );
-    assert.equal(
-      outcome?.data?.text,
-      "Summarization failed: the rewind could not be completed (branch boom). Nothing was collapsed. Try again.",
-    );
     assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
+    assert.equal(
+      f.sm.getEntries().length,
+      entryCount + 2,
+      "only the rewind call and its result were added",
+    );
     assert.equal(fireToolCall(f.pi, f.ctx), undefined, "gate reopened");
   });
 });
@@ -5361,7 +3957,6 @@ describe("commitFold: engine shape", () => {
   ) {
     const leaf = f.sm.getLeafId() as string;
     const lead: number[] = [];
-    let branched = 0;
     const input: FoldCommitInput = {
       targetId: anchorId,
       rewindTo: "start",
@@ -5370,9 +3965,7 @@ describe("commitFold: engine shape", () => {
       handoffMode: "full",
       contextWindow: 200_000,
       foldPointId: leaf,
-      foldPointFolded: true,
       branchLabelEntryId: leaf,
-      excludeFromFileLists: [],
       continuationText: (afterTokens) => {
         lead.push(afterTokens);
         return `folded to ${afterTokens}`;
@@ -5381,12 +3974,9 @@ describe("commitFold: engine shape", () => {
         f.sm.appendLabelChange(entryId, label);
         return true;
       },
-      onBranched: () => {
-        branched++;
-      },
       ...overrides,
     };
-    return { leaf, lead, input, branched: () => branched };
+    return { leaf, lead, input };
   }
 
   it("branches from the target, labels both ends and re-appends input after the fold point", async () => {
@@ -5415,7 +4005,6 @@ describe("commitFold: engine shape", () => {
     assert.notEqual(tail[0].id, lateId);
     assert.ok(tail[0].type === "message" && tail[0].message.role === "user");
     assert.equal(tail[0].id, f.sm.getLeafId());
-    assert.equal(run.branched(), 1);
     assert.ok(outcome.refreshed);
     assert.ok(outcome.foldEstimateAfter < outcome.foldEstimateBefore);
     assert.equal(outcome.afterTokens, estimateAdmissionTokens(f.sm));
@@ -5456,7 +4045,6 @@ describe("commitFold: engine shape", () => {
     assert.equal(f.sm.getLeafId(), run.leaf);
     assert.equal(f.sm.getEntries().length, entryCount);
     assert.equal(f.sm.getLabel(run.leaf), undefined);
-    assert.equal(run.branched(), 0);
   });
 
   it("refuses a label that became taken and writes nothing", async () => {
@@ -5473,7 +4061,6 @@ describe("commitFold: engine shape", () => {
     });
     assert.equal(f.sm.getLeafId(), leafBefore);
     assert.equal(f.sm.getEntries().length, entryCount);
-    assert.equal(run.branched(), 0);
   });
 });
 
@@ -5488,8 +4075,7 @@ describe("rewind: one-time continue nudge after a fold", () => {
     "## Goal\nShip it.\n\n## Progress\n### Done\n- [x] Parser.\n\n### In Progress\n- [ ] (none)\n\n## Next Steps\n(none)";
 
   /** A committed fold: the continuation is on the branch, no turn since. */
-  const foldedFixture = (summary = SUMMARY_TEXT) =>
-    rewindFixture({ summary, commit: true });
+  const foldedFixture = (summary = SUMMARY_TEXT) => rewindFixture({ summary });
 
   /** One post-fold assistant turn, persisted and run through `turn_end`. */
   async function turn(
@@ -5566,17 +4152,14 @@ describe("rewind: one-time continue nudge after a fold", () => {
     const anchored = appendTurn(f.sm, "u9", "a9", 6_000);
     f.pi.pi.setLabel(anchored.assistantId, "anchor:a2");
     appendTurn(f.sm, "u10", "a10", 30_000, true);
+    f.ctx.modelRegistry = fakeRegistry(() =>
+      reply("## Goal\nSecond.\n\n## Next Steps\n1. Go on."),
+    ).registry;
     await requestRewind(
       f,
       { ...REWIND_ARGS, rewindTo: "a2", newLabel: "end2" },
       "tc-rewind-2",
       50_000,
-    );
-    await summaryTurn(
-      f,
-      "## Goal\nSecond.\n\n## Next Steps\n1. Go on.",
-      "stop",
-      { commit: true },
     );
     const folds = rewindMessages(f.pi).filter(
       (m) => m.message.details.status === "done",
@@ -5608,8 +4191,10 @@ describe("rewind: one-time continue nudge after a fold", () => {
   it("does not nudge after a failed fold", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
+    f.ctx.modelRegistry = fakeRegistry(() =>
+      reply("", "error", "overloaded"),
+    ).registry;
     await requestRewind(f);
-    await fireSessionCompact(f.pi, f.ctx, f.sm.getLeafId() as string);
     assert.equal(
       rewindMessages(f.pi).filter((m) => m.message.details.status === "done")
         .length,
@@ -5627,9 +4212,11 @@ describe("rewind: one-time continue nudge after a fold", () => {
   it("does not nudge a fold that re-appended late user input: the turn answers it", async () => {
     const f = setup();
     setupRewindable(f.sm, f.pi, { capture: true });
+    f.ctx.modelRegistry = fakeRegistry((_call, index) => {
+      if (index === 0) userSteer(f.sm, "steer while pending");
+      return reply(SUMMARY_TEXT);
+    }).registry;
     await requestRewind(f);
-    userSteer(f.sm, "steer while pending");
-    await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
     assert.equal(
       rewindMessages(f.pi).at(-1)?.message.details.reappendedLateMessages,
       1,
@@ -5749,28 +4336,10 @@ describe("rewind message copy (byte-exact)", () => {
     );
   });
 
-  it("SUMMARY_PENDING_BLOCK_REASON (TUI-only, #90 O9)", () => {
-    assert.equal(
-      SUMMARY_PENDING_BLOCK_REASON,
-      "navigate_tree: blocked: the model tried to call a tool instead of summarizing.",
-    );
-  });
-
   it("buildRewindAcceptedText (#90 S2)", () => {
     assert.equal(
       buildRewindAcceptedText("context-gathered", "parser-done"),
-      "[navigate_tree] Rewind to 'context-gathered' accepted (collapse as 'parser-done'). Follow the navigate_tree message below to complete it.",
-    );
-  });
-
-  it("ending texts (#90 O5 / O6)", () => {
-    assert.equal(
-      buildRewindFailedText("the context was compacted"),
-      "Summarization failed: the context was compacted. Nothing was collapsed. Try again.",
-    );
-    assert.equal(
-      REWIND_ABORTED_TEXT,
-      "Summarization aborted. Nothing was collapsed.",
+      "[navigate_tree] Rewind to 'context-gathered' accepted (collapse as 'parser-done'). The fold runs after this turn's tool results; the continuation follows in the same run.",
     );
   });
 });
@@ -5780,9 +4349,9 @@ describe("rewind message copy (byte-exact)", () => {
 // =============================================================================
 
 describe("dispatch: rewind newLabel uniqueness", () => {
-  it("newLabel collision: rewind refuses before the summary request and mutates nothing", async () => {
+  it("newLabel collision: rewind refuses before queueing a fold and mutates nothing", async () => {
     // Issue #55 (C8): a `newLabel` already on the active branch is refused
-    // BEFORE the summary request or any tree mutation. Setup ordering mirrors
+    // BEFORE a fold is queued or any tree mutation. Setup ordering mirrors
     // the retired move-on-collision test: the prior `anchor:b` sits on the
     // ancestral side of `rewindTo` (= tA), so the old behavior would have
     // moved it to the new summary.
@@ -5821,11 +4390,11 @@ describe("dispatch: rewind newLabel uniqueness", () => {
     );
     assert.match(result.content[0].text, /fresh `newLabel`/);
     assert.match(result.content[0].text, /stays addressable via `rewindTo`/);
-    // Refusal before the summary request: nothing is pending.
+    // Refusal before the fold is queued: nothing is pending.
     assert.equal(
       fireToolCall(pi, ctx),
       undefined,
-      "a duplicate-newLabel refusal must not leave a rewind pending",
+      "a duplicate-newLabel refusal must not leave a rewind queued",
     );
     assert.equal(pi.sendMessageCalls.length, 0);
     // No mutation: entry count, leaf, and both labels are untouched.
