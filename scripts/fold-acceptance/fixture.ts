@@ -10,6 +10,22 @@ export const FACTS = [
   "Remaining: compare the archived audit with the next supplied change.",
 ] as const;
 
+/** Opt-in policy in the isolated agent directory, never the user's configuration. */
+export const AUTOMATIC_CONFIG = {
+  auto_navigate: {
+    enabled: true,
+    mode: "anchor-and-rewind",
+    milestone: "recommended",
+    check_every_turns: 1,
+    min_tokens_since_anchor: 1000,
+    rewind_at_tokens: 8000,
+  },
+};
+
+/** A finalization request, without instructions to navigate or answers to the policy. */
+export const AUTOMATIC_REQUEST =
+  "The synthetic configuration and retry-boundary review phase is complete. Finalize that audit now: state the preserved response-code contract, the no-deployment constraint, and the remaining comparison against the next supplied change. Include ACCEPTANCE-CONTINUED in your final answer. Do not modify files.";
+
 /** Builds varied synthetic configuration evidence; no workspace or user files are read. */
 export function buildCorpus(blocks: number): string[] {
   if (!Number.isInteger(blocks) || blocks < 1 || blocks > 256)
@@ -55,6 +71,7 @@ export function corpusManifest(corpus: readonly string[]) {
 export function seedCorpus(
   sm: SessionManager,
   corpus: readonly string[],
+  completedReview = false,
 ): void {
   sm.appendMessage({ role: "user", content: FACTS.join("\n"), timestamp: 1 });
   const anchor = sm.appendMessage({
@@ -82,7 +99,10 @@ export function seedCorpus(
       content: [
         {
           type: "text",
-          text: `Synthetic fixture conclusion for block ${index + 1}: inspected, retain the audit constraints and remaining comparison work.`,
+          text:
+            completedReview && index === corpus.length - 1
+              ? `Synthetic completed review phase: all ${corpus.length * 24} service configurations have been reviewed. Input validation precedes persistence; invalid input remains 422, unavailable remains 503, duplicate remains 409. Retry exhaustion must not mutate the audit namespace. No deployment or deletion was performed or authorized. Configuration and retry-boundary review is complete with no pending user decision. Remaining work is final reporting and comparison with the next supplied change, which has not been supplied. ${FACTS.join(" ")}`
+              : `Synthetic fixture conclusion for block ${index + 1}: inspected, retain the audit constraints and remaining comparison work.`,
         },
       ],
       api: "openai-completions",

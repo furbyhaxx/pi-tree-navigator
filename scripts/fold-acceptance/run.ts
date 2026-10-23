@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -27,6 +27,7 @@ import navigateTree, {
   __testHooks,
   estimateAdmissionTokens,
 } from "../../extensions/navigate-tree/index.ts";
+import { RECOMMENDED_MILESTONE_POLICY } from "../../extensions/navigate-tree/milestone-policy.ts";
 import { safeMessage } from "../classifier-eval/adapters.ts";
 import {
   createBilling,
@@ -34,11 +35,18 @@ import {
   ROUTE_PRICES_URL,
 } from "../classifier-eval/billing.ts";
 import { BudgetLedger } from "../classifier-eval/budget.ts";
-import { buildCorpus, corpusManifest, FACTS, seedCorpus } from "./fixture.ts";
-import { createBudgetedTransport } from "./transport.ts";
+import {
+  AUTOMATIC_CONFIG,
+  AUTOMATIC_REQUEST,
+  buildCorpus,
+  corpusManifest,
+  FACTS,
+  seedCorpus,
+} from "./fixture.ts";
+import { createBudgetedTransport, type PricedModel } from "./transport.ts";
 
-/** Acceptance scenarios: independent idle folding and recovery before dispatch. */
-export type Scenario = "manual" | "preflight" | "agent";
+/** Acceptance scenarios for manual, recovery, tool-driven and automatic engine folds. */
+export type Scenario = "manual" | "preflight" | "agent" | "automatic";
 /** Options contain no credentials; they are safe to persist with the result. */
 export interface RunOptions {
   scenario: Scenario;
@@ -88,11 +96,26 @@ export function parseOptions(args: string[]): RunOptions {
   });
   if (!values.out)
     throw new Error("--out is required and must be a new directory");
-  if (!["manual", "preflight", "agent"].includes(values.scenario))
-    throw new Error("--scenario must be manual, preflight or agent");
+  if (!["manual", "preflight", "agent", "automatic"].includes(values.scenario))
+    throw new Error("--scenario must be manual, preflight, agent or automatic");
+  if (
+    values.scenario === "automatic" &&
+    !values["dry-run"] &&
+    ((!args.includes("--ledger") &&
+      !args.some((arg) => arg.startsWith("--ledger="))) ||
+      !isAbsolute(values.ledger))
+  )
+    throw new Error(
+      "automatic live runs require an explicit absolute --ledger path to the shared ledger",
+    );
   const window = Number(values.window),
     blocks = Number(
-      values.blocks ?? (values.scenario === "agent" ? "15" : "24"),
+      values.blocks ??
+        (values.scenario === "automatic"
+          ? "8"
+          : values.scenario === "agent"
+            ? "15"
+            : "24"),
     );
   if (!Number.isInteger(window) || window < 32000)
     throw new Error("--window must be an integer >=32000");
@@ -109,6 +132,50 @@ export function parseOptions(args: string[]): RunOptions {
   };
 }
 
+/** Intercept both runtime APIs; all paid requests share one budgeted transport. */
+export function interceptRuntime(
+  runtime: ModelRuntime,
+  fetch: typeof globalThis.fetch,
+  record: (call: {
+    api: "chat" | "decisions";
+    side: boolean;
+    model: string;
+    messages: number;
+    startedAt: string;
+  }) => void,
+): void {
+  const originalStream = runtime.streamSimple.bind(runtime);
+  const originalClassify = runtime.classify.bind(runtime);
+  runtime.streamSimple = ((selected, context, options) => {
+    record({
+      api: "chat",
+      side: options?.toolChoice === "none",
+      model: `${selected.provider}/${selected.id}`,
+      messages: context.messages.length,
+      startedAt: new Date().toISOString(),
+    });
+    return originalStream(selected, context, {
+      ...options,
+      fetch,
+      maxRetries: 0,
+    });
+  }) as typeof runtime.streamSimple;
+  runtime.classify = ((selected, context, options) => {
+    record({
+      api: "decisions",
+      side: true,
+      model: `${selected.provider}/${selected.id}`,
+      messages: 0,
+      startedAt: new Date().toISOString(),
+    });
+    return originalClassify(selected, context, {
+      ...options,
+      fetch,
+      maxRetries: 0,
+    });
+  }) as typeof runtime.classify;
+}
+
 /** Run only synthetic history through the production extension and budgeted real transport. */
 export async function runAcceptance(
   options: RunOptions,
@@ -116,6 +183,8 @@ export async function runAcceptance(
     ModelRuntime.create(opts),
 ): Promise<void> {
   const corpus = buildCorpus(options.blocks);
+  const request =
+    options.scenario === "automatic" ? AUTOMATIC_REQUEST : REQUEST;
   mkdirSync(dirname(options.out), { recursive: true });
   mkdirSync(options.out);
   const save = (name: string, value: unknown) =>
@@ -124,7 +193,9 @@ export async function runAcceptance(
       `${JSON.stringify(value, null, 2)}\n`,
       { flag: "wx" },
     );
-  save("fixture.json", { facts: FACTS, request: REQUEST, corpus });
+  save("fixture.json", { facts: FACTS, request, corpus });
+  if (options.scenario === "automatic")
+    save("auto-config.json", AUTOMATIC_CONFIG);
   save("manifest.json", corpusManifest(corpus));
   const { authDir: _authDir, ...publicOptions } = options;
   save("invocation.json", {
@@ -170,6 +241,11 @@ export async function runAcceptance(
     cwd = join(scratch, "work");
   mkdirSync(agentDir);
   mkdirSync(cwd);
+  if (options.scenario === "automatic")
+    writeFileSync(
+      join(agentDir, "tree-navigator.json"),
+      JSON.stringify(AUTOMATIC_CONFIG),
+    );
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
   const previousOffline = process.env.PI_OFFLINE;
   process.env.PI_CODING_AGENT_DIR = agentDir;
@@ -200,6 +276,27 @@ export async function runAcceptance(
       contextWindow: options.window,
       maxTokens: Math.min(catalogModel.maxTokens, 8192),
     };
+    const pricedModels: PricedModel[] = [
+      { id: model.id, kind: "chat", cost: model.cost },
+    ];
+    if (options.scenario === "automatic") {
+      for (const [kind, id] of [
+        ["decisions", RECOMMENDED_MILESTONE_POLICY.classifier],
+        ["chat", RECOMMENDED_MILESTONE_POLICY.confirmer],
+      ] as const) {
+        const selected =
+          kind === "decisions"
+            ? registry.findOfType(
+                "classifier",
+                RECOMMENDED_MILESTONE_POLICY.provider,
+                id,
+              )
+            : registry.find(RECOMMENDED_MILESTONE_POLICY.provider, id);
+        assert.ok(selected, `Policy catalog model unavailable: ${id}`);
+        if (!pricedModels.some((entry) => entry.id === id))
+          pricedModels.push({ id, kind, cost: selected.cost });
+      }
+    }
     ledger = BudgetLedger.open(options.ledger, 25);
     const beforeBudget = ledger.snapshot();
     const billing = createBilling({
@@ -210,7 +307,7 @@ export async function runAcceptance(
       ledger,
       models: {
         routes: loadRouteTable(ROUTE_PRICES_URL),
-        models: [{ id: model.id, kind: "chat", cost: model.cost }],
+        models: pricedModels,
       },
       billing,
       record: (record) =>
@@ -219,27 +316,14 @@ export async function runAcceptance(
           `${JSON.stringify(record)}\n`,
         ),
     });
-    const budgetedFetch = transport.fetch;
-    const originalStream = runtime.streamSimple.bind(runtime);
-    const calls: {
-      side: boolean;
-      model: string;
-      messages: number;
-      startedAt: string;
-    }[] = [];
-    runtime.streamSimple = ((selected, context, streamOptions) => {
-      calls.push({
-        side: streamOptions?.toolChoice === "none",
-        model: `${selected.provider}/${selected.id}`,
-        messages: context.messages.length,
-        startedAt: new Date().toISOString(),
-      });
-      return originalStream(selected, context, {
-        ...streamOptions,
-        fetch: budgetedFetch,
-        maxRetries: 0,
-      });
-    }) as typeof runtime.streamSimple;
+    const calls: Parameters<Parameters<typeof interceptRuntime>[2]>[0][] = [];
+    interceptRuntime(runtime, transport.fetch, (call) => {
+      calls.push(call);
+      appendFileSync(
+        join(options.out, "calls.jsonl"),
+        `${JSON.stringify(call)}\n`,
+      );
+    });
     const settings = SettingsManager.inMemory({
       compaction: { enabled: false },
       retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0 } },
@@ -291,14 +375,14 @@ export async function runAcceptance(
     });
     // Seeded sessions represent an existing run whose prompt bootstrap already ran.
     __testHooks.captureSession(session);
-    seedCorpus(sm, corpus);
+    seedCorpus(sm, corpus, options.scenario === "automatic");
     const initialTokens = estimateAdmissionTokens(sm);
     if (options.scenario === "preflight")
       assert.ok(
         initialTokens + 5120 > model.contextWindow,
         "fixture must exceed admission before any main request",
       );
-    if (options.scenario === "agent")
+    if (options.scenario === "agent" || options.scenario === "automatic")
       assert.ok(
         initialTokens + 16384 < model.contextWindow,
         "agent scenario must start with room to call the tool",
@@ -328,14 +412,89 @@ export async function runAcceptance(
         `Call navigate_tree with action rewind, rewindTo audit-start, newLabel audit-folded, summaryFocus 'Preserve audit constraints and remaining comparison work, then answer the latest request'. After it completes: ${REQUEST}`,
       );
     } else {
-      await session.prompt(REQUEST);
+      await session.prompt(request);
     }
     await session.waitForIdle();
+    if (options.scenario === "automatic") {
+      const entries = sm.getEntries();
+      const receipts = entries.filter(
+        (entry) =>
+          entry.type === "custom_message" &&
+          entry.customType === "navigate-tree-rewind",
+      );
+      save("automatic-evidence.json", { calls, receipts });
+      assert.ok(
+        calls.some(
+          (call) =>
+            call.api === "decisions" &&
+            call.model ===
+              `openrouter/${RECOMMENDED_MILESTONE_POLICY.classifier}`,
+        ),
+        "automatic acceptance requires an actual Decisions classifier call; host auto-engine wiring may be missing",
+      );
+      assert.ok(
+        calls.some(
+          (call) =>
+            call.api === "chat" &&
+            call.model ===
+              `openrouter/${RECOMMENDED_MILESTONE_POLICY.confirmer}` &&
+            call.side,
+        ),
+        "automatic acceptance requires chat confirmation",
+      );
+      assert.ok(
+        receipts.some(
+          (entry) =>
+            entry.type === "custom_message" &&
+            (entry.details as { origin?: string; status?: string } | undefined)
+              ?.origin === "auto" &&
+            (entry.details as { status?: string }).status === "done",
+        ),
+        "automatic classifier must produce an origin auto engine receipt; abstention is an acceptance failure",
+      );
+      assert.ok(
+        !entries.some(
+          (entry) =>
+            entry.type === "custom_message" &&
+            (entry.customType === "navigate-tree-auto-rewind" ||
+              /call[^\n]*rewind/i.test(textOf(entry))),
+        ),
+        "automatic folding must not inject a call-rewind steer",
+      );
+      assert.ok(
+        !entries.some(
+          (entry) =>
+            entry.type === "message" &&
+            entry.message.role === "assistant" &&
+            Array.isArray(entry.message.content) &&
+            entry.message.content.some(
+              (part) =>
+                part.type === "toolCall" &&
+                part.name === "navigate_tree" &&
+                (part.arguments as { action?: string }).action === "rewind",
+            ),
+        ),
+        "automatic folding must use the engine directly, without a main-model rewind tool call",
+      );
+    }
     const branch = sm.getBranch();
     const summaryAt = branch.findIndex(
       (entry) => entry.type === "branch_summary",
     );
     assert.ok(summaryAt >= 0, "production engine must write a branch summary");
+    if (options.scenario === "automatic") {
+      assert.ok(
+        branch
+          .slice(summaryAt + 1)
+          .some(
+            (entry) =>
+              entry.type === "message" &&
+              entry.message.role === "assistant" &&
+              textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
+          ),
+        "automatic fold must continue the main request in the same prompt run after the handoff",
+      );
+    }
     const final = branch.findLast(
       (entry) => entry.type === "message" && entry.message.role === "assistant",
     );
