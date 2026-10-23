@@ -88,7 +88,6 @@ import navigateTree, {
   commitFold,
   estimateAdmissionTokens,
   type FoldCommitInput,
-  MAX_FORCED_REWIND_ATTEMPTS,
   MAX_HINT_WALK_DEPTH,
   MAX_SESSION_REFS,
   MIN_REWIND_SAVINGS_TOKENS,
@@ -452,8 +451,8 @@ function assistantMessage(
 
 /**
  * Append an assistant message declaring tool calls (each with `arguments`),
- * the shape the model emits for the rewind call itself or for a failed
- * summary turn. Returns the appended message (for `turn_end`) and its id.
+ * the shape the model emits for the rewind call itself or for a blocked
+ * forced attempt. Returns the appended message (for `turn_end`) and its id.
  */
 function appendToolCallAssistant(
   sm: SessionManager,
@@ -496,7 +495,7 @@ function appendToolResult(
   } as never);
 }
 
-/** Canonical well-formed summary turn text (r5d headings). */
+/** Canonical well-formed summary text (r5d headings). */
 const SUMMARY_TEXT =
   "## Goal\nTest the rewind happy path.\n\n## Progress\n### Done\n- [x] Appended turns.\n\n## Next Steps\n1. Verify the branch_summary.";
 
@@ -871,30 +870,6 @@ async function fireAgentSettled(
   for (const handler of pi.onCalls.get("agent_settled") ?? []) {
     await handler({ type: "agent_settled", aborted } as never, ctx as never);
   }
-}
-
-/** Append a compaction (as pi does) and fire every `session_compact` handler. */
-async function fireSessionCompact(
-  pi: FakePi,
-  ctx: FakeCtx,
-  firstKeptEntryId: string,
-  reason: "manual" | "threshold" | "overflow" = "threshold",
-): Promise<string> {
-  const sm = ctx.sessionManager;
-  const id = sm.appendCompaction("compacted", firstKeptEntryId, 1000);
-  for (const handler of pi.onCalls.get("session_compact") ?? []) {
-    await handler(
-      {
-        type: "session_compact",
-        compactionEntry: sm.getEntry(id),
-        fromExtension: false,
-        reason,
-        willRetry: reason === "overflow",
-      } as never,
-      ctx as never,
-    );
-  }
-  return id;
 }
 
 /** Fire the `context` handler and return the messages it would send. */
@@ -1372,8 +1347,8 @@ describe("context event handler", () => {
     assert.equal(last.customType, REWIND_CUSTOM_TYPE);
     assert.equal(last.content, f.done.message.content);
 
-    // Anchor turn retained; collapsed turns, the rewind call, its result
-    // and the summary turn are gone.
+    // Anchor turn retained; collapsed turns, the rewind call and its result
+    // are gone.
     assert.ok(json.includes('"a1"'), "the anchor turn is retained");
     for (const gone of ['"a2"', '"a3"', '"a4"', "tc-rewind"]) {
       assert.ok(
@@ -1385,7 +1360,7 @@ describe("context event handler", () => {
       !messages.some(
         (m) => m.role === "assistant" && JSON.stringify(m).includes("## Goal"),
       ),
-      "the summary turn itself is not replayed as an assistant message",
+      "the summary text is not replayed as an assistant message",
     );
     assert.ok(
       !messages.some((m) => m.role === "toolResult"),
@@ -1767,7 +1742,7 @@ Operations (set \`action\`):
 describe("factory registration", () => {
   it("registers with the single pi argument and `list` succeeds", async () => {
     // Production callers (pi's extension loader) pass a single arg; the
-    // in-band rewind (#80) has no injectable summarizer.
+    // fold's summarizer is not injectable: it goes through `ctx.modelRegistry`.
     const sm = SessionManager.inMemory("/tmp");
     const fakePi = makeFakePi(sm);
     navigateTree(fakePi.pi);
@@ -1784,7 +1759,7 @@ describe("factory registration", () => {
     assert.equal(result.isError, undefined);
   });
 
-  it("registers the rewind summary turn_end handler BEFORE the hint/start-anchor handler", () => {
+  it("registers the rewind fold turn_end handler BEFORE the hint/start-anchor handler", () => {
     // Order matters: a completed rewind must already be on the branch when
     // the hint handler reads context usage. The rewind handler is async;
     // the hint handler is synchronous by design.
@@ -1984,7 +1959,7 @@ describe("dispatch: list action", () => {
     }
 
     // Rewind site: same conditions — the bootstrap-missing footer on the
-    // continuation message (#80: written once the summary turn lands) must
+    // continuation message (written once the fold lands) must
     // contain the rewind-specific constant verbatim, NOT the list one.
     {
       const { done } = await rewindFixture({ capture: false });
@@ -2500,15 +2475,6 @@ describe("dispatch: refusal results surface as failed tool calls", () => {
     assert.match(result.content[0].text, /summaryFocus/);
   });
 });
-
-// =============================================================================
-// dispatch: rewind phase 1 — the summary request (#80)
-//
-// The rewind tool call no longer summarizes or mutates anything: its result
-// IS the r5d summary instruction, and the live model writes the summary as
-// its next turn. These pins cover the instruction text, the `{first}`
-// numbering, and the no-mutation contract.
-// =============================================================================
 
 // =============================================================================
 // dispatch: rewind queues an independent fold
@@ -3541,8 +3507,6 @@ describe("rewind: completion", () => {
 // =============================================================================
 
 describe("rewind: TUI renderers", () => {
-  const theme = { fg: (color: string, text: string) => `<${color}>${text}` };
-
   it("wrapPlainLine word-wraps and hard-breaks long words", () => {
     assert.deepEqual(wrapPlainLine("aaa bbb ccc", 7), ["aaa bbb", "ccc"]);
     assert.deepEqual(wrapPlainLine("abcdefghij", 4), ["abcd", "efgh", "ij"]);
@@ -3956,8 +3920,8 @@ describe("rewind: multi-block summaries and late entries", () => {
 });
 
 // =============================================================================
-// commitFold, engine shape: fold point is the leaf, no summary turn, no hidden
-// attempts (the in-band path is pinned byte-exactly by the suites above)
+// commitFold, engine shape: the fold point is the leaf; input after it follows
+// the summary
 // =============================================================================
 
 describe("commitFold: engine shape", () => {
@@ -10122,9 +10086,7 @@ describe("rewind: continuity ledger", () => {
    * item (T2, scoped to `start`) and another rule (R3) that exist only on the
    * branch about to be abandoned.
    */
-  async function ledgerFixture(
-    opts: { summary?: string; request?: boolean } = {},
-  ) {
+  function ledgerSetup() {
     const f = setup();
     const u1 = f.sm.appendMessage(userMessage("u1 never edit the lockfile"));
     appendOpsEntry(f.pi.pi, [
@@ -10169,13 +10131,38 @@ describe("rewind: continuity ledger", () => {
     ]);
     const leafBeforeFold = f.sm.getLeafId() as string;
     const before = readBranchLedger(f.sm.getBranch());
-    await requestRewind(f);
-    const summary =
-      opts.summary === undefined
-        ? undefined
-        : await summaryTurn(f, opts.summary);
-    return { ...f, u1, a1, t2, t3, leafBeforeFold, before, summary };
+    return { ...f, u1, a1, t2, t3, leafBeforeFold, before };
   }
+
+  /** The rewind call, folded with `summary` as the side calls' answer; `calls` are the side calls. */
+  async function foldWith(
+    f: ReturnType<typeof ledgerSetup>,
+    summary: string,
+    args: Record<string, unknown> = REWIND_ARGS,
+    toolCallId = "tc-rewind",
+    totalTokens?: number,
+  ) {
+    const registry = fakeRegistry(() => reply(summary));
+    f.ctx.modelRegistry = registry.registry;
+    const rewound = await requestRewind(f, args, toolCallId, totalTokens);
+    return { ...rewound, calls: registry.calls };
+  }
+
+  async function ledgerFixture(opts: { summary?: string } = {}) {
+    const f = ledgerSetup();
+    const rewound = await foldWith(f, opts.summary ?? SUMMARY_TEXT);
+    return { ...f, rewound };
+  }
+
+  /** The text of the request a side call carried. */
+  const requestText = (call: RegistryCall) => {
+    const last = call.context.messages.at(-1);
+    assert.equal(last?.role, "user");
+    const { content } = last as { content: unknown };
+    return typeof content === "string"
+      ? content
+      : (content as Array<{ text: string }>).map((b) => b.text).join("\n");
+  };
 
   const foldedEntry = (sm: SessionManager, pi: FakePi) => {
     const done = rewindMessages(pi).at(-1);
@@ -10190,14 +10177,15 @@ describe("rewind: continuity ledger", () => {
 
   it("sends the ledger and the span's user messages with the summary request", async () => {
     const f = await ledgerFixture();
-    const { content } = summaryRequestDraftOf(f.pi);
+    const text = requestText(f.rewound.calls.at(-1) as RegistryCall);
+    const at = text.indexOf("\n\nContinuity ledger rev 3.");
+    assert.ok(at > 0, "the final request carries the continuity section");
     assert.ok(
-      content.startsWith(buildSummaryRequestText(3, REWIND_ARGS.summaryFocus)),
+      text
+        .slice(0, at)
+        .endsWith(`Additional focus: ${REWIND_ARGS.summaryFocus}`),
     );
-    const section = content.slice(
-      buildSummaryRequestText(3, REWIND_ARGS.summaryFocus).length,
-    );
-    assert.match(section, /^\n\nContinuity ledger rev 3\./);
+    const section = text.slice(at);
     assert.match(section, /R1 Never edit the lockfile/);
     assert.match(section, /R3 Always run the linter/);
     assert.match(
@@ -10330,7 +10318,6 @@ describe("rewind: continuity ledger", () => {
   });
 
   it("accepts a supersession that cites a newer user message of the active branch and refuses a bogus citation", async () => {
-    const f = await ledgerFixture();
     const delta = (citedEntryId: string) =>
       SUMMARY_TEXT +
       deltaBlock({
@@ -10342,15 +10329,16 @@ describe("rewind: continuity ledger", () => {
           },
         ],
       });
-    await summaryTurn(f, delta(f.a1));
+    const f = ledgerSetup();
+    await foldWith(f, delta(f.a1));
     const refused = foldedEntry(f.sm, f.pi);
     assert.equal(
       (refused.done.details.continuity as { rejected: unknown[] }).rejected
         .length,
       1,
     );
-    const g = await ledgerFixture();
-    await summaryTurn(g, delta(g.t3.userId));
+    const g = ledgerSetup();
+    await foldWith(g, delta(g.t3.userId));
     const accepted = foldedEntry(g.sm, g.pi);
     assert.deepEqual(
       (accepted.done.details.continuity as { rejected: unknown[] }).rejected,
@@ -10420,14 +10408,16 @@ describe("rewind: continuity ledger", () => {
   it("an empty ledger and a span without user messages change nothing", async () => {
     const f = setup();
     setupAutonomousSpan(f.sm, f.pi);
-    await requestRewind(f);
-    assert.equal(
-      summaryRequestDraftOf(f.pi).content,
-      buildSummaryRequestText(3, REWIND_ARGS.summaryFocus),
+    const registry = fakeRegistry(() =>
+      reply(`${SUMMARY_TEXT}\n\nA stray </continuity-delta> in prose.`),
     );
-    await summaryTurn(
-      f,
-      `${SUMMARY_TEXT}\n\nA stray </continuity-delta> in prose.`,
+    f.ctx.modelRegistry = registry.registry;
+    await requestRewind(f);
+    assert.ok(
+      requestText(registry.calls.at(-1) as RegistryCall).endsWith(
+        `Additional focus: ${REWIND_ARGS.summaryFocus}`,
+      ),
+      "no continuity section in the request",
     );
     const { done, entry } = foldedEntry(f.sm, f.pi);
     assert.equal(
@@ -10439,17 +10429,13 @@ describe("rewind: continuity ledger", () => {
     assert.ok(!done.content.includes("Continuity"));
   });
 
-  it("failed attempts apply nothing: three failures leave the ledger and the branch as they were", async () => {
-    const f = await ledgerFixture();
-    for (let i = 0; i < MAX_SUMMARY_ATTEMPTS; i++) {
-      await summaryTurn(
-        f,
-        `no goal heading${deltaBlock({ ratified: [{ kind: "decision", text: `Hidden ${i}` }] })}`,
-        "stop",
-        { commit: true },
-      );
-    }
-    assert.equal(outcomeEntries(f.sm).at(-1)?.status, "failed");
+  it("a failed fold applies nothing: the ledger and the branch stay as they were", async () => {
+    const f = ledgerSetup();
+    const { boundary } = await foldWith(
+      f,
+      `no goal heading${deltaBlock({ ratified: [{ kind: "decision", text: "Hidden" }] })}`,
+    );
+    assert.equal(boundary.entries[0].details.status, "failed");
     assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
     assert.deepEqual(
       readBranchLedger(f.sm.getBranch()).ledger,
@@ -10480,10 +10466,9 @@ describe("rewind: continuity ledger", () => {
           ) as never,
         );
       }
-      await requestRewind(f);
       const before = readBranchLedger(f.sm.getBranch());
-      await summaryTurn(f, SUMMARY_TEXT, "stop", { commit: true });
-      return { f, before };
+      const { boundary } = await requestRewind(f);
+      return { f, before, boundary };
     };
     const small = await run(0);
     assert.ok(
@@ -10492,9 +10477,10 @@ describe("rewind: continuity ledger", () => {
     );
     const big = await run(12);
     assert.ok(!big.f.sm.getEntries().some((e) => e.type === "branch_summary"));
-    assert.equal(outcomeEntries(big.f.sm).at(-1)?.status, "failed");
+    assert.equal(big.boundary.entries[0].details.status, "failed");
+    assert.equal(big.boundary.entries[0].details.stage, "commit");
     assert.match(
-      String(outcomeEntries(big.f.sm).at(-1)?.reason),
+      String(big.boundary.entries[0].details.detail),
       /does not reduce projected context/,
     );
     assert.deepEqual(readBranchLedger(big.f.sm.getBranch()), big.before);
@@ -10512,13 +10498,13 @@ describe("rewind: continuity ledger", () => {
       },
     ]);
     appendTurn(f.sm, "u5", "a5", 60_000, true);
-    await requestRewind(
+    await foldWith(
       f,
+      "## Goal\nSecond fold.\n\n## Next Steps\n1. Go.",
       { ...REWIND_ARGS, newLabel: "end2" },
       "tc-rewind-2",
       70_000,
     );
-    await summaryTurn(f, "## Goal\nSecond fold.\n\n## Next Steps\n1. Go.");
     const second = foldedEntry(f.sm, f.pi);
     assert.equal(second.entry.summary.split("## Continuity ledger").length, 2);
     assert.match(second.entry.summary, /Child handoffs in chronological order/);
@@ -10626,7 +10612,6 @@ describe("dispatch: pin action", () => {
 
     appendTurn(f.sm, "u3 keep going", "a3", 24_000, true);
     await requestRewind(f);
-    await summaryTurn(f);
     const done = rewindMessages(f.pi).at(-1);
     assert.ok(done, "a continuation was delivered");
     const entry = f.sm.getEntry(done.message.details.summaryId as string);
@@ -10847,35 +10832,6 @@ describe("dispatch: pin action", () => {
     );
   });
 
-  it("is not a rewind: it passes a batch the solo guard would refuse, and the pending-rewind gate still blocks it", async () => {
-    const f = setup();
-    anchored(f);
-    appendTurn(f.sm, "u2", "a2", 12_000, true);
-    appendToolCallAssistant(f.sm, [
-      { id: "tc-read", name: "read", arguments: { path: "a.ts" } },
-      { id: "tc-batched-pin", name: TOOL_NAME, arguments: { action: "pin" } },
-    ]);
-    const batched = await f.tool.execute(
-      "tc-batched-pin",
-      { action: "pin", kind: "fact", text: "Batched with a read" },
-      undefined,
-      undefined,
-      f.ctx,
-    );
-    assert.equal(batched.isError, undefined);
-    assert.equal(
-      fireToolCall(f.pi, f.ctx, TOOL_NAME, { action: "pin", kind: "fact" }),
-      undefined,
-    );
-
-    appendTurn(f.sm, "u3", "a3", 24_000, true);
-    await requestRewind(f);
-    assert.deepEqual(
-      fireToolCall(f.pi, f.ctx, TOOL_NAME, { action: "pin", kind: "fact" }),
-      { block: true, reason: SUMMARY_PENDING_BLOCK_REASON },
-    );
-  });
-
   it("`list` appends the ledger briefing once something is in force", async () => {
     const f = setup();
     anchored(f);
@@ -11055,18 +11011,6 @@ describe("continuity capture", () => {
     );
   });
 
-  it("does not capture while a rewind is pending", async () => {
-    const f = setup();
-    const first = appendTurn(f.sm, "u1 setting the stage", "a1", 6_000);
-    f.pi.pi.setLabel(first.assistantId, "anchor:start");
-    workTurn(f.sm, "u2 look at the parser", 24_000);
-    await requestRewind(f);
-    assert.equal(f.pi.appendEntryCalls.length, 0, "nothing to record yet");
-    f.sm.appendMessage(userMessage(RULE));
-    await summaryTurn(f, "no goal heading", "stop", { commit: true });
-    assert.equal(opsEntries(f.sm).length, 0);
-  });
-
   it("leaves a tool batch without all its results alone, then records after the last result", async () => {
     const f = setup();
     f.sm.appendMessage(userMessage(RULE));
@@ -11116,7 +11060,6 @@ describe("continuity capture", () => {
       }
       const t3 = workTurn(f.sm, "u3 look at the parser", 24_000);
       await requestRewind(f);
-      await summaryTurn(f, SUMMARY_TEXT);
       const done = rewindMessages(f.pi).at(-1);
       assert.ok(done, "a continuation was delivered");
       const entry = f.sm.getEntry(done.message.details.summaryId as string);
@@ -11154,11 +11097,19 @@ describe("continuity capture", () => {
       f.pi.pi.setLabel(first.assistantId, "anchor:start");
       workTurn(f.sm, RULE, 12_000);
       workTurn(f.sm, "u3 look at the parser", 24_000);
-      assert.equal(opsEntries(f.sm).length, 0);
+      assert.equal(f.pi.appendEntryCalls.length, 0);
       await requestRewind(f);
-      assert.equal(opsEntries(f.sm).length, 1);
-      const { content } = summaryRequestDraftOf(f.pi);
-      assert.ok(content.includes(`R1 ${RULE}`));
+      assert.equal(
+        f.pi.appendEntryCalls.filter(
+          ([type]) => type === CONTINUITY_OPS_CUSTOM_TYPE,
+        ).length,
+        1,
+        "captured at the rewind turn, before the fold",
+      );
+      const request = JSON.stringify(
+        f.ctx.registryCalls.at(-1)?.context.messages.at(-1),
+      );
+      assert.ok(request.includes(`R1 ${RULE}`));
     });
   });
 
@@ -11333,58 +11284,6 @@ describe("independent folds through the engine host", () => {
       "Continue the parser fix; the user's last instruction was to keep the tests green.",
   } as const;
 
-  interface RegistryCall {
-    model: unknown;
-    context: Context;
-    options: SimpleStreamOptions;
-  }
-
-  function reply(
-    text: string,
-    stopReason: "stop" | "error" | "aborted" = "stop",
-    errorMessage?: string,
-  ): AssistantMessage {
-    return {
-      role: "assistant",
-      content: [{ type: "text", text }],
-      api: "anthropic",
-      provider: "claude",
-      model: "claude-sonnet-4-5",
-      stopReason,
-      errorMessage,
-      timestamp: Date.now(),
-      usage: usageOf(10),
-    } as unknown as AssistantMessage;
-  }
-
-  /** A fake `modelRegistry` recording every side call; `respond` scripts the answer. */
-  function fakeRegistry(
-    respond: (
-      call: RegistryCall,
-      index: number,
-    ) => AssistantMessage | Promise<AssistantMessage> = () =>
-      reply(SUMMARY_TEXT),
-  ) {
-    const calls: RegistryCall[] = [];
-    const registry = {
-      hasConfiguredAuth: () => true,
-      streamSimple(
-        model: unknown,
-        context: Context,
-        options: SimpleStreamOptions,
-      ) {
-        const call = { model, context, options };
-        const index = calls.push(call) - 1;
-        const stream = createAssistantMessageEventStream();
-        void Promise.resolve(respond(call, index)).then((message) =>
-          stream.end(message),
-        );
-        return stream;
-      },
-    };
-    return { calls, registry };
-  }
-
   /**
    * An anchored session of five heavy turns. `leafTokens` is the usage the
    * newest assistant reports: 99k leaves the next main request over the guard.
@@ -11500,7 +11399,7 @@ describe("independent folds through the engine host", () => {
           (e) =>
             !(
               e.type === "custom_message" &&
-              e.customType === SUMMARY_REQUEST_CUSTOM_TYPE
+              e.customType === LEGACY_SUMMARY_REQUEST_TYPE
             ),
         ),
     );
@@ -11861,7 +11760,7 @@ describe("independent folds through the engine host", () => {
     assert.deepEqual(snapshotOf(g.sm), before);
   });
 
-  it("serializes folds per session and defers to a pending in-band rewind", async () => {
+  it("serializes folds per session", async () => {
     const f = await foldSetup(99_000);
     try {
       let release: () => void = () => {};
@@ -11889,24 +11788,6 @@ describe("independent folds through the engine host", () => {
       assert.equal((await first).status, "done");
     } finally {
       cleanupConfigFixture(f.fixture);
-    }
-
-    const g = await foldSetup(99_000);
-    try {
-      await requestRewind(g, { ...REWIND_ARGS, newLabel: "inband" });
-      const registry = fakeRegistry();
-      assert.deepEqual(g.api.queueFold(g.sm.getSessionId(), FOLD), {
-        ok: false,
-        reason: "an in-band rewind is pending",
-      });
-      const outcome = await g.api.runFoldNow(
-        foldCtx(g, registry.registry) as never,
-        FOLD,
-      );
-      assert.equal(outcome.status, "failed");
-      assert.equal(registry.calls.length, 0);
-    } finally {
-      cleanupConfigFixture(g.fixture);
     }
   });
 });
