@@ -68,7 +68,11 @@ const ROW = {
   minTokens: 11,
   rewindAt: 12,
   autoTools: 13,
-  overrides: 14,
+  consolidationEnabled: 14,
+  consolidationMax: 15,
+  consolidationShare: 16,
+  consolidationKeep: 17,
+  overrides: 18,
 } as const;
 
 type Script = (
@@ -326,6 +330,47 @@ const line = (lines: readonly string[], label: string): string =>
   lines.find((candidate) => candidate.includes(label)) ?? "";
 
 describe("settings screen: saving", () => {
+  it("lists consolidation settings and saves a staged flag while preserving unknown keys", async () => {
+    const h = harness({
+      global: json({ custom: 7, consolidation: { unknown: "keep" } }),
+      confirms: [true],
+    });
+    const described = await describeSettings(h.ctx, h.deps);
+    for (const key of [
+      "enabled",
+      "max_handoffs",
+      "max_window_share",
+      "keep_newest",
+    ])
+      assert.ok(described.includes(`consolidation.${key}`));
+    await h.run(edit(ROW.consolidationEnabled), press("s"), press(ESC));
+    assert.equal(
+      h.readGlobal(),
+      json({ custom: 7, consolidation: { unknown: "keep", enabled: false } }),
+    );
+  });
+
+  it("edits consolidation counts and fractional share with validation", async () => {
+    const h = harness({ inputs: ["6", "0.25", "3"], confirms: [true] });
+    await h.run(
+      edit(ROW.consolidationMax),
+      edit(ROW.consolidationShare),
+      edit(ROW.consolidationKeep),
+      press("s"),
+      press(ESC),
+    );
+    assert.equal(
+      h.readGlobal(),
+      json({
+        consolidation: {
+          max_handoffs: 6,
+          max_window_share: 0.25,
+          keep_newest: 3,
+        },
+      }),
+    );
+  });
+
   it("writes exactly the two staged keys, keeping unknown keys and snake_case spelling", async () => {
     const original = {
       rewind_hint_reserve_tokens: 50000,

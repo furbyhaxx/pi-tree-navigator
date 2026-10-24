@@ -22,6 +22,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  CONSOLIDATION_DEFAULTS,
   CONTINUITY_CAPTURE_DEFAULT,
   type HintField,
   loadTreeNavigatorConfig,
@@ -142,6 +143,7 @@ function cfg(
     rewindHintModelReserveTokens: new Map(byModel),
     anchorStartAfterTurns: start,
     parentHandoffMode,
+    consolidation: { ...CONSOLIDATION_DEFAULTS },
     continuity,
   };
 }
@@ -613,6 +615,110 @@ describe("mergeTreeNavigatorConfig", () => {
     assert.deepEqual(merged.hint, { kind: "invalid" });
     assert.deepEqual(merged.startAnchor, { kind: "ok", value: 5 });
   });
+});
+
+describe("consolidation config", () => {
+  const load = (
+    global: unknown = {},
+    project: unknown = {},
+    runtime?: Record<string, unknown>,
+  ) =>
+    loadTreeNavigatorConfig({
+      agentDir: AGENT_DIR,
+      projectPath: PROJECT_PATH,
+      projectTrusted: true,
+      readFile: readerFor({
+        [GLOBAL_PATH]: JSON.stringify(global),
+        [PROJECT_PATH]: JSON.stringify(project),
+      }).readFile,
+      runtime,
+    });
+
+  it("defaults when absent and merges partial layers per key", async () => {
+    assert.deepEqual(
+      (await load()).config.consolidation,
+      CONSOLIDATION_DEFAULTS,
+    );
+    const out = await load(
+      { consolidation: { enabled: false } },
+      { consolidation: { keep_newest: 3 } },
+    );
+    assert.deepEqual(out.config.consolidation, {
+      ...CONSOLIDATION_DEFAULTS,
+      enabled: false,
+      keepNewest: 3,
+    });
+    assert.deepEqual(out.warnings, []);
+  });
+
+  it("accepts camelCase aliases and runtime overrides without dropping lower keys", async () => {
+    const out = await load(
+      {
+        consolidation: {
+          enabled: false,
+          maxHandoffs: 6,
+          maxWindowShare: 0.2,
+          keepNewest: 3,
+        },
+      },
+      { consolidation: { max_handoffs: 5, maxHandoffs: 9 } },
+      { consolidation: { keepNewest: 4 } },
+    );
+    assert.deepEqual(out.config.consolidation, {
+      enabled: false,
+      maxHandoffs: 5,
+      maxWindowShare: 0.2,
+      keepNewest: 4,
+    });
+    assert.deepEqual(out.warnings, []);
+  });
+
+  it("warns per invalid field and falls back to valid lower values or defaults", async () => {
+    const out = await load(
+      { consolidation: { max_window_share: 0.3 } },
+      {
+        consolidation: {
+          enabled: "yes",
+          max_handoffs: 0,
+          max_window_share: 2,
+          keep_newest: 21,
+        },
+      },
+      { consolidation: { max_window_share: 0 } },
+    );
+    assert.deepEqual(out.config.consolidation, {
+      ...CONSOLIDATION_DEFAULTS,
+      maxWindowShare: 0.3,
+    });
+    assert.equal(out.warnings.length, 5);
+    for (const key of [
+      "enabled",
+      "max_handoffs",
+      "max_window_share",
+      "keep_newest",
+    ])
+      assert.ok(
+        out.warnings.some((warning) =>
+          warning.includes(`invalid consolidation.${key}`),
+        ),
+      );
+    assert.ok(out.warnings[4].includes("runtime config"));
+  });
+
+  for (const block of [null, [], false, 3, "on"]) {
+    it(`ignores non-object block ${JSON.stringify(block)}`, async () => {
+      const out = await load(
+        { consolidation: { enabled: false } },
+        { consolidation: block },
+      );
+      assert.equal(out.config.consolidation.enabled, false);
+      assert.equal(out.warnings.length, 1);
+      assert.match(
+        out.warnings[0],
+        /consolidation .*must be an object — ignored/,
+      );
+    });
+  }
 });
 
 describe("loadTreeNavigatorConfig", () => {
