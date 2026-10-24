@@ -128,6 +128,7 @@ const SET: Status = { kind: "set" };
 type Kind =
   | "tokens"
   | "count"
+  | "share"
   | "flag"
   | "choice"
   | "model"
@@ -356,6 +357,72 @@ const SETTINGS: readonly SettingDef[] = [
     description: `Context size at which the controller may fold to an earlier anchor. ${TOKEN_RANGE} (default 120k).`,
     status: autoStatus("rewindAtTokens"),
     read: (config) => autoRead(config).rewindAtTokens,
+  },
+  {
+    key: "consolidation.enabled",
+    path: [
+      name("consolidation"),
+      { ...name("enabled", "enabled"), fresh: "snake" },
+    ],
+    kind: "flag",
+    onInvalid: "falls-through",
+    expects: "true or false",
+    description:
+      "Merge older handoffs into one compaction entry while you work. Newest handoffs stay verbatim. Default true.",
+    status: (layer) =>
+      layer.consolidation ? fieldStatus(layer.consolidation.enabled) : ABSENT,
+    read: (config) => config.consolidation.enabled,
+  },
+  {
+    key: "consolidation.max_handoffs",
+    path: [
+      name("consolidation"),
+      { ...name("maxHandoffs", "max_handoffs"), fresh: "snake" },
+    ],
+    kind: "count",
+    onInvalid: "falls-through",
+    expects: "integer 1-100",
+    description:
+      "Consolidate when the projection has more handoffs than this count. 1-100 (default 4).",
+    status: (layer) =>
+      layer.consolidation
+        ? fieldStatus(layer.consolidation.maxHandoffs)
+        : ABSENT,
+    read: (config) => config.consolidation.maxHandoffs,
+  },
+  {
+    key: "consolidation.max_window_share",
+    path: [
+      name("consolidation"),
+      { ...name("maxWindowShare", "max_window_share"), fresh: "snake" },
+    ],
+    kind: "share",
+    onInvalid: "falls-through",
+    expects: "number greater than 0 and at most 1",
+    description:
+      "Consolidate when handoff tokens exceed this share of the context window. Greater than 0, at most 1 (default 0.1).",
+    status: (layer) =>
+      layer.consolidation
+        ? fieldStatus(layer.consolidation.maxWindowShare)
+        : ABSENT,
+    read: (config) => config.consolidation.maxWindowShare,
+  },
+  {
+    key: "consolidation.keep_newest",
+    path: [
+      name("consolidation"),
+      { ...name("keepNewest", "keep_newest"), fresh: "snake" },
+    ],
+    kind: "count",
+    onInvalid: "falls-through",
+    expects: "integer 1-20",
+    description:
+      "Newest handoffs retained verbatim during consolidation. 1-20 (default 2).",
+    status: (layer) =>
+      layer.consolidation
+        ? fieldStatus(layer.consolidation.keepNewest)
+        : ABSENT,
+    read: (config) => config.consolidation.keepNewest,
   },
 ];
 
@@ -1408,6 +1475,8 @@ function parseInput(def: SettingDef, text: string): unknown {
   const lower = text.toLowerCase();
   if (def.off && OFF_WORDS.has(lower)) return null;
   if (def.kind === "tokens" || def.kind === "count") return parseCount(text);
+  if (def.kind === "share")
+    return text.trim() === "" ? undefined : Number(text);
   const unquoted = text.replace(/^["']+|["']+$/g, "").trim();
   return def.kind === "model" && unquoted.toLowerCase() === "current"
     ? "current"
@@ -1450,15 +1519,22 @@ async function promptEdit(
   }
   if (
     direction !== undefined &&
-    (def.kind === "tokens" || def.kind === "count")
+    (def.kind === "tokens" || def.kind === "count" || def.kind === "share")
   ) {
-    const step = def.kind === "tokens" ? 1000 : 1;
-    const before = shown === "off" ? 0 : parseCount(shown);
+    const step = def.kind === "tokens" ? 1000 : def.kind === "share" ? 0.01 : 1;
+    const before =
+      shown === "off"
+        ? 0
+        : def.kind === "share"
+          ? Number(shown)
+          : parseCount(shown);
     if (before === undefined) return undefined;
     const value =
       def.off && before + step * direction <= 0
         ? null
-        : before + step * direction;
+        : def.kind === "share"
+          ? Math.round((before + step * direction) * 100) / 100
+          : before + step * direction;
     if (accepts(def, value)) return { kind: "set", value };
     ctx.ui.notify(
       `Limit reached for ${def.key}. Use ${def.expects}.`,
