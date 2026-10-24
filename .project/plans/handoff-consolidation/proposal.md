@@ -1,11 +1,11 @@
 ---
-version: 3
+version: 4
 id: "handoff-consolidation-proposal"
 title: "Continuous consolidation of older handoffs"
 description: "Decision material for letting completed work fade from active context instead of accumulating as verbatim handoffs."
 type: "plan"
 created: "2026-10-24T01:12:10+02:00"
-updated: "2026-10-24T15:10:00+02:00"
+updated: "2026-10-24T15:09:40+02:00"
 createdBy: "agent"
 updatedBy: "agent"
 ---
@@ -135,6 +135,49 @@ after : [compaction(summary of start..H4)] H5 … H6 … work
   foldable (test).
 - **Config:** `consolidation: { enabled: true, max_handoffs: 4,
   max_window_share: 0.1, keep_newest: 2 }`, plus `/anchor settings` rows.
+
+## Slice 2 correction: carry the compaction forward (v4)
+
+v3 misses one consequence. `appendCompaction` parents the entry at the
+current leaf, so every existing anchor lies before it on the path.
+`precedesLatestCompaction` (`index.ts`) then refuses all of them, and a fold
+that branched there anyway would drop the compaction and restore the
+consolidated history. After the first consolidation, manual, pressure and
+recovery folds would have no valid target.
+
+Fix: a fold whose target lies inside the latest compaction's kept range
+(`firstKeptEntryId` at or before the target, target before the compaction)
+re-appends a copy of that compaction on the new branch.
+
+```
+old path : … H5(firstKept) … A … C(compaction) … leaf
+fold to A: … H5 … A ─ branch_summary ─ C'(copy of C) ─ late input …
+context  : [C' summary] H5 … A, branch_summary, late input
+```
+
+- `commitFold`: after the summary label, `appendCompaction(C.summary,
+  C.firstKeptEntryId, C.tokensBefore, {...C.details, carriedFrom: C.id},
+  C.fromHook)` through `trySessionWrite`; failure goes to `refuseWrite`.
+- `previewFoldCommit`: add the same copy as a preview child of the preview
+  `branch_summary` and project from it, or pricing restores the history.
+- `projectAtEntry` / `estimateAtEntry`: include the copy when it applies,
+  so anchor rows, recommendations and pressure targets price correctly.
+- `precedesLatestCompaction`: true only when the target is before the
+  kept range (or the kept entry is not on the branch). Those targets stay
+  refused.
+- Keeping `fromHook` and the original details preserves Pi's own file-list
+  handling for native compactions; the fix applies to them too.
+
+Summarizer seam: `summarizeFold` builds `buildSummaryRequestText` (r5d) for
+the in-context request and the final reduce. Add an optional
+`instruction(first)` override used in both places; consolidation passes a
+project-history instruction that still starts with `## Goal`, because
+`extractSummaryText` requires it. r5d stays byte-exact.
+
+Units: (1) pure planner + `consolidation` config + settings rows;
+(2) summarizer override + consolidation prompt; (3) carry-forward in
+`index.ts`; (4) host trigger and commit in `index.ts`. 1 and 2 run in
+parallel; 3 then 4.
 
 ## Open
 
