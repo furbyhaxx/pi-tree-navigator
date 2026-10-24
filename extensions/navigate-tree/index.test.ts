@@ -4646,6 +4646,62 @@ describe("commitFold: engine shape", () => {
     }
   });
 
+  it("closes a request once a newer user message follows a response, or a later handoff carried it", async () => {
+    const work = (f: ReturnType<typeof setup>, id: string) => {
+      f.sm.appendMessage(
+        assistantMessage(
+          [{ type: "toolCall", id, name: "read", arguments: {} }],
+          "toolUse",
+        ) as never,
+      );
+      appendToolResult(f.sm, id, "read", "evidence");
+    };
+
+    const newer = setup();
+    const { anchorId } = setupRewindable(newer.sm, newer.pi, { capture: true });
+    newer.sm.appendMessage({ role: "user", content: "old task", timestamp: 1 });
+    work(newer, "w1");
+    const latestId = newer.sm.appendMessage({
+      role: "user",
+      content: "new task",
+      timestamp: 2,
+    });
+    work(newer, "w2");
+    newer.sm.appendCustomMessageEntry("work", "evidence ".repeat(6_000), false);
+    const replaced = await commitFold(
+      newer.sm,
+      engineFold(newer, anchorId).input,
+    );
+    assert.ok(replaced.ok, JSON.stringify(replaced));
+    assert.deepEqual(replaced.openUserRequests, [
+      { sourceEntryId: latestId, text: "new task" },
+    ]);
+
+    const carried = setup();
+    const start = setupRewindable(carried.sm, carried.pi, { capture: true });
+    carried.sm.appendMessage({
+      role: "user",
+      content: "long running task",
+      timestamp: 1,
+    });
+    work(carried, "w1");
+    const leaf = carried.sm.getLeafId();
+    assert.ok(leaf);
+    carried.sm.branchWithSummary(leaf, SUMMARY_TEXT, {}, true);
+    work(carried, "w2");
+    carried.sm.appendCustomMessageEntry(
+      "work",
+      "evidence ".repeat(6_000),
+      false,
+    );
+    const folded = await commitFold(
+      carried.sm,
+      engineFold(carried, start.anchorId).input,
+    );
+    assert.ok(folded.ok, JSON.stringify(folded));
+    assert.deepEqual(folded.openUserRequests, []);
+  });
+
   it("references an attached skill instead of quoting its body, including inherited requests", async () => {
     const skillBody = "Skill rule: always prefer the large model. ".repeat(400);
     const location = "/skills/picking/SKILL.md";
