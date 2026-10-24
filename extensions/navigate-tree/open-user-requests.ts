@@ -1,5 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { withoutSkillBody } from "./skill-blocks.ts";
 
 /** A still-open user instruction quoted from the canonical context. */
 export interface OpenUserRequest {
@@ -25,7 +26,8 @@ function storedRequests(details: unknown): OpenUserRequest[] {
   );
 }
 
-/** Collect collapsed open requests without resurrecting edited or retained input. */
+/** Collect collapsed open requests without resurrecting edited or retained input. Skill bodies are referenced, not quoted. */
+
 export function collectOpenUserRequests(
   entries: readonly { sourceEntry: SessionEntry; messages: AgentMessage[] }[],
   foldPointId: string,
@@ -46,7 +48,7 @@ export function collectOpenUserRequests(
         if (text.length > 0)
           open.set(entry.sourceEntry.id, {
             sourceEntryId: entry.sourceEntry.id,
-            text,
+            text: withoutSkillBody(text),
             collapsed,
           });
       } else if (
@@ -67,7 +69,11 @@ export function collectOpenUserRequests(
           OpenUserRequest & { collapsed: boolean }
         >();
         for (const request of storedRequests(message.details)) {
-          inherited.set(request.sourceEntryId, { ...request, collapsed });
+          inherited.set(request.sourceEntryId, {
+            ...request,
+            text: withoutSkillBody(request.text),
+            collapsed,
+          });
         }
         // Archived requests precede late input delivered before the receipt.
         open = new Map([...inherited, ...open]);
