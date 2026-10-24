@@ -157,6 +157,24 @@ export function buildFoldSegment(
 }
 
 /**
+ * Consolidation evidence: every projected record before `firstKeptId`, the
+ * latest compaction summary and older handoffs included, so a new compaction
+ * replaces them without losing what the previous one kept. Empty when the
+ * projection does not carry `firstKeptId`.
+ */
+export function buildConsolidationSegment(
+  entries: SessionEntry[],
+  leafId: string,
+  firstKeptId: string,
+): FoldSegmentRecord[] {
+  const projected = buildFoldProjection(entries, leafId).entries;
+  const at = projected.findIndex(
+    (entry) => entry.sourceEntry.id === firstKeptId,
+  );
+  return at < 0 ? [] : projected.slice(0, at).flatMap(entryRecords);
+}
+
+/**
  * Index in `projection.messages` of the anchor's last message, or -1 when the
  * projection no longer carries the anchor.
  */
