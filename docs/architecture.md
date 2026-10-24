@@ -24,8 +24,12 @@ branch creation, agent-context refresh and history-rewrite notifications.
   map-reduce strategy, explicit evidence coverage and call limits; reasoning
   allowance on top of answer caps and one reasoning-off retry after a `length` stop.
 - `auto-fold-planner.ts`: turn-boundary decisions for opt-in automatic folding:
-  deterministic pressure folds at `rewind_at_tokens` (no classifier), milestone
+  deterministic pressure relief at `rewind_at_tokens` (no classifier), milestone
   anchors from the classifier policy below it, cadence and stale-state gates.
+- `pressure-compaction.ts`: pure cut for tail-keeping pressure compaction: the
+  newest safe message boundary that keeps a token budget verbatim without
+  separating a tool call from its result. The host writes a native compaction
+  with quoted open requests and the briefing, and anchors it.
 - `summary-prompt.ts`: byte-pinned r5d instruction, stored-summary shape and file lists.
 - `legacy-rewind.ts`: read-only projection and rendering of historical in-band
   instructions and failed outcomes; no legacy execution.
