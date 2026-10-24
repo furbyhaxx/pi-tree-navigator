@@ -5023,7 +5023,8 @@ describe("previewFoldCommit", () => {
         appendTurn(f.sm, `u${n}`, `a${n}`, usageOf(n), true);
       const cut = appendTurn(f.sm, "u5", "a5", usageOf(5), true);
       f.pi.pi.setLabel(cut.assistantId, "anchor:before-cut");
-      f.sm.appendCompaction("Compacted summary", cut.userId, 0);
+      const kept = appendTurn(f.sm, "u5k", "a5k", usageOf(5), true);
+      f.sm.appendCompaction("Compacted summary", kept.userId, 0);
       for (const n of [6, 7])
         appendTurn(f.sm, `u${n}`, `a${n}`, usageOf(n), true);
       return { ...f, early, cut };
@@ -9747,9 +9748,9 @@ describe("rewind-driven compaction (#101)", () => {
     const WINDOW = 100_000;
 
     /**
-     * Five pre-compaction turns (the compaction keeps only the fifth), then two
-     * more. Zero recorded usage by default, so the request-time estimate and the
-     * fold gate price the same characters.
+     * Five pre-compaction turns, then one the compaction keeps (anchored as
+     * `kept`), then two more. Zero recorded usage by default, so the
+     * request-time estimate and the fold gate price the same characters.
      */
     function compactedSession(usageOf = (_turn: number) => 0) {
       const f = setup({ contextWindow: WINDOW });
@@ -9759,7 +9760,9 @@ describe("rewind-driven compaction (#101)", () => {
         appendTurn(f.sm, `u${n}`, `a${n}`, usageOf(n), true);
       const cut = appendTurn(f.sm, "u5", "a5", usageOf(5), true);
       f.pi.pi.setLabel(cut.assistantId, "anchor:before-cut");
-      f.sm.appendCompaction("Compacted summary", cut.userId, 0);
+      const kept = appendTurn(f.sm, "u5k", "a5k", usageOf(5), true);
+      f.pi.pi.setLabel(kept.assistantId, "anchor:kept");
+      f.sm.appendCompaction("Compacted summary", kept.userId, 0);
       const late = appendTurn(f.sm, "u6", "a6", usageOf(6), true);
       f.pi.pi.setLabel(late.assistantId, "anchor:after-cut");
       appendTurn(f.sm, "u7", "a7", usageOf(7), true);
@@ -9768,6 +9771,8 @@ describe("rewind-driven compaction (#101)", () => {
         ids: {
           early: early.assistantId,
           cut: cut.assistantId,
+          kept: kept.assistantId,
+          keptUser: kept.userId,
           late: late.assistantId,
         },
       };
@@ -9833,7 +9838,71 @@ describe("rewind-driven compaction (#101)", () => {
         lines.find((line) => line.includes(` ${name} `)) ?? "";
       assert.match(row("before-cut"), /−0 savable {2}\(before compaction\)$/);
       assert.match(row("early"), /savable$/);
+      assert.match(row("kept"), /savable$/);
       assert.match(row("after-cut"), /savable$/);
+    });
+
+    it("carries the compaction forward when the target lies inside its kept range", async () => {
+      const f = compactedSession();
+      const original = f.sm
+        .getBranch()
+        .find((entry) => entry.type === "compaction");
+      assert.ok(original);
+      const uncarried = admissionAt(f.sm, f.ids.kept);
+      const { result } = await requestRewind(f, foldArgs("kept"), "tc-kept", 0);
+      assert.equal(result.isError, undefined, result.content[0].text);
+      const done = rewindMessages(f.pi).at(-1)?.message;
+      assert.equal(done?.details.status, "done", String(done?.details.detail));
+
+      const branch = f.sm.getBranch();
+      const summaryAt = branch.findIndex((e) => e.type === "branch_summary");
+      const copies = branch.filter(
+        (e) => e.type === "compaction" && e.id !== original.id,
+      );
+      assert.equal(copies.length, 1, "one carried copy");
+      const copy = copies[0] as typeof original & {
+        firstKeptEntryId: string;
+        summary: string;
+        details: { carriedFrom?: string };
+      };
+      assert.ok(branch.indexOf(copy) > summaryAt, "copy follows the summary");
+      assert.equal(copy.summary, "Compacted summary");
+      assert.equal(copy.firstKeptEntryId, f.ids.keptUser);
+      assert.equal(copy.details.carriedFrom, original.id);
+
+      const messages = f.sm.buildSessionContext().messages;
+      const texts = JSON.stringify(messages);
+      for (const gone of ["u1", "u2", "u3", "u4", "u5"])
+        assert.ok(!texts.includes(`"${gone}"`), `${gone} stays compacted`);
+      assert.ok(texts.includes('"u5k"'), "the kept turn stays");
+
+      // The preview priced the target through the same carried copy.
+      const handoffAt = messages.findIndex(
+        (m) => m.role === "custom" && m.customType === "navigate-tree-handoff",
+      );
+      assert.ok(handoffAt > 0);
+      const carriedPrice =
+        estimateRequestTokens(messages.slice(0, handoffAt)) +
+        Math.ceil(ANCHOR_MANDATE.length / 3.5);
+      assert.equal(result.details.tokensAtTarget, carriedPrice);
+      assert.ok(carriedPrice < uncarried, "carrying keeps history compacted");
+    });
+
+    it("keeps anchors foldable after a carried fold and still refuses targets before the kept range", async () => {
+      const f = compactedSession();
+      await requestRewind(f, foldArgs("kept"), "tc-kept", 0);
+      appendTurn(f.sm, "u8", "a8", 0, true);
+      appendTurn(f.sm, "u9", "a9", 0, true);
+      const ctx = makeCtx(f.sm, { contextWindow: WINDOW, hasUI: false });
+      const command = f.pi.commands.get("anchor");
+      assert.ok(command);
+      await command.handler("list", ctx as unknown as ExtensionCommandContext);
+      const lines = ctx.notifyCalls[0][0].split("\n");
+      const row = (name: string) =>
+        lines.find((line) => line.includes(` ${name} `)) ?? "";
+      assert.match(row("kept"), /savable$/);
+      assert.match(row("folded"), /savable$/);
+      assert.match(row("before-cut"), /\(before compaction\)$/);
     });
 
     it("refuses a fold to a pre-compaction anchor at request time, before any fold is queued", async () => {
@@ -11916,7 +11985,8 @@ describe("independent folds through the engine host", () => {
     for (const n of [2, 3, 4]) appendTurn(g.sm, `u${n}`, `a${n}`, 0, true);
     const cut = appendTurn(g.sm, "u5", "a5", 0, true);
     g.pi.pi.setLabel(cut.assistantId, "anchor:before-cut");
-    g.sm.appendCompaction("Compacted summary", cut.userId, 0);
+    const kept = appendTurn(g.sm, "u5k", "a5k", 0, true);
+    g.sm.appendCompaction("Compacted summary", kept.userId, 0);
     appendTurn(g.sm, "u6", "a6", 0, true);
     const registry = fakeRegistry();
     const before = snapshotOf(g.sm);
@@ -12158,7 +12228,8 @@ describe("independent folds through the engine host", () => {
     for (const n of [2, 3, 4]) appendTurn(g.sm, `u${n}`, `a${n}`, 0, true);
     const cut = appendTurn(g.sm, "u5", "a5", 0, true);
     g.pi.pi.setLabel(cut.assistantId, "anchor:before-cut");
-    g.sm.appendCompaction("Compacted summary", cut.userId, 0);
+    const kept = appendTurn(g.sm, "u5k", "a5k", 0, true);
+    g.sm.appendCompaction("Compacted summary", kept.userId, 0);
     appendTurn(g.sm, "u6", "a6", 0, true);
     const before = snapshotOf(g.sm);
     const ctx = foldCtx(g, fakeRegistry().registry);

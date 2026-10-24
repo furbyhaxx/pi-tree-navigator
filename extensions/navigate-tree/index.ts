@@ -62,6 +62,7 @@ import {
   AgentSession,
   buildSessionProjection,
   CONFIG_DIR_NAME,
+  type CompactionEntry,
   collectEntriesForBranchSummary,
   type ExtensionAPI,
   type ExtensionCommandContext,
@@ -588,20 +589,71 @@ function findLabeledEntry(
 }
 
 /**
+ * The latest compaction on `branch` that a fold to `targetId` carries
+ * forward: the target lies inside its kept range (at or after
+ * `firstKeptEntryId`, before the compaction). Branching there drops the
+ * compaction from the ancestry, so the fold re-appends a copy.
+ */
+function carriedCompaction(
+  branch: readonly SessionEntry[],
+  targetId: string,
+): CompactionEntry | undefined {
+  const at = branch.findIndex((entry) => entry.id === targetId);
+  const compactionAt = branch.findLastIndex((e) => e.type === "compaction");
+  if (at < 0 || compactionAt <= at) return undefined;
+  const compaction = branch[compactionAt] as CompactionEntry;
+  const keptAt = branch.findIndex(
+    (entry) => entry.id === compaction.firstKeptEntryId,
+  );
+  return keptAt >= 0 && keptAt <= at ? compaction : undefined;
+}
+
+/** An unsaved copy of `compaction` under `parentId`, as `commitFold` appends it. */
+function compactionCopy(
+  compaction: CompactionEntry,
+  parentId: string,
+  taken: ReadonlyMap<string, unknown>,
+): CompactionEntry {
+  let id = "tree-navigator-carried-compaction";
+  while (taken.has(id)) id += "-";
+  return {
+    ...compaction,
+    id,
+    parentId,
+    details: carriedDetails(compaction),
+  };
+}
+
+function carriedDetails(compaction: CompactionEntry): unknown {
+  const base =
+    compaction.details && typeof compaction.details === "object"
+      ? (compaction.details as Record<string, unknown>)
+      : {};
+  return { ...base, carriedFrom: compaction.id };
+}
+
+/**
  * The messages a branch rooted at `entryId` would carry: what a fold to that
  * entry leaves behind before its handoff is added. `commitFold` projects
- * its preview the same way, so a compaction on the active branch only counts
- * when `entryId` lies after it.
+ * its preview the same way: a compaction whose kept range holds `entryId` is
+ * carried forward, an earlier one only counts when `entryId` lies after it.
  */
 function projectAtEntry(
   entries: SessionEntry[],
   entryId: string,
   byId: Map<string, SessionEntry>,
+  carry?: CompactionEntry,
 ): AgentMessage[] {
-  return projectHandoffs(
-    buildSessionProjection(entries, entryId, byId),
-    entries,
-  ).messages;
+  if (!carry) {
+    return projectHandoffs(
+      buildSessionProjection(entries, entryId, byId),
+      entries,
+    ).messages;
+  }
+  const copy = compactionCopy(carry, entryId, byId);
+  const withCopy = [...entries, copy];
+  return projectHandoffs(buildSessionProjection(withCopy, copy.id), withCopy)
+    .messages;
 }
 
 /** The admission estimate (see `estimateAdmissionTokens`) for the branch a fold to `entryId` leaves. */
@@ -611,20 +663,26 @@ function estimateAtEntry(
   entryId: string,
   byId: Map<string, SessionEntry>,
 ): number {
-  return requestAccounting(sm, projectAtEntry(entries, entryId, byId)).tokens;
+  const carry = carriedCompaction(sm.getBranch(), entryId);
+  return requestAccounting(sm, projectAtEntry(entries, entryId, byId, carry))
+    .tokens;
 }
 
 /**
- * Whether `targetId` precedes the latest compaction on `branch`. A fold there
- * parents its summary at the target, which drops the compaction from the
- * ancestry and restores the history it had summarized.
+ * Whether `targetId` precedes the latest compaction's kept range on `branch`.
+ * A fold there parents its summary before every entry the compaction kept,
+ * so the copy cannot be carried and the summarized history would return.
  */
 function precedesLatestCompaction(
   branch: readonly SessionEntry[],
   targetId: string,
 ): boolean {
   const at = branch.findIndex((entry) => entry.id === targetId);
-  return at >= 0 && at < branch.findLastIndex((e) => e.type === "compaction");
+  return (
+    at >= 0 &&
+    at < branch.findLastIndex((e) => e.type === "compaction") &&
+    !carriedCompaction(branch, targetId)
+  );
 }
 
 /** The anchors on the active branch, root → leaf, with the context footprint at each. */
@@ -1418,6 +1476,8 @@ export interface FoldMaterialization {
   continuity: FoldContinuity;
   /** Open collapsed user instructions, separate from generated narrative. */
   openUserRequests: OpenUserRequest[];
+  /** The latest compaction, re-appended after the summary because its kept range holds the target. */
+  carriedCompaction?: CompactionEntry;
 }
 
 /** `ok: false` is the reason `commitFold` would refuse for; nothing was written either way. */
@@ -1571,9 +1631,20 @@ export function previewFoldCommit(
       details,
       fromHook: true,
     };
-    const prospectiveEntries = [...all.values(), preview];
+    const carry = carriedCompaction(sm.getBranch(), targetId);
+    const prospectiveEntries: SessionEntry[] = [...all.values(), preview];
+    let prospectiveLeaf = previewId;
+    if (carry) {
+      const copy = compactionCopy(
+        carry,
+        previewId,
+        new Map(prospectiveEntries.map((entry) => [entry.id, entry])),
+      );
+      prospectiveEntries.push(copy);
+      prospectiveLeaf = copy.id;
+    }
     const prospective = projectHandoffs(
-      buildSessionProjection(prospectiveEntries, previewId),
+      buildSessionProjection(prospectiveEntries, prospectiveLeaf),
       prospectiveEntries,
     ).messages;
     const lateMessages: AgentMessage[] = lateEntries.map((late) =>
@@ -1664,6 +1735,7 @@ export function previewFoldCommit(
       lateEntries,
       continuity,
       openUserRequests,
+      ...(carry && { carriedCompaction: carry }),
     };
   } catch (err) {
     return refuse(
@@ -1705,6 +1777,7 @@ export async function commitFold(
     openUserRequests,
     foldEstimateBefore,
     foldEstimateAfter,
+    carriedCompaction: carry,
   } = preview;
   const { targetId, newLabel, branchLabelEntryId } = input;
   const previousLabel = branchLabelEntryId
@@ -1775,6 +1848,22 @@ export async function commitFold(
   const label = labelWrite(summaryId, LABEL_PREFIX + newLabel);
   if (!label.ok)
     return refuseWrite("the summary label could not be written", label.error);
+  if (carry) {
+    const carried = trySessionWrite(sm, () =>
+      sm.appendCompaction(
+        carry.summary,
+        carry.firstKeptEntryId,
+        carry.tokensBefore,
+        carriedDetails(carry),
+        carry.fromHook,
+      ),
+    );
+    if (!carried.ok)
+      return refuseWrite(
+        "the carried compaction could not be written",
+        carried.error,
+      );
+  }
   // Direct appends, not the steer queue: no second pass through other
   // extensions' input handlers, and anything still queued is delivered
   // after these, keeping the original order.
