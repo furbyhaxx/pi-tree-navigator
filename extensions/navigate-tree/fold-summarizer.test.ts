@@ -21,6 +21,7 @@ import {
   summarizeFold,
 } from "./fold-summarizer.ts";
 import {
+  buildConsolidationRequestText,
   buildSummaryRequestText,
   extractSummaryText,
 } from "./summary-prompt.ts";
@@ -711,5 +712,43 @@ describe("createFoldSummaryRunner", () => {
     }).complete({ messages: [], maxTokens: 10, reasoning: "off" });
     assert.equal(observed?.reasoning, undefined);
     assert.equal(observed?.maxTokens, 10);
+  });
+});
+
+describe("summarizeFold instruction override", () => {
+  const consolidate = (first: number) => buildConsolidationRequestText(first);
+  const answer = (request: Request) =>
+    lastText(request).startsWith("[navigate_tree consolidation]")
+      ? { text: SUMMARY }
+      : {};
+
+  it("sends the override instead of r5d in the in-context request", async () => {
+    const { requests, runner } = harness(answer);
+    const result = await summarizeFold(
+      options(runner, {
+        inContext: inContext(1),
+        instruction: consolidate,
+        admit: () => ({ fits: true, inputEstimate: 10 }),
+      }),
+    );
+    assert.equal(result.ok, true);
+    assert.equal(requests.length, 1);
+    assert.equal(lastText(requests[0]), buildConsolidationRequestText(1));
+    assert.ok(!lastText(requests[0]).includes(FOCUS));
+  });
+
+  it("sends the override in the chunked final reduce", async () => {
+    const { requests, runner } = harness(answer, 8000);
+    const result = await summarizeFold(
+      options(runner, { instruction: consolidate }),
+    );
+    assert.equal(result.ok, true);
+    assert.equal(result.ok && result.strategy, "chunked");
+    const finals = requests.filter((request) =>
+      lastText(request).startsWith("[navigate_tree"),
+    );
+    assert.equal(finals.length, 1);
+    assert.equal(lastText(finals[0]), buildConsolidationRequestText(2));
+    assert.ok(!requests.some(isFinal));
   });
 });

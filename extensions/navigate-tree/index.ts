@@ -62,6 +62,7 @@ import {
   AgentSession,
   buildSessionProjection,
   CONFIG_DIR_NAME,
+  type CompactionEntry,
   collectEntriesForBranchSummary,
   type ExtensionAPI,
   type ExtensionCommandContext,
@@ -85,7 +86,9 @@ import { registerAnchorCommand } from "./anchor-command.ts";
 import { type AutoFoldState, planAutomaticFold } from "./auto-fold-planner.ts";
 import type { AutoNavigatePartial } from "./auto-navigate-config.ts";
 import {
+  CONSOLIDATION_DEFAULTS,
   CONTINUITY_CAPTURE_DEFAULT,
+  type ConsolidationConfig,
   loadTreeNavigatorConfig,
   PARENT_HANDOFF_MODE_DEFAULT,
   resolveAutoNavigateConfig,
@@ -93,6 +96,7 @@ import {
   START_ANCHOR_DEFAULT_TURNS,
   TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./config.ts";
+import { planConsolidation } from "./consolidation-planner.ts";
 import {
   estimateContentTokens,
   estimateRequestTokens,
@@ -137,6 +141,7 @@ import {
 } from "./fold-engine.ts";
 import {
   anchorMessageIndex,
+  buildConsolidationSegment,
   buildFoldProjection,
   buildFoldSegment,
   buildInContextMessages,
@@ -154,6 +159,7 @@ import {
   DEFAULT_REDUCE_OUTPUT_TOKENS,
   reasoningAllowance,
   type SummarizeFoldOptions,
+  summarizeFold,
 } from "./fold-summarizer.ts";
 import {
   getHandoff,
@@ -215,6 +221,7 @@ import { persistedOnDisk, trySessionWrite } from "./session-write.ts";
 import { createSettingsScreenDeps } from "./settings-screen.ts";
 import {
   appendContinuityBriefing,
+  buildConsolidationRequestText,
   buildSummaryRequestText,
   computeFileLists,
   formatFileOperations,
@@ -285,6 +292,10 @@ export const MIN_SUMMARY_FOCUS_LENGTH = 20;
 // rewind pays for a summary, forks a junk branch_summary, consumes
 // a milestone label, and GROWS live context.
 export const MIN_REWIND_SAVINGS_TOKENS = 4000;
+/** The consolidation prompt asks for about 6,000 characters. */
+const CONSOLIDATION_SUMMARY_TOKENS = Math.ceil(6000 / 3.5);
+/** Receipt of a background consolidation; visible, one line. */
+export const CONSOLIDATION_CUSTOM_TYPE = "navigate-tree-consolidation";
 const RECOVERY_MIN_OUTPUT_TOKENS = 1_024;
 const RECOVERY_HEADROOM_TOKENS = 4_096;
 // Hint length cap for the per-row hint shown in `list` output. 50 chars
@@ -572,6 +583,32 @@ async function emitSessionTree(
   }
 }
 
+/**
+ * Emit `session_compact` for a compaction the extension appended, as pi does
+ * after its own. History-mirroring providers rebuild from it. False when the
+ * runner is unreachable or a handler throws; the compaction is written either way.
+ */
+async function emitSessionCompact(
+  sm: SessionManager,
+  compactionId: string,
+): Promise<boolean> {
+  const session = findOwningSession(sm);
+  const runner = session ? asInternals(session)._extensionRunner : undefined;
+  if (typeof runner?.emit !== "function") return false;
+  try {
+    await runner.emit({
+      type: "session_compact",
+      compactionEntry: sm.getEntry(compactionId),
+      fromExtension: true,
+      reason: "manual",
+      willRetry: false,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // =============================================================================
 // Helpers (extension-internal; pure helpers in ./helpers.ts)
 // =============================================================================
@@ -588,20 +625,71 @@ function findLabeledEntry(
 }
 
 /**
+ * The latest compaction on `branch` that a fold to `targetId` carries
+ * forward: the target lies inside its kept range (at or after
+ * `firstKeptEntryId`, before the compaction). Branching there drops the
+ * compaction from the ancestry, so the fold re-appends a copy.
+ */
+function carriedCompaction(
+  branch: readonly SessionEntry[],
+  targetId: string,
+): CompactionEntry | undefined {
+  const at = branch.findIndex((entry) => entry.id === targetId);
+  const compactionAt = branch.findLastIndex((e) => e.type === "compaction");
+  if (at < 0 || compactionAt <= at) return undefined;
+  const compaction = branch[compactionAt] as CompactionEntry;
+  const keptAt = branch.findIndex(
+    (entry) => entry.id === compaction.firstKeptEntryId,
+  );
+  return keptAt >= 0 && keptAt <= at ? compaction : undefined;
+}
+
+/** An unsaved copy of `compaction` under `parentId`, as `commitFold` appends it. */
+function compactionCopy(
+  compaction: CompactionEntry,
+  parentId: string,
+  taken: ReadonlyMap<string, unknown>,
+): CompactionEntry {
+  let id = "tree-navigator-carried-compaction";
+  while (taken.has(id)) id += "-";
+  return {
+    ...compaction,
+    id,
+    parentId,
+    details: carriedDetails(compaction),
+  };
+}
+
+function carriedDetails(compaction: CompactionEntry): unknown {
+  const base =
+    compaction.details && typeof compaction.details === "object"
+      ? (compaction.details as Record<string, unknown>)
+      : {};
+  return { ...base, carriedFrom: compaction.id };
+}
+
+/**
  * The messages a branch rooted at `entryId` would carry: what a fold to that
  * entry leaves behind before its handoff is added. `commitFold` projects
- * its preview the same way, so a compaction on the active branch only counts
- * when `entryId` lies after it.
+ * its preview the same way: a compaction whose kept range holds `entryId` is
+ * carried forward, an earlier one only counts when `entryId` lies after it.
  */
 function projectAtEntry(
   entries: SessionEntry[],
   entryId: string,
   byId: Map<string, SessionEntry>,
+  carry?: CompactionEntry,
 ): AgentMessage[] {
-  return projectHandoffs(
-    buildSessionProjection(entries, entryId, byId),
-    entries,
-  ).messages;
+  if (!carry) {
+    return projectHandoffs(
+      buildSessionProjection(entries, entryId, byId),
+      entries,
+    ).messages;
+  }
+  const copy = compactionCopy(carry, entryId, byId);
+  const withCopy = [...entries, copy];
+  return projectHandoffs(buildSessionProjection(withCopy, copy.id), withCopy)
+    .messages;
 }
 
 /** The admission estimate (see `estimateAdmissionTokens`) for the branch a fold to `entryId` leaves. */
@@ -611,20 +699,26 @@ function estimateAtEntry(
   entryId: string,
   byId: Map<string, SessionEntry>,
 ): number {
-  return requestAccounting(sm, projectAtEntry(entries, entryId, byId)).tokens;
+  const carry = carriedCompaction(sm.getBranch(), entryId);
+  return requestAccounting(sm, projectAtEntry(entries, entryId, byId, carry))
+    .tokens;
 }
 
 /**
- * Whether `targetId` precedes the latest compaction on `branch`. A fold there
- * parents its summary at the target, which drops the compaction from the
- * ancestry and restores the history it had summarized.
+ * Whether `targetId` precedes the latest compaction's kept range on `branch`.
+ * A fold there parents its summary before every entry the compaction kept,
+ * so the copy cannot be carried and the summarized history would return.
  */
 function precedesLatestCompaction(
   branch: readonly SessionEntry[],
   targetId: string,
 ): boolean {
   const at = branch.findIndex((entry) => entry.id === targetId);
-  return at >= 0 && at < branch.findLastIndex((e) => e.type === "compaction");
+  return (
+    at >= 0 &&
+    at < branch.findLastIndex((e) => e.type === "compaction") &&
+    !carriedCompaction(branch, targetId)
+  );
 }
 
 /** The anchors on the active branch, root → leaf, with the context footprint at each. */
@@ -1418,6 +1512,8 @@ export interface FoldMaterialization {
   continuity: FoldContinuity;
   /** Open collapsed user instructions, separate from generated narrative. */
   openUserRequests: OpenUserRequest[];
+  /** The latest compaction, re-appended after the summary because its kept range holds the target. */
+  carriedCompaction?: CompactionEntry;
 }
 
 /** `ok: false` is the reason `commitFold` would refuse for; nothing was written either way. */
@@ -1571,9 +1667,20 @@ export function previewFoldCommit(
       details,
       fromHook: true,
     };
-    const prospectiveEntries = [...all.values(), preview];
+    const carry = carriedCompaction(sm.getBranch(), targetId);
+    const prospectiveEntries: SessionEntry[] = [...all.values(), preview];
+    let prospectiveLeaf = previewId;
+    if (carry) {
+      const copy = compactionCopy(
+        carry,
+        previewId,
+        new Map(prospectiveEntries.map((entry) => [entry.id, entry])),
+      );
+      prospectiveEntries.push(copy);
+      prospectiveLeaf = copy.id;
+    }
     const prospective = projectHandoffs(
-      buildSessionProjection(prospectiveEntries, previewId),
+      buildSessionProjection(prospectiveEntries, prospectiveLeaf),
       prospectiveEntries,
     ).messages;
     const lateMessages: AgentMessage[] = lateEntries.map((late) =>
@@ -1664,6 +1771,7 @@ export function previewFoldCommit(
       lateEntries,
       continuity,
       openUserRequests,
+      ...(carry && { carriedCompaction: carry }),
     };
   } catch (err) {
     return refuse(
@@ -1705,6 +1813,7 @@ export async function commitFold(
     openUserRequests,
     foldEstimateBefore,
     foldEstimateAfter,
+    carriedCompaction: carry,
   } = preview;
   const { targetId, newLabel, branchLabelEntryId } = input;
   const previousLabel = branchLabelEntryId
@@ -1775,6 +1884,22 @@ export async function commitFold(
   const label = labelWrite(summaryId, LABEL_PREFIX + newLabel);
   if (!label.ok)
     return refuseWrite("the summary label could not be written", label.error);
+  if (carry) {
+    const carried = trySessionWrite(sm, () =>
+      sm.appendCompaction(
+        carry.summary,
+        carry.firstKeptEntryId,
+        carry.tokensBefore,
+        carriedDetails(carry),
+        carry.fromHook,
+      ),
+    );
+    if (!carried.ok)
+      return refuseWrite(
+        "the carried compaction could not be written",
+        carried.error,
+      );
+  }
   // Direct appends, not the steer queue: no second pass through other
   // extensions' input handlers, and anything still queued is delivered
   // after these, keeping the original order.
@@ -3172,6 +3297,7 @@ export default function (pi: ExtensionAPI) {
   const continuityWarned = new Map<string, Set<string>>();
   // Sessions whose model classifier hung once: heuristics only from then on.
   const classifierTimedOut = new Set<string>();
+  let consolidationConfig: ConsolidationConfig = CONSOLIDATION_DEFAULTS;
 
   // Runs at a `turn_end` boundary, where the assistant and all its tool
   // results are already on the branch, so the entry cannot land inside a tool
@@ -3485,6 +3611,10 @@ export default function (pi: ExtensionAPI) {
       ctx,
     );
     if (auto) return auto;
+    if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
+      const consolidated = await maybeConsolidate(sm, sessionId, message, ctx);
+      if (consolidated) return deliverRaw(consolidated, event.continue);
+    }
     let signal: AbortSignal | undefined;
     try {
       signal = ctx.signal;
@@ -3845,6 +3975,7 @@ export default function (pi: ExtensionAPI) {
     autoNavigateByModel = config.autoNavigateByModel ?? new Map();
     proposalConfig = config.proposal;
     continuityConfig = config.continuity;
+    consolidationConfig = config.consolidation;
     anchorStartTurnsBySession.set(sessionId, config.anchorStartAfterTurns);
     parentModes.set(sessionId, config.parentHandoffMode);
   }
@@ -3888,6 +4019,7 @@ export default function (pi: ExtensionAPI) {
       capture: CONTINUITY_CAPTURE_DEFAULT,
       intentClassifier: null,
     };
+    consolidationConfig = CONSOLIDATION_DEFAULTS;
     continuityWarned.delete(sessionId);
     classifierTimedOut.delete(sessionId);
     clearRuntimeConfig(sessionId);
@@ -4569,6 +4701,221 @@ export default function (pi: ExtensionAPI) {
       return deliver(draft);
     }
     return warnings.length ? deliver() : undefined;
+  }
+
+  /**
+   * Background handoff consolidation at a turn boundary nothing else used:
+   * merge every projected entry before the oldest of the newest handoffs into
+   * one native compaction. Pi projects that compaction followed by the kept
+   * entries; later folds carry it forward (`carriedCompaction`). Returns the
+   * receipt or warning to append, or nothing when no check was due.
+   */
+  async function maybeConsolidate(
+    sm: SessionManager,
+    sessionId: string,
+    message: { stopReason?: string },
+    ctx: ExtensionContext,
+  ): Promise<SessionBoundaryDraft[] | undefined> {
+    const config = consolidationConfig;
+    if (
+      !config.enabled ||
+      (toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+      message.stopReason === "error" ||
+      message.stopReason === "aborted" ||
+      queuedFolds.has(sessionId) ||
+      runningFolds.has(sessionId) ||
+      unrestoredFoldCursors.has(sm)
+    )
+      return;
+    let host: FoldHost;
+    let signal: AbortSignal | undefined;
+    let notify: ((text: string) => void) | undefined;
+    try {
+      host = foldHostOf(ctx);
+      signal = ctx.signal;
+      const ui = ctx.hasUI ? ctx.ui : undefined;
+      notify = ui ? (text) => ui.notify(text, "warning") : undefined;
+      if (host.sm !== sm || sm.getSessionId() !== sessionId) return;
+    } catch {
+      return;
+    }
+    const { model, registry } = host;
+    const leafId = sm.getLeafId();
+    if (!model || !leafId || signal?.aborted) return;
+    const contextWindow = model.contextWindow ?? 0;
+    const entries = sm.getEntries();
+    const projected = buildFoldProjection(entries, leafId).entries;
+    const handoffs: {
+      entryId: string;
+      tokens: number;
+      prefixTokens: number;
+    }[] = [];
+    let prefixTokens = 0;
+    for (const entry of projected) {
+      const messages = entry.messages.filter((m) => m.role !== "system");
+      const tokens = estimateContentTokens(messages);
+      if (entry.sourceEntry.type === "branch_summary")
+        handoffs.push({ entryId: entry.sourceEntry.id, tokens, prefixTokens });
+      prefixTokens += tokens;
+    }
+    const plan = planConsolidation({
+      limits: config,
+      handoffs,
+      contextWindow,
+      summaryTokens: CONSOLIDATION_SUMMARY_TOKENS,
+      minSavingTokens: MIN_REWIND_SAVINGS_TOKENS,
+    });
+    if (plan.kind === "skip") return;
+    const warn = (reason: string): SessionBoundaryDraft[] => {
+      const text = `[${TOOL_NAME} consolidation] ${plan.merged} older handoffs (~${formatWindow(plan.prefixTokens)} tokens) were not consolidated: ${toOneLine(reason, 400) ?? "unknown reason"}`;
+      try {
+        notify?.(text);
+      } catch {
+        /* A stale UI must not block the receipt. */
+      }
+      return [
+        {
+          type: "custom_message",
+          customType: "navigate-tree-auto-warning",
+          content: text,
+          display: true,
+        },
+      ];
+    };
+    const cutAt = projected.findIndex(
+      (entry) => entry.sourceEntry.id === plan.firstKeptEntryId,
+    );
+    const prefixCalls = new Set<string>();
+    for (const entry of projected.slice(0, cutAt))
+      for (const m of entry.messages)
+        if (m.role === "assistant")
+          for (const block of m.content)
+            if (block.type === "toolCall") prefixCalls.add(block.id);
+    const split = projected
+      .slice(cutAt)
+      .some((entry) =>
+        entry.messages.some(
+          (m) => m.role === "toolResult" && prefixCalls.has(m.toolCallId),
+        ),
+      );
+    if (split)
+      return warn("a tool call before the cut has its result after it");
+    const records = buildConsolidationSegment(
+      entries,
+      leafId,
+      plan.firstKeptEntryId,
+    );
+    if (!records.length) return;
+    if (!registry.hasConfiguredAuth(model))
+      return warn(
+        `no authentication is configured for ${model.provider}/${model.id}`,
+      );
+    const isCurrent = () => {
+      try {
+        return (
+          !signal?.aborted &&
+          ctx.signal === signal &&
+          ctx.sessionManager === sm &&
+          sm.getSessionId() === sessionId &&
+          sm.getLeafId() === leafId &&
+          !queuedFolds.has(sessionId) &&
+          !unrestoredFoldCursors.has(sm)
+        );
+      } catch {
+        return false;
+      }
+    };
+    runningFolds.add(sessionId);
+    try {
+      const summary = await summarizeFold({
+        runner: createFoldSummaryRunner({
+          registry,
+          model,
+          thinking: host.thinking,
+          sessionId,
+        }),
+        focus:
+          "The consolidated project history: goals, constraints, delivered work, decisions, open items and standing authorization.",
+        instruction: buildConsolidationRequestText,
+        segment: { background: "", records },
+        admit: foldAdmission(contextWindow),
+        signal,
+      });
+      if (!isCurrent()) return;
+      if (!summary.ok) return warn(`${summary.reason}: ${summary.detail}`);
+      const text = summary.text;
+      const tokensBefore = estimateAdmissionTokens(sm);
+      const details = {
+        navigateTree: {
+          consolidation: {
+            merged: plan.merged,
+            trigger: plan.trigger,
+            strategy: summary.strategy,
+            calls: summary.calls,
+          },
+        },
+      };
+      // Deterministic gate: the compaction must free context as Pi will project it.
+      const all = sm.getEntries();
+      const preview = {
+        type: "compaction",
+        id: "tree-navigator-consolidation-preview",
+        parentId: leafId,
+        timestamp: new Date().toISOString(),
+        summary: text,
+        firstKeptEntryId: plan.firstKeptEntryId,
+        tokensBefore,
+        details,
+        fromHook: true,
+      } satisfies CompactionEntry;
+      const before = estimateContentTokens(
+        buildFoldProjection(all, leafId).messages,
+      );
+      const after = estimateContentTokens(
+        buildFoldProjection([...all, preview], preview.id).messages,
+      );
+      if (before - after < MIN_REWIND_SAVINGS_TOKENS)
+        return warn(
+          `the consolidated history does not free enough context (estimated ${before} -> ${after} tokens); original history was kept`,
+        );
+      const written = trySessionWrite(sm, () =>
+        sm.appendCompaction(
+          text,
+          plan.firstKeptEntryId,
+          tokensBefore,
+          details,
+          true,
+        ),
+      );
+      if (!written.ok) {
+        if (!written.cursorRestored) unrestoredFoldCursors.add(sm);
+        return warn(
+          `the compaction could not be written (${written.error instanceof Error ? written.error.message : String(written.error)}); ${written.cursorRestored ? "the session cursor was restored" : "persistence is uncertain, reload the session before folding again"}`,
+        );
+      }
+      refreshAgentMessages(sm);
+      await emitSessionCompact(sm, written.value);
+      return [
+        {
+          type: "custom_message",
+          customType: CONSOLIDATION_CUSTOM_TYPE,
+          content: `[${TOOL_NAME} consolidation] Merged ${plan.merged} older handoffs into the project history: context ~${formatWindow(before)} -> ~${formatWindow(after)} tokens. The newest ${config.keepNewest} handoffs stay verbatim; the original entries remain in the session file.`,
+          display: true,
+          details: {
+            compactionId: written.value,
+            merged: plan.merged,
+            trigger: plan.trigger,
+            before,
+            after,
+            calls: summary.calls,
+          },
+        },
+      ];
+    } catch (error) {
+      return warn(error instanceof Error ? error.message : String(error));
+    } finally {
+      runningFolds.delete(sessionId);
+    }
   }
 
   // Auto start anchor (#55) run-end fallback: a run that finishes before its

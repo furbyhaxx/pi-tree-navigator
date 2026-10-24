@@ -96,6 +96,44 @@ export function buildSummaryRequestText(
   return `[navigate_tree]\n${buildSummaryInstruction(first, focus, parent, continuitySection)}`;
 }
 
+/** Merges older handoffs into one project-history compaction summary; `{first}` is the first summarized message. */
+export const CONSOLIDATION_PROMPT = `Consolidate messages {first} onwards in the conversation above into one project-history summary (message numbering starts at 1 and excludes the system prompt; this instruction message itself is not evidence). These messages are older, completed work, mostly earlier handoff reports. Newer handoffs and the current work are kept verbatim after this summary, so do not restate step-level progress.
+
+Keep: the user's goals, rules and preferences; decisions and their reasons; rejected or superseded approaches; what was delivered and how it was verified; commits and branches; facts, paths and identifiers later work may need; still-open or deferred items. Drop step-level detail, tool output and anything a later decision superseded. Do not invent facts.
+
+Start directly with the first heading and use this format:
+
+## Goal
+[The overall objective as it stands]
+
+## Constraints & Preferences
+- [User rules and preferences still in force]
+
+## Delivered
+- [Completed, verified work]
+
+## Decisions
+- **[Decision]**: [reason]
+
+## Rejected or Superseded
+- [Approach and why]
+
+## Commits
+- [SHA or branch: what it contains]
+
+## Open or Deferred
+- [Items still open from this history, or (none)]
+
+## Standing authorization
+[The user's current authorization and scope, quoted verbatim from the messages above (for example "work autonomously until done"), or "(none)". Say whether that scope is complete.]
+
+Keep it under about 6000 characters.`;
+
+/** Build the user instruction for a handoff consolidation request. */
+export function buildConsolidationRequestText(first: number): string {
+  return `[navigate_tree consolidation]\n${CONSOLIDATION_PROMPT.replaceAll("{first}", String(first))}`;
+}
+
 /**
  * The summary turn's text, from its `## Goal` heading on (r5d's first
  * required heading), or `null` when the heading is missing — an

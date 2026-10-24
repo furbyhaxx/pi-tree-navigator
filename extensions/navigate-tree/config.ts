@@ -135,6 +135,26 @@ export type StartAnchorField = FallbackField<number>;
 /** Per-field parse outcome for `parentHandoffMode`. */
 export type ParentHandoffModeField = FallbackField<HandoffMode>;
 
+/** Controls background consolidation of older fold handoffs. */
+export interface ConsolidationConfig {
+  enabled: boolean;
+  maxHandoffs: number;
+  maxWindowShare: number;
+  keepNewest: number;
+}
+
+/** Default consolidation thresholds and number of handoffs retained verbatim. */
+export const CONSOLIDATION_DEFAULTS: ConsolidationConfig = {
+  enabled: true,
+  maxHandoffs: 4,
+  maxWindowShare: 0.1,
+  keepNewest: 2,
+};
+
+type ConsolidationLayer = {
+  [K in keyof ConsolidationConfig]: FallbackField<ConsolidationConfig[K]>;
+} & { notObject: boolean };
+
 /** Per-field parse outcomes for the `continuity` block. */
 export interface ContinuityLayer {
   capture: FallbackField<boolean>;
@@ -159,6 +179,7 @@ export interface ParsedLayer {
     | { kind: "ok"; value: ProposalOptions }
     | { kind: "invalid"; error: string };
   continuity?: ContinuityLayer;
+  consolidation?: ConsolidationLayer;
   /** Sidecar auto-navigation policy (`auto_navigate`). */
   autoNavigate?:
     | { kind: "ok"; value: AutoNavigatePartial }
@@ -370,6 +391,51 @@ function parseIntentClassifierField(
     : { kind: "invalid" };
 }
 
+function parseConsolidationField(
+  record: Record<string, unknown>,
+): Pick<ParsedLayer, "consolidation"> {
+  if (!("consolidation" in record)) return {};
+  const block = record.consolidation;
+  const object = isPlainObject(block);
+  const read = <T>(
+    snake: string,
+    camel: string,
+    accepts: (value: unknown) => value is T,
+  ): FallbackField<T> => {
+    if (!object || (!(snake in block) && !(camel in block)))
+      return { kind: "absent" };
+    const value = snake in block ? block[snake] : block[camel];
+    return accepts(value) ? { kind: "ok", value } : { kind: "invalid" };
+  };
+  return {
+    consolidation: {
+      enabled: read(
+        "enabled",
+        "enabled",
+        (v): v is boolean => typeof v === "boolean",
+      ),
+      maxHandoffs: read(
+        "max_handoffs",
+        "maxHandoffs",
+        (v): v is number =>
+          typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 100,
+      ),
+      maxWindowShare: read(
+        "max_window_share",
+        "maxWindowShare",
+        (v): v is number => typeof v === "number" && v > 0 && v <= 1,
+      ),
+      keepNewest: read(
+        "keep_newest",
+        "keepNewest",
+        (v): v is number =>
+          typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 20,
+      ),
+      notObject: !object,
+    },
+  };
+}
+
 function parseContinuityField(
   record: Record<string, unknown>,
 ): Pick<ParsedLayer, "continuity"> {
@@ -413,6 +479,7 @@ export function parseTreeNavigatorConfig(raw: unknown): ParsedRoot {
       ...parseModelOverrides(record),
       ...parseProposalField(record),
       ...parseContinuityField(record),
+      ...parseConsolidationField(record),
       ...parseAutoNavigateField(record),
     },
   };
@@ -526,6 +593,37 @@ function mergeProposalField(
   };
 }
 
+function mergeConsolidationField(
+  globalLayer: ParsedLayer,
+  projectLayer: ParsedLayer,
+): Pick<ParsedLayer, "consolidation"> {
+  const global = globalLayer.consolidation;
+  const project = projectLayer.consolidation;
+  if (!global && !project) return {};
+  const absent = { kind: "absent" } as const;
+  return {
+    consolidation: {
+      enabled: mergeFallbackField(
+        global?.enabled ?? absent,
+        project?.enabled ?? absent,
+      ),
+      maxHandoffs: mergeFallbackField(
+        global?.maxHandoffs ?? absent,
+        project?.maxHandoffs ?? absent,
+      ),
+      maxWindowShare: mergeFallbackField(
+        global?.maxWindowShare ?? absent,
+        project?.maxWindowShare ?? absent,
+      ),
+      keepNewest: mergeFallbackField(
+        global?.keepNewest ?? absent,
+        project?.keepNewest ?? absent,
+      ),
+      notObject: false,
+    },
+  };
+}
+
 function mergeContinuityField(
   globalLayer: ParsedLayer,
   projectLayer: ParsedLayer,
@@ -602,6 +700,7 @@ export function mergeTreeNavigatorConfig(
     modelOverridesProblems: noModelOverridesProblems(),
     ...mergeProposalField(globalLayer, projectLayer),
     ...mergeContinuityField(globalLayer, projectLayer),
+    ...mergeConsolidationField(globalLayer, projectLayer),
     ...mergeAutoNavigateField(globalLayer, projectLayer),
   };
 }
@@ -802,6 +901,31 @@ function parseLayerRoot(where: string, root: unknown): LayerLoadResult {
       `navigate_tree: invalid parentHandoffMode in ${where} — expected "full", "synthesized" or "digest"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
     );
   }
+  const consolidation = parsed.layer.consolidation;
+  if (consolidation?.notObject)
+    warnings.push(
+      `navigate_tree: consolidation in ${where} must be an object — ignored.`,
+    );
+  if (consolidation?.enabled.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid consolidation.enabled in ${where} — expected true or false; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.enabled}.`,
+    );
+  }
+  if (consolidation?.maxHandoffs.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid consolidation.max_handoffs in ${where} — expected integer 1-100; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.maxHandoffs}.`,
+    );
+  }
+  if (consolidation?.maxWindowShare.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid consolidation.max_window_share in ${where} — expected number greater than 0 and at most 1; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.maxWindowShare}.`,
+    );
+  }
+  if (consolidation?.keepNewest.kind === "invalid") {
+    warnings.push(
+      `navigate_tree: invalid consolidation.keep_newest in ${where} — expected integer 1-20; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.keepNewest}.`,
+    );
+  }
   const continuity = parsed.layer.continuity;
   if (continuity?.notObject) {
     warnings.push(
@@ -880,6 +1004,7 @@ export async function loadTreeNavigatorConfig(opts: {
     rewindHintModelReserveTokens: Map<string, number | null>;
     anchorStartAfterTurns: number;
     parentHandoffMode: HandoffMode;
+    consolidation: ConsolidationConfig;
     continuity: {
       capture: boolean;
       /** `"recommended"`, an object policy's canonical JSON text, `provider/id` of a classifier model, or null for heuristics only. */
@@ -937,6 +1062,24 @@ export async function loadTreeNavigatorConfig(opts: {
         effective.parentHandoffMode.kind === "ok"
           ? effective.parentHandoffMode.value
           : PARENT_HANDOFF_MODE_DEFAULT,
+      consolidation: {
+        enabled:
+          effective.consolidation?.enabled.kind === "ok"
+            ? effective.consolidation.enabled.value
+            : CONSOLIDATION_DEFAULTS.enabled,
+        maxHandoffs:
+          effective.consolidation?.maxHandoffs.kind === "ok"
+            ? effective.consolidation.maxHandoffs.value
+            : CONSOLIDATION_DEFAULTS.maxHandoffs,
+        maxWindowShare:
+          effective.consolidation?.maxWindowShare.kind === "ok"
+            ? effective.consolidation.maxWindowShare.value
+            : CONSOLIDATION_DEFAULTS.maxWindowShare,
+        keepNewest:
+          effective.consolidation?.keepNewest.kind === "ok"
+            ? effective.consolidation.keepNewest.value
+            : CONSOLIDATION_DEFAULTS.keepNewest,
+      },
       continuity: {
         capture:
           effective.continuity?.capture.kind === "ok"

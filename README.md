@@ -329,6 +329,36 @@ reserve, or the oldest valid target when none meets the recommendation budget.
 With hints off, the recommendation leaves 25% of the window free. Every selected
 target must still pass the engine's actual reduction and headroom gates.
 
+### Handoff consolidation (on by default)
+
+Handoffs before a fold target stay in context, so they pile up across a long
+session. At a completed turn boundary, the extension merges every projected entry
+before the oldest of the newest `keep_newest` handoffs into one project-history
+summary and appends it as a native Pi `compaction` entry. The newest handoffs and
+everything after them stay verbatim; the merged originals remain in the JSONL.
+
+```text
+before: H1 H2 H3 H4 H5 ... leaf
+after : [compaction: H1..H3 merged] H4 H5 ... leaf
+```
+
+| key (`consolidation`) | default | effect |
+|---|---|---|
+| `enabled` | `true` | Turn background consolidation on or off. |
+| `max_handoffs` / `maxHandoffs` | `4` | Consolidate when more handoffs than this are in context. |
+| `max_window_share` / `maxWindowShare` | `0.1` | Or when handoffs exceed this share of the window. |
+| `keep_newest` / `keepNewest` | `2` | Handoffs kept verbatim after the cut. |
+
+- The summary is an independent side call (chunked, low reasoning) under the same
+  per-session lock as folds. It never runs while a fold is queued or running, after
+  an errored or aborted turn, or when the session changed meanwhile.
+- The cut is refused when a tool call before it has its result after it. The
+  compaction must free at least 4,000 estimated tokens; otherwise nothing is written.
+- Every refusal or failure appends a visible `navigate-tree-auto-warning`; a success
+  appends a `navigate-tree-consolidation` receipt and emits `session_compact`.
+- Later folds to an anchor inside the kept range carry the compaction forward, so
+  anchors after the cut stay foldable. Anchors before the cut are refused.
+
 ## Continuity ledger (endless sessions)
 
 A fold keeps the work summary but used to lose the user's own binding words: goals, rules,
