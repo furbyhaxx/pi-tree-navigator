@@ -596,8 +596,8 @@ Cache behavior on the bridge:
   inspect important reports and pin durable facts.
 - **Budgets are estimates.** Planning and execution share an admission policy.
   Estimated text is priced at the ratio the current model reported for its last
-  request (never below Pi's 3.5 characters per token, at most 4x the four-char
-  heuristic), because dense code and JSON cost far more on some tokenizers. The
+  request of at least 50k estimated tokens (never below Pi's 3.5 characters per
+  token, at most 4x the four-char heuristic), because dense code and JSON cost far more on some tokenizers. The
   first fold right after a model switch, before that model has answered once,
   still uses the default. Provider errors still need recovery or an explicit
   failure.

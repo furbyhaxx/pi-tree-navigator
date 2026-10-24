@@ -1089,7 +1089,7 @@ describe("context event handler", () => {
     };
     f.sm.appendMessage({
       role: "user",
-      content: "x".repeat(40_000),
+      content: "x".repeat(240_000),
       timestamp: 1,
     });
     const uncalibrated = growth();

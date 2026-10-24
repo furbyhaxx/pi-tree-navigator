@@ -115,7 +115,9 @@ export function measuredTokenFactor(
   );
 }
 
-const MIN_CALIBRATION_TOKENS = 2_000;
+// Tool schemas are in the reported usage but not always in the heuristic; on a
+// request this large they are a small share instead of the measured ratio.
+const MIN_CALIBRATION_TOKENS = 50_000;
 const MAX_TOKEN_FACTOR = 4;
 
 /** Estimate projected context with Pi's heuristic and the effective system state. */

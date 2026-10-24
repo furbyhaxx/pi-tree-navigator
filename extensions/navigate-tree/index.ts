@@ -1122,7 +1122,7 @@ function accountRequest(
     messages: effective,
     tokens:
       estimateRequestTokens(effective, factor) +
-      (mandated ? 0 : Math.ceil(ANCHOR_MANDATE.length / 3.5)),
+      (mandated ? 0 : Math.ceil((ANCHOR_MANDATE.length / 4) * factor)),
   };
 }
 
@@ -2290,9 +2290,10 @@ function previewStrategy(
   focus: string,
   parent: { mode: HandoffMode; childCount: number },
   continuitySection: string | undefined,
+  factor: number,
 ): "in-context" | "chunked" {
   if (!inContext) return "chunked";
-  const admitted = foldAdmission(contextWindow)(
+  const admitted = foldAdmission(contextWindow, factor)(
     {
       systemPrompt: inContext.systemPrompt,
       tools: inContext.tools,
@@ -2429,6 +2430,7 @@ export function priceFoldCandidates(
           target: targetId,
           rewindTo: anchor.name,
         }),
+        tokenFactorOf(sm),
       );
     } catch {
       strategy = "chunked";
@@ -5030,7 +5032,7 @@ export default function (pi: ExtensionAPI) {
     for (let tries = 0; tries < 4; tries++) {
       if (plan.kind !== "plan" || plan.floor <= budget) break;
       const next =
-        plan.cut.keptTokens -
+        Math.min(configuredKeep, plan.cut.keptTokens) -
         Math.ceil(((plan.floor - budget) / tokenFactorOf(sm)) * 1.05);
       if (next < minKeep) break;
       const smaller = planAt(next);
