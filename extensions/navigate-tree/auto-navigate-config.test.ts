@@ -53,6 +53,8 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     const parsed = parseAutoNavigatePartial({
       enabled: true,
       mode: "anchor-and-rewind",
+      pressure: "fold",
+      keep_recent_share: 0.3,
       milestone: "recommended",
       check_every_turns: 4,
       min_tokens_since_anchor: 20000,
@@ -62,12 +64,22 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     assert.deepEqual(parsed, {
       enabled: true,
       mode: "anchor-and-rewind",
+      pressure: "fold",
+      keepRecentShare: 0.3,
       milestonePolicy: "recommended",
       checkEveryTurns: 4,
       minTokensSinceAnchor: 20000,
       rewindAtTokens: 90000,
       tools: { bash: "calls-only", read: "omit" },
     });
+    assert.equal(
+      parseAutoNavigatePartial({ keep_recent_share: 0.05 }).keepRecentShare,
+      0.05,
+    );
+    assert.equal(
+      parseAutoNavigatePartial({ keep_recent_share: 0.45 }).keepRecentShare,
+      0.45,
+    );
     assert.throws(() => parseAutoNavigatePartial({ camelCaseKey: true }));
     assert.throws(() => parseAutoNavigatePartial({ check_every_turns: 0 }));
     // Removed in favour of `milestone`: ignored here, reported once by the loader.
@@ -80,7 +92,58 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
   it("defaults auto-navigation off with the recommended milestone policy", () => {
     const config = materializeAutoNavigateConfig(undefined);
     assert.equal(config.enabled, false);
+    assert.equal(config.pressure, "compact");
+    assert.equal(config.keepRecentShare, 0.25);
     assert.equal(config.milestonePolicy, RECOMMENDED_MILESTONE_CLASSIFIER);
+  });
+
+  it("merges pressure settings per model override", async () => {
+    const loaded = await loadTreeNavigatorConfig({
+      agentDir: "/agent",
+      projectPath: "/project/.pi/tree-navigator.json",
+      projectTrusted: false,
+      readFile: async () =>
+        JSON.stringify({
+          auto_navigate: { pressure: "fold", keep_recent_share: 0.3 },
+          model_overrides: {
+            "*opus*": {
+              auto_navigate: { keep_recent_share: 0.2 },
+            },
+          },
+        }),
+    });
+    assert.deepEqual(loaded.warnings, []);
+    const resolved = resolveAutoNavigateConfig(
+      loaded.config,
+      "anthropic/claude-opus-5-5",
+    );
+    assert.equal(resolved.pressure, "fold");
+    assert.equal(resolved.keepRecentShare, 0.2);
+  });
+
+  it("warns on invalid pressure fields without applying their values", async () => {
+    for (const [autoNavigate, field] of [
+      [
+        { pressure: "squash", keep_recent_share: 0.3 },
+        "auto_navigate.pressure",
+      ],
+      [
+        { pressure: "fold", keep_recent_share: 0.5 },
+        "auto_navigate.keep_recent_share",
+      ],
+    ] as const) {
+      const loaded = await loadTreeNavigatorConfig({
+        agentDir: "/agent",
+        projectPath: "/project/.pi/tree-navigator.json",
+        projectTrusted: false,
+        readFile: async () => JSON.stringify({ auto_navigate: autoNavigate }),
+      });
+      assert.equal(loaded.warnings.length, 1);
+      assert.ok(loaded.warnings[0]?.includes(field));
+      const resolved = resolveAutoNavigateConfig(loaded.config, undefined);
+      assert.equal(resolved.pressure, "compact");
+      assert.equal(resolved.keepRecentShare, 0.25);
+    }
   });
 
   it("canonicalizes and resolves milestone object settings", async () => {
@@ -172,6 +235,8 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     assert.deepEqual(matching, {
       enabled: true,
       mode: "anchor-and-rewind",
+      pressure: "compact",
+      keepRecentShare: 0.25,
       checkEveryTurns: 4,
       minTokensSinceAnchor: 25000,
       rewindAtTokens: 120000,
@@ -243,6 +308,8 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
     assert.deepEqual(openrouterAuto, {
       enabled: true,
       mode: "anchor-and-rewind",
+      pressure: "compact",
+      keepRecentShare: 0.25,
       checkEveryTurns: 4,
       minTokensSinceAnchor: 25000,
       rewindAtTokens: 90000,

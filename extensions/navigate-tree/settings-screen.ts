@@ -28,8 +28,10 @@ import {
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import {
+  AUTO_NAVIGATE_MAX_KEEP_RECENT_SHARE,
   AUTO_NAVIGATE_MAX_TOKENS,
   AUTO_NAVIGATE_MAX_TURNS,
+  AUTO_NAVIGATE_MIN_KEEP_RECENT_SHARE,
   AUTO_NAVIGATE_MIN_TOKENS,
   AUTO_NAVIGATE_MIN_TURNS,
   type AutoNavigatePartial,
@@ -212,6 +214,10 @@ const autoRead = (config: Loaded) =>
   resolveAutoNavigateConfig(config, undefined);
 
 const TOKEN_RANGE = range(AUTO_NAVIGATE_MIN_TOKENS, AUTO_NAVIGATE_MAX_TOKENS);
+const KEEP_RECENT_SHARE_RANGE = range(
+  AUTO_NAVIGATE_MIN_KEEP_RECENT_SHARE,
+  AUTO_NAVIGATE_MAX_KEEP_RECENT_SHARE,
+);
 
 const SETTINGS: readonly SettingDef[] = [
   {
@@ -359,6 +365,29 @@ const SETTINGS: readonly SettingDef[] = [
     read: (config) => autoRead(config).rewindAtTokens,
   },
   {
+    key: "auto_navigate.pressure",
+    path: [AUTO_NAVIGATE, name("pressure")],
+    kind: "choice",
+    choices: ["compact", "fold"],
+    onInvalid: "blocks",
+    expects: "compact or fold",
+    description:
+      "At rewind_at_tokens: compact (default) summarizes older work; keeps recent work verbatim. Fold returns to anchor.",
+    status: autoStatus("pressure"),
+    read: (config) => autoRead(config).pressure,
+  },
+  {
+    key: "auto_navigate.keep_recent_share",
+    path: [AUTO_NAVIGATE, name("keep_recent_share")],
+    kind: "share",
+    onInvalid: "blocks",
+    expects: `number ${KEEP_RECENT_SHARE_RANGE} inclusive`,
+    description:
+      "Share of rewind_at_tokens kept verbatim after a pressure compaction. 0.05 to 0.45 (default 0.25).",
+    status: autoStatus("keepRecentShare"),
+    read: (config) => autoRead(config).keepRecentShare,
+  },
+  {
     key: "consolidation.enabled",
     path: [
       name("consolidation"),
@@ -447,6 +476,8 @@ const AUTO_FIELD: Record<string, keyof AutoNavigatePartial> = {
   check_every_turns: "checkEveryTurns",
   min_tokens_since_anchor: "minTokensSinceAnchor",
   rewind_at_tokens: "rewindAtTokens",
+  pressure: "pressure",
+  keep_recent_share: "keepRecentShare",
 };
 const BASE_RESERVE = SETTINGS.filter(
   (def) => def.key === "rewindHintReserveTokens",
@@ -693,7 +724,7 @@ const entryItems = (pattern: string): readonly Item[] => [
 
 const GROUP_AFTER = new Map<string, Group>([
   ["treeProposal.model", PROPOSAL_TOOLS],
-  ["auto_navigate.rewind_at_tokens", AUTO_TOOLS],
+  ["auto_navigate.keep_recent_share", AUTO_TOOLS],
 ]);
 
 /** Everything the top screen lists, in order. */
