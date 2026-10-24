@@ -107,6 +107,11 @@ export interface SummarizeFoldOptions {
   parent?: { mode: "full" | "synthesized" | "digest"; childCount: number };
   continuitySection?: string;
   /**
+   * Replaces the r5d fold instruction in the in-context request and the final reduce;
+   * `first` is the 1-based first summarized message. The answer must still start at `## Goal`.
+   */
+  instruction?(first: number): string;
+  /**
    * Strategy A candidate: the projected live request up to the leaf; `first` is the 1-based first collapsed message.
    * pi 1.3 carries the system prompt and tools as system messages inside `messages`; the separate fields are optional.
    */
@@ -407,6 +412,15 @@ export async function summarizeFold(
   const usage: Usage[] = [];
   let calls = 0;
   let plannedCalls = 0;
+  const requestText = (first: number) =>
+    options.instruction
+      ? options.instruction(first)
+      : buildSummaryRequestText(
+          first,
+          options.focus,
+          options.parent,
+          options.continuitySection,
+        );
 
   const fail = (reason: Failure["reason"], detail: string): Failure => ({
     ok: false,
@@ -487,14 +501,7 @@ export async function summarizeFold(
       tools: inContext.tools,
       messages: [
         ...inContext.messages,
-        userMessage(
-          buildSummaryRequestText(
-            inContext.first,
-            options.focus,
-            options.parent,
-            options.continuitySection,
-          ),
-        ),
+        userMessage(requestText(inContext.first)),
       ],
     };
     const { fits, inputEstimate } = options.admit(request, reduceCeiling);
@@ -549,12 +556,7 @@ export async function summarizeFold(
     );
 
   const first = background ? 2 : 1;
-  const finalInstruction = buildSummaryRequestText(
-    first,
-    options.focus,
-    options.parent,
-    options.continuitySection,
-  );
+  const finalInstruction = requestText(first);
   const backgroundMessage = background
     ? `Background for the collapsed work below; it is not part of it:\n${background}`
     : "";
