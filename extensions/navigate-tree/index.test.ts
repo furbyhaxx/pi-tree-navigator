@@ -4646,6 +4646,42 @@ describe("commitFold: engine shape", () => {
     }
   });
 
+  it("references an attached skill instead of quoting its body, including inherited requests", async () => {
+    const skillBody = "Skill rule: always prefer the large model. ".repeat(400);
+    const location = "/skills/picking/SKILL.md";
+    const message = `<skill name="picking" location="${location}">\nReferences are relative to /skills/picking.\n\n${skillBody}\n</skill>\n\nchoose the right model for the workers`;
+    const reference = `[skill "picking" was attached from ${location}; its content is not repeated here, re-read that file if needed]\n\nchoose the right model for the workers`;
+    const f = setup();
+    const { anchorId } = setupRewindable(f.sm, f.pi, { capture: true });
+    const sourceEntryId = f.sm.appendMessage({
+      role: "user",
+      content: [{ type: "text", text: message }],
+      timestamp: 1,
+    });
+    f.sm.appendCustomMessageEntry("work", "evidence ".repeat(6_000), false);
+    const first = await commitFold(f.sm, engineFold(f, anchorId).input);
+    assert.ok(first.ok, JSON.stringify(first));
+    assert.deepEqual(first.openUserRequests, [
+      { sourceEntryId, text: reference },
+    ]);
+    assert.ok(!first.continuation.includes("Skill rule:"));
+
+    // A continuation written before this fix stored the full skill body.
+    f.sm.appendCustomMessageEntry(REWIND_CUSTOM_TYPE, "old receipt", true, {
+      openUserRequests: [{ sourceEntryId, text: message }],
+    });
+    f.sm.appendCustomMessageEntry("work", "more work ".repeat(6_000), false);
+    const second = await commitFold(
+      f.sm,
+      engineFold(f, anchorId, { newLabel: "end-two" }).input,
+    );
+    assert.ok(second.ok, JSON.stringify(second));
+    assert.deepEqual(second.openUserRequests, [
+      { sourceEntryId, text: reference },
+    ]);
+    assert.ok(!second.continuation.includes("Skill rule:"));
+  });
+
   it("does not quote an open user request in the retained prefix", async () => {
     const f = setup();
     const id = f.sm.appendMessage({

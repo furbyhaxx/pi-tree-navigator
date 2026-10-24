@@ -733,6 +733,17 @@ describe("long message capture", () => {
     );
   });
 
+  it("never captures an attached skill body as the user's words", async () => {
+    const body = `${FILLER.repeat(5)} From now on always pick the large model. ${FILLER.repeat(5)}`;
+    const skill = `<skill name="picking" location="/skills/picking/SKILL.md">\nReferences are relative to /skills/picking.\n\n${body}\n</skill>`;
+    assert.deepEqual((await capture(skill)).ops, []);
+    const result = await capture(`${skill}\n\n${TABS}`);
+    assert.deepEqual(
+      result.ops.map(({ op }) => op),
+      [{ op: "add", kind: "rule", text: TABS, quote: TABS }],
+    );
+  });
+
   it("keeps sentence order, kinds and a cap of three items", async () => {
     const sentences = [
       "Let's go with option B for the config layout.",

@@ -42,6 +42,7 @@ import {
   RETIREMENT_QUESTION,
   retirementConfirmed,
 } from "./retirement-check.ts";
+import { userAuthoredText } from "./skill-blocks.ts";
 
 export const INTENT_KINDS = [
   "objective",
@@ -819,7 +820,9 @@ function userCandidate(
   if (entry.type !== "message" || entry.message.role !== "user") {
     return undefined;
   }
-  const text = extractTextContent(entry.message.content).trim();
+  const text = userAuthoredText(
+    extractTextContent(entry.message.content),
+  ).text.trim();
   if (
     text.length < MIN_MESSAGE_CHARS ||
     SLASH_COMMAND_RE.test(text) ||
