@@ -162,11 +162,6 @@ export async function planAutomaticFold(
     activeTokens >= config.rewindAtTokens;
   state.aboveRewindThreshold = above;
   state.turnsSinceCheck++;
-  if (options.calledNavigateTree) {
-    state.turnsSinceCheck = 0;
-    state.lastCheckTokens = activeTokens;
-    return result;
-  }
   if (!config.enabled) return result;
   // Pressure folds need no classifier: crossing the threshold is the decision.
   // A retry needs the runway a successful fold would have created, so a fold
@@ -186,6 +181,12 @@ export async function planAutomaticFold(
       result.action = { kind: "pressure-fold" };
       state.lastPressureTokens = activeTokens;
     }
+    return result;
+  }
+  // The agent is managing context itself; only the milestone check waits.
+  if (options.calledNavigateTree) {
+    state.turnsSinceCheck = 0;
+    state.lastCheckTokens = activeTokens;
     return result;
   }
   if (

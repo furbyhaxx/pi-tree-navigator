@@ -15,6 +15,7 @@ import {
 import {
   createFauxCore,
   fauxAssistantMessage,
+  fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import {
   createAgentSession,
@@ -23,6 +24,7 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import navigateTree, { estimateAdmissionTokens } from "./index.ts";
 
 const WINDOW = 32_000;
@@ -72,8 +74,12 @@ function abortedReply(): AssistantMessage {
   });
 }
 
+/** Tool turns the `regrow` agent runs after its first recovery; together they overflow again. */
+const REGROW_TURNS = 4;
+const REGROW_RESULT = `REGROW-EVIDENCE-${"dolor sit amet ".repeat(2_000)}`;
+
 async function withSession(
-  mode: "recover" | "cancel" | "no-anchor",
+  mode: "recover" | "cancel" | "no-anchor" | "regrow",
   run: (harness: {
     sm: SessionManager;
     prompt: (text: string) => Promise<string | undefined>;
@@ -131,12 +137,17 @@ async function withSession(
       else options?.signal?.addEventListener("abort", finish, { once: true });
       return stream;
     }
+    const mainCalls = calls.filter((call) => !call.side).length;
+    const reply = side
+      ? summaryReply()
+      : mode === "regrow" && mainCalls <= REGROW_TURNS
+        ? fauxAssistantMessage(
+            [fauxToolCall("grow", {}, { id: `grow-${mainCalls}` })],
+            { stopReason: "toolUse" },
+          )
+        : fauxAssistantMessage("recovered answer");
     const stream = createAssistantMessageEventStream();
-    queueMicrotask(() =>
-      stream.end(
-        side ? summaryReply() : fauxAssistantMessage("recovered answer"),
-      ),
-    );
+    queueMicrotask(() => stream.end(reply));
     return stream;
   };
   const runtime = await ModelRuntime.create({
@@ -174,7 +185,20 @@ async function withSession(
     agentDir: dir,
     settingsManager: settings,
     noExtensions: true,
-    extensionFactories: [navigateTree],
+    extensionFactories: [
+      navigateTree,
+      (pi) =>
+        pi.registerTool({
+          name: "grow",
+          label: "Grow",
+          description: "Returns a large synthetic result.",
+          parameters: Type.Object({}),
+          execute: async () => ({
+            content: [{ type: "text", text: REGROW_RESULT }],
+            details: {},
+          }),
+        }),
+    ],
     noSkills: true,
     noPromptTemplates: true,
     noThemes: true,
@@ -192,7 +216,7 @@ async function withSession(
     modelRuntime: runtime,
     model,
     thinkingLevel: "off",
-    tools: ["navigate_tree"],
+    tools: mode === "regrow" ? ["navigate_tree", "grow"] : ["navigate_tree"],
     resourceLoader: loader,
     sessionManager: sm,
     settingsManager: settings,
@@ -330,6 +354,39 @@ describe("production preflight recovery", () => {
             messageText(entry.message).includes("recovered answer"),
         ),
         true,
+      );
+    });
+  });
+
+  it("recovers again when the run overflows a second time after the recovered request generated", async () => {
+    await withSession("regrow", async ({ sm, prompt, calls }) => {
+      const rejected = await prompt(REQUEST);
+      assert.equal(rejected, undefined, rejected);
+      const recoveries = sm
+        .getEntries()
+        .flatMap((entry) =>
+          entry.type === "custom_message" &&
+          entry.customType === "navigate-tree-rewind"
+            ? [entry.details as { status?: string; origin?: string }]
+            : [],
+        );
+      assert.deepEqual(
+        recoveries.map((details) => `${details.origin}:${details.status}`),
+        ["recovery:done", "recovery:done"],
+        JSON.stringify(recoveries),
+      );
+      const main = calls.filter((call) => !call.side && !call.aborted);
+      assert.equal(main.length, REGROW_TURNS + 1);
+      for (const call of main)
+        assert.ok(call.tokens + RESERVE <= WINDOW, `main ${call.tokens}`);
+      assert.ok(
+        messageText(
+          (
+            sm.getBranch().findLast((entry) => entry.type === "message") as {
+              message: { content?: unknown };
+            }
+          ).message,
+        ).includes("recovered answer"),
       );
     });
   });

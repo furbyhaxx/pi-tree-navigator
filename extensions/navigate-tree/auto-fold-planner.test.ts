@@ -198,6 +198,18 @@ test("crossing rewind_at_tokens folds deterministically without asking a classif
   assert.equal(f.sent.length, 0);
 });
 
+test("a navigate_tree call in the turn does not postpone pressure relief", async () => {
+  const f = fixture();
+  f.disagree();
+  const out = await planAutomaticFold({
+    ...f.options(),
+    activeTokens: 100_000,
+    calledNavigateTree: true,
+  });
+  assert.deepEqual(out.action, { kind: "pressure-fold" });
+  assert.equal(f.sent.length, 0);
+});
+
 test("a pressure fold that did not get below the threshold waits for half the threshold of fresh tokens, even after its own new anchor", async () => {
   const f = fixture();
   f.disagree();

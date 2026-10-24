@@ -5,7 +5,7 @@ title: "Independent fold live acceptance: running results"
 description: "Budgeted synthetic manual, preflight and agent scenarios; failed evidence retained. Acceptance remains incomplete."
 type: "analysis"
 created: "2026-10-23T19:21:08+02:00"
-updated: "2026-10-24T19:02:56+02:00"
+updated: "2026-10-25T00:06:26+02:00"
 createdBy: "coding-agent"
 updatedBy: "coding-agent"
 ---
@@ -77,3 +77,15 @@ main request returned OpenRouter `402 Insufficient credits`; no summary or
 compaction ran and the call settled at $0. This is an account-balance blocker,
 not a product result. Pressure compaction remains unverified against a real
 provider; offline coverage is the SDK-loop host tests in `index.test.ts`.
+
+`pressure-02` and `pressure-03` (native `openai/gpt-6-luna` via the subscription,
+settled at $0 with `costSource: "subscription"`; same fixture):
+
+- `pressure-02`: **FAIL**. The compaction itself worked (in-context summary,
+  78k -> 21k, ~17k kept verbatim), but only after the final answer: the planner
+  skipped pressure relief in any turn that called `navigate_tree`, and the
+  fixture's first turn calls `list`. Fixed in `50c5299`.
+- `pressure-03`: **PASS**. Compacted at the first boundary over 64k
+  (78,002 reported), kept ~16.8k verbatim, estimated 21,003 after; the provider
+  reported 20,733 for the next request (20,708 input). The agent continued in the
+  same run and answered. 4 requests.

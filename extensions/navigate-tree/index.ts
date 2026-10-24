@@ -63,6 +63,7 @@ import {
   buildSessionProjection,
   CONFIG_DIR_NAME,
   type CompactionEntry,
+  calculateContextTokens,
   collectEntriesForBranchSummary,
   type ExtensionAPI,
   type ExtensionCommandContext,
@@ -102,8 +103,11 @@ import {
 } from "./config.ts";
 import { planConsolidation } from "./consolidation-planner.ts";
 import {
+  DEFAULT_TOKEN_FACTOR,
   estimateContentTokens,
+  estimateRawRequestTokens,
   estimateRequestTokens,
+  measuredTokenFactor,
 } from "./context-tokens.ts";
 import {
   isVisible,
@@ -300,6 +304,9 @@ export const MIN_SUMMARY_FOCUS_LENGTH = 20;
 export const MIN_REWIND_SAVINGS_TOKENS = 4000;
 /** The consolidation prompt asks for about 6,000 characters. */
 const CONSOLIDATION_SUMMARY_TOKENS = Math.ceil(6000 / 3.5);
+
+/** The smallest kept tail a pressure compaction shrinks to, as a share of `keep_recent_share`. */
+const MIN_KEPT_SHARE_OF_CONFIGURED = 0.25;
 /** Receipt of a background consolidation; visible, one line. */
 export const CONSOLIDATION_CUSTOM_TYPE = "navigate-tree-consolidation";
 /** Receipt of a tail-keeping pressure compaction. */
@@ -1038,11 +1045,75 @@ function effectiveRequestMessages(
 }
 
 function requestAccounting(sm: SessionManager, messages: AgentMessage[]) {
-  return accountRequest(effectiveRequestMessages(sm, messages));
+  return accountRequest(
+    effectiveRequestMessages(sm, messages),
+    tokenFactorOf(sm),
+  );
+}
+
+/**
+ * Per session, for the model that served its latest request: estimated tokens
+ * per heuristic token that model reported, and the heuristic of the request
+ * still awaiting its usage. A model switch drops the measurement, because
+ * tokenizers differ.
+ */
+const tokenCalibration = new Map<
+  string,
+  { modelKey: string; factor?: number; pending?: number }
+>();
+
+function tokenFactorOf(sm: { getSessionId(): string }): number {
+  try {
+    return (
+      tokenCalibration.get(sm.getSessionId())?.factor ?? DEFAULT_TOKEN_FACTOR
+    );
+  } catch {
+    return DEFAULT_TOKEN_FACTOR;
+  }
+}
+
+/** Remember the heuristic of the request about to go to `modelKey`. */
+function noteOutgoingRequest(
+  sessionId: string,
+  modelKey: string,
+  effective: AgentMessage[],
+): void {
+  const current = tokenCalibration.get(sessionId);
+  tokenCalibration.set(sessionId, {
+    modelKey,
+    ...(current?.modelKey === modelKey && { factor: current.factor }),
+    pending: estimateRawRequestTokens(effective),
+  });
+}
+
+/** Calibrate from the usage the model reported for the noted request. */
+function noteRequestUsage(sessionId: string, message: unknown): void {
+  const current = tokenCalibration.get(sessionId);
+  const m = message as Partial<AssistantMessage> | undefined;
+  if (
+    current?.pending === undefined ||
+    m?.role !== "assistant" ||
+    `${m.provider}/${m.model}` !== current.modelKey ||
+    m.stopReason === "error" ||
+    m.stopReason === "aborted" ||
+    !m.usage
+  )
+    return;
+  const factor = measuredTokenFactor(
+    calculateContextTokens(m.usage) - (m.usage.output ?? 0),
+    current.pending,
+  );
+  tokenCalibration.set(sessionId, {
+    modelKey: current.modelKey,
+    factor: factor ?? current.factor,
+  });
 }
 
 /** The admission estimate of a complete request whose system state is already effective. */
-function accountRequest(effective: AgentMessage[]) {
+function accountRequest(
+  effective: AgentMessage[],
+  factor = DEFAULT_TOKEN_FACTOR,
+) {
   const system = getCurrentSystemMessage(effective);
   const mandated =
     system !== undefined &&
@@ -1050,8 +1121,8 @@ function accountRequest(effective: AgentMessage[]) {
   return {
     messages: effective,
     tokens:
-      estimateRequestTokens(effective) +
-      (mandated ? 0 : Math.ceil(ANCHOR_MANDATE.length / 3.5)),
+      estimateRequestTokens(effective, factor) +
+      (mandated ? 0 : Math.ceil((ANCHOR_MANDATE.length / 4) * factor)),
   };
 }
 
@@ -2060,23 +2131,29 @@ export interface FoldApi {
  * estimate of the complete request (system prompt and tools included), the
  * output allowance and the recovery headroom must fit the model's window.
  */
-function foldAdmission(contextWindow: number): SummarizeFoldOptions["admit"] {
+function foldAdmission(
+  contextWindow: number,
+  factor = DEFAULT_TOKEN_FACTOR,
+): SummarizeFoldOptions["admit"] {
   return (request, maxOutputTokens) => {
     const inputEstimate =
-      accountRequest([
-        ...(request.systemPrompt
-          ? [
-              {
-                role: "system" as const,
-                content: request.systemPrompt,
-                timestamp: 0,
-              },
-            ]
-          : []),
-        ...request.messages,
-      ]).tokens +
+      accountRequest(
+        [
+          ...(request.systemPrompt
+            ? [
+                {
+                  role: "system" as const,
+                  content: request.systemPrompt,
+                  timestamp: 0,
+                },
+              ]
+            : []),
+          ...request.messages,
+        ],
+        factor,
+      ).tokens +
       (request.tools
-        ? Math.ceil(JSON.stringify(request.tools).length / 3.5)
+        ? Math.ceil((JSON.stringify(request.tools).length / 4) * factor)
         : 0);
     return {
       fits:
@@ -2213,9 +2290,10 @@ function previewStrategy(
   focus: string,
   parent: { mode: HandoffMode; childCount: number },
   continuitySection: string | undefined,
+  factor: number,
 ): "in-context" | "chunked" {
   if (!inContext) return "chunked";
-  const admitted = foldAdmission(contextWindow)(
+  const admitted = foldAdmission(contextWindow, factor)(
     {
       systemPrompt: inContext.systemPrompt,
       tools: inContext.tools,
@@ -2352,6 +2430,7 @@ export function priceFoldCandidates(
           target: targetId,
           rewindTo: anchor.name,
         }),
+        tokenFactorOf(sm),
       );
     } catch {
       strategy = "chunked";
@@ -2917,7 +2996,10 @@ export default function (pi: ExtensionAPI) {
             sessionId: req.sessionId,
           });
         },
-        admit: foldAdmission(host.model?.contextWindow ?? 0),
+        admit: foldAdmission(
+          host.model?.contextWindow ?? 0,
+          tokenFactorOf(host.sm),
+        ),
         commit: (req, prepared, summary) =>
           commitEngineFold(host, req, prepared, summary.text),
       }).run(request, options);
@@ -2955,7 +3037,7 @@ export default function (pi: ExtensionAPI) {
     ).filter((message) => message.role === "system");
     const modelKey = `${model.provider}/${model.id}`;
     if (
-      accountRequest(systemHead).tokens +
+      accountRequest(systemHead, tokenFactorOf(sm)).tokens +
         RECOVERY_MIN_OUTPUT_TOKENS +
         RECOVERY_HEADROOM_TOKENS >
       contextWindow
@@ -3560,6 +3642,16 @@ export default function (pi: ExtensionAPI) {
       stopReason?: string;
     };
     if (message?.role !== "assistant") return;
+    noteRequestUsage(sessionId, message);
+    // The recovered request generated within the window: a later overflow in
+    // this run is a new request and may recover again. Only a recovery that
+    // did not let the next request through is final.
+    if (
+      message.stopReason !== "error" &&
+      message.stopReason !== "aborted" &&
+      !overflowed(message, ctx.model)
+    )
+      preflightAttempted.delete(sessionId);
     const messageEntryId =
       typeof event.messageEntryId === "string" ? event.messageEntryId : "";
     const turnIds = messageEntryId
@@ -3797,6 +3889,7 @@ export default function (pi: ExtensionAPI) {
       nativeRetryOwned.delete(sessionId);
       recoveryCuts.delete(sessionId);
       queuedFolds.delete(sessionId);
+      tokenCalibration.delete(sessionId);
       autoFoldStateBySession.delete(sessionId);
     } catch {
       // Fail-open: session_start clears it too.
@@ -4034,6 +4127,7 @@ export default function (pi: ExtensionAPI) {
     nativeRetryOwned.delete(sessionId);
     recoveryCuts.delete(sessionId);
     queuedFolds.delete(sessionId);
+    tokenCalibration.delete(sessionId);
     rewindHintReserveTokens = null;
     hintByModel = new Map();
     autoNavigateBase = undefined;
@@ -4166,6 +4260,13 @@ export default function (pi: ExtensionAPI) {
       (message) => message.role === "system",
     );
     captureSystemHead(sm, sessionId, model, event.messages);
+    const modelKey = model ? `${model.provider}/${model.id}` : undefined;
+    if (modelKey)
+      noteOutgoingRequest(
+        sessionId,
+        modelKey,
+        effectiveRequestMessages(sm, event.messages),
+      );
     if (signal?.aborted) return;
     if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
     if (nativeRetryOwned.has(sessionId)) {
@@ -4219,7 +4320,9 @@ export default function (pi: ExtensionAPI) {
       }
       refreshAgentMessages(sm);
       try {
-        return { messages: [...systemHead, ...buildContextMessages(sm)] };
+        const recovered = [...systemHead, ...buildContextMessages(sm)];
+        if (modelKey) noteOutgoingRequest(sessionId, modelKey, recovered);
+        return { messages: recovered };
       } catch {
         refuse("the recovered projection could not be built");
         return;
@@ -4787,126 +4890,176 @@ export default function (pi: ExtensionAPI) {
     const budget = pressureFoldBudget(config.rewindAtTokens);
     const all = sm.getEntries();
     const projected = buildFoldProjection(all, leafId).entries;
-    const cut = planPressureCut({
-      keepRecentTokens: Math.floor(
-        config.rewindAtTokens * config.keepRecentShare,
-      ),
-      entries: projected.map((entry) => {
-        const messages = entry.messages.filter((m) => m.role !== "system");
-        return {
-          entryId: entry.sourceEntry.id,
-          tokens: estimateContentTokens(messages),
-          roles: messages.map((m) => m.role),
-          toolCallIds: messages.flatMap((m) =>
-            m.role === "assistant"
-              ? m.content.flatMap((block) =>
-                  block.type === "toolCall" ? [block.id] : [],
-                )
-              : [],
-          ),
-          toolResultIds: messages.flatMap((m) =>
-            m.role === "toolResult" ? [m.toolCallId] : [],
-          ),
-        };
-      }),
-    });
-    if (cut.kind === "skip") return { kind: "skip", reason: cut.detail };
-    const cutAt = projected.findIndex(
-      (entry) => entry.sourceEntry.id === cut.firstKeptEntryId,
-    );
-    const records = buildConsolidationSegment(
-      all,
-      leafId,
-      cut.firstKeptEntryId,
-    );
-    if (cutAt < 0 || !records.length)
-      return {
-        kind: "skip",
-        reason: "the cut is no longer in the projected context",
-      };
     if (!registry.hasConfiguredAuth(model))
       return {
         kind: "skip",
         reason: `no authentication is configured for ${model.provider}/${model.id}`,
       };
-    const requests = collectOpenUserRequests(
-      projected,
-      leafId,
-      new Set(projected.slice(cutAt).map((entry) => entry.sourceEntry.id)),
-      REWIND_CUSTOM_TYPE,
-    );
-    const quoted = requests.length
-      ? "\n\n## Open user requests\nThe work above was compacted to free context. The user request(s) below are still open and quoted verbatim; continue them.\n" +
-        requests
-          .map(
-            (request) =>
-              `\nQuoted user request (source entry ID: ${request.sourceEntryId}):\n<archived-user-request>\n${request.text}\n</archived-user-request>`,
-          )
-          .join("\n")
-      : "";
-    const details = (summary?: { strategy: string; calls: number }) => ({
-      navigateTree: {
-        pressure: {
-          keptTokens: cut.keptTokens,
-          prefixTokens: cut.prefixTokens,
-          ...(summary && { strategy: summary.strategy, calls: summary.calls }),
-          openUserRequests: requests,
-        },
-      },
+    const cutEntries = projected.map((entry) => {
+      const messages = entry.messages.filter((m) => m.role !== "system");
+      return {
+        entryId: entry.sourceEntry.id,
+        tokens: estimateContentTokens(messages),
+        roles: messages.map((m) => m.role),
+        toolCallIds: messages.flatMap((m) =>
+          m.role === "assistant"
+            ? m.content.flatMap((block) =>
+                block.type === "toolCall" ? [block.id] : [],
+              )
+            : [],
+        ),
+        toolResultIds: messages.flatMap((m) =>
+          m.role === "toolResult" ? [m.toolCallId] : [],
+        ),
+      };
     });
-    const compactionText = (summaryText: string) => {
-      const continuity = compactionContinuity(sm.getBranch(), summaryText);
-      return continuity.briefing === undefined
-        ? continuity.summaryText + quoted
-        : appendContinuityBriefing(
-            continuity.summaryText + quoted,
-            continuity.briefing,
-          );
-    };
-    const previewOf = (summary: string, info?: object): CompactionEntry => ({
-      type: "compaction",
-      id: "tree-navigator-pressure-preview",
-      parentId: leafId,
-      timestamp: new Date().toISOString(),
-      summary,
-      firstKeptEntryId: cut.firstKeptEntryId,
-      tokensBefore: activeTokens,
-      details: info,
-      fromHook: true,
-      ...systemCheckpoint(sm),
-    });
-    // The request after the compaction, priced as the request guard prices it,
-    // including the effective system state and the model-visible receipt.
-    const admissionAfter = (preview: CompactionEntry, receipt: string) => {
-      const withPreview = [...sm.getEntries(), preview];
-      return requestAccounting(sm, [
-        ...projectHandoffs(
-          buildSessionProjection(withPreview, preview.id),
-          withPreview,
-        ).messages,
-        {
-          role: "custom",
-          customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
-          content: receipt,
-          display: true,
-          timestamp: Date.now(),
+    // One candidate cut: its records, open requests and the priced request a
+    // compaction with a full-size summary would leave.
+    const planAt = (keepRecentTokens: number) => {
+      const cut = planPressureCut({ keepRecentTokens, entries: cutEntries });
+      if (cut.kind === "skip")
+        return { kind: "skip" as const, reason: cut.detail };
+      const cutAt = projected.findIndex(
+        (entry) => entry.sourceEntry.id === cut.firstKeptEntryId,
+      );
+      const records = buildConsolidationSegment(
+        all,
+        leafId,
+        cut.firstKeptEntryId,
+      );
+      if (cutAt < 0 || !records.length)
+        return {
+          kind: "skip" as const,
+          reason: "the cut is no longer in the projected context",
+        };
+      const requests = collectOpenUserRequests(
+        projected,
+        leafId,
+        new Set(projected.slice(cutAt).map((entry) => entry.sourceEntry.id)),
+        REWIND_CUSTOM_TYPE,
+      );
+      const quoted = requests.length
+        ? "\n\n## Open user requests\nThe work above was compacted to free context. The user request(s) below are still open and quoted verbatim; continue them.\n" +
+          requests
+            .map(
+              (request) =>
+                `\nQuoted user request (source entry ID: ${request.sourceEntryId}):\n<archived-user-request>\n${request.text}\n</archived-user-request>`,
+            )
+            .join("\n")
+        : "";
+      const details = (summary?: { strategy: string; calls: number }) => ({
+        navigateTree: {
+          pressure: {
+            keptTokens: cut.keptTokens,
+            prefixTokens: cut.prefixTokens,
+            ...(summary && {
+              strategy: summary.strategy,
+              calls: summary.calls,
+            }),
+            openUserRequests: requests,
+          },
         },
-      ]).tokens;
+      });
+      const compactionText = (summaryText: string) => {
+        const continuity = compactionContinuity(sm.getBranch(), summaryText);
+        return continuity.briefing === undefined
+          ? continuity.summaryText + quoted
+          : appendContinuityBriefing(
+              continuity.summaryText + quoted,
+              continuity.briefing,
+            );
+      };
+      const previewOf = (summary: string, info?: object): CompactionEntry => ({
+        type: "compaction",
+        id: "tree-navigator-pressure-preview",
+        parentId: leafId,
+        timestamp: new Date().toISOString(),
+        summary,
+        firstKeptEntryId: cut.firstKeptEntryId,
+        tokensBefore: activeTokens,
+        details: info,
+        fromHook: true,
+        ...systemCheckpoint(sm),
+      });
+      // The request after the compaction, priced as the request guard prices it,
+      // including the effective system state and the model-visible receipt.
+      const admissionAfter = (preview: CompactionEntry, receipt: string) => {
+        const withPreview = [...sm.getEntries(), preview];
+        return requestAccounting(sm, [
+          ...projectHandoffs(
+            buildSessionProjection(withPreview, preview.id),
+            withPreview,
+          ).messages,
+          {
+            role: "custom",
+            customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
+            content: receipt,
+            display: true,
+            timestamp: Date.now(),
+          },
+        ]).tokens;
+      };
+      const receiptText = (after: number, anchor?: string) =>
+        `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(after)} tokens. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchor ? ` Anchor '${anchor}' marks the compaction.` : ""} The original entries remain in the session file.`;
+      const floor = admissionAfter(
+        previewOf(
+          compactionText(foldPlaceholderSummary(summarizerReduceTokens(model))),
+          details(),
+        ),
+        receiptText(activeTokens, "compacted-00"),
+      );
+      return {
+        kind: "plan" as const,
+        cut,
+        cutAt,
+        records,
+        requests,
+        details,
+        compactionText,
+        previewOf,
+        admissionAfter,
+        receiptText,
+        floor,
+      };
     };
-    const receiptText = (after: number, anchor?: string) =>
-      `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(after)} tokens. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchor ? ` Anchor '${anchor}' marks the compaction.` : ""} The original entries remain in the session file.`;
-    const floor = admissionAfter(
-      previewOf(
-        compactionText(foldPlaceholderSummary(summarizerReduceTokens(model))),
-        details(),
-      ),
-      receiptText(activeTokens, "compacted-00"),
+    // The newest work stays verbatim, but a kept tail too large to land under
+    // the budget shrinks first, down to a quarter of the configured share.
+    const configuredKeep = Math.floor(
+      config.rewindAtTokens * config.keepRecentShare,
     );
-    if (floor > budget)
+    const minKeep = Math.ceil(configuredKeep * MIN_KEPT_SHARE_OF_CONFIGURED);
+    let plan = planAt(configuredKeep);
+    for (let tries = 0; tries < 4; tries++) {
+      if (plan.kind !== "plan" || plan.floor <= budget) break;
+      const next =
+        Math.min(configuredKeep, plan.cut.keptTokens) -
+        Math.ceil(((plan.floor - budget) / tokenFactorOf(sm)) * 1.05);
+      if (next < minKeep) break;
+      const smaller = planAt(next);
+      if (
+        smaller.kind !== "plan" ||
+        smaller.cut.keptTokens >= plan.cut.keptTokens
+      )
+        break;
+      plan = smaller;
+    }
+    if (plan.kind !== "plan") return plan;
+    if (plan.floor > budget)
       return {
         kind: "skip",
-        reason: `a compaction that keeps the newest ~${formatWindow(cut.keptTokens)} tokens verbatim still leaves ~${formatWindow(floor)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); lower keep_recent_share or raise rewind_at_tokens`,
+        reason: `a compaction that keeps the newest ~${formatWindow(plan.cut.keptTokens)} tokens verbatim still leaves ~${formatWindow(plan.floor)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); the rest is the system prompt, tools and a full-size summary, so raise rewind_at_tokens`,
       };
+    const {
+      cut,
+      cutAt,
+      records,
+      requests,
+      details,
+      compactionText,
+      previewOf,
+      admissionAfter,
+      receiptText,
+    } = plan;
     runningFolds.add(sessionId);
     try {
       const summary = await summarizeFold({
@@ -4932,7 +5085,7 @@ export default function (pi: ExtensionAPI) {
           model,
         ),
         segment: { background: "", records },
-        admit: foldAdmission(model.contextWindow ?? 0),
+        admit: foldAdmission(model.contextWindow ?? 0, tokenFactorOf(sm)),
         signal,
       });
       if (!input.isCurrent()) return { kind: "stale" };
@@ -5150,7 +5303,7 @@ export default function (pi: ExtensionAPI) {
           "The consolidated project history: goals, constraints, delivered work, decisions, open items and standing authorization.",
         instruction: buildConsolidationRequestText,
         segment: { background: "", records },
-        admit: foldAdmission(contextWindow),
+        admit: foldAdmission(contextWindow, tokenFactorOf(sm)),
         signal,
       });
       if (!isCurrent()) return;

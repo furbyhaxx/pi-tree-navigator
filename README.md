@@ -229,11 +229,12 @@ When `auto_navigate.enabled` is true, two things happen at each turn boundary:
   under half of `rewind_at_tokens`, priced like the request guard prices the
   next request (system, tools, summary, kept work and receipt). Before any
   summary call, a summary of the full reduce-output size is assumed; after it,
-  the real summary is priced. Otherwise nothing is written and a warning says
-  whether to lower `keep_recent_share` or raise `rewind_at_tokens`. Leave room:
-  half of `rewind_at_tokens` minus the kept share must hold the system prompt
-  and the summary (at 200k and 0.25: 50k). The same retry rule as pressure
-  folds applies.
+  the real summary is priced. When the configured share cannot land under the
+  budget, the kept tail shrinks first, down to a quarter of the configured share,
+  never splitting a tool call from its result. Only then is nothing written, and
+  a warning names the kept and resulting sizes. Leave room: half of
+  `rewind_at_tokens` must hold the system prompt, tools, a full-size summary and
+  the kept work. The same retry rule as pressure folds applies.
 - **Pressure fold (`pressure: "fold"`, deterministic).** At the same threshold
   the independent engine folds back to an anchor instead, without asking a
   classifier. It uses the canonical cut and the shared
@@ -321,8 +322,10 @@ Successful recovery does not abort the run or ask the model to call a tool.
 
 A provider context-overflow response is handled through the same engine at the
 appropriate lifecycle boundary. Native compaction/retry ownership and user
-cancellation take precedence. Recovery attempts are bounded: a repeated failure
-produces an actionable receipt instead of an unbounded retry loop. A request that
+cancellation take precedence. Recovery attempts are bounded per request: when
+the request a recovery produced still cannot fit, the next attempt produces an
+actionable receipt instead of an unbounded retry loop. Once the recovered request generates, a
+later overflow in the same run is a new request and recovers again. A request that
 cannot fit at all is refused before dispatch with `Request stopped before generation: estimated input <n> tokens leaves fewer than 1024 output tokens plus 4096 headroom`;
 nothing is withheld and the original history is kept.
 
@@ -425,7 +428,7 @@ answers the same questions as strict JSON.
 
 - `"provider/id"`: one model answers both the intent kind and the supersession question.
 - `"recommended"`: the benchmarked preset. `openrouter/microsoft/microsoft-decision-1` judges the
-  kind and which active item the message replaces; `openrouter/openai/gpt-6-luna` is asked the
+  kind and which active item the message replaces; `openai/gpt-6-luna` is asked the
   supersession question only when the classifier abstains. The kind is never escalated: in the
   benchmark, escalating it accepted unsafe answers. A retirement proposed by the escalation
   needs a separate Microsoft decision-model check of that specific item. A refusal, uncertain
@@ -445,7 +448,7 @@ answers the same questions as strict JSON.
       "kind": { "model": "openrouter/microsoft/microsoft-decision-1" },
       "supersession": {
         "model": "openrouter/microsoft/microsoft-decision-1",
-        "escalation": { "model": "openrouter/openai/gpt-6-luna" },
+        "escalation": { "model": "openai/gpt-6-luna" },
         "verification": { "model": "openrouter/microsoft/microsoft-decision-1" }
       }
     }
@@ -591,9 +594,13 @@ Cache behavior on the bridge:
 - **Summaries are lossy.** Structural checks and continuity preservation do not
   prove semantic completeness. Original messages remain in the archived branch;
   inspect important reports and pin durable facts.
-- **Budgets are estimates.** Planning and execution share an admission policy,
-  but provider tokenization can differ. Provider errors still need recovery or
-  an explicit failure.
+- **Budgets are estimates.** Planning and execution share an admission policy.
+  Estimated text is priced at the ratio the current model reported for its last
+  request of at least 50k estimated tokens (never below Pi's 3.5 characters per
+  token, at most 4x the four-char heuristic), because dense code and JSON cost far more on some tokenizers. The
+  first fold right after a model switch, before that model has answered once,
+  still uses the default. Provider errors still need recovery or an explicit
+  failure.
 - **Some folds cannot reduce context.** Retained prefixes, full child handoffs,
   protected continuity and unanswered input can already consume the budget.
   Chunking makes summary requests manageable; it cannot guarantee that the final

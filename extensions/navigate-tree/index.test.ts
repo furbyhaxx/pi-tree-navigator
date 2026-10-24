@@ -65,6 +65,7 @@ import {
 } from "./config.ts";
 import {
   estimateContentTokens,
+  estimateRawRequestTokens,
   estimateRequestTokens,
 } from "./context-tokens.ts";
 import { renderBriefing } from "./continuity-briefing.ts";
@@ -1062,6 +1063,61 @@ async function piAiEstimateContextTokens(messages: unknown[]) {
 }
 
 describe("context event handler", () => {
+  it("prices estimated context at the token ratio the model reported for its last request", async () => {
+    const f = setup({ contextWindow: 400_000 });
+    const model = f.ctx.model as { provider: string; id: string };
+    const send = async () => {
+      const request = [
+        { role: "system", content: "rules", timestamp: 0 },
+        ...fireContext(f.pi, f.ctx),
+      ];
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? [])
+        await handler(
+          { type: "context_with_system", messages: request } as never,
+          f.ctx as never,
+        );
+      return estimateRawRequestTokens(request as never);
+    };
+    const growth = () => {
+      const before = estimateAdmissionTokens(f.sm);
+      f.sm.appendMessage({
+        role: "user",
+        content: "{".repeat(40_000),
+        timestamp: 1,
+      });
+      return estimateAdmissionTokens(f.sm) - before;
+    };
+    f.sm.appendMessage({
+      role: "user",
+      content: "x".repeat(240_000),
+      timestamp: 1,
+    });
+    const uncalibrated = growth();
+    assert.ok(
+      Math.abs(uncalibrated - (10_000 * 8) / 7) < 50,
+      `${uncalibrated}`,
+    );
+
+    // The tokenizer reports 1.6x Pi's four-chars-per-token heuristic.
+    const raw = await send();
+    const reply = {
+      ...assistantMessage([{ type: "text", text: "ok" }], "stop"),
+      provider: model.provider,
+      model: model.id,
+      usage: usageOf(Math.round(raw * 1.6)),
+    };
+    f.sm.appendMessage(reply as never);
+    await fireTurnEndAll(f.pi, f.ctx, reply);
+    const calibrated = growth();
+    assert.ok(Math.abs(calibrated - 16_000) < 50, `${calibrated}`);
+
+    // Another model's tokenizer starts over at the default.
+    f.ctx.model = { ...f.ctx.model, id: "other-model" } as never;
+    await send();
+    const switched = growth();
+    assert.ok(Math.abs(switched - (10_000 * 8) / 7) < 50, `${switched}`);
+  });
+
   it("registers exactly one context handler via pi.on", () => {
     const { pi } = setup();
     const handlers = pi.onCalls.get("context");
@@ -9644,6 +9700,41 @@ describe("rewind-driven compaction (#101)", () => {
         String(warning?.content),
         /still leaves ~\d+k, above the ~20k a pressure compaction must reach/,
       );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate shrinks the kept tail when the configured share cannot land under the budget", async () => {
+    const f = await autoFixture(async () => ({ status: "continue" }), {
+      pressure: "compact",
+      rewind_at_tokens: 60_000,
+      keep_recent_share: 0.45,
+    });
+    try {
+      appendTurn(f.sm, "earlier", "# Earlier", 5_000, true);
+      f.sm.appendMessage({ role: "user", content: "read them", timestamp: 1 });
+      let leafId = "";
+      for (let i = 1; i <= 6; i++)
+        leafId = toolTurn(f, `t${i}`, 6_000, i === 6 ? 70_000 : i * 10_000);
+      const leaf = f.sm.getEntry(leafId);
+      assert.ok(leaf?.type === "message");
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, leaf.message);
+      const compaction = f.sm
+        .getBranch()
+        .findLast((value) => value.type === "compaction");
+      assert.ok(compaction?.type === "compaction", JSON.stringify(boundary));
+      const kept = (
+        compaction.details as {
+          navigateTree: { pressure: { keptTokens: number } };
+        }
+      ).navigateTree.pressure.keptTokens;
+      assert.ok(kept < 27_000, `kept ${kept} shrank below the configured 27k`);
+      assert.ok(kept >= 6_000, `kept ${kept} still holds the newest tool turn`);
+      const receipt = boundary.entries.find(
+        (value) => value.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
+      );
+      assert.ok((receipt?.details as { after: number }).after <= 30_000);
     } finally {
       cleanupConfigFixture(f.fixture);
     }

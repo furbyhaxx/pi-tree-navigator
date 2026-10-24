@@ -27,10 +27,10 @@ export type PolicyKind = "intent" | "milestone";
 export type PolicyValue = null | "recommended" | Record<string, unknown>;
 
 const MAX_INSTRUCTIONS = 1_000;
-const INTENT_CLASSIFIER = `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.classifier}`;
-const INTENT_ESCALATION = `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.escalation}`;
-const MILESTONE_CLASSIFIER = `${RECOMMENDED_MILESTONE_POLICY.provider}/${RECOMMENDED_MILESTONE_POLICY.classifier}`;
-const MILESTONE_CONFIRMER = `${RECOMMENDED_MILESTONE_POLICY.provider}/${RECOMMENDED_MILESTONE_POLICY.confirmer}`;
+const INTENT_CLASSIFIER = RECOMMENDED_POLICY.classifier;
+const INTENT_ESCALATION = RECOMMENDED_POLICY.escalation;
+const MILESTONE_CLASSIFIER = RECOMMENDED_MILESTONE_POLICY.classifier;
+const MILESTONE_CONFIRMER = RECOMMENDED_MILESTONE_POLICY.confirmer;
 const SINGLE_MODEL_WARNING =
   "Single-model mode: no confirmer. One model alone accepted unsafe answers on holdout.";
 

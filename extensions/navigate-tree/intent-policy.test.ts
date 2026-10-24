@@ -11,8 +11,8 @@ import {
   resolveIntentPolicy,
 } from "./intent-policy.ts";
 
-const MICROSOFT = `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.classifier}`;
-const LUNA = `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.escalation}`;
+const MICROSOFT = RECOMMENDED_POLICY.classifier;
+const LUNA = RECOMMENDED_POLICY.escalation;
 
 const problems = (value: unknown): readonly string[] => {
   const out = parseIntentPolicyObject(value);
@@ -131,13 +131,15 @@ describe("parseIntentPolicyObject", () => {
 
 describe("resolveIntentPolicy", () => {
   it("resolves the preset: microsoft for both questions, luna to escalate, heuristics on", () => {
-    assert.deepEqual(resolveIntentPolicy("recommended"), {
+    const policy = resolveIntentPolicy("recommended");
+    assert.deepEqual(policy, {
       heuristics: true,
       kind: { model: MICROSOFT },
       supersession: { model: MICROSOFT },
       escalation: { model: LUNA },
       verification: { model: MICROSOFT },
     });
+    assert.equal(policy?.escalation.model, "openai/gpt-6-luna");
   });
 
   const object = (setting: object) =>

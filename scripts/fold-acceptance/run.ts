@@ -29,9 +29,11 @@ import navigateTree, {
   estimateAdmissionTokens,
   PRESSURE_COMPACTION_CUSTOM_TYPE,
 } from "../../extensions/navigate-tree/index.ts";
+import { parseClassifierModel } from "../../extensions/navigate-tree/intent-policy.ts";
 import { RECOMMENDED_MILESTONE_POLICY } from "../../extensions/navigate-tree/milestone-policy.ts";
 import { safeMessage } from "../classifier-eval/adapters.ts";
 import {
+  type Billing,
   createBilling,
   loadRouteTable,
   ROUTE_PRICES_URL,
@@ -47,7 +49,11 @@ import {
   PRESSURE_REQUEST,
   seedCorpus,
 } from "./fixture.ts";
-import { createBudgetedTransport, type PricedModel } from "./transport.ts";
+import {
+  createBudgetedTransport,
+  type NativeEndpoint,
+  type PricedModel,
+} from "./transport.ts";
 
 /** Acceptance scenarios for manual, recovery, tool-driven and automatic engine folds, and pressure compaction. */
 export type Scenario =
@@ -158,6 +164,24 @@ export function verifyPressureCompaction(
   );
 }
 
+/**
+ * Split a Pi `provider/modelId` selector. A model id may itself contain
+ * slashes, e.g. `openrouter/openai/gpt-6-luna`.
+ */
+export function parseModelSelector(value: string): {
+  provider: string;
+  modelId: string;
+} {
+  const at = value.indexOf("/");
+  const provider = at > 0 ? value.slice(0, at) : "";
+  const modelId = at > 0 ? value.slice(at + 1) : "";
+  if (provider === "" || modelId === "")
+    throw new Error(
+      "--model must be a provider/modelId selector, e.g. openai/gpt-6-luna",
+    );
+  return { provider, modelId };
+}
+
 /** Parse explicit run controls; no request is sent by parsing. */
 export function parseOptions(args: string[]): RunOptions {
   const { values } = parseArgs({
@@ -213,6 +237,7 @@ export function parseOptions(args: string[]): RunOptions {
     );
   if (!Number.isInteger(window) || window < 32000)
     throw new Error("--window must be an integer >=32000");
+  parseModelSelector(values.model);
   buildCorpus(blocks);
   return {
     scenario: values.scenario as Scenario,
@@ -223,6 +248,23 @@ export function parseOptions(args: string[]): RunOptions {
     ledger: resolve(values.ledger),
     authDir: resolve(values["auth-dir"]),
     dryRun: values["dry-run"],
+  };
+}
+
+/** Settle native calls from reported costs or a configured subscription. */
+export function nativeBilling(subscription: boolean): Billing {
+  return {
+    async settle(evidence) {
+      if (!evidence.dispatched) return { costUsd: 0, costSource: "local" };
+      if (evidence.responseCostUsd !== undefined)
+        return { costUsd: evidence.responseCostUsd, costSource: "response" };
+      return subscription
+        ? { costUsd: 0, costSource: "subscription" }
+        : { costUsd: null, costSource: "unknown" };
+    },
+    async keyUsage() {
+      throw new Error("native billing has no key usage endpoint");
+    },
   };
 }
 
@@ -365,11 +407,12 @@ export async function runAcceptance(
       allowModelNetwork: false,
     });
     const registry = new ModelRegistry(runtime);
-    const catalogModel = registry.find("openrouter", options.model);
-    if (!catalogModel || !registry.hasConfiguredAuth(catalogModel))
-      throw new Error(
-        "Selected OpenRouter model is unavailable or unauthenticated",
-      );
+    const selector = parseModelSelector(options.model);
+    const catalogModel = registry.find(selector.provider, selector.modelId);
+    if (!catalogModel)
+      throw new Error(`Selected model ${options.model} is unavailable`);
+    if (!registry.hasConfiguredAuth(catalogModel))
+      throw new Error(`Provider ${selector.provider} has no auth configured`);
     if (options.window > catalogModel.contextWindow)
       throw new Error(
         "Fixture window cannot exceed the catalogued operating window",
@@ -379,25 +422,38 @@ export async function runAcceptance(
       contextWindow: options.window,
       maxTokens: Math.min(catalogModel.maxTokens, 8192),
     };
+    const natives: NativeEndpoint[] = [];
+    const addNative = (provider: string, baseUrl: string): void => {
+      if (provider === "openrouter") return;
+      if (natives.some((entry) => entry.provider === provider)) return;
+      natives.push({ provider, baseUrl });
+    };
+    addNative(model.provider, model.baseUrl);
     const pricedModels: PricedModel[] = [
-      { id: model.id, kind: "chat", cost: model.cost },
+      {
+        id: model.id,
+        kind: "chat",
+        cost: model.cost,
+        ...(model.provider === "openrouter"
+          ? {}
+          : { maxOutputTokens: catalogModel.maxTokens }),
+      },
     ];
     if (options.scenario === "automatic") {
-      for (const [kind, id] of [
+      for (const [kind, selector] of [
         ["decisions", RECOMMENDED_MILESTONE_POLICY.classifier],
         ["chat", RECOMMENDED_MILESTONE_POLICY.confirmer],
       ] as const) {
+        const parsed = parseClassifierModel(selector);
+        assert.ok(parsed, `Invalid policy selector: ${selector}`);
         const selected =
           kind === "decisions"
-            ? registry.findOfType(
-                "classifier",
-                RECOMMENDED_MILESTONE_POLICY.provider,
-                id,
-              )
-            : registry.find(RECOMMENDED_MILESTONE_POLICY.provider, id);
-        assert.ok(selected, `Policy catalog model unavailable: ${id}`);
-        if (!pricedModels.some((entry) => entry.id === id))
-          pricedModels.push({ id, kind, cost: selected.cost });
+            ? registry.findOfType("classifier", parsed.provider, parsed.id)
+            : registry.find(parsed.provider, parsed.id);
+        assert.ok(selected, `Policy catalog model unavailable: ${selector}`);
+        addNative(selected.provider, selected.baseUrl);
+        if (!pricedModels.some((entry) => entry.id === parsed.id))
+          pricedModels.push({ id: parsed.id, kind, cost: selected.cost });
       }
     }
     ledger = BudgetLedger.open(options.ledger, 25);
@@ -413,6 +469,11 @@ export async function runAcceptance(
         models: pricedModels,
       },
       billing,
+      natives,
+      billingFor: (provider) =>
+        provider === "openrouter"
+          ? billing
+          : nativeBilling(runtime.isUsingSubscription(provider)),
       record: (record) =>
         appendFileSync(
           join(options.out, "wire.jsonl"),
@@ -569,8 +630,7 @@ export async function runAcceptance(
         calls.some(
           (call) =>
             call.api === "decisions" &&
-            call.model ===
-              `openrouter/${RECOMMENDED_MILESTONE_POLICY.classifier}`,
+            call.model === RECOMMENDED_MILESTONE_POLICY.classifier,
         ),
         "automatic acceptance requires an actual Decisions classifier call; host auto-engine wiring may be missing",
       );
@@ -578,8 +638,7 @@ export async function runAcceptance(
         calls.some(
           (call) =>
             call.api === "chat" &&
-            call.model ===
-              `openrouter/${RECOMMENDED_MILESTONE_POLICY.confirmer}` &&
+            call.model === RECOMMENDED_MILESTONE_POLICY.confirmer &&
             call.side,
         ),
         "automatic acceptance requires chat confirmation",
