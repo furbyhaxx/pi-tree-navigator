@@ -70,10 +70,13 @@ export function estimateContentTokens(messages: AgentMessage[]): number {
  * The admission estimate, shaped like the SDK's own pre-request estimate: the
  * newest valid usage plus the estimated messages after it, or all messages when
  * no baseline survives invalidation (a later compaction, context edit, system
- * message or model change). Estimated text is scaled from the host's four
- * chars/token to the SDK's 3.5.
+ * message or model change). Estimated text is scaled by `factor`: the SDK's
+ * 3.5 chars/token over the host's four by default, or what the model measured.
  */
-export function estimateRequestTokens(messages: AgentMessage[]): number {
+export function estimateRequestTokens(
+  messages: AgentMessage[],
+  factor = DEFAULT_TOKEN_FACTOR,
+): number {
   const converted = convertToLlm(messages);
   const anchor = newestUsageIndex(converted);
   const usage =
@@ -81,10 +84,39 @@ export function estimateRequestTokens(messages: AgentMessage[]): number {
   const tail = converted
     .slice(anchor + 1)
     .reduce((sum, message) => sum + estimateTokens(message), 0);
-  return (
-    (usage ? calculateContextTokens(usage) : 0) + Math.ceil((tail * 8) / 7)
+  return (usage ? calculateContextTokens(usage) : 0) + Math.ceil(tail * factor);
+}
+
+/** The SDK's 3.5 chars/token over the host heuristic's four. */
+export const DEFAULT_TOKEN_FACTOR = 8 / 7;
+
+/** Pi's four-chars-per-token estimate of a whole request, ignoring usage. */
+export function estimateRawRequestTokens(messages: AgentMessage[]): number {
+  return convertToLlm(messages).reduce(
+    (sum, message) => sum + estimateTokens(message),
+    0,
   );
 }
+
+/**
+ * Tokens per heuristic token a model reported for a request, bounded so a
+ * measurement only ever raises estimates, and never absurdly. Dense code and
+ * JSON cost far more than four chars per token on some tokenizers.
+ */
+export function measuredTokenFactor(
+  actualInput: number,
+  heuristic: number,
+): number | undefined {
+  if (!(heuristic >= MIN_CALIBRATION_TOKENS) || !(actualInput > 0))
+    return undefined;
+  return Math.min(
+    MAX_TOKEN_FACTOR,
+    Math.max(DEFAULT_TOKEN_FACTOR, actualInput / heuristic),
+  );
+}
+
+const MIN_CALIBRATION_TOKENS = 2_000;
+const MAX_TOKEN_FACTOR = 4;
 
 /** Estimate projected context with Pi's heuristic and the effective system state. */
 export function estimateContextTokens(messages: AgentMessage[]): number {

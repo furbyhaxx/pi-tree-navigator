@@ -63,6 +63,7 @@ import {
   buildSessionProjection,
   CONFIG_DIR_NAME,
   type CompactionEntry,
+  calculateContextTokens,
   collectEntriesForBranchSummary,
   type ExtensionAPI,
   type ExtensionCommandContext,
@@ -102,8 +103,11 @@ import {
 } from "./config.ts";
 import { planConsolidation } from "./consolidation-planner.ts";
 import {
+  DEFAULT_TOKEN_FACTOR,
   estimateContentTokens,
+  estimateRawRequestTokens,
   estimateRequestTokens,
+  measuredTokenFactor,
 } from "./context-tokens.ts";
 import {
   isVisible,
@@ -1038,11 +1042,75 @@ function effectiveRequestMessages(
 }
 
 function requestAccounting(sm: SessionManager, messages: AgentMessage[]) {
-  return accountRequest(effectiveRequestMessages(sm, messages));
+  return accountRequest(
+    effectiveRequestMessages(sm, messages),
+    tokenFactorOf(sm),
+  );
+}
+
+/**
+ * Per session, for the model that served its latest request: estimated tokens
+ * per heuristic token that model reported, and the heuristic of the request
+ * still awaiting its usage. A model switch drops the measurement, because
+ * tokenizers differ.
+ */
+const tokenCalibration = new Map<
+  string,
+  { modelKey: string; factor?: number; pending?: number }
+>();
+
+function tokenFactorOf(sm: { getSessionId(): string }): number {
+  try {
+    return (
+      tokenCalibration.get(sm.getSessionId())?.factor ?? DEFAULT_TOKEN_FACTOR
+    );
+  } catch {
+    return DEFAULT_TOKEN_FACTOR;
+  }
+}
+
+/** Remember the heuristic of the request about to go to `modelKey`. */
+function noteOutgoingRequest(
+  sessionId: string,
+  modelKey: string,
+  effective: AgentMessage[],
+): void {
+  const current = tokenCalibration.get(sessionId);
+  tokenCalibration.set(sessionId, {
+    modelKey,
+    ...(current?.modelKey === modelKey && { factor: current.factor }),
+    pending: estimateRawRequestTokens(effective),
+  });
+}
+
+/** Calibrate from the usage the model reported for the noted request. */
+function noteRequestUsage(sessionId: string, message: unknown): void {
+  const current = tokenCalibration.get(sessionId);
+  const m = message as Partial<AssistantMessage> | undefined;
+  if (
+    current?.pending === undefined ||
+    m?.role !== "assistant" ||
+    `${m.provider}/${m.model}` !== current.modelKey ||
+    m.stopReason === "error" ||
+    m.stopReason === "aborted" ||
+    !m.usage
+  )
+    return;
+  const factor = measuredTokenFactor(
+    calculateContextTokens(m.usage) - (m.usage.output ?? 0),
+    current.pending,
+  );
+  tokenCalibration.set(sessionId, {
+    modelKey: current.modelKey,
+    factor: factor ?? current.factor,
+  });
 }
 
 /** The admission estimate of a complete request whose system state is already effective. */
-function accountRequest(effective: AgentMessage[]) {
+function accountRequest(
+  effective: AgentMessage[],
+  factor = DEFAULT_TOKEN_FACTOR,
+) {
   const system = getCurrentSystemMessage(effective);
   const mandated =
     system !== undefined &&
@@ -1050,7 +1118,7 @@ function accountRequest(effective: AgentMessage[]) {
   return {
     messages: effective,
     tokens:
-      estimateRequestTokens(effective) +
+      estimateRequestTokens(effective, factor) +
       (mandated ? 0 : Math.ceil(ANCHOR_MANDATE.length / 3.5)),
   };
 }
@@ -2060,23 +2128,29 @@ export interface FoldApi {
  * estimate of the complete request (system prompt and tools included), the
  * output allowance and the recovery headroom must fit the model's window.
  */
-function foldAdmission(contextWindow: number): SummarizeFoldOptions["admit"] {
+function foldAdmission(
+  contextWindow: number,
+  factor = DEFAULT_TOKEN_FACTOR,
+): SummarizeFoldOptions["admit"] {
   return (request, maxOutputTokens) => {
     const inputEstimate =
-      accountRequest([
-        ...(request.systemPrompt
-          ? [
-              {
-                role: "system" as const,
-                content: request.systemPrompt,
-                timestamp: 0,
-              },
-            ]
-          : []),
-        ...request.messages,
-      ]).tokens +
+      accountRequest(
+        [
+          ...(request.systemPrompt
+            ? [
+                {
+                  role: "system" as const,
+                  content: request.systemPrompt,
+                  timestamp: 0,
+                },
+              ]
+            : []),
+          ...request.messages,
+        ],
+        factor,
+      ).tokens +
       (request.tools
-        ? Math.ceil(JSON.stringify(request.tools).length / 3.5)
+        ? Math.ceil((JSON.stringify(request.tools).length / 4) * factor)
         : 0);
     return {
       fits:
@@ -2917,7 +2991,10 @@ export default function (pi: ExtensionAPI) {
             sessionId: req.sessionId,
           });
         },
-        admit: foldAdmission(host.model?.contextWindow ?? 0),
+        admit: foldAdmission(
+          host.model?.contextWindow ?? 0,
+          tokenFactorOf(host.sm),
+        ),
         commit: (req, prepared, summary) =>
           commitEngineFold(host, req, prepared, summary.text),
       }).run(request, options);
@@ -2955,7 +3032,7 @@ export default function (pi: ExtensionAPI) {
     ).filter((message) => message.role === "system");
     const modelKey = `${model.provider}/${model.id}`;
     if (
-      accountRequest(systemHead).tokens +
+      accountRequest(systemHead, tokenFactorOf(sm)).tokens +
         RECOVERY_MIN_OUTPUT_TOKENS +
         RECOVERY_HEADROOM_TOKENS >
       contextWindow
@@ -3560,6 +3637,7 @@ export default function (pi: ExtensionAPI) {
       stopReason?: string;
     };
     if (message?.role !== "assistant") return;
+    noteRequestUsage(sessionId, message);
     // The recovered request generated within the window: a later overflow in
     // this run is a new request and may recover again. Only a recovery that
     // did not let the next request through is final.
@@ -3806,6 +3884,7 @@ export default function (pi: ExtensionAPI) {
       nativeRetryOwned.delete(sessionId);
       recoveryCuts.delete(sessionId);
       queuedFolds.delete(sessionId);
+      tokenCalibration.delete(sessionId);
       autoFoldStateBySession.delete(sessionId);
     } catch {
       // Fail-open: session_start clears it too.
@@ -4043,6 +4122,7 @@ export default function (pi: ExtensionAPI) {
     nativeRetryOwned.delete(sessionId);
     recoveryCuts.delete(sessionId);
     queuedFolds.delete(sessionId);
+    tokenCalibration.delete(sessionId);
     rewindHintReserveTokens = null;
     hintByModel = new Map();
     autoNavigateBase = undefined;
@@ -4175,6 +4255,13 @@ export default function (pi: ExtensionAPI) {
       (message) => message.role === "system",
     );
     captureSystemHead(sm, sessionId, model, event.messages);
+    const modelKey = model ? `${model.provider}/${model.id}` : undefined;
+    if (modelKey)
+      noteOutgoingRequest(
+        sessionId,
+        modelKey,
+        effectiveRequestMessages(sm, event.messages),
+      );
     if (signal?.aborted) return;
     if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
     if (nativeRetryOwned.has(sessionId)) {
@@ -4228,7 +4315,9 @@ export default function (pi: ExtensionAPI) {
       }
       refreshAgentMessages(sm);
       try {
-        return { messages: [...systemHead, ...buildContextMessages(sm)] };
+        const recovered = [...systemHead, ...buildContextMessages(sm)];
+        if (modelKey) noteOutgoingRequest(sessionId, modelKey, recovered);
+        return { messages: recovered };
       } catch {
         refuse("the recovered projection could not be built");
         return;
@@ -4941,7 +5030,7 @@ export default function (pi: ExtensionAPI) {
           model,
         ),
         segment: { background: "", records },
-        admit: foldAdmission(model.contextWindow ?? 0),
+        admit: foldAdmission(model.contextWindow ?? 0, tokenFactorOf(sm)),
         signal,
       });
       if (!input.isCurrent()) return { kind: "stale" };
@@ -5159,7 +5248,7 @@ export default function (pi: ExtensionAPI) {
           "The consolidated project history: goals, constraints, delivered work, decisions, open items and standing authorization.",
         instruction: buildConsolidationRequestText,
         segment: { background: "", records },
-        admit: foldAdmission(contextWindow),
+        admit: foldAdmission(contextWindow, tokenFactorOf(sm)),
         signal,
       });
       if (!isCurrent()) return;
