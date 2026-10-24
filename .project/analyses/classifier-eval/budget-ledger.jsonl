@@ -22901,3 +22901,5 @@
 {"event":"settle","id":"b782f1f1-df7a-4ca9-b59b-8e974dd5dac8","actualNanoUsd":47205401,"at":"2026-10-23T22:25:46.045Z"}
 {"event":"reserve","id":"1cf906dd-8016-4133-b563-a7cf36eb90ba","worstCaseNanoUsd":174977500,"at":"2026-10-23T22:25:46.054Z"}
 {"event":"settle","id":"1cf906dd-8016-4133-b563-a7cf36eb90ba","actualNanoUsd":44506001,"at":"2026-10-23T22:26:01.341Z"}
+{"event":"reserve","id":"47e69e0f-0225-41e9-bef7-6da799332d11","worstCaseNanoUsd":175776001,"at":"2026-10-24T17:01:53.656Z"}
+{"event":"settle","id":"47e69e0f-0225-41e9-bef7-6da799332d11","actualNanoUsd":0,"at":"2026-10-24T17:01:53.733Z"}
