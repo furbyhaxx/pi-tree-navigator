@@ -3,8 +3,6 @@ import { before, describe, it } from "node:test";
 import type { PolicyRegistry } from "../../extensions/navigate-tree/intent-policy.ts";
 import {
   evaluateMilestone,
-  RECOMMENDED_MILESTONE_CLASSIFIER,
-  RECOMMENDED_MILESTONE_POLICY,
   resolveMilestonePolicy,
 } from "../../extensions/navigate-tree/milestone-policy.ts";
 import { analyze, loadRun, type Metrics } from "./analyze.ts";
@@ -13,9 +11,13 @@ import {
   type CaseParity,
   compareCase,
   decisionVerdict,
+  HISTORIC_MILESTONE_MODELS,
+  HISTORIC_MILESTONE_POLICY_SETTING,
   harnessConfirm,
   holds,
+  JEV_LABEL as JEV,
   judge,
+  LUNA_LABEL as LUNA,
   milestoneInput,
   selectCases,
   summarize,
@@ -29,8 +31,6 @@ const RUNS = new URL(
   "../../.project/analyses/classifier-eval/runs/",
   import.meta.url,
 );
-const JEV = `decisions:${RECOMMENDED_MILESTONE_POLICY.classifier}#instructions`;
-const LUNA = `chat:${RECOMMENDED_MILESTONE_POLICY.confirmer}#instructions`;
 const CONFIRM = `confirm(${JEV} + ${LUNA})`;
 
 /** A registry that answers each model with its recorded observation of one case. */
@@ -45,14 +45,14 @@ function recordedRegistry(
       type === "classifier"
         ? [
             {
-              provider: "openrouter",
-              id: RECOMMENDED_MILESTONE_POLICY.classifier,
+              provider: HISTORIC_MILESTONE_MODELS.provider,
+              id: HISTORIC_MILESTONE_MODELS.classifier,
             },
           ]
         : [
             {
-              provider: "openrouter",
-              id: RECOMMENDED_MILESTONE_POLICY.confirmer,
+              provider: HISTORIC_MILESTONE_MODELS.provider,
+              id: HISTORIC_MILESTONE_MODELS.confirmer,
               api: "openai-completions",
             },
           ],
@@ -105,7 +105,7 @@ const emptyTally = (): Tally => ({
 });
 
 describe("recorded holdout v3 observations replayed through the production policy", () => {
-  const policy = resolveMilestonePolicy(RECOMMENDED_MILESTONE_CLASSIFIER);
+  const policy = resolveMilestonePolicy(HISTORIC_MILESTONE_POLICY_SETTING);
   const production: Record<string, Tally> = {};
   const harness: Record<string, Tally> = {};
   const mismatches: string[] = [];

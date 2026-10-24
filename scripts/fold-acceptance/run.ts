@@ -29,6 +29,7 @@ import navigateTree, {
   estimateAdmissionTokens,
   PRESSURE_COMPACTION_CUSTOM_TYPE,
 } from "../../extensions/navigate-tree/index.ts";
+import { parseClassifierModel } from "../../extensions/navigate-tree/intent-policy.ts";
 import { RECOMMENDED_MILESTONE_POLICY } from "../../extensions/navigate-tree/milestone-policy.ts";
 import { safeMessage } from "../classifier-eval/adapters.ts";
 import {
@@ -383,21 +384,19 @@ export async function runAcceptance(
       { id: model.id, kind: "chat", cost: model.cost },
     ];
     if (options.scenario === "automatic") {
-      for (const [kind, id] of [
+      for (const [kind, selector] of [
         ["decisions", RECOMMENDED_MILESTONE_POLICY.classifier],
         ["chat", RECOMMENDED_MILESTONE_POLICY.confirmer],
       ] as const) {
+        const model = parseClassifierModel(selector);
+        assert.ok(model, `Invalid policy selector: ${selector}`);
         const selected =
           kind === "decisions"
-            ? registry.findOfType(
-                "classifier",
-                RECOMMENDED_MILESTONE_POLICY.provider,
-                id,
-              )
-            : registry.find(RECOMMENDED_MILESTONE_POLICY.provider, id);
-        assert.ok(selected, `Policy catalog model unavailable: ${id}`);
-        if (!pricedModels.some((entry) => entry.id === id))
-          pricedModels.push({ id, kind, cost: selected.cost });
+            ? registry.findOfType("classifier", model.provider, model.id)
+            : registry.find(model.provider, model.id);
+        assert.ok(selected, `Policy catalog model unavailable: ${selector}`);
+        if (!pricedModels.some((entry) => entry.id === model.id))
+          pricedModels.push({ id: model.id, kind, cost: selected.cost });
       }
     }
     ledger = BudgetLedger.open(options.ledger, 25);
@@ -569,8 +568,7 @@ export async function runAcceptance(
         calls.some(
           (call) =>
             call.api === "decisions" &&
-            call.model ===
-              `openrouter/${RECOMMENDED_MILESTONE_POLICY.classifier}`,
+            call.model === RECOMMENDED_MILESTONE_POLICY.classifier,
         ),
         "automatic acceptance requires an actual Decisions classifier call; host auto-engine wiring may be missing",
       );
@@ -578,8 +576,7 @@ export async function runAcceptance(
         calls.some(
           (call) =>
             call.api === "chat" &&
-            call.model ===
-              `openrouter/${RECOMMENDED_MILESTONE_POLICY.confirmer}` &&
+            call.model === RECOMMENDED_MILESTONE_POLICY.confirmer &&
             call.side,
         ),
         "automatic acceptance requires chat confirmation",

@@ -32,7 +32,6 @@ import {
   evaluateMilestone,
   type MilestoneEvaluation,
   RECOMMENDED_MILESTONE_CLASSIFIER,
-  RECOMMENDED_MILESTONE_POLICY,
   resolveMilestonePolicy,
 } from "../../extensions/navigate-tree/milestone-policy.ts";
 import {
@@ -63,8 +62,22 @@ const DEFAULT_BENCHMARK =
 /** The benchmark's confidence gate for accepting an answer. */
 export const GATE = 0.7;
 const CASES_PER_TASK = 8;
-const JEV_LABEL = `decisions:${RECOMMENDED_MILESTONE_POLICY.classifier}#instructions`;
-const LUNA_LABEL = `chat:${RECOMMENDED_MILESTONE_POLICY.confirmer}#instructions`;
+export const HISTORIC_MILESTONE_MODELS = {
+  provider: "openrouter",
+  classifier: "typesafe/jev-1.14",
+  confirmer: "openai/gpt-6-luna",
+} as const;
+export const HISTORIC_MILESTONE_POLICY_SETTING = JSON.stringify({
+  preset: RECOMMENDED_MILESTONE_CLASSIFIER,
+  classifier: {
+    model: `${HISTORIC_MILESTONE_MODELS.provider}/${HISTORIC_MILESTONE_MODELS.classifier}`,
+  },
+  confirmer: {
+    model: `${HISTORIC_MILESTONE_MODELS.provider}/${HISTORIC_MILESTONE_MODELS.confirmer}`,
+  },
+});
+export const JEV_LABEL = `decisions:${HISTORIC_MILESTONE_MODELS.classifier}#instructions`;
+export const LUNA_LABEL = `chat:${HISTORIC_MILESTONE_MODELS.confirmer}#instructions`;
 
 /** A decision by question: the accepted choice, or undefined when the question abstained. */
 export type Verdict = Record<string, string | undefined>;
@@ -441,7 +454,7 @@ export async function main(
 }
 
 async function run(options: Options, deps: Deps): Promise<number> {
-  const policy = resolveMilestonePolicy(RECOMMENDED_MILESTONE_CLASSIFIER);
+  const policy = resolveMilestonePolicy(HISTORIC_MILESTONE_POLICY_SETTING);
   if (!policy?.classifier || !policy.confirmer)
     throw new Error("the recommended milestone policy has no two models");
   const cases = selectCases(await deps.loadCases(), options.perTask).map(
@@ -461,13 +474,13 @@ async function run(options: Options, deps: Deps): Promise<number> {
     if (options.dryRun) {
       const jev = base.getModelOfType(
         "classifier",
-        RECOMMENDED_MILESTONE_POLICY.provider,
-        RECOMMENDED_MILESTONE_POLICY.classifier,
+        HISTORIC_MILESTONE_MODELS.provider,
+        HISTORIC_MILESTONE_MODELS.classifier,
       );
       const luna = base.getModelOfType(
         "chat",
-        RECOMMENDED_MILESTONE_POLICY.provider,
-        RECOMMENDED_MILESTONE_POLICY.confirmer,
+        HISTORIC_MILESTONE_MODELS.provider,
+        HISTORIC_MILESTONE_MODELS.confirmer,
       );
       if (!jev || !luna)
         throw new Error("the recommended models are not in the catalog");

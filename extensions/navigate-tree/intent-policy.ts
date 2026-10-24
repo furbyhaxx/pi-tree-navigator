@@ -25,9 +25,8 @@ import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 export const RECOMMENDED_INTENT_CLASSIFIER = "recommended";
 
 export const RECOMMENDED_POLICY = {
-  provider: "openrouter",
   /** Decisions model: the intent kind, and the first answer to `contradicts`. */
-  classifier: "microsoft/microsoft-decision-1",
+  classifier: "openrouter/microsoft/microsoft-decision-1",
   /** Chat model asked `contradicts` only when the classifier abstains on it. */
   escalation: "openai/gpt-6-luna",
 } as const;
@@ -147,8 +146,6 @@ export interface IntentPolicy {
   verification: StagePolicy;
 }
 
-const selector = (id: string) => `${RECOMMENDED_POLICY.provider}/${id}`;
-
 const NO_MODELS: IntentPolicy = {
   heuristics: true,
   kind: { model: null },
@@ -159,10 +156,10 @@ const NO_MODELS: IntentPolicy = {
 
 const RECOMMENDED: IntentPolicy = {
   heuristics: true,
-  kind: { model: selector(RECOMMENDED_POLICY.classifier) },
-  supersession: { model: selector(RECOMMENDED_POLICY.classifier) },
-  escalation: { model: selector(RECOMMENDED_POLICY.escalation) },
-  verification: { model: selector(RECOMMENDED_POLICY.classifier) },
+  kind: { model: RECOMMENDED_POLICY.classifier },
+  supersession: { model: RECOMMENDED_POLICY.classifier },
+  escalation: { model: RECOMMENDED_POLICY.escalation },
+  verification: { model: RECOMMENDED_POLICY.classifier },
 };
 
 const MAX_INSTRUCTIONS_CHARS = 1_000;

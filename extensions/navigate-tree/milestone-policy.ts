@@ -42,9 +42,8 @@ import {
 export const RECOMMENDED_MILESTONE_CLASSIFIER = "recommended";
 
 export const RECOMMENDED_MILESTONE_POLICY = {
-  provider: "openrouter",
   /** Decisions model: answers first; its accepted choice is what the confirmer must repeat. */
-  classifier: "typesafe/jev-1.14",
+  classifier: "openrouter/typesafe/jev-1.14",
   /** Chat model that must give the same choice. */
   confirmer: "openai/gpt-6-luna",
 } as const;
@@ -104,9 +103,6 @@ export interface MilestonePolicy {
   instructions: { status?: string; boundary?: string };
 }
 
-const selector = (id: string) =>
-  `${RECOMMENDED_MILESTONE_POLICY.provider}/${id}`;
-
 const OFF: MilestonePolicy = {
   minConfidence: DEFAULT_MIN_CONFIDENCE,
   classifier: null,
@@ -116,8 +112,8 @@ const OFF: MilestonePolicy = {
 
 const RECOMMENDED: MilestonePolicy = {
   ...OFF,
-  classifier: selector(RECOMMENDED_MILESTONE_POLICY.classifier),
-  confirmer: selector(RECOMMENDED_MILESTONE_POLICY.confirmer),
+  classifier: RECOMMENDED_MILESTONE_POLICY.classifier,
+  confirmer: RECOMMENDED_MILESTONE_POLICY.confirmer,
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
