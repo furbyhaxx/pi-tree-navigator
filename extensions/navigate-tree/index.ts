@@ -653,6 +653,19 @@ function carriedCompaction(
   return keptAt >= 0 && keptAt <= at ? compaction : undefined;
 }
 
+/**
+ * The system checkpoint `appendCompaction` stores on a compaction: projection
+ * restarts at a compaction, so a preview without it prices no system prompt.
+ */
+function systemCheckpoint(sm: SessionManager): {
+  systemMessage?: CompactionEntry["systemMessage"];
+} {
+  const systemMessage = getCurrentSystemMessage(
+    sm.buildSessionProjection().messages,
+  );
+  return systemMessage ? { systemMessage } : {};
+}
+
 /** An unsaved copy of `compaction` under `parentId`, as `commitFold` appends it. */
 function compactionCopy(
   compaction: CompactionEntry,
@@ -4860,6 +4873,7 @@ export default function (pi: ExtensionAPI) {
       tokensBefore: activeTokens,
       details: info,
       fromHook: true,
+      ...systemCheckpoint(sm),
     });
     // The request after the compaction, priced as the request guard prices it,
     // including the effective system state and the model-visible receipt.
@@ -5165,6 +5179,7 @@ export default function (pi: ExtensionAPI) {
         tokensBefore,
         details,
         fromHook: true,
+        ...systemCheckpoint(sm),
       } satisfies CompactionEntry;
       const before = estimateContentTokens(
         buildFoldProjection(all, leafId).messages,

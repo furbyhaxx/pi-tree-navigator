@@ -9649,6 +9649,66 @@ describe("rewind-driven compaction (#101)", () => {
     }
   });
 
+  it("auto_navigate prices the system prompt a pressure compaction keeps", async () => {
+    const run = async (systemChars: number) => {
+      const f = await autoFixture(async () => ({ status: "continue" }), {
+        pressure: "compact",
+        rewind_at_tokens: 60_000,
+        keep_recent_share: 0.1,
+      });
+      f.sm.appendMessage({
+        role: "system",
+        content: "s".repeat(systemChars),
+        timestamp: 0,
+      } as never);
+      for (let i = 1; i <= 4; i++)
+        appendTurn(f.sm, `task ${i}`, `# Done ${i}`, i * 10_000, true);
+      const last = appendTurn(f.sm, "task 5", "# Done 5", 70_000, true);
+      const entry = f.sm.getEntry(last.assistantId);
+      assert.ok(entry?.type === "message");
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, entry.message);
+      return { f, boundary };
+    };
+
+    const small = await run(8_000);
+    try {
+      const receipt = small.boundary.entries.find(
+        (value) => value.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
+      );
+      assert.ok(receipt, JSON.stringify(small.boundary));
+      const priced = (receipt.details as { after: number }).after;
+      const committed = estimateAdmissionTokens(small.f.sm);
+      assert.ok(
+        priced >= committed && priced - committed < 200,
+        `the priced request (${priced}) is the committed one (${committed}) plus the receipt`,
+      );
+    } finally {
+      cleanupConfigFixture(small.f.fixture);
+    }
+
+    const large = await run(60_000);
+    try {
+      assert.equal(
+        large.f.summaries.calls.length,
+        0,
+        "skipped before any call",
+      );
+      assert.ok(
+        !large.f.sm.getEntries().some((value) => value.type === "compaction"),
+        "the kept system prompt pushes the compaction over its budget",
+      );
+      const [warning] = large.boundary.entries.filter(
+        (value) => value.customType === "navigate-tree-auto-warning",
+      );
+      assert.match(
+        String(warning?.content),
+        /still leaves ~\d+k, above the ~30k a pressure compaction must reach/,
+      );
+    } finally {
+      cleanupConfigFixture(large.f.fixture);
+    }
+  });
+
   it("auto_navigate keeps steering scoped to a retained compaction anchor across the next compaction", async () => {
     const f = await autoFixture(async () => ({ status: "continue" }), {
       pressure: "compact",
