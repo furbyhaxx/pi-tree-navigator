@@ -304,6 +304,9 @@ export const MIN_SUMMARY_FOCUS_LENGTH = 20;
 export const MIN_REWIND_SAVINGS_TOKENS = 4000;
 /** The consolidation prompt asks for about 6,000 characters. */
 const CONSOLIDATION_SUMMARY_TOKENS = Math.ceil(6000 / 3.5);
+
+/** The smallest kept tail a pressure compaction shrinks to, as a share of `keep_recent_share`. */
+const MIN_KEPT_SHARE_OF_CONFIGURED = 0.25;
 /** Receipt of a background consolidation; visible, one line. */
 export const CONSOLIDATION_CUSTOM_TYPE = "navigate-tree-consolidation";
 /** Receipt of a tail-keeping pressure compaction. */
@@ -4885,126 +4888,176 @@ export default function (pi: ExtensionAPI) {
     const budget = pressureFoldBudget(config.rewindAtTokens);
     const all = sm.getEntries();
     const projected = buildFoldProjection(all, leafId).entries;
-    const cut = planPressureCut({
-      keepRecentTokens: Math.floor(
-        config.rewindAtTokens * config.keepRecentShare,
-      ),
-      entries: projected.map((entry) => {
-        const messages = entry.messages.filter((m) => m.role !== "system");
-        return {
-          entryId: entry.sourceEntry.id,
-          tokens: estimateContentTokens(messages),
-          roles: messages.map((m) => m.role),
-          toolCallIds: messages.flatMap((m) =>
-            m.role === "assistant"
-              ? m.content.flatMap((block) =>
-                  block.type === "toolCall" ? [block.id] : [],
-                )
-              : [],
-          ),
-          toolResultIds: messages.flatMap((m) =>
-            m.role === "toolResult" ? [m.toolCallId] : [],
-          ),
-        };
-      }),
-    });
-    if (cut.kind === "skip") return { kind: "skip", reason: cut.detail };
-    const cutAt = projected.findIndex(
-      (entry) => entry.sourceEntry.id === cut.firstKeptEntryId,
-    );
-    const records = buildConsolidationSegment(
-      all,
-      leafId,
-      cut.firstKeptEntryId,
-    );
-    if (cutAt < 0 || !records.length)
-      return {
-        kind: "skip",
-        reason: "the cut is no longer in the projected context",
-      };
     if (!registry.hasConfiguredAuth(model))
       return {
         kind: "skip",
         reason: `no authentication is configured for ${model.provider}/${model.id}`,
       };
-    const requests = collectOpenUserRequests(
-      projected,
-      leafId,
-      new Set(projected.slice(cutAt).map((entry) => entry.sourceEntry.id)),
-      REWIND_CUSTOM_TYPE,
-    );
-    const quoted = requests.length
-      ? "\n\n## Open user requests\nThe work above was compacted to free context. The user request(s) below are still open and quoted verbatim; continue them.\n" +
-        requests
-          .map(
-            (request) =>
-              `\nQuoted user request (source entry ID: ${request.sourceEntryId}):\n<archived-user-request>\n${request.text}\n</archived-user-request>`,
-          )
-          .join("\n")
-      : "";
-    const details = (summary?: { strategy: string; calls: number }) => ({
-      navigateTree: {
-        pressure: {
-          keptTokens: cut.keptTokens,
-          prefixTokens: cut.prefixTokens,
-          ...(summary && { strategy: summary.strategy, calls: summary.calls }),
-          openUserRequests: requests,
-        },
-      },
+    const cutEntries = projected.map((entry) => {
+      const messages = entry.messages.filter((m) => m.role !== "system");
+      return {
+        entryId: entry.sourceEntry.id,
+        tokens: estimateContentTokens(messages),
+        roles: messages.map((m) => m.role),
+        toolCallIds: messages.flatMap((m) =>
+          m.role === "assistant"
+            ? m.content.flatMap((block) =>
+                block.type === "toolCall" ? [block.id] : [],
+              )
+            : [],
+        ),
+        toolResultIds: messages.flatMap((m) =>
+          m.role === "toolResult" ? [m.toolCallId] : [],
+        ),
+      };
     });
-    const compactionText = (summaryText: string) => {
-      const continuity = compactionContinuity(sm.getBranch(), summaryText);
-      return continuity.briefing === undefined
-        ? continuity.summaryText + quoted
-        : appendContinuityBriefing(
-            continuity.summaryText + quoted,
-            continuity.briefing,
-          );
-    };
-    const previewOf = (summary: string, info?: object): CompactionEntry => ({
-      type: "compaction",
-      id: "tree-navigator-pressure-preview",
-      parentId: leafId,
-      timestamp: new Date().toISOString(),
-      summary,
-      firstKeptEntryId: cut.firstKeptEntryId,
-      tokensBefore: activeTokens,
-      details: info,
-      fromHook: true,
-      ...systemCheckpoint(sm),
-    });
-    // The request after the compaction, priced as the request guard prices it,
-    // including the effective system state and the model-visible receipt.
-    const admissionAfter = (preview: CompactionEntry, receipt: string) => {
-      const withPreview = [...sm.getEntries(), preview];
-      return requestAccounting(sm, [
-        ...projectHandoffs(
-          buildSessionProjection(withPreview, preview.id),
-          withPreview,
-        ).messages,
-        {
-          role: "custom",
-          customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
-          content: receipt,
-          display: true,
-          timestamp: Date.now(),
+    // One candidate cut: its records, open requests and the priced request a
+    // compaction with a full-size summary would leave.
+    const planAt = (keepRecentTokens: number) => {
+      const cut = planPressureCut({ keepRecentTokens, entries: cutEntries });
+      if (cut.kind === "skip")
+        return { kind: "skip" as const, reason: cut.detail };
+      const cutAt = projected.findIndex(
+        (entry) => entry.sourceEntry.id === cut.firstKeptEntryId,
+      );
+      const records = buildConsolidationSegment(
+        all,
+        leafId,
+        cut.firstKeptEntryId,
+      );
+      if (cutAt < 0 || !records.length)
+        return {
+          kind: "skip" as const,
+          reason: "the cut is no longer in the projected context",
+        };
+      const requests = collectOpenUserRequests(
+        projected,
+        leafId,
+        new Set(projected.slice(cutAt).map((entry) => entry.sourceEntry.id)),
+        REWIND_CUSTOM_TYPE,
+      );
+      const quoted = requests.length
+        ? "\n\n## Open user requests\nThe work above was compacted to free context. The user request(s) below are still open and quoted verbatim; continue them.\n" +
+          requests
+            .map(
+              (request) =>
+                `\nQuoted user request (source entry ID: ${request.sourceEntryId}):\n<archived-user-request>\n${request.text}\n</archived-user-request>`,
+            )
+            .join("\n")
+        : "";
+      const details = (summary?: { strategy: string; calls: number }) => ({
+        navigateTree: {
+          pressure: {
+            keptTokens: cut.keptTokens,
+            prefixTokens: cut.prefixTokens,
+            ...(summary && {
+              strategy: summary.strategy,
+              calls: summary.calls,
+            }),
+            openUserRequests: requests,
+          },
         },
-      ]).tokens;
+      });
+      const compactionText = (summaryText: string) => {
+        const continuity = compactionContinuity(sm.getBranch(), summaryText);
+        return continuity.briefing === undefined
+          ? continuity.summaryText + quoted
+          : appendContinuityBriefing(
+              continuity.summaryText + quoted,
+              continuity.briefing,
+            );
+      };
+      const previewOf = (summary: string, info?: object): CompactionEntry => ({
+        type: "compaction",
+        id: "tree-navigator-pressure-preview",
+        parentId: leafId,
+        timestamp: new Date().toISOString(),
+        summary,
+        firstKeptEntryId: cut.firstKeptEntryId,
+        tokensBefore: activeTokens,
+        details: info,
+        fromHook: true,
+        ...systemCheckpoint(sm),
+      });
+      // The request after the compaction, priced as the request guard prices it,
+      // including the effective system state and the model-visible receipt.
+      const admissionAfter = (preview: CompactionEntry, receipt: string) => {
+        const withPreview = [...sm.getEntries(), preview];
+        return requestAccounting(sm, [
+          ...projectHandoffs(
+            buildSessionProjection(withPreview, preview.id),
+            withPreview,
+          ).messages,
+          {
+            role: "custom",
+            customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
+            content: receipt,
+            display: true,
+            timestamp: Date.now(),
+          },
+        ]).tokens;
+      };
+      const receiptText = (after: number, anchor?: string) =>
+        `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(after)} tokens. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchor ? ` Anchor '${anchor}' marks the compaction.` : ""} The original entries remain in the session file.`;
+      const floor = admissionAfter(
+        previewOf(
+          compactionText(foldPlaceholderSummary(summarizerReduceTokens(model))),
+          details(),
+        ),
+        receiptText(activeTokens, "compacted-00"),
+      );
+      return {
+        kind: "plan" as const,
+        cut,
+        cutAt,
+        records,
+        requests,
+        details,
+        compactionText,
+        previewOf,
+        admissionAfter,
+        receiptText,
+        floor,
+      };
     };
-    const receiptText = (after: number, anchor?: string) =>
-      `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(after)} tokens. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchor ? ` Anchor '${anchor}' marks the compaction.` : ""} The original entries remain in the session file.`;
-    const floor = admissionAfter(
-      previewOf(
-        compactionText(foldPlaceholderSummary(summarizerReduceTokens(model))),
-        details(),
-      ),
-      receiptText(activeTokens, "compacted-00"),
+    // The newest work stays verbatim, but a kept tail too large to land under
+    // the budget shrinks first, down to a quarter of the configured share.
+    const configuredKeep = Math.floor(
+      config.rewindAtTokens * config.keepRecentShare,
     );
-    if (floor > budget)
+    const minKeep = Math.ceil(configuredKeep * MIN_KEPT_SHARE_OF_CONFIGURED);
+    let plan = planAt(configuredKeep);
+    for (let tries = 0; tries < 4; tries++) {
+      if (plan.kind !== "plan" || plan.floor <= budget) break;
+      const next =
+        plan.cut.keptTokens -
+        Math.ceil(((plan.floor - budget) / tokenFactorOf(sm)) * 1.05);
+      if (next < minKeep) break;
+      const smaller = planAt(next);
+      if (
+        smaller.kind !== "plan" ||
+        smaller.cut.keptTokens >= plan.cut.keptTokens
+      )
+        break;
+      plan = smaller;
+    }
+    if (plan.kind !== "plan") return plan;
+    if (plan.floor > budget)
       return {
         kind: "skip",
-        reason: `a compaction that keeps the newest ~${formatWindow(cut.keptTokens)} tokens verbatim still leaves ~${formatWindow(floor)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); lower keep_recent_share or raise rewind_at_tokens`,
+        reason: `a compaction that keeps the newest ~${formatWindow(plan.cut.keptTokens)} tokens verbatim still leaves ~${formatWindow(plan.floor)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); the rest is the system prompt, tools and a full-size summary, so raise rewind_at_tokens`,
       };
+    const {
+      cut,
+      cutAt,
+      records,
+      requests,
+      details,
+      compactionText,
+      previewOf,
+      admissionAfter,
+      receiptText,
+    } = plan;
     runningFolds.add(sessionId);
     try {
       const summary = await summarizeFold({

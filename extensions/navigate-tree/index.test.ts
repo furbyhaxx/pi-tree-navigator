@@ -9705,6 +9705,41 @@ describe("rewind-driven compaction (#101)", () => {
     }
   });
 
+  it("auto_navigate shrinks the kept tail when the configured share cannot land under the budget", async () => {
+    const f = await autoFixture(async () => ({ status: "continue" }), {
+      pressure: "compact",
+      rewind_at_tokens: 60_000,
+      keep_recent_share: 0.45,
+    });
+    try {
+      appendTurn(f.sm, "earlier", "# Earlier", 5_000, true);
+      f.sm.appendMessage({ role: "user", content: "read them", timestamp: 1 });
+      let leafId = "";
+      for (let i = 1; i <= 6; i++)
+        leafId = toolTurn(f, `t${i}`, 6_000, i === 6 ? 70_000 : i * 10_000);
+      const leaf = f.sm.getEntry(leafId);
+      assert.ok(leaf?.type === "message");
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, leaf.message);
+      const compaction = f.sm
+        .getBranch()
+        .findLast((value) => value.type === "compaction");
+      assert.ok(compaction?.type === "compaction", JSON.stringify(boundary));
+      const kept = (
+        compaction.details as {
+          navigateTree: { pressure: { keptTokens: number } };
+        }
+      ).navigateTree.pressure.keptTokens;
+      assert.ok(kept < 27_000, `kept ${kept} shrank below the configured 27k`);
+      assert.ok(kept >= 6_000, `kept ${kept} still holds the newest tool turn`);
+      const receipt = boundary.entries.find(
+        (value) => value.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
+      );
+      assert.ok((receipt?.details as { after: number }).after <= 30_000);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("auto_navigate prices the system prompt a pressure compaction keeps", async () => {
     const run = async (systemChars: number) => {
       const f = await autoFixture(async () => ({ status: "continue" }), {
