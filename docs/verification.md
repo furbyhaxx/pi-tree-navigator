@@ -88,8 +88,10 @@ Local SDK tests prove this lifecycle, not real-provider cache reuse or tokenizat
 
 Live calls require authorization and a shared spending ceiling. The acceptance transport
 reserves a conservative request bound before dispatch, disables automatic retries, captures
-safe request/response bodies and reconciles per-generation billed costs. Unknown costs stay
-reserved. Account-level usage deltas can include unrelated sessions and are not run billing.
+safe request/response bodies and reconciles per-generation billed costs on OpenRouter. A
+native subscription provider (the default `openai/gpt-6-luna`) records the cost the response
+reports, or `0` with `costSource: "subscription"`, never a catalog estimate. Unknown costs
+stay reserved. Account-level usage deltas can include unrelated sessions and are not run billing.
 Never copy credentials or submit private sessions. Use synthetic fixtures in isolated agent
 and workspace directories, and preserve unsuccessful runs.
 
@@ -102,9 +104,14 @@ node scripts/fold-acceptance/run.ts --scenario preflight --out /path/to/new-pref
 node scripts/fold-acceptance/run.ts --scenario agent --out /path/to/new-agent-run --ledger /absolute/path/to/shared-budget-ledger.jsonl
 ```
 
-Use a fresh output directory. `--model` selects the OpenRouter model ID; `--window` controls
-the fixture operating window without exceeding the catalog limit. `--blocks` controls the
-varied source corpus. Authentication is referenced through `--auth-dir`, never copied.
+Use a fresh output directory. `--model` takes a full Pi `provider/modelId` selector and
+defaults to `openai/gpt-6-luna`; `openrouter/openai/gpt-6-luna` keeps the OpenRouter route.
+A native provider is allowed exactly its own `${baseUrl}/responses` endpoint, and `--dry-run`
+makes no provider calls or auth reads. `--window` controls the fixture operating window
+without exceeding the catalog limit. `--blocks` controls the varied source corpus.
+Authentication is referenced through `--auth-dir`, never copied. Pi's native `openai`
+provider supports an API key or ChatGPT OAuth subscription; the runner uses Pi's runtime
+auth resolution and only records subscription-zero costs when that subscription is configured.
 
 For each real run, inspect the saved session and wire evidence:
 
