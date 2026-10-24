@@ -32,7 +32,7 @@ export const PRESSURE_CONFIG = {
     milestone: null,
     check_every_turns: 50,
     min_tokens_since_anchor: 1000,
-    rewind_at_tokens: 48000,
+    rewind_at_tokens: 64000,
   },
 };
 

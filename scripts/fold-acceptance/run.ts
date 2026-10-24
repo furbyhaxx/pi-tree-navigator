@@ -206,7 +206,7 @@ export function parseOptions(args: string[]): RunOptions {
         (values.scenario === "automatic"
           ? "8"
           : values.scenario === "pressure"
-            ? "12"
+            ? "16"
             : values.scenario === "agent"
               ? "15"
               : "24"),
