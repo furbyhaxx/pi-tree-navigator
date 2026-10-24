@@ -1,4 +1,7 @@
-/** Budgets OpenRouter POSTs before dispatch. Decisions are POST /api/v1/systemone. */
+/**
+ * Budgets provider POSTs before dispatch. OpenRouter decisions are POST
+ * /api/v1/systemone; the native openai provider posts to `${baseUrl}/responses`.
+ */
 
 import { randomUUID } from "node:crypto";
 import type { ModelCost } from "@earendil-works/pi-ai";
@@ -27,16 +30,31 @@ export const OPENROUTER_MESSAGES_PATH = "/api/v1/messages";
 /** TypeSafe System One on OpenRouter. This is the decisions path fold tests hit. */
 export const OPENROUTER_DECISIONS_PATH = "/api/v1/systemone";
 
+/** The OpenAI Responses path appended to a native provider's base URL. */
+export const RESPONSES_PATH = "/responses";
+
 type FetchInput = string | URL | Request;
 
 const GENERATION_ID = /^gen-[0-9A-Za-z-]{1,124}$/u;
 
-export type TransportEndpoint = "chat/completions" | "messages" | "systemone";
+export type TransportEndpoint =
+  | "chat/completions"
+  | "messages"
+  | "systemone"
+  | "responses";
 
 export interface PricedModel {
   readonly id: string;
   readonly kind: "chat" | "decisions";
   readonly cost: ModelCost;
+  /** Reservation cap when a native Responses body omits `max_output_tokens`. */
+  readonly maxOutputTokens?: number;
+}
+
+/** A non-OpenRouter provider and the base URL its Responses endpoint is derived from. */
+export interface NativeEndpoint {
+  readonly provider: string;
+  readonly baseUrl: string;
 }
 
 /** Catalog costs plus the route-price table `pricingFor` reserves against. */
@@ -64,6 +82,10 @@ export interface BudgetedTransportOptions {
   readonly ledger: BudgetLedger;
   readonly models: ModelPricingTable;
   readonly billing: Billing;
+  /** Additional native Responses endpoints; each is allowed exactly, nothing wider. */
+  readonly natives?: readonly NativeEndpoint[];
+  /** Per-provider settlement; falls back to `billing` (OpenRouter). */
+  readonly billingFor?: (provider: string) => Billing;
   readonly record: (record: TransportRecord) => void | Promise<void>;
 }
 
@@ -76,6 +98,7 @@ interface Shaped {
   readonly url: string;
   readonly init: RequestInit;
   readonly endpoint: TransportEndpoint;
+  readonly provider: string;
   readonly model: string;
   readonly body: string;
   readonly signal: AbortSignal;
@@ -152,6 +175,26 @@ function openRouterUrl(value: string): URL | undefined {
   )
     return undefined;
   return url;
+}
+
+/**
+ * The exact Responses URL for a native base URL, e.g.
+ * `https://api.openai.com/v1` becomes `https://api.openai.com/v1/responses`.
+ */
+export function nativeResponsesUrl(baseUrl: string): URL | undefined {
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return undefined;
+  }
+  if (base.protocol !== "https:") return undefined;
+  if (base.username !== "" || base.password !== "") return undefined;
+  if (base.port !== "" && base.port !== "443") return undefined;
+  if (base.search !== "" || base.hash !== "") return undefined;
+  return new URL(
+    `${base.origin}${base.pathname.replace(/\/+$/u, "")}${RESPONSES_PATH}`,
+  );
 }
 
 function endpointOf(url: URL): TransportEndpoint | undefined {
@@ -252,6 +295,16 @@ function shapeBody(
   const pricing = pricingFor(entry, routes, kind);
   if (pricing.refusal !== undefined)
     fail(`refused unpriced model ${parsed.model}: ${pricing.refusal}`);
+  if (endpoint === "responses") {
+    validateResponsesRequest(parsed);
+    const maxOutputTokens = responsesOutputCap(parsed, entry.maxOutputTokens);
+    return {
+      body: JSON.stringify(parsed),
+      model: parsed.model,
+      maxOutputTokens,
+      rates: pricing.rates,
+    };
+  }
   if (kind === "chat") {
     validateTextRequest(parsed, endpoint);
     const maxOutputTokens = chatOutputCap(parsed);
@@ -286,6 +339,60 @@ function textContent(value: unknown): boolean {
       return block.type === "tool_result" && textContent(block.content);
     })
   );
+}
+
+/**
+ * The Responses API keeps no server state when \`store\` is false, and the body
+ * must stay text-only and locally capped.
+ */
+function validateResponsesRequest(body: Record<string, unknown>): void {
+  if (body.store !== false) fail("refused a stateful request");
+  if (
+    body.previous_response_id !== undefined ||
+    body.conversation !== undefined ||
+    body.background !== undefined
+  )
+    fail("refused a stateful request");
+  if (body.input === undefined) fail("refused an unsupported request");
+  if (typeof body.input !== "string" && !Array.isArray(body.input))
+    fail("refused an unsupported request");
+  if (
+    body.modalities !== undefined &&
+    (!Array.isArray(body.modalities) ||
+      body.modalities.some((value) => value !== "text"))
+  )
+    fail("refused non-text generation");
+  if (
+    body.tools !== undefined &&
+    (!Array.isArray(body.tools) ||
+      !body.tools.every(
+        (tool) =>
+          isRecord(tool) &&
+          tool.type === "function" &&
+          typeof tool.name === "string" &&
+          isRecord(tool.parameters),
+      ))
+  )
+    fail("refused unbudgeted server tools");
+}
+
+/**
+ * A ChatGPT subscription token rejects \`max_output_tokens\`, so the reservation
+ * falls back to the catalog cap; a request may never be left uncapped.
+ */
+function responsesOutputCap(
+  body: Record<string, unknown>,
+  fallback: number | undefined,
+): number {
+  if (body.max_output_tokens !== undefined) {
+    const cap = readCap(body.max_output_tokens);
+    if (cap === undefined)
+      fail("refused a chat request without a finite output cap");
+    return cap;
+  }
+  if (fallback === undefined)
+    fail("refused a chat request without a finite output cap");
+  return fallback;
 }
 
 function validateTextRequest(
@@ -375,6 +482,7 @@ function mergeObserved(into: Observed, value: unknown): void {
   if (isRecord(value.usage) && isUsd(value.usage.cost))
     into.responseCostUsd = value.usage.cost;
   if (isRecord(value.message)) mergeObserved(into, value.message);
+  if (isRecord(value.response)) mergeObserved(into, value.response);
 }
 
 function parseProviderBody(text: string): Observed {
@@ -468,6 +576,15 @@ export function createBudgetedTransport(
   options: BudgetedTransportOptions,
 ): BudgetedTransport {
   const models = indexModels(options.models);
+  const natives = new Map<string, string>();
+  for (const endpoint of options.natives ?? []) {
+    const url = nativeResponsesUrl(endpoint.baseUrl);
+    if (!url)
+      fail(`refused an unsupported native base URL for ${endpoint.provider}`);
+    if (natives.has(url.href))
+      fail(`refused a duplicate native endpoint for ${endpoint.provider}`);
+    natives.set(url.href, endpoint.provider);
+  }
   const tasks = new Set<Promise<Done>>();
   const failures: unknown[] = [];
   const track = (task: Promise<void>): void => {
@@ -504,9 +621,10 @@ export function createBudgetedTransport(
         responseCostUsd: parsed.responseCostUsd,
       }),
     };
+    const billing = options.billingFor?.(shaped.provider) ?? options.billing;
     const settlement = holdIfUnproven(
       evidence,
-      await options.billing.settle(evidence, shaped.signal),
+      await billing.settle(evidence, shaped.signal),
       incomplete,
     );
     const record: TransportRecord = {
@@ -564,10 +682,20 @@ export function createBudgetedTransport(
       throw publicError(
         (signal ?? request.signal).reason ?? new Error("aborted"),
       );
-    const url = openRouterUrl(request.url);
-    if (!url) fail("refused an unsupported request");
-    const endpoint = endpointOf(url);
-    if (!endpoint) fail(`refused an unsupported request to ${url.pathname}`);
+    let provider: string;
+    let endpoint: TransportEndpoint;
+    const openRouter = openRouterUrl(request.url);
+    if (openRouter) {
+      const found = endpointOf(openRouter);
+      if (!found)
+        fail(`refused an unsupported request to ${openRouter.pathname}`);
+      provider = "openrouter";
+      endpoint = found;
+    } else {
+      provider = natives.get(new URL(request.url).href) ?? "";
+      if (provider === "") fail("refused an unsupported request");
+      endpoint = "responses";
+    }
     let text: string;
     try {
       text = await request.text();
@@ -582,6 +710,7 @@ export function createBudgetedTransport(
       url: request.url,
       init: outboundInit(request, body, outboundSignal),
       endpoint,
+      provider,
       model: shapedBody.model,
       body,
       signal: outboundSignal,

@@ -53,6 +53,7 @@ const COST_SOURCES: readonly CostSource[] = [
   "generation",
   "response",
   "local",
+  "subscription",
   "unknown",
 ];
 

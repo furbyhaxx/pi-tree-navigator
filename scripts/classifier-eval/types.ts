@@ -77,7 +77,12 @@ export interface EvalAnswer {
 export type EvalAdapter = "decisions" | "chat" | "heuristic";
 
 /** Where `costUsd` came from; catalog-computed usage is never billing evidence. */
-export type CostSource = "generation" | "response" | "local" | "unknown";
+export type CostSource =
+  | "generation"
+  | "response"
+  | "local"
+  | "subscription"
+  | "unknown";
 
 /** A transport attempt with no credential/header fields; one JSONL line per attempt. */
 export interface EvalObservation {
