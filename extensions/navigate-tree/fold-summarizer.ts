@@ -104,7 +104,7 @@ export type FoldSummaryProgress = {
 export interface SummarizeFoldOptions {
   runner: FoldSummaryRunner;
   focus: string;
-  parent?: { mode: "full" | "synthesized"; childCount: number };
+  parent?: { mode: "full" | "synthesized" | "digest"; childCount: number };
   continuitySection?: string;
   /**
    * Strategy A candidate: the projected live request up to the leaf; `first` is the 1-based first collapsed message.

@@ -63,8 +63,8 @@ const warnLegacyPercent = (layerName: string, path: string) =>
 const WARN_INVALID_HINT_PROJECT = `navigate_tree: invalid rewindHintReserveTokens in project config at ${PROJECT_PATH} — expected integer ${REWIND_HINT_MIN_RESERVE}-${REWIND_HINT_MAX_RESERVE} or a disable sentinel (null, false, "off", "disabled"); rewind hint disabled for this session.`;
 const WARN_INVALID_START_GLOBAL = `navigate_tree: invalid anchorStartAfterTurns in global config at ${GLOBAL_PATH} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`;
 const WARN_INVALID_START_PROJECT = `navigate_tree: invalid anchorStartAfterTurns in project config at ${PROJECT_PATH} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`;
-const WARN_INVALID_HANDOFF_GLOBAL = `navigate_tree: invalid parentHandoffMode in global config at ${GLOBAL_PATH} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "full".`;
-const WARN_INVALID_HANDOFF_PROJECT = `navigate_tree: invalid parentHandoffMode in project config at ${PROJECT_PATH} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "full".`;
+const WARN_INVALID_HANDOFF_GLOBAL = `navigate_tree: invalid parentHandoffMode in global config at ${GLOBAL_PATH} — expected "full", "synthesized" or "digest"; falling back to the other layer's valid value, else the default "digest".`;
+const WARN_INVALID_HANDOFF_PROJECT = `navigate_tree: invalid parentHandoffMode in project config at ${PROJECT_PATH} — expected "full", "synthesized" or "digest"; falling back to the other layer's valid value, else the default "digest".`;
 
 /** In-memory `readFile` double: returns `files[path]` or throws ENOENT. */
 function readerFor(files: Record<string, string>): {
@@ -134,7 +134,7 @@ function cfg(
   hint: number | null,
   start = START_ANCHOR_DEFAULT_TURNS,
   byModel: Array<[string, number | null]> = [],
-  parentHandoffMode: HandoffMode = "full",
+  parentHandoffMode: HandoffMode = "digest",
   continuity = DEFAULT_CONTINUITY,
 ) {
   return {
@@ -301,10 +301,11 @@ describe("parseTreeNavigatorConfig", () => {
     }
   });
 
-  describe("parentHandoffMode: accepts exactly the two supported modes", () => {
+  describe("parentHandoffMode: accepts exactly the three supported modes", () => {
     const accepted: Array<[HandoffMode, HandoffMode]> = [
       ["full", "full"],
       ["synthesized", "synthesized"],
+      ["digest", "digest"],
     ];
     for (const [raw, want] of accepted) {
       it(raw, () => {
@@ -940,7 +941,7 @@ describe("loadTreeNavigatorConfig", () => {
     });
   });
 
-  it("an invalid handoff mode with no valid layer warns and defaults to full", async () => {
+  it("an invalid handoff mode with no valid layer warns and defaults to digest", async () => {
     const reader = readerFor({
       [GLOBAL_PATH]: JSON.stringify({ parentHandoffMode: "FULL" }),
     });
@@ -951,7 +952,7 @@ describe("loadTreeNavigatorConfig", () => {
       readFile: reader.readFile,
     });
     assert.deepEqual(out, {
-      config: cfg(null, START_ANCHOR_DEFAULT_TURNS, [], "full"),
+      config: cfg(null, START_ANCHOR_DEFAULT_TURNS, [], "digest"),
       warnings: [WARN_INVALID_HANDOFF_GLOBAL],
     });
   });

@@ -82,10 +82,13 @@ recorded inclusive token/cost statistics appear before expansion. Converted
 sessions open a chronological, nested `/tree` outline with `[current]` inside
 its open phase; F2 returns to Pi's raw conversation graph.
 
-`parentHandoffMode` in `tree-navigator.json` selects `full` (default: retain child
-handoffs once each) or `synthesized` (a relevance-focused parent report, with room
-for more detail). Plans may override the mode per group. The agent receives full
-handoff text, not the collapsed UI label.
+`parentHandoffMode` in `tree-navigator.json` selects `digest` (default: a synthesized
+parent report plus one bounded index line per child), `full` (retain child handoffs
+once each), or `synthesized` (a relevance-focused parent report only). The summarizer
+always receives full child reports as evidence; digest keeps the originals in
+session history, reachable through `/anchor tree`. Existing handoffs retain their
+frozen mode. Plans may override the mode per group; plans without a mode retain
+`full`. The agent receives materialized handoff text, not the collapsed UI label.
 
 See [Retrospective session cloning](docs/retrospective-cloning.md) for the plan
 format, safety checks, CLI commands, and limitations. See

@@ -17,6 +17,7 @@ import {
   planDescendantCopies,
 } from "./descendant-sessions.ts";
 import {
+  getHandoff,
   type HistoryGroup,
   type HistoryManifest,
   makeHandoff,
@@ -47,7 +48,7 @@ export interface RetrospectivePreview {
     lastEntryId: string;
     summary: string;
     state: "folded" | "open";
-    mode: "full" | "synthesized";
+    mode: "full" | "synthesized" | "digest";
   }[];
   readonly descendants: readonly {
     source: string;
@@ -346,7 +347,11 @@ function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
         const entry = entries.find((entry) => entry.id === group.entryId);
         if (entry?.type !== "branch_summary")
           throw new Error(`Missing child handoff ${group.name}`);
-        return { id: entry.id, summary: entry.summary };
+        return {
+          id: entry.id,
+          summary: entry.summary,
+          handoff: getHandoff(entry),
+        };
       });
       append({
         id: summaryId,

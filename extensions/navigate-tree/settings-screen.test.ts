@@ -528,7 +528,7 @@ describe("settings screen: saving", () => {
     );
     assert.deepEqual(h.dialogs.input, []);
     assert.deepEqual(JSON.parse(h.readGlobal()), {
-      parentHandoffMode: "synthesized",
+      parentHandoffMode: "full",
       continuity: { capture: false },
     });
   });
@@ -944,6 +944,7 @@ describe("settings screen: refusals", () => {
     const first = text(h.rendered[0]);
     assert.match(first, /target: global/);
     assert.match(first, /rewindHintReserveTokens\s+off · default/);
+    assert.match(first, /parentHandoffMode\s+digest · default/);
     assert.match(first, /global unset · project untrusted/);
     assert.ok(!first.includes("to project"));
     assert.match(text(afterT), /target: runtime/);

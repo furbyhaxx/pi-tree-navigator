@@ -87,6 +87,7 @@ import type { AutoNavigatePartial } from "./auto-navigate-config.ts";
 import {
   CONTINUITY_CAPTURE_DEFAULT,
   loadTreeNavigatorConfig,
+  PARENT_HANDOFF_MODE_DEFAULT,
   resolveAutoNavigateConfig,
   resolveRewindHintReserve,
   START_ANCHOR_DEFAULT_TURNS,
@@ -1540,6 +1541,7 @@ export function previewFoldCommit(
               {
                 id: child.id,
                 summary: stripContinuityBriefing(child.summary),
+                handoff: getHandoff(child),
               },
             ]
           : [],
@@ -2672,7 +2674,7 @@ export default function (pi: ExtensionAPI) {
       segment: buildFoldSegment(allEntries, sessionLeaf, targetId, foldPointId),
       inContext,
       parent: {
-        mode: parentModes.get(request.sessionId) ?? "full",
+        mode: parentModes.get(request.sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
         childCount: entries.filter((entry) => entry.type === "branch_summary")
           .length,
       },
@@ -2827,7 +2829,7 @@ export default function (pi: ExtensionAPI) {
       const focus = defaultFoldFocus(sm);
       const candidates = priceFoldCandidates(sm, {
         model,
-        handoffMode: parentModes.get(sessionId) ?? "full",
+        handoffMode: parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
         captured: capturedSystems.get(sessionId),
         focus,
         suggestLabel: (name) => suggestFoldLabel(sm, name),
@@ -3027,7 +3029,8 @@ export default function (pi: ExtensionAPI) {
         const sessionId = sm.getSessionId();
         return priceFoldCandidates(sm, {
           model: commandCtx.model,
-          handoffMode: parentModes.get(sessionId) ?? "full",
+          handoffMode:
+            parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
           captured: capturedSystems.get(sessionId),
           focus: defaultFoldFocus(sm),
           suggestLabel: (name) => suggestFoldLabel(sm, name),
@@ -3889,7 +3892,7 @@ export default function (pi: ExtensionAPI) {
     classifierTimedOut.delete(sessionId);
     clearRuntimeConfig(sessionId);
     anchorStartTurnsBySession.set(sessionId, START_ANCHOR_DEFAULT_TURNS);
-    parentModes.set(sessionId, "full");
+    parentModes.set(sessionId, PARENT_HANDOFF_MODE_DEFAULT);
     let warnings: string[] = [];
     try {
       const loaded = await loadTreeNavigatorConfig({
@@ -4367,7 +4370,8 @@ export default function (pi: ExtensionAPI) {
     const signature = JSON.stringify(config);
     const capturedSource = capturedSystems.get(sessionId);
     const captured = structuredClone(capturedSource);
-    const handoffMode = parentModes.get(sessionId) ?? "full";
+    const handoffMode =
+      parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT;
     const reserve = resolveRewindHintReserve(
       { rewindHintReserveTokens, rewindHintModelReserveTokens: hintByModel },
       modelKey,
@@ -4406,7 +4410,8 @@ export default function (pi: ExtensionAPI) {
           ctx.modelRegistry === registry &&
           capturedSystems.get(sessionId) === capturedSource &&
           JSON.stringify(capturedSource) === JSON.stringify(captured) &&
-          (parentModes.get(sessionId) ?? "full") === handoffMode &&
+          (parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT) ===
+            handoffMode &&
           resolveRewindHintReserve(
             {
               rewindHintReserveTokens,

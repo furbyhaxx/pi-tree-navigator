@@ -19,9 +19,9 @@
  *     0.3.0): a present legacy key only warns and is otherwise ignored.
  *   - `anchorStartAfterTurns` (issue #55): turn bound for the automatic
  *     `anchor:start` write. Non-optional — an absent key still fires.
- *   - `parentHandoffMode`: whether completed child reports are included in
- *     the parent's model context. Invalid values warn and fall through like
- *     `anchorStartAfterTurns`, defaulting to `full`.
+ *   - `parentHandoffMode`: child reports in parent context: `full` reports,
+ *     `digest` index or `synthesized` parent only. Invalid values fall through like
+ *     `anchorStartAfterTurns`, defaulting to `digest`.
  *   - `continuity` (`capture`, `intentClassifier`/`intent_classifier`): the
  *     session continuity ledger's capture of user intent. `capture` defaults to
  *     true; `intentClassifier` is `"recommended"` (the benchmarked preset of
@@ -92,7 +92,7 @@ export const REWIND_HINT_MIN_RESERVE = 1_000;
 export const REWIND_HINT_MAX_RESERVE = 1_000_000;
 export const START_ANCHOR_MIN_TURNS = 1;
 export const START_ANCHOR_MAX_TURNS = 50;
-export const PARENT_HANDOFF_MODE_DEFAULT: HandoffMode = "full";
+export const PARENT_HANDOFF_MODE_DEFAULT: HandoffMode = "digest";
 export const CONTINUITY_CAPTURE_DEFAULT = true;
 /**
  * Effective turn bound when `anchorStartAfterTurns` is absent everywhere
@@ -330,7 +330,7 @@ function parseParentHandoffModeField(
   const value = hasSnake
     ? record.parent_handoff_mode
     : record.parentHandoffMode;
-  return value === "full" || value === "synthesized"
+  return value === "full" || value === "synthesized" || value === "digest"
     ? { kind: "ok", value }
     : { kind: "invalid" };
 }
@@ -799,7 +799,7 @@ function parseLayerRoot(where: string, root: unknown): LayerLoadResult {
   }
   if (parsed.layer.parentHandoffMode.kind === "invalid") {
     warnings.push(
-      `navigate_tree: invalid parentHandoffMode in ${where} — expected "full" or "synthesized"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
+      `navigate_tree: invalid parentHandoffMode in ${where} — expected "full", "synthesized" or "digest"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
     );
   }
   const continuity = parsed.layer.continuity;

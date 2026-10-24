@@ -67,8 +67,8 @@ branch creation, agent-context refresh and history-rewrite notifications.
   entry mapping.
 - `milestone-policy.ts`: tunable, benchmarked parallel confirmation of phase status
   and boundary; failures and disagreement abstain. Decisions place anchors only.
-- `handoff.ts`: report metadata, full/synthesized materialization, unique recorded
-  statistics and honest model-facing work context.
+- `handoff.ts`: report metadata, full/synthesized/digest materialization (digest
+  by default), unique recorded statistics and honest model-facing work context.
 - `handoff-renderer.ts`: guarded native summary-card and tree-row patches.
 - `handoff-projection.ts`: shared native projection patch; stale assistant usage
   is invalidated for budgeting without changing historical accounting. Context
@@ -107,6 +107,9 @@ for the clone workflow and supported inputs.
   Unsafe plans fail before a clone is published.
 - Parent context policy is frozen at fold time. Full mode inserts each child
   handoff once in child order; synthesized mode keeps the reviewed parent report.
+  Digest, the default for new live folds, adds one bounded line per unique child
+  to the synthesized parent report; full child reports remain summarizer evidence
+  and session history. Existing handoffs retain their frozen mode.
   Inclusive statistics union unique source IDs; they never create new billing.
 - Chronological containment is presentation metadata, not context ancestry.
   Native tree navigation always targets a real persisted entry ID.
