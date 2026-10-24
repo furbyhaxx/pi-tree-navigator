@@ -126,6 +126,7 @@ import {
   appendOpsEntry,
   type BranchLedger,
   CONTINUITY_OPS_CUSTOM_TYPE,
+  compactionContinuity,
   type FoldContinuity,
   readBranchLedger,
   reconcileFoldContinuity,
@@ -4797,12 +4798,6 @@ export default function (pi: ExtensionAPI) {
       }),
     });
     if (cut.kind === "skip") return { kind: "skip", reason: cut.detail };
-    const floor = activeTokens - cut.prefixTokens;
-    if (floor > budget)
-      return {
-        kind: "skip",
-        reason: `the newest work kept verbatim alone is ~${formatWindow(floor)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); lower keep_recent_share or raise rewind_at_tokens`,
-      };
     const cutAt = projected.findIndex(
       (entry) => entry.sourceEntry.id === cut.firstKeptEntryId,
     );
@@ -4827,6 +4822,77 @@ export default function (pi: ExtensionAPI) {
       new Set(projected.slice(cutAt).map((entry) => entry.sourceEntry.id)),
       REWIND_CUSTOM_TYPE,
     );
+    const quoted = requests.length
+      ? "\n\n## Open user requests\nThe work above was compacted to free context. The user request(s) below are still open and quoted verbatim; continue them.\n" +
+        requests
+          .map(
+            (request) =>
+              `\nQuoted user request (source entry ID: ${request.sourceEntryId}):\n<archived-user-request>\n${request.text}\n</archived-user-request>`,
+          )
+          .join("\n")
+      : "";
+    const details = (summary?: { strategy: string; calls: number }) => ({
+      navigateTree: {
+        pressure: {
+          keptTokens: cut.keptTokens,
+          prefixTokens: cut.prefixTokens,
+          ...(summary && { strategy: summary.strategy, calls: summary.calls }),
+          openUserRequests: requests,
+        },
+      },
+    });
+    const compactionText = (summaryText: string) => {
+      const continuity = compactionContinuity(sm.getBranch(), summaryText);
+      return continuity.briefing === undefined
+        ? continuity.summaryText + quoted
+        : appendContinuityBriefing(
+            continuity.summaryText + quoted,
+            continuity.briefing,
+          );
+    };
+    const previewOf = (summary: string, info?: object): CompactionEntry => ({
+      type: "compaction",
+      id: "tree-navigator-pressure-preview",
+      parentId: leafId,
+      timestamp: new Date().toISOString(),
+      summary,
+      firstKeptEntryId: cut.firstKeptEntryId,
+      tokensBefore: activeTokens,
+      details: info,
+      fromHook: true,
+    });
+    // The request after the compaction, priced as the request guard prices it,
+    // including the effective system state and the model-visible receipt.
+    const admissionAfter = (preview: CompactionEntry, receipt: string) => {
+      const withPreview = [...sm.getEntries(), preview];
+      return requestAccounting(sm, [
+        ...projectHandoffs(
+          buildSessionProjection(withPreview, preview.id),
+          withPreview,
+        ).messages,
+        {
+          role: "custom",
+          customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
+          content: receipt,
+          display: true,
+          timestamp: Date.now(),
+        },
+      ]).tokens;
+    };
+    const receiptText = (after: number, anchor?: string) =>
+      `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(after)} tokens. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchor ? ` Anchor '${anchor}' marks the compaction.` : ""} The original entries remain in the session file.`;
+    const floor = admissionAfter(
+      previewOf(
+        compactionText(foldPlaceholderSummary(summarizerReduceTokens(model))),
+        details(),
+      ),
+      receiptText(activeTokens, "compacted-00"),
+    );
+    if (floor > budget)
+      return {
+        kind: "skip",
+        reason: `a compaction that keeps the newest ~${formatWindow(cut.keptTokens)} tokens verbatim still leaves ~${formatWindow(floor)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); lower keep_recent_share or raise rewind_at_tokens`,
+      };
     runningFolds.add(sessionId);
     try {
       const summary = await summarizeFold({
@@ -4858,49 +4924,9 @@ export default function (pi: ExtensionAPI) {
       if (!input.isCurrent()) return { kind: "stale" };
       if (!summary.ok)
         return { kind: "skip", reason: `${summary.reason}: ${summary.detail}` };
-      const continuity = reconcileFoldContinuity(
-        sm.getBranch(),
-        summary.text,
-        "compacted",
-      );
-      const quoted = requests.length
-        ? "\n\n## Open user requests\nThe work above was compacted to free context. The user request(s) below are still open and quoted verbatim; continue them.\n" +
-          requests
-            .map(
-              (request) =>
-                `\nQuoted user request (source entry ID: ${request.sourceEntryId}):\n<archived-user-request>\n${request.text}\n</archived-user-request>`,
-            )
-            .join("\n")
-        : "";
-      const text =
-        continuity.briefing === undefined
-          ? continuity.summaryText + quoted
-          : appendContinuityBriefing(
-              continuity.summaryText + quoted,
-              continuity.briefing,
-            );
-      const details = {
-        navigateTree: {
-          pressure: {
-            keptTokens: cut.keptTokens,
-            prefixTokens: cut.prefixTokens,
-            strategy: summary.strategy,
-            calls: summary.calls,
-            openUserRequests: requests,
-          },
-        },
-      };
-      const preview = {
-        type: "compaction",
-        id: "tree-navigator-pressure-preview",
-        parentId: leafId,
-        timestamp: new Date().toISOString(),
-        summary: text,
-        firstKeptEntryId: cut.firstKeptEntryId,
-        tokensBefore: activeTokens,
-        details,
-        fromHook: true,
-      } satisfies CompactionEntry;
+      const text = compactionText(summary.text);
+      const info = details(summary);
+      const preview = previewOf(text, info);
       const now = sm.getEntries();
       const before = estimateContentTokens(
         buildFoldProjection(now, leafId).messages,
@@ -4908,7 +4934,10 @@ export default function (pi: ExtensionAPI) {
       const after = estimateContentTokens(
         buildFoldProjection([...now, preview], preview.id).messages,
       );
-      const projectedAfter = activeTokens - (before - after);
+      const projectedAfter = admissionAfter(
+        preview,
+        receiptText(activeTokens, "compacted-00"),
+      );
       if (before - after < MIN_REWIND_SAVINGS_TOKENS)
         return {
           kind: "skip",
@@ -4924,7 +4953,7 @@ export default function (pi: ExtensionAPI) {
           text,
           cut.firstKeptEntryId,
           activeTokens,
-          details,
+          info,
           true,
         ),
       );
@@ -4947,7 +4976,7 @@ export default function (pi: ExtensionAPI) {
           {
             type: "custom_message",
             customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
-            content: `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(projectedAfter)} tokens. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchored ? ` Anchor '${name}' marks the compaction.` : ""} The original entries remain in the session file.`,
+            content: receiptText(projectedAfter, anchored ? name : undefined),
             display: true,
             details: {
               compactionId: written.value,

@@ -287,6 +287,28 @@ function noticeOf(
 }
 
 /**
+ * Continuity for a pressure compaction: no anchor is folded and no snapshot is
+ * stored, so the ledger is rendered exactly as the branch holds it. Steering
+ * stays active and a stray `<continuity-delta>` is dropped from the summary
+ * without being applied, because nothing would persist it.
+ */
+export function compactionContinuity(
+  branch: readonly SessionEntry[],
+  summaryText: string,
+): { summaryText: string; briefing?: string } {
+  const { ledger } = readBranchLedger(branch);
+  const text = extractContinuityDelta(summaryText).text;
+  return ledger.items.some(isVisible)
+    ? {
+        summaryText: text,
+        briefing: renderBriefing(ledger, {
+          maxTokens: FOLD_BRIEFING_MAX_TOKENS,
+        }).text,
+      }
+    : { summaryText: text };
+}
+
+/**
  * Fold-time reconciliation, with no model call: strip the model's optional
  * `<continuity-delta>` from its summary, apply it as an agent proposal (user
  * rules, decisions and the objective stay protected), archive the anchor's
