@@ -18,11 +18,16 @@ export const AUTO_NAVIGATE_MIN_TOKENS = 1_000;
 export const AUTO_NAVIGATE_MAX_TOKENS = 1_000_000;
 export const AUTO_NAVIGATE_DEFAULT_MIN_TOKENS = 25_000;
 export const AUTO_NAVIGATE_DEFAULT_REWIND_TOKENS = 120_000;
+export const AUTO_NAVIGATE_MIN_KEEP_RECENT_SHARE = 0.05;
+export const AUTO_NAVIGATE_MAX_KEEP_RECENT_SHARE = 0.45;
+export const AUTO_NAVIGATE_DEFAULT_KEEP_RECENT_SHARE = 0.25;
 
 /** Resolved sidecar auto-navigation policy for an active model. */
 export interface AutoNavigateConfig {
   readonly enabled: boolean;
   readonly mode: AutoNavigateMode;
+  readonly pressure: "compact" | "fold";
+  readonly keepRecentShare: number;
   readonly checkEveryTurns: number;
   readonly minTokensSinceAnchor: number;
   readonly rewindAtTokens: number;
@@ -34,6 +39,8 @@ export interface AutoNavigateConfig {
 export interface AutoNavigatePartial {
   readonly enabled?: boolean;
   readonly mode?: AutoNavigateMode;
+  readonly pressure?: "compact" | "fold";
+  readonly keepRecentShare?: number;
   readonly checkEveryTurns?: number;
   readonly minTokensSinceAnchor?: number;
   readonly rewindAtTokens?: number;
@@ -44,6 +51,8 @@ export interface AutoNavigatePartial {
 export const DEFAULT_AUTO_NAVIGATE_CONFIG: AutoNavigateConfig = {
   enabled: false,
   mode: "anchor-and-rewind",
+  pressure: "compact",
+  keepRecentShare: AUTO_NAVIGATE_DEFAULT_KEEP_RECENT_SHARE,
   checkEveryTurns: AUTO_NAVIGATE_DEFAULT_TURNS,
   minTokensSinceAnchor: AUTO_NAVIGATE_DEFAULT_MIN_TOKENS,
   rewindAtTokens: AUTO_NAVIGATE_DEFAULT_REWIND_TOKENS,
@@ -54,12 +63,28 @@ export const DEFAULT_AUTO_NAVIGATE_CONFIG: AutoNavigateConfig = {
 const KNOWN_KEYS = new Set([
   "enabled",
   "mode",
+  "pressure",
+  "keep_recent_share",
   "check_every_turns",
   "min_tokens_since_anchor",
   "rewind_at_tokens",
   "milestone",
   "tools",
 ]);
+
+function parseShare(value: unknown, where: string): number {
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value < AUTO_NAVIGATE_MIN_KEEP_RECENT_SHARE ||
+    value > AUTO_NAVIGATE_MAX_KEEP_RECENT_SHARE
+  ) {
+    throw new Error(
+      `${where} must be a number ${AUTO_NAVIGATE_MIN_KEEP_RECENT_SHARE}-${AUTO_NAVIGATE_MAX_KEEP_RECENT_SHARE}`,
+    );
+  }
+  return value;
+}
 
 function parsePositiveInt(
   value: unknown,
@@ -119,6 +144,17 @@ export function parseAutoNavigatePartial(
     }
     mode = record.mode;
   }
+  let pressure: "compact" | "fold" | undefined;
+  if (record.pressure !== undefined) {
+    if (record.pressure !== "compact" && record.pressure !== "fold") {
+      throw new Error(`${where}.pressure must be "compact" or "fold"`);
+    }
+    pressure = record.pressure;
+  }
+  const keepRecentShare =
+    record.keep_recent_share !== undefined
+      ? parseShare(record.keep_recent_share, `${where}.keep_recent_share`)
+      : undefined;
   const checkEveryTurns =
     record.check_every_turns !== undefined
       ? parsePositiveInt(
@@ -200,6 +236,8 @@ export function parseAutoNavigatePartial(
   return {
     ...(enabled !== undefined ? { enabled } : {}),
     ...(mode !== undefined ? { mode } : {}),
+    ...(pressure !== undefined ? { pressure } : {}),
+    ...(keepRecentShare !== undefined ? { keepRecentShare } : {}),
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
@@ -220,6 +258,8 @@ export function mergeAutoNavigatePartial(
     b.tools || o.tools ? { ...(b.tools ?? {}), ...(o.tools ?? {}) } : undefined;
   const enabled = o.enabled ?? b.enabled;
   const mode = o.mode ?? b.mode;
+  const pressure = o.pressure ?? b.pressure;
+  const keepRecentShare = o.keepRecentShare ?? b.keepRecentShare;
   const checkEveryTurns = o.checkEveryTurns ?? b.checkEveryTurns;
   const minTokensSinceAnchor = o.minTokensSinceAnchor ?? b.minTokensSinceAnchor;
   const rewindAtTokens = o.rewindAtTokens ?? b.rewindAtTokens;
@@ -228,6 +268,8 @@ export function mergeAutoNavigatePartial(
   return {
     ...(enabled !== undefined ? { enabled } : {}),
     ...(mode !== undefined ? { mode } : {}),
+    ...(pressure !== undefined ? { pressure } : {}),
+    ...(keepRecentShare !== undefined ? { keepRecentShare } : {}),
     ...(checkEveryTurns !== undefined ? { checkEveryTurns } : {}),
     ...(minTokensSinceAnchor !== undefined ? { minTokensSinceAnchor } : {}),
     ...(rewindAtTokens !== undefined ? { rewindAtTokens } : {}),
@@ -247,6 +289,9 @@ export function materializeAutoNavigateConfig(
   return {
     enabled: partial?.enabled ?? DEFAULT_AUTO_NAVIGATE_CONFIG.enabled,
     mode: partial?.mode ?? DEFAULT_AUTO_NAVIGATE_CONFIG.mode,
+    pressure: partial?.pressure ?? DEFAULT_AUTO_NAVIGATE_CONFIG.pressure,
+    keepRecentShare:
+      partial?.keepRecentShare ?? DEFAULT_AUTO_NAVIGATE_CONFIG.keepRecentShare,
     checkEveryTurns:
       partial?.checkEveryTurns ?? DEFAULT_AUTO_NAVIGATE_CONFIG.checkEveryTurns,
     minTokensSinceAnchor:
