@@ -323,8 +323,8 @@ Successful recovery does not abort the run or ask the model to call a tool.
 A provider context-overflow response is handled through the same engine at the
 appropriate lifecycle boundary. Native compaction/retry ownership and user
 cancellation take precedence. Recovery attempts are bounded per request: when
-the request a recovery produced still cannot fit, the next attempt fails with an
-actionable receipt instead of looping. Once the recovered request generates, a
+the request a recovery produced still cannot fit, the next attempt produces an
+actionable receipt instead of an unbounded retry loop. Once the recovered request generates, a
 later overflow in the same run is a new request and recovers again. A request that
 cannot fit at all is refused before dispatch with `Request stopped before generation: estimated input <n> tokens leaves fewer than 1024 output tokens plus 4096 headroom`;
 nothing is withheld and the original history is kept.
