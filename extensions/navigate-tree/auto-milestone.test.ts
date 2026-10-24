@@ -142,9 +142,7 @@ test("tool disclosure covers edited results, mismatched names and native shell",
     );
     if (mode !== "full") {
       assert.match(text, /withheld/);
-      assert.ok(
-        result.warnings.some((warning) => warning.includes("disclosure")),
-      );
+      assert.ok(result.notices.some((notice) => notice.includes("disclosure")));
     }
   }
 });
@@ -227,7 +225,7 @@ test("newest bounded phase retains objective, active goals, anchors and prior fo
   ]);
   for (const hidden of ["ARCHIVED_WORK", "PRE_ANCHOR_WORK", "PRIOR_REPORT"])
     assert.ok(!JSON.stringify(result.input).includes(hidden));
-  assert.match(result.warnings.join("\n"), /3 older milestone records omitted/);
+  assert.match(result.notices.join("\n"), /3 older milestone records omitted/);
 });
 
 test("compacted originals do not return as evidence", () => {

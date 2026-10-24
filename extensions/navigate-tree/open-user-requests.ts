@@ -26,8 +26,12 @@ function storedRequests(details: unknown): OpenUserRequest[] {
   );
 }
 
-/** Collect collapsed open requests without resurrecting edited or retained input. Skill bodies are referenced, not quoted. */
-
+/**
+ * Collect collapsed open requests without resurrecting edited or retained input.
+ * Skill bodies are referenced, not quoted. A request closes on a text-only final
+ * reply, on a newer user message once the agent has responded since, and on a
+ * later handoff, which already carried it through a fold summary.
+ */
 export function collectOpenUserRequests(
   entries: readonly { sourceEntry: SessionEntry; messages: AgentMessage[] }[],
   foldPointId: string,
@@ -35,8 +39,13 @@ export function collectOpenUserRequests(
   continuationType: string,
 ): OpenUserRequest[] {
   let open = new Map<string, OpenUserRequest & { collapsed: boolean }>();
+  let answered = false;
   for (const entry of entries) {
     const collapsed = !retainedIds.has(entry.sourceEntry.id);
+    if (entry.sourceEntry.type === "branch_summary") {
+      open.clear();
+      answered = false;
+    }
     for (const message of entry.messages) {
       if (message.role === "user") {
         const text =
@@ -45,21 +54,24 @@ export function collectOpenUserRequests(
             : message.content
                 .flatMap((block) => (block.type === "text" ? [block.text] : []))
                 .join("");
-        if (text.length > 0)
-          open.set(entry.sourceEntry.id, {
-            sourceEntryId: entry.sourceEntry.id,
-            text: withoutSkillBody(text),
-            collapsed,
-          });
-      } else if (
-        message.role === "assistant" &&
-        message.stopReason === "stop" &&
-        !message.content.some((block) => block.type === "toolCall") &&
-        message.content.some(
-          (block) => block.type === "text" && block.text.trim().length > 0,
+        if (text.length === 0) continue;
+        if (answered) open.clear();
+        answered = false;
+        open.set(entry.sourceEntry.id, {
+          sourceEntryId: entry.sourceEntry.id,
+          text: withoutSkillBody(text),
+          collapsed,
+        });
+      } else if (message.role === "assistant") {
+        answered = true;
+        if (
+          message.stopReason === "stop" &&
+          !message.content.some((block) => block.type === "toolCall") &&
+          message.content.some(
+            (block) => block.type === "text" && block.text.trim().length > 0,
+          )
         )
-      ) {
-        open.clear();
+          open.clear();
       } else if (
         message.role === "custom" &&
         message.customType === continuationType
@@ -77,6 +89,7 @@ export function collectOpenUserRequests(
         }
         // Archived requests precede late input delivered before the receipt.
         open = new Map([...inherited, ...open]);
+        answered = false;
       }
     }
     if (entry.sourceEntry.id === foldPointId) break;

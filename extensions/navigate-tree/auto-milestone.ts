@@ -82,7 +82,10 @@ export function buildAutoMilestoneEvidence(options: {
 }): {
   input: MilestoneInput;
   recordEntryIds: ReadonlyMap<string, string>;
+  /** Problems the user should see, e.g. an unreadable ledger. */
   warnings: string[];
+  /** Expected omissions from disclosure rules and record caps; not worth a transcript entry. */
+  notices: string[];
 } {
   const { entries, leafId, getLabel, tools } = options;
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
@@ -194,15 +197,10 @@ export function buildAutoMilestoneEvidence(options: {
         ]
       : [];
   });
-  const warnings = [
-    ...new Set([
-      ...ledger.warnings,
-      ...disclosure.warnings,
-      ...filtered.warnings,
-    ]),
-  ];
+  const warnings = [...new Set(ledger.warnings)];
+  const notices = [...new Set([...disclosure.warnings, ...filtered.warnings])];
   if (records.length > capped.length)
-    warnings.push(
+    notices.push(
       `${records.length - capped.length} older milestone records omitted.`,
     );
   return {
@@ -223,5 +221,6 @@ export function buildAutoMilestoneEvidence(options: {
     },
     recordEntryIds,
     warnings,
+    notices,
   };
 }

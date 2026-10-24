@@ -33,6 +33,15 @@ export type AutoFoldAction =
   | { kind: "anchor"; entryId: string; suggestedName: string }
   | { kind: "pressure-fold" };
 
+/**
+ * The context a pressure fold must get under: half of `rewindAtTokens`. A fold
+ * that lands just under the threshold triggers again after a few file reads,
+ * evicting the agent's current work each time.
+ */
+export function pressureFoldBudget(rewindAtTokens: number): number {
+  return Math.floor(rewindAtTokens / 2);
+}
+
 /** Immutable turn-end inputs; isCurrent must cover session, leaf, model and config. */
 export interface AutoFoldOptions {
   state?: AutoFoldState;
@@ -160,12 +169,16 @@ export async function planAutomaticFold(
   }
   if (!config.enabled) return result;
   // Pressure folds need no classifier: crossing the threshold is the decision.
-  // Requiring fresh tokens since the last one keeps a fold that cannot get
-  // below the threshold from repeating every turn.
+  // A retry needs the runway a successful fold would have created, so a fold
+  // that was skipped or landed high does not repeat every few turns.
+  const pressureRunway = Math.max(
+    config.minTokensSinceAnchor,
+    config.rewindAtTokens - pressureFoldBudget(config.rewindAtTokens),
+  );
   if (
     above &&
     (state.lastPressureTokens === undefined ||
-      activeTokens - state.lastPressureTokens >= config.minTokensSinceAnchor)
+      activeTokens - state.lastPressureTokens >= pressureRunway)
   ) {
     state.turnsSinceCheck = 0;
     state.lastCheckTokens = activeTokens;
