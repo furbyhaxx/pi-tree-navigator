@@ -30,7 +30,8 @@ function storedRequests(details: unknown): OpenUserRequest[] {
  * Collect collapsed open requests without resurrecting edited or retained input.
  * Skill bodies are referenced, not quoted. A request closes on a text-only final
  * reply, on a newer user message once the agent has responded since, and on a
- * later handoff, which already carried it through a fold summary.
+ * later handoff, which already carried it through a fold summary. Requests a
+ * pressure compaction quoted (`details.navigateTree.pressure`) are inherited.
  */
 export function collectOpenUserRequests(
   entries: readonly { sourceEntry: SessionEntry; messages: AgentMessage[] }[],
@@ -45,6 +46,25 @@ export function collectOpenUserRequests(
     if (entry.sourceEntry.type === "branch_summary") {
       open.clear();
       answered = false;
+    } else if (entry.sourceEntry.type === "compaction") {
+      // A pressure compaction quotes the requests it summarized; they stay open.
+      const details = entry.sourceEntry.details as
+        | { navigateTree?: { pressure?: unknown } }
+        | undefined;
+      const carried = storedRequests(details?.navigateTree?.pressure);
+      if (carried.length > 0) {
+        open = new Map([
+          ...carried.map(
+            (request) =>
+              [
+                request.sourceEntryId,
+                { ...request, text: withoutSkillBody(request.text), collapsed },
+              ] as const,
+          ),
+          ...open,
+        ]);
+        answered = false;
+      }
     }
     for (const message of entry.messages) {
       if (message.role === "user") {
