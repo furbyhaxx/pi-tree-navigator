@@ -9363,6 +9363,34 @@ describe("rewind-driven compaction (#101)", () => {
     }
   });
 
+  it("auto_navigate skips a pressure fold that cannot reach half of rewind_at_tokens instead of folding to the oldest anchor", async () => {
+    const f = await autoFixture(async () => ({ status: "continue" }), {
+      rewind_at_tokens: 2_000,
+    });
+    try {
+      const boundary = await autoTurn(f, 90_000);
+      assert.equal(f.summaries.calls.length, 0, "no fold ran");
+      assert.ok(
+        !f.sm.getBranch().some((entry) => entry.type === "branch_summary"),
+      );
+      const [warning] = boundary.entries.filter(
+        (entry) => entry.customType === "navigate-tree-auto-warning",
+      );
+      assert.match(
+        String(warning?.content),
+        /above the ~1k a pressure fold must reach .* Raise rewind_at_tokens to at least/,
+      );
+      await autoTurn(f, 90_500);
+      assert.equal(
+        f.summaries.calls.length,
+        0,
+        "a skipped pressure fold waits for the runway before retrying",
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
   it("auto_navigate persists a visible warning when a pressure fold has no valid target", async () => {
     const f = await autoFixture(async () => ({ status: "continue" }));
     try {

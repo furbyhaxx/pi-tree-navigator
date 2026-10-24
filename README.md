@@ -216,12 +216,18 @@ When `auto_navigate.enabled` is true, two things happen at each turn boundary:
 
 - **Pressure fold (deterministic).** When the estimated context reaches
   `rewind_at_tokens` in `anchor-and-rewind` mode, the independent engine folds
-  without asking a classifier. Target selection follows the recovery rules: the
-  canonical cut, the shared materialized preview, the newest anchor whose result
-  lands under `rewind_at_tokens`, else the oldest valid anchor. Unfinished work is
-  folded too; still-open user requests are kept verbatim after the handoff. Another
-  pressure fold needs `min_tokens_since_anchor` fresh estimated tokens, so a fold
-  that cannot get below the threshold does not repeat every turn.
+  without asking a classifier. It uses the canonical cut and the shared
+  materialized preview, and folds to the newest anchor whose result lands under
+  half of `rewind_at_tokens`. There is no oldest-anchor fallback: a fold that
+  lands just under the threshold would fire again after a few file reads and
+  discard the agent's current work each time. When no anchor reaches that budget,
+  a warning names the smallest reachable size and the `rewind_at_tokens` it needs.
+  A retry (after a fold or a skip) needs half of `rewind_at_tokens`, at least
+  `min_tokens_since_anchor`, of fresh estimated tokens. Unfinished work is folded
+  too; still-open user requests are kept verbatim after the handoff. A request
+  closes on a text-only final reply, on a newer user message after the agent
+  responded, or on a later handoff. An attached skill is quoted as a reference to
+  its file, not its body.
 - **Milestone anchors (classifier).** Below the threshold, after
   `check_every_turns` completed turns or `min_tokens_since_anchor` fresh tokens,
   the configured `milestone` policy judges projected, disclosure-filtered evidence

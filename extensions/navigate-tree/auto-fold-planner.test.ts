@@ -198,7 +198,7 @@ test("crossing rewind_at_tokens folds deterministically without asking a classif
   assert.equal(f.sent.length, 0);
 });
 
-test("a pressure fold that did not get below the threshold waits for fresh tokens, even after its own new anchor", async () => {
+test("a pressure fold that did not get below the threshold waits for half the threshold of fresh tokens, even after its own new anchor", async () => {
   const f = fixture();
   f.disagree();
   let out = await planAutomaticFold({
@@ -225,7 +225,15 @@ test("a pressure fold that did not get below the threshold waits for fresh token
   out = await planAutomaticFold({
     ...f.options(),
     state: out.state,
-    activeTokens: 111_000,
+    activeTokens: 159_000,
+    newestAnchorId: f.boundary,
+    anchorTokens: 105_000,
+  });
+  assert.notEqual(out.action.kind, "pressure-fold");
+  out = await planAutomaticFold({
+    ...f.options(),
+    state: out.state,
+    activeTokens: 160_000,
     newestAnchorId: f.boundary,
     anchorTokens: 105_000,
   });
@@ -523,7 +531,10 @@ test("disclosure applies before requests and cannot hide an exposed unfinished s
   });
   assert.equal(out.action.kind, "anchor");
   assert.ok(!JSON.stringify(f.sent).includes("SECRET_RESULT"));
-  assert.ok(out.warnings.some((warning) => warning.includes("disclosure")));
+  assert.ok(
+    !out.warnings.some((warning) => warning.includes("disclosure")),
+    "expected disclosure omissions are not persisted as warnings",
+  );
 });
 
 test("anchor names are bounded, readable, deterministic, collision-safe and never overwrite labels", async () => {

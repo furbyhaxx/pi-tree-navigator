@@ -83,7 +83,11 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { registerAnchorCommand } from "./anchor-command.ts";
-import { type AutoFoldState, planAutomaticFold } from "./auto-fold-planner.ts";
+import {
+  type AutoFoldState,
+  planAutomaticFold,
+  pressureFoldBudget,
+} from "./auto-fold-planner.ts";
 import type { AutoNavigatePartial } from "./auto-navigate-config.ts";
 import {
   CONSOLIDATION_DEFAULTS,
@@ -4636,8 +4640,8 @@ export default function (pi: ExtensionAPI) {
     if (plan.action.kind === "anchor") {
       anchor(plan.action.entryId, plan.action.suggestedName);
     } else if (plan.action.kind === "pressure-fold") {
-      // Same rules as recovery: canonical cut, shared materialized preview,
-      // newest anchor whose result lands under the threshold, else the oldest valid one.
+      // Canonical cut and shared materialized preview as in recovery, but only
+      // the newest anchor that lands under the pressure budget; no oldest-anchor fallback.
       const skipped = (reason: string) => {
         const text = `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}, but no fold ran: ${toOneLine(reason, 400) ?? "no target"}`;
         try {
@@ -4665,8 +4669,19 @@ export default function (pi: ExtensionAPI) {
         foldPointId: cut.foldPointId,
         thinking: host.thinking,
       });
-      const selected = selectFoldTarget(candidates, config.rewindAtTokens);
+      const budget = pressureFoldBudget(config.rewindAtTokens);
+      const selected = selectFoldTarget(candidates, budget);
       if (!selected.ok) return skipped(selected.reasons.join("; "));
+      if (!selected.withinBudget) {
+        const floor = Math.min(
+          ...candidates
+            .filter((candidate) => candidate.valid)
+            .map((candidate) => candidate.projectedAfterTokens),
+        );
+        return skipped(
+          `the smallest fold leaves ~${formatWindow(floor)}, above the ~${formatWindow(budget)} a pressure fold must reach (half of rewind_at_tokens), so it would trigger again after a few turns and discard the current work. Raise rewind_at_tokens to at least ~${formatWindow(floor * 2)} or fold manually with /anchor fold`,
+        );
+      }
       if (!isCurrent() || runningFolds.has(sessionId)) return;
       const request: FoldRequest = {
         sessionId,
