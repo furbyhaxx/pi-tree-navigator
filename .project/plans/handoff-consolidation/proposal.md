@@ -1,11 +1,11 @@
 ---
-version: 2
+version: 3
 id: "handoff-consolidation-proposal"
 title: "Continuous consolidation of older handoffs"
 description: "Decision material for letting completed work fade from active context instead of accumulating as verbatim handoffs."
 type: "plan"
 created: "2026-10-24T01:12:10+02:00"
-updated: "2026-10-24T01:20:00+02:00"
+updated: "2026-10-24T15:10:00+02:00"
 createdBy: "agent"
 updatedBy: "agent"
 ---
@@ -89,8 +89,53 @@ new persistence surface and should land after B is measured in real sessions.
 2. Slice 2 is built next and is **on by default** once it passes acceptance
    (the recommendation was opt-in; the user chose default-on).
 
+3. Slice 1 shipped as `5308c7d`; the user's global config was switched to
+   `digest` (backup `tree-navigator.json.bak-20261024T150312`).
+4. Slice 2: build now with the proposed values (more than 4 handoffs or more
+   than 10% of the window, newest 2 kept verbatim), default on, tunable.
+
+## Slice 2 design (supersedes "prefix rewrite + tail replay")
+
+Use Pi's native `compaction` entry instead of a new commit shape.
+`buildContextEntries` (`pi-coding-agent/dist/core/session-manager.js`)
+projects the latest compaction as its summary, then the path entries from
+`firstKeptEntryId` up to the compaction, then everything after it. Nothing is
+rewritten or replayed; the entry is append-only.
+
+```
+before: [start … H1 … H2 … H3 … H4 … H5 … H6 … work]
+after : [compaction(summary of start..H4)] H5 … H6 … work
+         firstKeptEntryId = H5 (oldest of the newest 2 handoffs)
+```
+
+- **Planner (pure):** count handoff (`branch_summary`) messages in the current
+  projection and their estimated tokens. Trigger when count > `max_handoffs`
+  (4) or handoff tokens > `max_window_share` (0.10) of the window. Cut at the
+  entry of the oldest of the newest `keep_newest` (2) handoffs. Refuse unsafe
+  cuts with the existing recovery-cut checks (tool call before the cut with
+  its result after it, unanswered input before the cut). Skip when the prefix
+  saving is below the minimum fold saving.
+- **Summarizer:** `summarizeFold` hardcodes the r5d fold instruction
+  (`buildSummaryRequestText`); add an instruction override so consolidation
+  can ask for a project-history summary (decisions, user rules, delivered
+  state, rejected approaches, commits; drop step-level detail). Evidence is
+  the projected prefix, which starts with the previous compaction summary, so
+  repeated consolidations accumulate correctly. Reasoning cap low, as folds.
+- **Commit:** `sm.appendCompaction(summary, firstKeptId, tokensBefore,
+  details: { navigateTree: { consolidation, handoffs, strategy, usage } })`,
+  guarded by `trySessionWrite`; refresh agent messages; emit
+  `session_compact` for history-mirroring providers, as folds emit
+  `session_tree`.
+- **Trigger:** idle and turn boundaries only, after any queued fold, never
+  mid-tool-batch; one per crossing; per-session engine lock shared with folds.
+- **Unaffected:** the continuity ledger replays raw `sm.getBranch()` ops, not
+  the projection. Raw history stays on disk.
+- **Consequence:** anchors before `firstKeptEntryId` become pre-compaction
+  targets, which folds already refuse. Anchors at or after the cut must stay
+  foldable (test).
+- **Config:** `consolidation: { enabled: true, max_handoffs: 4,
+  max_window_share: 0.1, keep_newest: 2 }`, plus `/anchor settings` rows.
+
 ## Open
 
-- Slice 2 thresholds (count, share of window, newest K kept verbatim);
-  proposed values above, to be validated against real-session measurements
-  after slice 1.
+- Thresholds are initial values; re-measure on real sessions after release.
