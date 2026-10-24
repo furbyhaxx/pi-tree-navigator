@@ -27,6 +27,7 @@ import {
 import navigateTree, {
   __testHooks,
   estimateAdmissionTokens,
+  PRESSURE_COMPACTION_CUSTOM_TYPE,
 } from "../../extensions/navigate-tree/index.ts";
 import { RECOMMENDED_MILESTONE_POLICY } from "../../extensions/navigate-tree/milestone-policy.ts";
 import { safeMessage } from "../classifier-eval/adapters.ts";
@@ -42,12 +43,19 @@ import {
   buildCorpus,
   corpusManifest,
   FACTS,
+  PRESSURE_CONFIG,
+  PRESSURE_REQUEST,
   seedCorpus,
 } from "./fixture.ts";
 import { createBudgetedTransport, type PricedModel } from "./transport.ts";
 
-/** Acceptance scenarios for manual, recovery, tool-driven and automatic engine folds. */
-export type Scenario = "manual" | "preflight" | "agent" | "automatic";
+/** Acceptance scenarios for manual, recovery, tool-driven and automatic engine folds, and pressure compaction. */
+export type Scenario =
+  | "manual"
+  | "preflight"
+  | "agent"
+  | "automatic"
+  | "pressure";
 /** Options contain no credentials; they are safe to persist with the result. */
 export interface RunOptions {
   scenario: Scenario;
@@ -109,6 +117,47 @@ export function verifyAutomaticContinuation(
   );
 }
 
+/** Require a tail-keeping compaction mid-run and a final answer written after it. */
+export function verifyPressureCompaction(
+  branch: readonly SessionEntry[],
+  getLabel: (id: string) => string | undefined,
+): void {
+  const at = branch.findIndex(
+    (entry) =>
+      entry.type === "compaction" &&
+      typeof (entry.details as { navigateTree?: { pressure?: unknown } })
+        ?.navigateTree?.pressure === "object",
+  );
+  assert.ok(at >= 0, "pressure relief must write a native compaction");
+  assert.match(getLabel(branch[at].id) ?? "", /^anchor:compacted/);
+  assert.ok(
+    !branch.some((entry) => entry.type === "branch_summary"),
+    "pressure compaction must not fold",
+  );
+  assert.ok(
+    branch
+      .slice(at + 1)
+      .some(
+        (entry) =>
+          entry.type === "custom_message" &&
+          entry.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
+      ),
+    "pressure compaction must leave a visible receipt",
+  );
+  assert.ok(
+    branch
+      .slice(at + 1)
+      .some(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "assistant" &&
+          entry.message.stopReason === "stop" &&
+          textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
+      ),
+    "the agent must answer in the same run after the compaction",
+  );
+}
+
 /** Parse explicit run controls; no request is sent by parsing. */
 export function parseOptions(args: string[]): RunOptions {
   const { values } = parseArgs({
@@ -133,26 +182,34 @@ export function parseOptions(args: string[]): RunOptions {
   });
   if (!values.out)
     throw new Error("--out is required and must be a new directory");
-  if (!["manual", "preflight", "agent", "automatic"].includes(values.scenario))
-    throw new Error("--scenario must be manual, preflight, agent or automatic");
   if (
-    values.scenario === "automatic" &&
+    !["manual", "preflight", "agent", "automatic", "pressure"].includes(
+      values.scenario,
+    )
+  )
+    throw new Error(
+      "--scenario must be manual, preflight, agent, automatic or pressure",
+    );
+  if (
+    (values.scenario === "automatic" || values.scenario === "pressure") &&
     !values["dry-run"] &&
     ((!args.includes("--ledger") &&
       !args.some((arg) => arg.startsWith("--ledger="))) ||
       !isAbsolute(values.ledger))
   )
     throw new Error(
-      "automatic live runs require an explicit absolute --ledger path to the shared ledger",
+      "automatic and pressure live runs require an explicit absolute --ledger path to the shared ledger",
     );
   const window = Number(values.window),
     blocks = Number(
       values.blocks ??
         (values.scenario === "automatic"
           ? "8"
-          : values.scenario === "agent"
-            ? "15"
-            : "24"),
+          : values.scenario === "pressure"
+            ? "16"
+            : values.scenario === "agent"
+              ? "15"
+              : "24"),
     );
   if (!Number.isInteger(window) || window < 32000)
     throw new Error("--window must be an integer >=32000");
@@ -221,7 +278,17 @@ export async function runAcceptance(
 ): Promise<void> {
   const corpus = buildCorpus(options.blocks);
   const request =
-    options.scenario === "automatic" ? AUTOMATIC_REQUEST : REQUEST;
+    options.scenario === "automatic"
+      ? AUTOMATIC_REQUEST
+      : options.scenario === "pressure"
+        ? PRESSURE_REQUEST
+        : REQUEST;
+  const navigatorConfig =
+    options.scenario === "automatic"
+      ? AUTOMATIC_CONFIG
+      : options.scenario === "pressure"
+        ? PRESSURE_CONFIG
+        : undefined;
   mkdirSync(dirname(options.out), { recursive: true });
   mkdirSync(options.out);
   const save = (name: string, value: unknown) =>
@@ -231,8 +298,7 @@ export async function runAcceptance(
       { flag: "wx" },
     );
   save("fixture.json", { facts: FACTS, request, corpus });
-  if (options.scenario === "automatic")
-    save("auto-config.json", AUTOMATIC_CONFIG);
+  if (navigatorConfig) save("auto-config.json", navigatorConfig);
   save("manifest.json", corpusManifest(corpus));
   const { authDir: _authDir, ...publicOptions } = options;
   save("invocation.json", {
@@ -278,10 +344,10 @@ export async function runAcceptance(
     cwd = join(scratch, "work");
   mkdirSync(agentDir);
   mkdirSync(cwd);
-  if (options.scenario === "automatic")
+  if (navigatorConfig)
     writeFileSync(
       join(agentDir, "tree-navigator.json"),
-      JSON.stringify(AUTOMATIC_CONFIG),
+      JSON.stringify(navigatorConfig),
     );
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
   const previousOffline = process.env.PI_OFFLINE;
@@ -388,12 +454,14 @@ export async function runAcceptance(
       noThemes: true,
       noContextFiles: true,
       systemPrompt:
-        options.scenario === "automatic"
-          ? // The tool must stay active for automatic folding to run; the model
-            // is told to leave navigation to the controller so the classifier
-            // pair is the only source of anchors and folds.
-            "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. Do not call navigate_tree: anchors and folding are handled automatically."
-          : "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. When asked to fold, invoke navigate_tree rewind, then answer the remaining request after the handoff.",
+        options.scenario === "pressure"
+          ? "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. Use navigate_tree only as the request says; context management is automatic."
+          : options.scenario === "automatic"
+            ? // The tool must stay active for automatic folding to run; the model
+              // is told to leave navigation to the controller so the classifier
+              // pair is the only source of anchors and folds.
+              "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. Do not call navigate_tree: anchors and folding are handled automatically."
+            : "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. When asked to fold, invoke navigate_tree rewind, then answer the remaining request after the handoff.",
     });
     await loader.reload();
     assert.deepEqual(loader.getExtensions().errors, []);
@@ -424,10 +492,19 @@ export async function runAcceptance(
         initialTokens + 5120 > model.contextWindow,
         "fixture must exceed admission before any main request",
       );
-    if (options.scenario === "agent" || options.scenario === "automatic")
+    if (
+      options.scenario === "agent" ||
+      options.scenario === "automatic" ||
+      options.scenario === "pressure"
+    )
       assert.ok(
         initialTokens + 16384 < model.contextWindow,
         "agent scenario must start with room to call the tool",
+      );
+    if (options.scenario === "pressure")
+      assert.ok(
+        initialTokens > PRESSURE_CONFIG.auto_navigate.rewind_at_tokens,
+        "pressure fixture must start above rewind_at_tokens",
       );
     assert.ok(
       pi && extensionContext,
@@ -457,6 +534,29 @@ export async function runAcceptance(
       await session.prompt(request);
     }
     await session.waitForIdle();
+    if (options.scenario === "pressure") {
+      const branch = sm.getBranch();
+      verifyPressureCompaction(branch, (id) => sm.getLabel(id));
+      const afterTokens = estimateAdmissionTokens(sm);
+      assert.ok(afterTokens < initialTokens, "compaction must reduce context");
+      await transport.drain();
+      save("result.json", {
+        passed: true,
+        scenario: options.scenario,
+        sessionFile: sm.getSessionFile(),
+        initialTokens,
+        afterTokens,
+        compaction: branch.find((entry) => entry.type === "compaction"),
+        calls,
+        beforeBudget,
+        afterBudget: ledger.snapshot(),
+        completedAt: new Date().toISOString(),
+      });
+      console.log(
+        `pressure: PASS; ${initialTokens} -> ${afterTokens} estimated tokens; ${calls.length} requests.`,
+      );
+      return;
+    }
     if (options.scenario === "automatic") {
       const entries = sm.getEntries();
       const receipts = entries.filter(

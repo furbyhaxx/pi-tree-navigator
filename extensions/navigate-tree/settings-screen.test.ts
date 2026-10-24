@@ -67,12 +67,14 @@ const ROW = {
   checkEvery: 10,
   minTokens: 11,
   rewindAt: 12,
-  autoTools: 13,
-  consolidationEnabled: 14,
-  consolidationMax: 15,
-  consolidationShare: 16,
-  consolidationKeep: 17,
-  overrides: 18,
+  pressure: 13,
+  keepRecentShare: 14,
+  autoTools: 15,
+  consolidationEnabled: 16,
+  consolidationMax: 17,
+  consolidationShare: 18,
+  consolidationKeep: 19,
+  overrides: 20,
 } as const;
 
 type Script = (
@@ -767,6 +769,26 @@ describe("settings screen: saving", () => {
     );
   });
 
+  it("edits automatic pressure and its kept-recent share", async () => {
+    const h = harness({
+      global: json({
+        auto_navigate: { pressure: "compact", keep_recent_share: 0.25 },
+      }),
+      inputs: ["0.3"],
+      confirms: [true],
+    });
+    await h.run(
+      at(ROW.pressure, RIGHT),
+      edit(ROW.keepRecentShare),
+      press("s"),
+      press(ESC),
+    );
+
+    assert.deepEqual(JSON.parse(h.readGlobal()), {
+      auto_navigate: { pressure: "fold", keep_recent_share: 0.3 },
+    });
+  });
+
   it("uses left and right to set flags and cycle choices", async () => {
     const h = harness({
       global: json({
@@ -1028,6 +1050,11 @@ describe("settings screen: rows", () => {
     assert.match(
       line(screen, "auto_navigate.mode"),
       /anchor-and-rewind · default/,
+    );
+    assert.match(line(screen, "auto_navigate.pressure"), /compact · default/);
+    assert.match(
+      line(screen, "auto_navigate.keep_recent_share"),
+      /0\.25 · default/,
     );
     assert.match(
       line(screen, "auto_navigate.milestone"),
@@ -1342,7 +1369,7 @@ describe("settings screen: keyed maps", () => {
       press("a"),
       press("a"),
       edit(0),
-      edit(7),
+      edit(9),
       press("a"),
       press(ESC),
       press(ESC),

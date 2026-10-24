@@ -192,6 +192,8 @@ Different models need different budgets: a model that writes long summaries or g
   "auto_navigate": {
     "enabled": false,
     "mode": "anchor-and-rewind",
+    "pressure": "compact",
+    "keep_recent_share": 0.25,
     "milestone": "recommended",
     "check_every_turns": 6,
     "min_tokens_since_anchor": 25000,
@@ -214,9 +216,27 @@ Different models need different budgets: a model that writes long summaries or g
 
 When `auto_navigate.enabled` is true, two things happen at each turn boundary:
 
-- **Pressure fold (deterministic).** When the estimated context reaches
-  `rewind_at_tokens` in `anchor-and-rewind` mode, the independent engine folds
-  without asking a classifier. It uses the canonical cut and the shared
+- **Pressure compaction (default, deterministic).** When the estimated context
+  reaches `rewind_at_tokens` in `anchor-and-rewind` mode with `pressure: "compact"`,
+  the newest `keep_recent_share` of `rewind_at_tokens` (default 0.25, range
+  0.05–0.45) stays verbatim and everything older is summarized into one native
+  Pi compaction. The cut lands on a message boundary and never separates a tool
+  call from its result, so the files and results the agent is working with stay
+  in context. No anchor is needed. The summary carries still-open user requests
+  verbatim and the continuity briefing; the compaction entry gets an
+  `anchor:compacted` label, a later fold or recovery target. No anchor is folded,
+  so steering stays active and the ledger is unchanged. The result must land
+  under half of `rewind_at_tokens`, priced like the request guard prices the
+  next request (system, tools, summary, kept work and receipt). Before any
+  summary call, a summary of the full reduce-output size is assumed; after it,
+  the real summary is priced. Otherwise nothing is written and a warning says
+  whether to lower `keep_recent_share` or raise `rewind_at_tokens`. Leave room:
+  half of `rewind_at_tokens` minus the kept share must hold the system prompt
+  and the summary (at 200k and 0.25: 50k). The same retry rule as pressure
+  folds applies.
+- **Pressure fold (`pressure: "fold"`, deterministic).** At the same threshold
+  the independent engine folds back to an anchor instead, without asking a
+  classifier. It uses the canonical cut and the shared
   materialized preview, and folds to the newest anchor whose result lands under
   half of `rewind_at_tokens`. There is no oldest-anchor fallback: a fold that
   lands just under the threshold would fire again after a few file reads and
