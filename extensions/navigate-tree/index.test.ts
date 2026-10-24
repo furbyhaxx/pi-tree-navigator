@@ -101,6 +101,7 @@ import navigateTree, {
   MAX_SESSION_REFS,
   MIN_REWIND_SAVINGS_TOKENS,
   MIN_SUMMARY_FOCUS_LENGTH,
+  PRESSURE_COMPACTION_CUSTOM_TYPE,
   previewFoldCommit,
   priceFoldCandidates,
   REWIND_CUSTOM_TYPE,
@@ -9213,6 +9214,7 @@ describe("rewind-driven compaction (#101)", () => {
           check_every_turns: 3,
           min_tokens_since_anchor: 100_000,
           rewind_at_tokens: 80_000,
+          pressure: "fold",
           ...config,
         },
         ...overrides,
@@ -9454,6 +9456,154 @@ describe("rewind-driven compaction (#101)", () => {
         "the open request stays a user message after the handoff",
       );
       assertNoAutoSteer(f, boundary);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  /** A tool turn whose result carries about `tokens` tokens of evidence. */
+  function toolTurn(f: Forced, id: string, tokens: number, usage = 0) {
+    const assistantId = f.sm.appendMessage(
+      assistantMessage(
+        [{ type: "toolCall", id, name: "read", arguments: {} }],
+        "toolUse",
+        usage,
+      ) as never,
+    );
+    appendToolResult(f.sm, id, "read", "e".repeat(tokens * 4));
+    return assistantId;
+  }
+
+  it("auto_navigate compacts older work at rewind_at_tokens and keeps the newest turns verbatim", async () => {
+    const f = await autoFixture(
+      async () => {
+        throw new Error("a classifier must not decide pressure relief");
+      },
+      { pressure: "compact", rewind_at_tokens: 40_000, keep_recent_share: 0.1 },
+    );
+    try {
+      for (let i = 1; i <= 4; i++)
+        appendTurn(f.sm, `task ${i}`, `# Done ${i}`, i * 10_000, true);
+      const last = appendTurn(f.sm, "task 5", "# Done 5", 50_000, true);
+      const entry = f.sm.getEntry(last.assistantId);
+      assert.ok(entry?.type === "message");
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, entry.message);
+
+      const receipt = boundary.entries.find(
+        (value) => value.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
+      );
+      assert.ok(receipt, JSON.stringify(boundary));
+      assert.equal(f.questions.length, 0);
+      assert.ok(f.summaries.calls.length > 0);
+      const compaction = f.sm
+        .getBranch()
+        .findLast((value) => value.type === "compaction");
+      assert.ok(compaction?.type === "compaction");
+      assert.equal(compaction.firstKeptEntryId, last.userId);
+      assert.equal(f.sm.getLabel(compaction.id), "anchor:compacted");
+      assert.ok(
+        !f.sm.getBranch().some((value) => value.type === "branch_summary"),
+        "a compaction, not a fold",
+      );
+      const projected = f.sm.buildSessionProjection().entries;
+      assert.equal(projected[0].sourceEntry.id, compaction.id);
+      assert.ok(
+        projected.some((value) => value.sourceEntry.id === last.userId),
+        "the newest turn stays verbatim",
+      );
+      assertNoAutoSteer(f, boundary);
+
+      // The compaction anchor is a fold target that keeps the compacted summary.
+      for (let i = 6; i <= 8; i++)
+        appendTurn(f.sm, `task ${i}`, `# Done ${i}`, 20_000, true);
+      const api = __testHooks.foldApi(f.pi.pi);
+      assert.ok(api);
+      const fold = (rewindTo: string, newLabel: string) =>
+        api.runFoldNow({ ...f.ctx, isIdle: () => true } as never, {
+          origin: "manual",
+          rewindTo,
+          newLabel,
+          focus: "Preserve user instructions and continue the work.",
+        });
+      const folded = await fold("compacted", "after-compaction");
+      assert.equal(folded.status, "done", JSON.stringify(folded));
+      const summary = f.sm
+        .getBranch()
+        .findLast((value) => value.type === "branch_summary");
+      assert.equal(summary?.parentId, compaction.id);
+      assert.equal(
+        f.sm.buildSessionProjection().entries[0].sourceEntry.id,
+        compaction.id,
+        "the fold keeps the compaction summary in context",
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate quotes an open request a pressure compaction summarizes", async () => {
+    const f = await autoFixture(async () => ({ status: "continue" }), {
+      pressure: "compact",
+      rewind_at_tokens: 40_000,
+      keep_recent_share: 0.1,
+    });
+    try {
+      appendTurn(f.sm, "earlier", "# Earlier", 5_000, true);
+      const request = "Migrate every crate to edition 2024 and keep going.";
+      const requestId = f.sm.appendMessage({
+        role: "user",
+        content: request,
+        timestamp: 1,
+      });
+      for (let i = 1; i <= 4; i++) toolTurn(f, `r${i}`, 9_000, i * 10_000);
+      const leaf = f.sm.getEntry(toolTurn(f, "r5", 2_000, 50_000));
+      assert.ok(leaf?.type === "message");
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, leaf.message);
+      const compaction = f.sm
+        .getBranch()
+        .findLast((value) => value.type === "compaction");
+      assert.ok(compaction?.type === "compaction", JSON.stringify(boundary));
+      assert.ok(
+        compaction.summary.includes(
+          `<archived-user-request>\n${request}\n</archived-user-request>`,
+        ),
+      );
+      assert.deepEqual(
+        (
+          compaction.details as {
+            navigateTree: { pressure: { openUserRequests: unknown } };
+          }
+        ).navigateTree.pressure.openUserRequests,
+        [{ sourceEntryId: requestId, text: request }],
+      );
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate skips a pressure compaction whose kept work alone exceeds half of rewind_at_tokens", async () => {
+    const f = await autoFixture(async () => ({ status: "continue" }), {
+      pressure: "compact",
+      rewind_at_tokens: 40_000,
+      keep_recent_share: 0.1,
+    });
+    try {
+      appendTurn(f.sm, "earlier", "# Earlier", 5_000, true);
+      f.sm.appendMessage({ role: "user", content: "read it", timestamp: 1 });
+      const leaf = f.sm.getEntry(toolTurn(f, "big", 30_000, 50_000));
+      assert.ok(leaf?.type === "message");
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, leaf.message);
+      assert.equal(f.summaries.calls.length, 0, "skipped before any call");
+      assert.ok(
+        !f.sm.getEntries().some((value) => value.type === "compaction"),
+      );
+      const [warning] = boundary.entries.filter(
+        (value) => value.customType === "navigate-tree-auto-warning",
+      );
+      assert.match(
+        String(warning?.content),
+        /kept verbatim alone is .* above the ~20k a pressure compaction must reach/,
+      );
     } finally {
       cleanupConfigFixture(f.fixture);
     }
