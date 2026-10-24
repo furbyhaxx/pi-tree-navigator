@@ -5,7 +5,7 @@ title: "Independent fold live acceptance: running results"
 description: "Budgeted synthetic manual, preflight and agent scenarios; failed evidence retained. Acceptance remains incomplete."
 type: "analysis"
 created: "2026-10-23T19:21:08+02:00"
-updated: "2026-10-23T21:46:00+02:00"
+updated: "2026-10-24T19:02:56+02:00"
 createdBy: "coding-agent"
 updatedBy: "coding-agent"
 ---
@@ -68,3 +68,12 @@ abstains instead of reproducing the recorded retirement.
 The installed build remains `229afe0`. Folding inside this working session is
 impossible until the engine build is installed and reloaded: its pre-request
 guard aborts at 367k/372k, which is the originally reported deadlock.
+
+## Pressure compaction (2026-10-24)
+
+`pressure-01` (source `695f1a5`, `openai/gpt-6-luna`, 96k window, 16 blocks,
+`rewind_at_tokens` 64,000, `keep_recent_share` 0.25): **not executed**. The first
+main request returned OpenRouter `402 Insufficient credits`; no summary or
+compaction ran and the call settled at $0. This is an account-balance blocker,
+not a product result. Pressure compaction remains unverified against a real
+provider; offline coverage is the SDK-loop host tests in `index.test.ts`.

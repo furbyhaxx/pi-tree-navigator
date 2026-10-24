@@ -1,0 +1,12 @@
+{
+  "scenario": "pressure",
+  "model": "openai/gpt-6-luna",
+  "window": 96000,
+  "blocks": 16,
+  "out": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/pressure-01",
+  "ledger": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+  "dryRun": false,
+  "startedAt": "2026-10-24T17:01:53.530Z",
+  "sourceCommit": "695f1a5d51bc8a4de10aa36c87c536778c50bb7a",
+  "dirtyPaths": []
+}

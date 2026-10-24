@@ -224,10 +224,16 @@ When `auto_navigate.enabled` is true, two things happen at each turn boundary:
   call from its result, so the files and results the agent is working with stay
   in context. No anchor is needed. The summary carries still-open user requests
   verbatim and the continuity briefing; the compaction entry gets an
-  `anchor:compacted` label, a later fold or recovery target. The result must land
-  under half of `rewind_at_tokens`; otherwise nothing is written and a warning
-  says whether to lower `keep_recent_share` or raise `rewind_at_tokens`. The
-  same retry rule as pressure folds applies.
+  `anchor:compacted` label, a later fold or recovery target. No anchor is folded,
+  so steering stays active and the ledger is unchanged. The result must land
+  under half of `rewind_at_tokens`, priced like the request guard prices the
+  next request (system, tools, summary, kept work and receipt). Before any
+  summary call, a summary of the full reduce-output size is assumed; after it,
+  the real summary is priced. Otherwise nothing is written and a warning says
+  whether to lower `keep_recent_share` or raise `rewind_at_tokens`. Leave room:
+  half of `rewind_at_tokens` minus the kept share must hold the system prompt
+  and the summary (at 200k and 0.25: 50k). The same retry rule as pressure
+  folds applies.
 - **Pressure fold (`pressure: "fold"`, deterministic).** At the same threshold
   the independent engine folds back to an anchor instead, without asking a
   classifier. It uses the canonical cut and the shared
