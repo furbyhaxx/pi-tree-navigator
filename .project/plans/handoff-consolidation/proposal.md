@@ -1,11 +1,11 @@
 ---
-version: 1
+version: 2
 id: "handoff-consolidation-proposal"
 title: "Continuous consolidation of older handoffs"
 description: "Decision material for letting completed work fade from active context instead of accumulating as verbatim handoffs."
 type: "plan"
 created: "2026-10-24T01:12:10+02:00"
-updated: "2026-10-24T01:12:10+02:00"
+updated: "2026-10-24T01:20:00+02:00"
 createdBy: "agent"
 updatedBy: "agent"
 ---
@@ -83,8 +83,14 @@ Recommendation: B now, then C. B removes the dominant growth with no new
 failure modes. C is the user's "completed work fades" idea, but tail replay is
 new persistence surface and should land after B is measured in real sessions.
 
-## Open decisions
+## Decisions (user, 2026-10-24)
 
-1. Default materialization for new folds: `digest`, `synthesized` or `full`.
-2. Whether slice 2 ships at all, and opt-in versus on by default.
-3. Slice 2 thresholds (count, share of window, newest K kept verbatim).
+1. New folds default to `digest` (slice 1, implemented now).
+2. Slice 2 is built next and is **on by default** once it passes acceptance
+   (the recommendation was opt-in; the user chose default-on).
+
+## Open
+
+- Slice 2 thresholds (count, share of window, newest K kept verbatim);
+  proposed values above, to be validated against real-session measurements
+  after slice 1.
