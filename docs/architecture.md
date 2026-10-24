@@ -16,7 +16,10 @@ branch creation, agent-context refresh and history-rewrite notifications.
 - `fold-engine.ts`: per-session serialization, snapshot/summary/commit orchestration
   and deterministic target selection.
 - `fold-inputs.ts`: current projected evidence restricted to the folded ancestry;
-  Strategy A request construction and Strategy B evidence records.
+  Strategy A request construction, Strategy B evidence records and the projected
+  records a consolidation merges.
+- `consolidation-planner.ts`: pure trigger and cut for background handoff
+  consolidation (handoff count or window share, newest handoffs kept, minimum saving).
 - `fold-summarizer.ts`: independent registry calls, cache-prefix strategy and bounded
   map-reduce strategy, explicit evidence coverage and call limits; reasoning
   allowance on top of answer caps and one reasoning-off retry after a `length` stop.
@@ -88,6 +91,10 @@ for the clone workflow and supported inputs.
 ## Invariants
 
 - Folds preserve the abandoned branch and run independently of main-agent turns.
+- A fold to a target inside the latest compaction's kept range re-appends a copy
+  of that compaction after its handoff (`details.carriedFrom`, no `usage`). Targets
+  before the kept range are refused. Consolidation appends a compaction; it never
+  rewrites existing entries.
   Queued folds wait for the current tool batch to finish; idle folds run directly.
 - `anchor:` labels identify rewind targets. `branch:` labels identify archived
   work. Neither namespace may silently overwrite an existing label.
