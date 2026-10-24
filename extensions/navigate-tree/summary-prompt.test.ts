@@ -138,6 +138,19 @@ describe("buildSummaryInstruction", () => {
     assert.ok(text.endsWith(`\n\nAdditional focus: ${focus}`));
   });
 
+  it("synthesizes digest parents before reducing children to a one-line index", () => {
+    const text = buildSummaryInstruction(1, "retain evidence", {
+      mode: "digest",
+      childCount: 2,
+    });
+    assert.match(text, /Synthesize the child reports/);
+    assert.match(text, /one-line index per child/);
+    assert.match(
+      text,
+      /still-relevant decisions, verification, commits and open work/,
+    );
+  });
+
   it("allows relevance-focused parent synthesis to grow beyond the leaf report limit", () => {
     const focus = "preserve later-work context";
     const text = buildSummaryInstruction(1, focus, {

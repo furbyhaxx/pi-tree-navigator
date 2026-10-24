@@ -43,7 +43,7 @@ type TestGroup = {
   summary: string;
   children: TestGroup[];
   state?: "folded" | "open";
-  mode?: "full" | "synthesized";
+  mode?: "full" | "synthesized" | "digest";
 };
 
 function group(
@@ -248,6 +248,18 @@ describe("retrospective clone", () => {
         ).length,
       2,
     );
+    f.plan.groups[0].children[0].mode = "digest";
+    await writeFile(f.planPath, JSON.stringify(f.plan));
+    const digestPreview = await previewRetrospectiveSession(f.planPath);
+    const digestClone = await cloneRetrospectiveSession(
+      f.planPath,
+      digestPreview.previewToken,
+    );
+    const digestText = JSON.stringify(
+      SessionManager.open(digestClone.path).buildSessionContext().messages,
+    );
+    assert.match(digestText, /Earlier handoffs in this span/);
+    assert.doesNotMatch(digestText, /CHILD_FACT/);
     f.plan.groups[0].children[0].mode = "synthesized";
     await writeFile(f.planPath, JSON.stringify(f.plan));
     const synthesized = await previewRetrospectiveSession(f.planPath);

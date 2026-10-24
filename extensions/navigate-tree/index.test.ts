@@ -80,6 +80,7 @@ import {
   type StoredOp,
 } from "./continuity-store.ts";
 import { DEFAULT_REDUCE_OUTPUT_TOKENS } from "./fold-summarizer.ts";
+import { getHandoff, materializeHandoff } from "./handoff.ts";
 import { formatPct1, MAX_NAME_LENGTH, TOOL_NAME } from "./helpers.ts";
 import navigateTree, {
   __testHooks,
@@ -987,15 +988,29 @@ function hiddenIds(sm: SessionManager): Set<string> {
   return new Set([...last].filter(([, r]) => r === null).map(([id]) => id));
 }
 
+async function configureParentMode(
+  f: ReturnType<typeof setup>,
+  mode: "full" | "digest",
+) {
+  const fixture = makeConfigFixture();
+  try {
+    writeGlobalConfig(fixture, JSON.stringify({ parentHandoffMode: mode }));
+    await runSessionStart(f.pi, f.ctx, fixture);
+  } finally {
+    cleanupConfigFixture(fixture);
+  }
+}
+
 /**
  * Full rewind: canonical fixture and the rewind call, whose fold lands at its
  * `turn_end`. Returns the fixture plus the call's result and the continuation
  * message.
  */
 async function rewindFixture(
-  opts: { capture?: boolean; summary?: string } = {},
+  opts: { capture?: boolean; summary?: string; mode?: "full" | "digest" } = {},
 ) {
   const f = setup();
+  if (opts.mode) await configureParentMode(f, opts.mode);
   if (opts.summary !== undefined) {
     const summary = opts.summary;
     f.ctx.modelRegistry = fakeRegistry(() => reply(summary)).registry;
@@ -3352,6 +3367,7 @@ describe("rewind: completion", () => {
 
   it("includes full child reports in the net-fold check", async () => {
     const f = setup();
+    await configureParentMode(f, "full");
     setupRewindable(f.sm, f.pi);
     const leaf = f.sm.getLeafId();
     assert.ok(leaf);
@@ -3380,7 +3396,7 @@ describe("rewind: completion", () => {
   });
 
   it("folds an earlier child handoff into a parent once and projects honest work context", async () => {
-    const f = await rewindFixture();
+    const f = await rewindFixture({ mode: "full" });
     const childId = f.done.message.details.summaryId as string;
     appendTurn(f.sm, "parent-work", "parent-delivery", 24000, true);
     appendTurn(f.sm, "parent-verification", "parent-result", 30000, true);
@@ -3425,6 +3441,42 @@ describe("rewind: completion", () => {
       JSON.stringify(projected),
       /explored a different conversation|came back from/,
     );
+  });
+
+  it("defaults parent folds to a digest while retaining full child evidence for synthesis", async () => {
+    const f = await rewindFixture();
+    const childId = f.done.message.details.summaryId as string;
+    const child = f.sm.getEntry(childId);
+    assert.ok(child?.type === "branch_summary");
+    appendTurn(f.sm, "parent-work", "parent-delivery", 24000, true);
+    appendTurn(f.sm, "parent-verification", "parent-result", 30000, true);
+    const parentReport =
+      "## Goal\nParent scope\n\n## Outcome\nParent delivered.";
+    const registry = fakeRegistry(() => reply(parentReport));
+    f.ctx.modelRegistry = registry.registry;
+    await requestRewind(
+      f,
+      { ...REWIND_ARGS, rewindTo: "start", newLabel: "digest-parent" },
+      "tc-digest",
+    );
+    const latest = rewindMessages(f.pi).at(-1);
+    assert.ok(latest);
+    const parent = f.sm.getEntry(latest.message.details.summaryId as string);
+    assert.ok(parent?.type === "branch_summary");
+    const handoff = getHandoff(parent);
+    assert.ok(handoff);
+    assert.equal(handoff.mode, "digest");
+    assert.match(parent.summary, /Earlier handoffs in this span \(digest\)/);
+    assert.ok(parent.summary.includes(`entry ${childId}`));
+    assert.ok(!parent.summary.includes(child.summary));
+    assert.ok(!parent.summary.includes(SUMMARY_TEXT));
+    assert.ok(
+      JSON.stringify(registry.calls).includes("Test the rewind happy path."),
+    );
+    const full = materializeHandoff({ ...handoff, mode: "full" }, [
+      { id: childId, summary: child.summary },
+    ]);
+    assert.ok(parent.summary.length < full.length);
   });
 
   it("includes a native child summary’s own generation usage in parent recorded statistics", async () => {
@@ -10550,6 +10602,7 @@ describe("rewind: continuity ledger", () => {
 
   it("a parent fold embeds only its own briefing, not the child's", async () => {
     const f = await ledgerFixture({ summary: SUMMARY_TEXT });
+    await configureParentMode(f, "full");
     const first = foldedEntry(f.sm, f.pi);
     assert.match(first.entry.summary, /continuity ledger rev 4\]/);
     appendTurn(f.sm, "u4 prefer small diffs", "a4", 40_000, true);
@@ -12123,114 +12176,121 @@ describe("independent folds through the engine host", () => {
     assert.equal(g.pi.sendUserMessageCalls.length, 0);
   });
 
-  it("prices a full child handoff as the commit materializes it", async () => {
-    const f = setup({ contextWindow: 1_000_000 });
-    (f.ctx.model as { maxTokens?: number }).maxTokens = 64_000;
-    const root = appendTurn(f.sm, "u1 keep the parser", "a1", 6_000);
-    f.pi.pi.setLabel(root.assistantId, "anchor:start");
-    for (const n of [2, 3, 4, 5])
-      appendTurn(f.sm, `u${n}`, `a${n}`, 12_000, true);
-    const marker = "CHILD-HANDOFF-MARKER";
-    const childLeaf = f.sm.getLeafId();
-    assert.ok(childLeaf);
-    f.sm.branchWithSummary(
-      childLeaf,
-      `${SUMMARY_TEXT}\n${marker} ${"evidence ".repeat(4_000)}`,
-      {},
-      true,
-    );
-    for (const n of [6, 7, 8]) appendTurn(f.sm, `u${n}`, `a${n}`, 20_000, true);
-    const model = {
-      provider: "claude",
-      id: "claude-sonnet-4-5",
-      contextWindow: 1_000_000,
-      maxTokens: 64_000,
-    };
-    const focus = "Continue the parser work that is still open on this branch.";
-    assert.equal(
-      foldPlaceholderSummary(foldSummaryPlaceholderTokens(model.maxTokens))
-        .length,
-      DEFAULT_REDUCE_OUTPUT_TOKENS * 4,
-    );
-    assert.equal(foldSummaryPlaceholderTokens(100), 100);
-    const prices = priceFoldCandidates(f.sm, {
-      model,
-      handoffMode: "full",
-      focus,
-      suggestLabel: (name) => (name === "start" ? "parent" : `${name}-folded`),
-    });
-    const start = prices.find((price) => price.name === "start");
-    assert.ok(start?.valid, start?.reason);
-    if (!start?.valid) return;
-    const leafId = f.sm.getLeafId();
-    assert.ok(leafId);
-    const preview = previewFoldCommit(f.sm, {
-      targetId: start.targetId,
-      rewindTo: "start",
-      newLabel: start.suggestedLabel,
-      summaryText: foldPlaceholderSummary(
-        foldSummaryPlaceholderTokens(model.maxTokens),
-      ),
-      handoffMode: "full",
-      contextWindow: model.contextWindow,
-      foldPointId: leafId,
-      continuationText: (afterTokens) =>
-        buildRewindDoneText(
-          {
-            rewindTo: "start",
-            newLabel: start.suggestedLabel,
-            beforeTokens: start.beforeTokens,
-            contextWindow: model.contextWindow,
-          },
-          afterTokens,
+  for (const mode of ["full", "digest"] as const) {
+    it(`prices a ${mode} child handoff as the commit materializes it`, async () => {
+      const f = setup({ contextWindow: 1_000_000 });
+      (f.ctx.model as { maxTokens?: number }).maxTokens = 64_000;
+      const root = appendTurn(f.sm, "u1 keep the parser", "a1", 6_000);
+      f.pi.pi.setLabel(root.assistantId, "anchor:start");
+      for (const n of [2, 3, 4, 5])
+        appendTurn(f.sm, `u${n}`, `a${n}`, 12_000, true);
+      const marker = "CHILD-HANDOFF-MARKER";
+      const childLeaf = f.sm.getLeafId();
+      assert.ok(childLeaf);
+      f.sm.branchWithSummary(
+        childLeaf,
+        `${SUMMARY_TEXT}\n${marker} ${"evidence ".repeat(4_000)}`,
+        {},
+        true,
+      );
+      for (const n of [6, 7, 8])
+        appendTurn(f.sm, `u${n}`, `a${n}`, 20_000, true);
+      const model = {
+        provider: "claude",
+        id: "claude-sonnet-4-5",
+        contextWindow: 1_000_000,
+        maxTokens: 64_000,
+      };
+      const focus =
+        "Continue the parser work that is still open on this branch.";
+      assert.equal(
+        foldPlaceholderSummary(foldSummaryPlaceholderTokens(model.maxTokens))
+          .length,
+        DEFAULT_REDUCE_OUTPUT_TOKENS * 4,
+      );
+      assert.equal(foldSummaryPlaceholderTokens(100), 100);
+      const prices = priceFoldCandidates(f.sm, {
+        model,
+        handoffMode: mode,
+        focus,
+        suggestLabel: (name) =>
+          name === "start" ? "parent" : `${name}-folded`,
+      });
+      const start = prices.find((price) => price.name === "start");
+      assert.ok(start?.valid, start?.reason);
+      if (!start?.valid) return;
+      const leafId = f.sm.getLeafId();
+      assert.ok(leafId);
+      const preview = previewFoldCommit(f.sm, {
+        targetId: start.targetId,
+        rewindTo: "start",
+        newLabel: start.suggestedLabel,
+        summaryText: foldPlaceholderSummary(
+          foldSummaryPlaceholderTokens(model.maxTokens),
         ),
-    });
-    assert.ok(preview.ok, preview.ok ? "" : preview.reason);
-    if (!preview.ok) return;
-    assert.equal(start.projectedAfterTokens, preview.projectedAfterTokens);
-    assert.ok(preview.materialized.includes(marker));
-    const anchorOnly =
-      estimateRequestTokens(
-        buildSessionContext(f.sm.getEntries(), start.targetId).messages,
-      ) + Math.ceil(ANCHOR_MANDATE.length / 3.5);
-    assert.notEqual(
-      start.projectedAfterTokens,
-      start.beforeTokens - anchorOnly,
-    );
-    assert.ok(start.projectedAfterTokens > anchorOnly);
-    const outcome = await commitFold(f.sm, {
-      targetId: start.targetId,
-      rewindTo: "start",
-      newLabel: start.suggestedLabel,
-      summaryText: foldPlaceholderSummary(
-        foldSummaryPlaceholderTokens(model.maxTokens),
-      ),
-      handoffMode: "full",
-      contextWindow: model.contextWindow,
-      foldPointId: leafId,
-      branchLabelEntryId: leafId,
-      continuationText: (afterTokens) =>
-        buildRewindDoneText(
-          {
-            rewindTo: "start",
-            newLabel: start.suggestedLabel,
-            beforeTokens: start.beforeTokens,
-            contextWindow: model.contextWindow,
-          },
-          afterTokens,
+        handoffMode: mode,
+        contextWindow: model.contextWindow,
+        foldPointId: leafId,
+        continuationText: (afterTokens) =>
+          buildRewindDoneText(
+            {
+              rewindTo: "start",
+              newLabel: start.suggestedLabel,
+              beforeTokens: start.beforeTokens,
+              contextWindow: model.contextWindow,
+            },
+            afterTokens,
+          ),
+      });
+      assert.ok(preview.ok, preview.ok ? "" : preview.reason);
+      if (!preview.ok) return;
+      assert.equal(start.projectedAfterTokens, preview.projectedAfterTokens);
+      assert.equal(preview.materialized.includes(marker), mode === "full");
+      if (mode === "digest")
+        assert.match(preview.materialized, /Earlier handoffs in this span/);
+      const anchorOnly =
+        estimateRequestTokens(
+          buildSessionContext(f.sm.getEntries(), start.targetId).messages,
+        ) + Math.ceil(ANCHOR_MANDATE.length / 3.5);
+      assert.notEqual(
+        start.projectedAfterTokens,
+        start.beforeTokens - anchorOnly,
+      );
+      assert.ok(start.projectedAfterTokens > anchorOnly);
+      const outcome = await commitFold(f.sm, {
+        targetId: start.targetId,
+        rewindTo: "start",
+        newLabel: start.suggestedLabel,
+        summaryText: foldPlaceholderSummary(
+          foldSummaryPlaceholderTokens(model.maxTokens),
         ),
-      writeLabel: (entryId, label) => {
-        f.sm.appendLabelChange(entryId, label);
-        return true;
-      },
+        handoffMode: mode,
+        contextWindow: model.contextWindow,
+        foldPointId: leafId,
+        branchLabelEntryId: leafId,
+        continuationText: (afterTokens) =>
+          buildRewindDoneText(
+            {
+              rewindTo: "start",
+              newLabel: start.suggestedLabel,
+              beforeTokens: start.beforeTokens,
+              contextWindow: model.contextWindow,
+            },
+            afterTokens,
+          ),
+        writeLabel: (entryId, label) => {
+          f.sm.appendLabelChange(entryId, label);
+          return true;
+        },
+      });
+      assert.ok(outcome.ok, outcome.ok ? "" : outcome.reason);
+      if (!outcome.ok) return;
+      const summary = f.sm.getEntry(outcome.summaryId);
+      assert.ok(summary && summary.type === "branch_summary");
+      assert.equal(summary.summary, preview.materialized);
+      assert.deepEqual(summary.details, preview.details);
     });
-    assert.ok(outcome.ok, outcome.ok ? "" : outcome.reason);
-    if (!outcome.ok) return;
-    const summary = f.sm.getEntry(outcome.summaryId);
-    assert.ok(summary && summary.type === "branch_summary");
-    assert.equal(summary.summary, preview.materialized);
-    assert.deepEqual(summary.details, preview.details);
-  });
+  }
 
   it("preselects the anchor chosen with r in the list", async () => {
     const f = await foldSetup(40_000);

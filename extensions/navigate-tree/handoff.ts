@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 /** How a completed parent carries its children's reports into model context. */
-export type HandoffMode = "full" | "synthesized";
+export type HandoffMode = "full" | "synthesized" | "digest";
 
 /** Recorded inclusive usage of unique source entries, not new billing. */
 export interface HandoffStats {
@@ -102,6 +102,16 @@ export function handoffStats(entries: readonly SessionEntry[]): HandoffStats {
   return result;
 }
 
+const OUTCOME_HEADINGS = [
+  "outcome",
+  "done",
+  "delivered",
+  "decisions and outcome",
+  "decisions and delivered state",
+  "delivered and final state",
+  "done/delivered",
+];
+
 function section(report: string, headings: readonly string[]): string {
   const lines = report.split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -146,17 +156,7 @@ export function makeHandoff(options: {
     name: options.name,
     title: options.title ?? options.name.replaceAll("-", " "),
     goal: options.goal ?? section(report, ["goal", "goal/scope"]),
-    outcome:
-      options.outcome ??
-      section(report, [
-        "outcome",
-        "done",
-        "delivered",
-        "decisions and outcome",
-        "decisions and delivered state",
-        "delivered and final state",
-        "done/delivered",
-      ]),
+    outcome: options.outcome ?? section(report, OUTCOME_HEADINGS),
     report,
     mode: options.mode,
     children: [...options.children],
@@ -165,17 +165,54 @@ export function makeHandoff(options: {
   };
 }
 
+function digestLine(child: {
+  id: string;
+  summary: string;
+  handoff?: HandoffData;
+}): string {
+  const bounded = (value: string, limit: number): string => {
+    const clean = value
+      .replace(/\p{Cc}/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return clean.length > limit ? `${clean.slice(0, limit - 1)}…` : clean;
+  };
+  const own = stripHandoffPreamble(child.summary).split(
+    /^## (?:Child handoffs in chronological order|Earlier handoffs in this span \(digest\))/m,
+  )[0];
+  const title =
+    child.handoff?.title ?? own.match(/^# Work handoff:\s*(.+)$/m)?.[1] ?? "";
+  const goal = child.handoff?.goal ?? section(own, ["goal", "goal/scope"]);
+  const outcome = child.handoff?.outcome ?? section(own, OUTCOME_HEADINGS);
+  const fields = [
+    bounded(title, 40),
+    ...[
+      ["goal", goal],
+      ["outcome", outcome],
+    ].flatMap(([label, value]) =>
+      value && value !== "Not recorded separately; see the full handoff."
+        ? [`${label}: ${bounded(value, 55)}`]
+        : [],
+    ),
+    `entry ${bounded(child.id, 60)}`,
+  ].filter(Boolean);
+  return `- ${fields.join(" · ")}`;
+}
+
 /** Materialize a frozen context policy; each child is inserted once in supplied chronological order. */
 export function materializeHandoff(
   data: HandoffData,
-  children: readonly { id: string; summary: string }[],
+  children: readonly { id: string; summary: string; handoff?: HandoffData }[],
 ): string {
   const own = `# Work handoff: ${data.title}\n\n${data.report}`;
   if (data.mode === "synthesized" || !children.length) return own;
   const seen = new Set<string>();
-  const reports = children
-    .filter((child) => !seen.has(child.id) && Boolean(seen.add(child.id)))
-    .map((child) => stripHandoffPreamble(child.summary));
+  const unique = children.filter(
+    (child) => !seen.has(child.id) && Boolean(seen.add(child.id)),
+  );
+  if (data.mode === "digest")
+    return `${own}\n\n## Earlier handoffs in this span (digest)\n\nThese completed phases are folded into the report above. Full reports remain in the session history (/anchor tree).\n${unique.map(digestLine).join("\n")}`;
+  const reports = unique.map((child) => stripHandoffPreamble(child.summary));
   return `${own}\n\n---\n\n## Child handoffs in chronological order\n\nThese are historical reports at each child's completion. The parent report above records the later outcome and superseding decisions.\n\n${reports.join("\n\n---\n\n")}`;
 }
 
@@ -187,7 +224,9 @@ function validHandoff(value: unknown): value is HandoffData {
   if (
     !record(value) ||
     value.version !== 1 ||
-    (value.mode !== "full" && value.mode !== "synthesized")
+    (value.mode !== "full" &&
+      value.mode !== "synthesized" &&
+      value.mode !== "digest")
   )
     return false;
   for (const key of ["name", "title", "goal", "outcome", "report"])

@@ -106,8 +106,8 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
   if (!/^[a-f0-9]{64}$/.test(hash))
     throw new Error("sourceSha256 must be a SHA-256 hex digest");
   const mode = (value: unknown): HandoffMode => {
-    if (value !== "full" && value !== "synthesized")
-      throw new Error("Handoff mode must be full or synthesized");
+    if (value !== "full" && value !== "synthesized" && value !== "digest")
+      throw new Error("Handoff mode must be full, synthesized or digest");
     return value;
   };
   const names = new Set<string>();

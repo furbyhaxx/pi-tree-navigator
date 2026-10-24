@@ -46,7 +46,7 @@ interface ViewGroup {
   readonly title?: string;
   readonly depth: number;
   readonly state: "folded" | "open";
-  readonly mode: "full" | "synthesized";
+  readonly mode: "full" | "synthesized" | "digest";
   readonly firstEntryId: string;
   readonly lastEntryId: string;
   readonly summary: string;
@@ -102,7 +102,7 @@ function stateCounts(
 }
 
 function modeSummary(groups: readonly ViewGroup[]): string {
-  const modes = ["full", "synthesized"] as const;
+  const modes = ["full", "synthesized", "digest"] as const;
   const counts = modes
     .map((mode) => ({
       mode,

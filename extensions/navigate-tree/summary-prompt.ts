@@ -63,7 +63,7 @@ The no-tools restriction applies only to this summary turn; normal tools return 
 export function buildSummaryInstruction(
   first: number,
   focus: string,
-  parent?: { mode: "full" | "synthesized"; childCount: number },
+  parent?: { mode: "full" | "synthesized" | "digest"; childCount: number },
   continuitySection?: string,
 ): string {
   // Substitute in the prompt only: a focus that quotes `{first}` stays
@@ -75,6 +75,9 @@ export function buildSummaryInstruction(
       "This parent folds completed child handoffs. Use the length needed to preserve what remains relevant to this parent; there is no fixed 4000-character cap.",
     );
     prompt += `\n\nThis is a work handoff, not an alternative conversation. There are ${parent.childCount} child handoffs in scope. ${parent.mode === "full" ? "Child reports will be attached verbatim once each; write the parent's own scope, final outcome, superseding decisions and remaining work without recopying child reports." : "Synthesize the child reports into this parent's handoff. Keep their relevant decisions, rejected or superseded approaches, deliverables, verification evidence and limits, commits, deferred/open work, and key facts needed for subsequent work. Omit child detail only when it is no longer relevant to the parent."} Include explicit Delivered, Verification, Rejected or Superseded, Commits, and Open or Deferred sections when supported by the evidence. Distinguish historical next steps from still-open work.`;
+    if (parent.mode === "digest")
+      prompt +=
+        "\n\nChild handoffs will appear only as a one-line index per child, not full reports. The parent report must carry all still-relevant decisions, verification, commits and open work from those reports.";
   }
   prompt += `\n\n${STANDING_AUTHORIZATION_INSTRUCTION}`;
   const instruction = `${prompt}\n\nAdditional focus: ${focus}`;
@@ -87,7 +90,7 @@ export function buildSummaryInstruction(
 export function buildSummaryRequestText(
   first: number,
   focus: string,
-  parent?: { mode: "full" | "synthesized"; childCount: number },
+  parent?: { mode: "full" | "synthesized" | "digest"; childCount: number },
   continuitySection?: string,
 ): string {
   return `[navigate_tree]\n${buildSummaryInstruction(first, focus, parent, continuitySection)}`;

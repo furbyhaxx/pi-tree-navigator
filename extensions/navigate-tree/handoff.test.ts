@@ -41,6 +41,59 @@ describe("work handoffs", () => {
     assert.doesNotMatch(synthesized, /LEAF_FACT/);
   });
 
+  it("indexes unique children with bounded own metadata and never embeds descendants", () => {
+    const metadata = {
+      ...data("metadata"),
+      title: "Metadata title",
+      goal: "Metadata goal",
+      outcome: "Metadata outcome",
+    };
+    const children = [
+      { id: "meta", summary: "SECRET_METADATA_BODY", handoff: metadata },
+      {
+        id: "plain",
+        summary: `# Work handoff: Plain phase
+## Goal
+Plain goal
+## Outcome
+${"Delivered\u0000\t".repeat(80)}
+## Details
+SECRET_PLAIN_BODY
+## Child handoffs in chronological order
+# Work handoff: Grandchild
+## Goal
+SECRET_GRANDCHILD`,
+      },
+    ];
+    const output = materializeHandoff({ ...data("parent"), mode: "digest" }, [
+      ...children,
+      children[0],
+    ]);
+    const lines = output.split("\n").filter((line) => line.startsWith("- "));
+    assert.equal(lines.length, 2);
+    assert.equal(
+      lines[0],
+      "- Metadata title · goal: Metadata goal · outcome: Metadata outcome · entry meta",
+    );
+    assert.match(
+      lines[1],
+      /^- Plain phase · goal: Plain goal · outcome: Delivered/,
+    );
+    assert.match(lines[1], /… · entry plain$/);
+    assert.ok(
+      lines.every((line) => line.length <= 300 && !/\p{Cc}/u.test(line)),
+    );
+    assert.doesNotMatch(output, /SECRET_|Grandchild/);
+    assert.equal(
+      materializeHandoff({ ...data("parent"), mode: "digest" }, [
+        { id: "empty", summary: "" },
+      ])
+        .split("\n")
+        .at(-1),
+      "- entry empty",
+    );
+  });
+
   it("counts unique recorded usage without charging nested inclusive totals again", () => {
     const entry: SessionEntry = {
       type: "usage",
