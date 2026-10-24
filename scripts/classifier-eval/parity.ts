@@ -45,7 +45,6 @@ import {
 } from "../../extensions/navigate-tree/continuity-capture.ts";
 import {
   RECOMMENDED_INTENT_CLASSIFIER,
-  RECOMMENDED_POLICY,
   resolveStageModels,
 } from "../../extensions/navigate-tree/intent-policy.ts";
 import {
@@ -80,8 +79,17 @@ const DEFAULT_BENCHMARK = [
   ".project/analyses/classifier-eval/runs-catalogued-2026-10-23/dev-screen-2026-10-23",
   ".project/analyses/classifier-eval/runs-catalogued-2026-10-23/holdout-2026-10-23",
 ];
-const MICROSOFT_LABEL = `decisions:${RECOMMENDED_POLICY.classifier}`;
-const LUNA_LABEL = `chat:${RECOMMENDED_POLICY.escalation}`;
+const HISTORIC_INTENT_POLICY = JSON.stringify({
+  preset: RECOMMENDED_INTENT_CLASSIFIER,
+  kind: { model: "openrouter/microsoft/microsoft-decision-1" },
+  supersession: {
+    model: "openrouter/microsoft/microsoft-decision-1",
+    escalation: { model: "openrouter/openai/gpt-6-luna" },
+    verification: { model: "openrouter/microsoft/microsoft-decision-1" },
+  },
+});
+const MICROSOFT_LABEL = "decisions:microsoft/microsoft-decision-1";
+const LUNA_LABEL = "chat:openai/gpt-6-luna";
 const CHAT_RESERVED_OUTPUT_TOKENS = 1_024;
 const PROBE_SUFFIX = "#luna-probe";
 
@@ -426,11 +434,11 @@ export async function replayVerdict(
     getModelOfType: () => undefined,
     getAvailableOfType: async (type: string) => [
       {
-        provider: RECOMMENDED_POLICY.provider,
+        provider: "openrouter",
         id:
           type === "classifier"
-            ? RECOMMENDED_POLICY.classifier
-            : RECOMMENDED_POLICY.escalation,
+            ? "microsoft/microsoft-decision-1"
+            : "openai/gpt-6-luna",
         api: "openai-completions",
       },
     ],
@@ -460,7 +468,7 @@ export async function replayVerdict(
   } as unknown as Parameters<typeof createModelClassifier>[0];
   const classifier = await createModelClassifier(
     registry,
-    RECOMMENDED_INTENT_CLASSIFIER,
+    HISTORIC_INTENT_POLICY,
   );
   if (!classifier) throw new Error("replay registry rejected the preset");
   return classifier(intentInput(prepared));
@@ -933,13 +941,9 @@ async function run(options: Options, deps: Deps): Promise<number> {
       options.dryRun,
     );
     const table = deps.loadRoutePrices();
-    const probe = await createModelClassifier(
-      base,
-      RECOMMENDED_INTENT_CLASSIFIER,
-      {
-        onWarning: (message) => deps.stderr(`${message}\n`),
-      },
-    );
+    const probe = await createModelClassifier(base, HISTORIC_INTENT_POLICY, {
+      onWarning: (message) => deps.stderr(`${message}\n`),
+    });
     if (!probe) throw new Error("the recommended policy is unavailable here");
     if (options.dryRun) {
       deps.stdout(
@@ -966,7 +970,7 @@ async function run(options: Options, deps: Deps): Promise<number> {
       maxRunUsd: options.maxUsd,
     });
     const registry = meter.registry(base);
-    const lunaSelector = `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.escalation}`;
+    const lunaSelector = "openrouter/openai/gpt-6-luna";
     const luna = await resolveStageModels(registry, [lunaSelector]);
     const lunaAsk = luna.ok ? luna.asks.get(lunaSelector) : undefined;
     if (!lunaAsk) throw new Error("the escalation model is unavailable here");
@@ -978,7 +982,7 @@ async function run(options: Options, deps: Deps): Promise<number> {
         const warnings: string[] = [];
         const classifier = await createModelClassifier(
           registry,
-          RECOMMENDED_INTENT_CLASSIFIER,
+          HISTORIC_INTENT_POLICY,
           { onWarning: (message) => warnings.push(message) },
         );
         if (!classifier)

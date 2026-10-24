@@ -1535,10 +1535,7 @@ describe("settings screen: classifier policies", () => {
       config.continuity.intentClassifier ?? "",
     );
     assert.equal(policy?.escalation.model, null);
-    assert.equal(
-      policy?.kind.model,
-      `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.classifier}`,
-    );
+    assert.equal(policy?.kind.model, RECOMMENDED_POLICY.classifier);
     assert.equal(policy?.supersession.model, policy?.kind.model);
     const [, message] = h.dialogs.confirm[0] ?? [];
     assert.doesNotMatch(message ?? "", /\{/);
@@ -1587,10 +1584,7 @@ describe("settings screen: classifier policies", () => {
       config.continuity.intentClassifier ?? "",
     );
     assert.equal(policy?.escalation.model, "acme/judge");
-    assert.equal(
-      policy?.kind.model,
-      `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.classifier}`,
-    );
+    assert.equal(policy?.kind.model, RECOMMENDED_POLICY.classifier);
     assert.equal(
       JSON.stringify(h.readRuntime()).includes("verification"),
       false,
@@ -1665,10 +1659,7 @@ describe("settings screen: classifier policies", () => {
     const policy = resolveMilestonePolicy(JSON.stringify(milestone));
     assert.equal(policy?.minConfidence, 0.85);
     assert.equal(policy?.classifier, "acme/judge");
-    assert.equal(
-      policy?.confirmer,
-      `${RECOMMENDED_MILESTONE_POLICY.provider}/${RECOMMENDED_MILESTONE_POLICY.confirmer}`,
-    );
+    assert.equal(policy?.confirmer, RECOMMENDED_MILESTONE_POLICY.confirmer);
     assert.equal(policy?.instructions.status, undefined);
     assert.ok(h.registryCalls.every((call) => call.startsWith("getAvailable")));
   });

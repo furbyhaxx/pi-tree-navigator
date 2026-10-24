@@ -19,8 +19,15 @@ import {
   resolveMilestonePolicy,
 } from "./milestone-policy.ts";
 
-const JEV = `${RECOMMENDED_MILESTONE_POLICY.provider}/${RECOMMENDED_MILESTONE_POLICY.classifier}`;
-const LUNA = `${RECOMMENDED_MILESTONE_POLICY.provider}/${RECOMMENDED_MILESTONE_POLICY.confirmer}`;
+const JEV = RECOMMENDED_MILESTONE_POLICY.classifier;
+const LUNA = RECOMMENDED_MILESTONE_POLICY.confirmer;
+const modelParts = (selector: string) => {
+  const slash = selector.indexOf("/");
+  return {
+    provider: selector.slice(0, slash),
+    id: selector.slice(slash + 1),
+  };
+};
 
 const INPUT: MilestoneInput = {
   records: [
@@ -43,12 +50,14 @@ const problems = (value: unknown): readonly string[] => {
 
 describe("milestone policy setting", () => {
   it("resolves the preset to the benchmarked pair with the 0.7 gate", () => {
-    assert.deepEqual(policy(RECOMMENDED_MILESTONE_CLASSIFIER), {
+    const resolved = policy(RECOMMENDED_MILESTONE_CLASSIFIER);
+    assert.deepEqual(resolved, {
       minConfidence: 0.7,
       classifier: JEV,
       confirmer: LUNA,
       instructions: {},
     });
+    assert.equal(resolved.confirmer, "openai/gpt-6-luna");
   });
 
   it("returns undefined for anything but the preset and a valid canonical object", () => {
@@ -184,20 +193,8 @@ function fakeRegistry(
   return {
     getAvailableOfType: async (type: string) =>
       type === "classifier"
-        ? [
-            {
-              provider: "openrouter",
-              id: RECOMMENDED_MILESTONE_POLICY.classifier,
-              api: "decisions",
-            },
-          ]
-        : [
-            {
-              provider: "openrouter",
-              id: RECOMMENDED_MILESTONE_POLICY.confirmer,
-              api: "openai-completions",
-            },
-          ],
+        ? [{ ...modelParts(JEV), api: "decisions" }]
+        : [{ ...modelParts(LUNA), api: "openai-completions" }],
     classify: async (model: { id: string }, context: { questions: object }) => {
       record(model.id, context);
       await wait(delays.jev);
@@ -390,10 +387,7 @@ describe("evaluateMilestone", () => {
     assert.ok(Date.now() - started < 290, "stages ran one after another");
     assert.deepEqual(
       sent.map((s) => s.model).sort(),
-      [
-        RECOMMENDED_MILESTONE_POLICY.classifier,
-        RECOMMENDED_MILESTONE_POLICY.confirmer,
-      ].sort(),
+      [modelParts(JEV).id, modelParts(LUNA).id].sort(),
     );
     assert.deepEqual(sent.find((s) => s.questions.length)?.questions, [
       "status",
@@ -440,7 +434,7 @@ describe("evaluateMilestone", () => {
     );
     assert.deepEqual(
       sent.map((s) => s.model),
-      [RECOMMENDED_MILESTONE_POLICY.classifier],
+      [modelParts(JEV).id],
     );
   });
 

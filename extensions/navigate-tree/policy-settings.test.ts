@@ -24,7 +24,7 @@ const ESC = "\x1b";
 const DOWN = "\x1b[B";
 const RIGHT = "\x1b[C";
 const HOME = "\x1b[H";
-const VERIFIER = `${RECOMMENDED_POLICY.provider}/${RECOMMENDED_POLICY.classifier}`;
+const VERIFIER = RECOMMENDED_POLICY.classifier;
 
 type Screen = {
   handleInput(data: string): void;
@@ -309,10 +309,7 @@ describe("policy editor", () => {
       classifier: { model: "acme/judge" },
     });
     const policy = resolveMilestonePolicy(JSON.stringify(result));
-    assert.equal(
-      policy?.confirmer,
-      `${RECOMMENDED_MILESTONE_POLICY.provider}/${RECOMMENDED_MILESTONE_POLICY.confirmer}`,
-    );
+    assert.equal(policy?.confirmer, RECOMMENDED_MILESTONE_POLICY.confirmer);
     assert.equal(policy?.classifier, "acme/judge");
   });
 

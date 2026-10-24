@@ -1561,11 +1561,15 @@ describe("createModelClassifier", () => {
 });
 
 describe("createModelClassifier: intent policy", () => {
-  const CLASSIFIER_ID = RECOMMENDED_POLICY.classifier;
-  const CHAT_ID = RECOMMENDED_POLICY.escalation;
+  const CLASSIFIER_ID = RECOMMENDED_POLICY.classifier.slice(
+    RECOMMENDED_POLICY.classifier.indexOf("/") + 1,
+  );
+  const CHAT_ID = RECOMMENDED_POLICY.escalation.slice(
+    RECOMMENDED_POLICY.escalation.indexOf("/") + 1,
+  );
   const PICKED = "openrouter/acme/judge";
-  const LUNA = `openrouter/${CHAT_ID}`;
-  const MICROSOFT = `openrouter/${CLASSIFIER_ID}`;
+  const LUNA = RECOMMENDED_POLICY.escalation;
+  const MICROSOFT = RECOMMENDED_POLICY.classifier;
 
   const choice = (value: string, confidence = 0.95) => ({
     type: "choice" as const,
@@ -1605,7 +1609,7 @@ describe("createModelClassifier: intent policy", () => {
       getModelOfType: () => undefined,
       getAvailableOfType: async (type: string) =>
         (catalog[type] ?? []).map((id) => ({
-          provider: "openrouter",
+          provider: type === "chat" && id === CHAT_ID ? "openai" : "openrouter",
           id,
           api: "openai-completions",
         })),

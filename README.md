@@ -428,7 +428,7 @@ answers the same questions as strict JSON.
 
 - `"provider/id"`: one model answers both the intent kind and the supersession question.
 - `"recommended"`: the benchmarked preset. `openrouter/microsoft/microsoft-decision-1` judges the
-  kind and which active item the message replaces; `openrouter/openai/gpt-6-luna` is asked the
+  kind and which active item the message replaces; `openai/gpt-6-luna` is asked the
   supersession question only when the classifier abstains. The kind is never escalated: in the
   benchmark, escalating it accepted unsafe answers. A retirement proposed by the escalation
   needs a separate Microsoft decision-model check of that specific item. A refusal, uncertain
@@ -448,7 +448,7 @@ answers the same questions as strict JSON.
       "kind": { "model": "openrouter/microsoft/microsoft-decision-1" },
       "supersession": {
         "model": "openrouter/microsoft/microsoft-decision-1",
-        "escalation": { "model": "openrouter/openai/gpt-6-luna" },
+        "escalation": { "model": "openai/gpt-6-luna" },
         "verification": { "model": "openrouter/microsoft/microsoft-decision-1" }
       }
     }

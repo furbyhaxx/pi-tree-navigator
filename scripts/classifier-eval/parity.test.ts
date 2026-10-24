@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import type { ClassifierContext } from "@earendil-works/pi-ai";
 import { RETIREMENT_YES } from "../../extensions/navigate-tree/retirement-check.ts";
-import { RECOMMENDED_POLICY } from "../../extensions/navigate-tree/intent-policy.ts";
 import type { Billing, RouteTable } from "./billing.ts";
 import { BudgetLedger } from "./budget.ts";
 import {
@@ -31,12 +30,12 @@ const TABLE: RouteTable = { retrievedAt: "test", source: [], models: {} };
 const COST = { input: 0.1, output: 0.5, cacheRead: 0, cacheWrite: 0 };
 const MICROSOFT = {
   provider: "openrouter",
-  id: RECOMMENDED_POLICY.classifier,
+  id: "microsoft/microsoft-decision-1",
   cost: COST,
 };
 const LUNA = {
   provider: "openrouter",
-  id: RECOMMENDED_POLICY.escalation,
+  id: "openai/gpt-6-luna",
   cost: COST,
 };
 
@@ -297,8 +296,8 @@ describe("comparison with the benchmark", () => {
     startedAt: "2026-10-23T00:00:00.000Z",
     ...(requestSha256 && { requestSha256 }),
   });
-  const MICRO = `decisions:${RECOMMENDED_POLICY.classifier}`;
-  const CHAT = `chat:${RECOMMENDED_POLICY.escalation}`;
+  const MICRO = "decisions:microsoft/microsoft-decision-1";
+  const CHAT = "chat:openai/gpt-6-luna";
   const kind = { choice: "rule", confidence: 0.99 };
   const benchmark = [
     observation(
@@ -337,7 +336,7 @@ describe("comparison with the benchmark", () => {
     seq: 1,
     caseId: "swap-tabs",
     kind: "classify",
-    model: RECOMMENDED_POLICY.classifier,
+    model: "microsoft/microsoft-decision-1",
     status: "ok",
     durationMs: 1,
     costBoundUsd: 0.001,
@@ -359,7 +358,7 @@ describe("comparison with the benchmark", () => {
       }),
       call({
         kind: "chat",
-        model: RECOMMENDED_POLICY.escalation,
+        model: "openai/gpt-6-luna",
         text: JSON.stringify({
           answers: { contradicts: { choice: "R1", confidence: 0.92 } },
         }),
@@ -416,7 +415,7 @@ describe("comparison with the benchmark", () => {
 
   it("compares a Luna probe with the recorded Luna answers, and skips an unreadable reply", () => {
     const probe = (text: string) =>
-      call({ kind: "chat", model: RECOMMENDED_POLICY.escalation, text });
+      call({ kind: "chat", model: "openai/gpt-6-luna", text });
     const reply = (choice: string, confidence: number) =>
       JSON.stringify({ answers: { contradicts: { choice, confidence } } });
     assert.equal(
