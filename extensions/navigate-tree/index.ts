@@ -3560,6 +3560,15 @@ export default function (pi: ExtensionAPI) {
       stopReason?: string;
     };
     if (message?.role !== "assistant") return;
+    // The recovered request generated within the window: a later overflow in
+    // this run is a new request and may recover again. Only a recovery that
+    // did not let the next request through is final.
+    if (
+      message.stopReason !== "error" &&
+      message.stopReason !== "aborted" &&
+      !overflowed(message, ctx.model)
+    )
+      preflightAttempted.delete(sessionId);
     const messageEntryId =
       typeof event.messageEntryId === "string" ? event.messageEntryId : "";
     const turnIds = messageEntryId
