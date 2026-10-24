@@ -22,6 +22,24 @@ export const AUTOMATIC_CONFIG = {
   },
 };
 
+/** Tail-keeping pressure compaction without classifier anchors, in the isolated agent directory. */
+export const PRESSURE_CONFIG = {
+  auto_navigate: {
+    enabled: true,
+    mode: "anchor-and-rewind",
+    pressure: "compact",
+    keep_recent_share: 0.25,
+    milestone: null,
+    check_every_turns: 50,
+    min_tokens_since_anchor: 1000,
+    rewind_at_tokens: 48000,
+  },
+};
+
+/** One tool turn first, so the compaction lands mid-run and the answer follows it. */
+export const PRESSURE_REQUEST =
+  "First call navigate_tree with action list. After that result, finalize the audit: state the preserved response-code contract, the no-deployment constraint, and the remaining comparison against the next supplied change. Include ACCEPTANCE-CONTINUED in your final answer. Do not modify files.";
+
 /** A finalization request, without instructions to navigate or answers to the policy. */
 export const AUTOMATIC_REQUEST =
   "The synthetic configuration and retry-boundary review phase is complete. Finalize that audit now: state the preserved response-code contract, the no-deployment constraint, and the remaining comparison against the next supplied change. Include ACCEPTANCE-CONTINUED in your final answer. Do not modify files.";
