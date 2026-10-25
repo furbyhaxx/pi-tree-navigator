@@ -25,7 +25,10 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import navigateTree, { estimateAdmissionTokens } from "./index.ts";
+import navigateTree, {
+  estimateAdmissionTokens,
+  PRESSURE_COMPACTION_CUSTOM_TYPE,
+} from "./index.ts";
 
 const WINDOW = 32_000;
 const RESERVE = 1_024 + 4_096;
@@ -584,31 +587,37 @@ describe("production preflight recovery", () => {
     });
   });
 
-  it("persists one receipt and does not call the main model when no anchor is valid", async () => {
+  it("compacts older work and lets the request through when no anchor is valid", async () => {
     await withSession("no-anchor", async ({ sm, prompt, calls }) => {
-      await prompt(REQUEST);
+      const error = await prompt(REQUEST);
+      assert.equal(error, undefined);
       const main = calls.filter((call) => !call.side && !call.aborted);
-      assert.equal(main.length, 0, JSON.stringify(calls));
-      assert.equal(
-        sm.getBranch().some((entry) => entry.type === "branch_summary"),
-        false,
+      assert.equal(main.length, 1, JSON.stringify(calls));
+      assert.ok(main[0].tokens + RESERVE <= WINDOW, "the sent request fits");
+      assert.ok(
+        calls.some((call) => call.side),
+        "a summary side call ran",
       );
+      const compaction = sm
+        .getBranch()
+        .findLast((entry) => entry.type === "compaction");
+      assert.ok(compaction, "a compaction replaced the older work");
       const receipts = sm
         .getBranch()
         .filter(
           (entry) =>
             entry.type === "custom_message" &&
-            entry.customType === "navigate-tree-rewind",
+            entry.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
         );
       assert.equal(receipts.length, 1, JSON.stringify(receipts));
       const receipt = receipts[0];
       assert.equal(receipt.type, "custom_message");
-      const text =
-        receipt.type === "custom_message"
-          ? messageText({ content: receipt.content })
-          : "";
-      assert.match(text, /no anchors on the active branch/);
-      assert.match(text, /No tool results were withheld/);
+      if (receipt.type !== "custom_message") return;
+      assert.equal((receipt.details as { origin?: string }).origin, "recovery");
+      assert.match(
+        messageText({ content: receipt.content }),
+        /no fold could relieve it \(.*no anchors on the active branch/,
+      );
     });
   });
 });
