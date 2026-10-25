@@ -1,0 +1,134 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[rewind to 'audit-mid' · collapsed as 'audit-mid-folded'] · context 426.4% → 22.5% of 32k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.\n\nThe 2 messages between the branch_summary and this one arrived while the rewind was pending — they are new and still unanswered; handle them now.",
+      "display": true,
+      "details": {
+        "status": "done",
+        "rewindTo": "audit-mid",
+        "newLabel": "audit-mid-folded",
+        "targetId": "003152d2",
+        "summaryId": "79ce6a44",
+        "collapsedEntries": 18,
+        "contextBefore": 136444,
+        "contextAfter": 7191,
+        "contextWindow": 32000,
+        "origin": "recovery",
+        "summaryStrategy": "chunked",
+        "summaryCalls": 4,
+        "foldEstimateBefore": 18956,
+        "foldEstimateAfter": 6536,
+        "agentMessagesRefreshed": true,
+        "historyRewriteNotified": true,
+        "readFiles": [],
+        "modifiedFiles": [],
+        "reappendedLateMessages": 2,
+        "openUserRequests": [],
+        "receiptId": "931e4e6d-3042-4228-9c24-7b1c96fedfd8"
+      },
+      "id": "a8839ca1",
+      "parentId": "67c48e4d",
+      "timestamp": "2026-10-25T06:13:59.641Z"
+    },
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[navigate_tree] Request stopped before generation: estimated input 42274 tokens leaves fewer than 1024 output tokens plus 4096 headroom in the 32000-token operating window. No tool results were withheld. audit-start: the materialized handoff does not reduce projected context (estimated 7505 -> 8506 tokens); original history was kept; audit-mid: the materialized handoff does not reduce projected context (estimated 7505 -> 14139 tokens); original history was kept; audit-mid-folded: the materialized handoff does not reduce projected context (estimated 7505 -> 14428 tokens); original history was kept; context-gathered: the materialized handoff does not reduce projected context (estimated 7505 -> 15748 tokens); original history was kept; start: the materialized handoff does not reduce projected context (estimated 7505 -> 15836 tokens); original history was kept; a compaction did not help either: the compaction does not free enough context (estimated 7505 -> 7659 tokens); original history was kept Reduce context with /tree or /compact, or select a larger operating window.",
+      "display": true,
+      "details": {
+        "status": "failed",
+        "reason": "insufficient request headroom",
+        "inputEstimate": 42274,
+        "contextWindow": 32000,
+        "appliedWithheld": 0,
+        "receiptId": "b8c6ea09-04e3-42f9-b3a6-55acea89b89a",
+        "detail": "audit-start: the materialized handoff does not reduce projected context (estimated 7505 -> 8506 tokens); original history was kept; audit-mid: the materialized handoff does not reduce projected context (estimated 7505 -> 14139 tokens); original history was kept; audit-mid-folded: the materialized handoff does not reduce projected context (estimated 7505 -> 14428 tokens); original history was kept; context-gathered: the materialized handoff does not reduce projected context (estimated 7505 -> 15748 tokens); original history was kept; start: the materialized handoff does not reduce projected context (estimated 7505 -> 15836 tokens); original history was kept; a compaction did not help either: the compaction does not free enough context (estimated 7505 -> 7659 tokens); original history was kept"
+      },
+      "id": "d2b3ad07",
+      "parentId": "6001bb12",
+      "timestamp": "2026-10-25T06:14:14.938Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "0d89267d",
+      "stopReason": "stop",
+      "usage": {
+        "input": 136397,
+        "output": 47,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 136444,
+        "cost": {
+          "input": 0.013639700000000001,
+          "output": 0.0000235,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0136632
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work: compare the archived audit with the next supplied change. No change has been supplied yet. Keep existing public response codes unchanged; do not deploy or delete service data."
+    },
+    {
+      "id": "67c48e4d",
+      "stopReason": "stop",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work: compare the archived audit with the next supplied change. No change has been supplied yet. Keep existing public response codes unchanged; do not deploy or delete service data."
+    },
+    {
+      "id": "e674b614",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 42139,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 42164,
+        "cost": {
+          "input": 0.0042139000000000005,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.004226400000000001
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "4c2b8d52",
+      "stopReason": "error",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "text": ""
+    }
+  ]
+}

@@ -1,11 +1,11 @@
 ---
-version: 1
+version: 2
 id: "independent-fold-live-acceptance"
 title: "Independent fold live acceptance: running results"
 description: "Budgeted synthetic manual, preflight and agent scenarios; failed evidence retained. Acceptance remains incomplete."
 type: "analysis"
 created: "2026-10-23T19:21:08+02:00"
-updated: "2026-10-25T00:06:26+02:00"
+updated: "2026-10-25T07:30:29+01:00"
 createdBy: "coding-agent"
 updatedBy: "coding-agent"
 ---
@@ -89,3 +89,35 @@ settled at $0 with `costSource: "subscription"`; same fixture):
   (78,002 reported), kept ~16.8k verbatim, estimated 21,003 after; the provider
   reported 20,733 for the next request (20,708 input). The agent continued in the
   same run and answered. 4 requests.
+
+## Best-effort recovery (2026-10-25)
+
+Native `openai/gpt-6-luna` (subscription, $0), branch
+`test/live-recovery-scenarios`. New scenarios: `fallback` (no anchor; recovery
+must compact before the first main request), `undercount` (seeded random CJK at
+~7.7x the four-char heuristic, 32k window, heuristic passes admission while the
+real request overflows), `rerecover` (dense evidence before `audit-mid`, light
+after, 96k window: the first recovery must still overflow and recover again).
+
+- `fallback-01`: **FAIL (verifier)**. Compaction ran first (115.5k -> 25.7k),
+  the agent answered; the verifier looked for the request after the compaction
+  entry, but it sat in the kept tail. Verifier fixed.
+- `fallback-02`: **PASS**. 114,473 -> 26,075 estimated, 7 requests.
+- `undercount-01`: **FAIL (fixture)**. `audit-mid` sat too late; the fold to
+  `audit-start` landed (426% -> 2% of 32k) but only one recovery was needed.
+- `undercount-02`, `undercount-03`: **FAIL (product)**. After the first
+  recovery the next request still overflowed (42k/57k real vs 32k) and recovery
+  refused with "Request stopped before generation": the heuristic counted
+  ~7.5k, calibration ignored requests under 50k heuristic tokens and clamped at
+  4x, the kept compaction tail was sized in raw instead of calibrated tokens,
+  and a reply accepted beyond the window reset the recovery runway. This
+  violates D64 (relief never hard-blocks). Fixed: overflow evidence calibrates
+  at any size, clamp 8x, calibrated kept tail and savings, runway kept while
+  reported input exceeds the window.
+- `undercount-04`: **PASS**. Recovery compaction 137k -> 25k (calibrated), next
+  request 15k reported, answered. 9 requests.
+- `rerecover-01`: **PASS**. Fold to `audit-mid` (184k reported -> 117k, still
+  over 96k), second recovery folded to `audit-start` (-> 1.7k), answered.
+  10 requests.
+- `pressure-04`: **PASS** (regression check after the fixes). 76,298 -> 21,134
+  estimated, 5 requests.

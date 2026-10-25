@@ -1,0 +1,105 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~137k tokens) does not fit the 32k operating window and no fold could relieve it (audit-start: the materialized handoff leaves insufficient request headroom; original history was kept; audit-mid: the materialized handoff leaves insufficient request headroom; original history was k…): older work was compacted, context ~137k -> ~63k tokens, above the ~24k target (the system prompt, tools, kept work and summary leave no smaller result). The newest ~8k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "e6d42ea1",
+        "anchor": "compacted",
+        "before": 137081,
+        "after": 63493,
+        "target": 24000,
+        "aboveTarget": true,
+        "keptTokens": 7656,
+        "strategy": "chunked",
+        "calls": 3,
+        "openUserRequests": 0
+      },
+      "id": "6f130e0e",
+      "parentId": "d7066d38",
+      "timestamp": "2026-10-25T06:19:36.030Z"
+    },
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[navigate_tree] Request stopped before generation: estimated input 56879 tokens leaves fewer than 1024 output tokens plus 4096 headroom in the 32000-token operating window. No tool results were withheld. audit-start: the materialized handoff leaves insufficient request headroom; original history was kept; audit-mid: the materialized handoff does not reduce projected context (estimated 9376 -> 14245 tokens); original history was kept; context-gathered: the materialized handoff does not reduce projected context (estimated 9376 -> 17357 tokens); original history was kept; compacted: the materialized handoff does not reduce projected context (estimated 9376 -> 17448 tokens); original history was kept; start: the materialized handoff does not reduce projected context (estimated 9376 -> 17807 tokens); original history was kept; a compaction did not help either: the compaction does not free enough context (estimated 9376 -> 7458 tokens); original history was kept Reduce context with /tree or /compact, or select a larger operating window.",
+      "display": true,
+      "details": {
+        "status": "failed",
+        "reason": "insufficient request headroom",
+        "inputEstimate": 56879,
+        "contextWindow": 32000,
+        "appliedWithheld": 0,
+        "receiptId": "6bf2a41e-8fc2-47c0-b7f4-bcca6e554a45",
+        "detail": "audit-start: the materialized handoff leaves insufficient request headroom; original history was kept; audit-mid: the materialized handoff does not reduce projected context (estimated 9376 -> 14245 tokens); original history was kept; context-gathered: the materialized handoff does not reduce projected context (estimated 9376 -> 17357 tokens); original history was kept; compacted: the materialized handoff does not reduce projected context (estimated 9376 -> 17448 tokens); original history was kept; start: the materialized handoff does not reduce projected context (estimated 9376 -> 17807 tokens); original history was kept; a compaction did not help either: the compaction does not free enough context (estimated 9376 -> 7458 tokens); original history was kept"
+      },
+      "id": "5aef564f",
+      "parentId": "b282e247",
+      "timestamp": "2026-10-25T06:20:00.910Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "3d337f93",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 136396,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 136421,
+        "cost": {
+          "input": 0.013639600000000002,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.013652100000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "8fe0b870",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 55655,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 55673,
+        "cost": {
+          "input": 0.0055655,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0055745000000000005
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "f471527a",
+      "stopReason": "error",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "text": ""
+    }
+  ]
+}

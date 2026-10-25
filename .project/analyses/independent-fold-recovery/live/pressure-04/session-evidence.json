@@ -1,0 +1,108 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree auto_navigate] Context ~78k crossed rewind_at_tokens 64k: older work was compacted, context ~78k -> ~21k tokens. The newest ~17k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "pressure",
+        "compactionId": "cd68aaaf",
+        "anchor": "compacted",
+        "before": 78046,
+        "after": 21138,
+        "target": 32000,
+        "aboveTarget": false,
+        "keptTokens": 16819,
+        "strategy": "in-context",
+        "calls": 1,
+        "openUserRequests": 0
+      },
+      "id": "a7f1df0d",
+      "parentId": "c90b4e86",
+      "timestamp": "2026-10-25T06:24:57.778Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "c4e5a5ca",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 77986,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 78004,
+        "cost": {
+          "input": 0.007798600000000001,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.007807600000000001
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "6ab9dddb",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 20653,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 20678,
+        "cost": {
+          "input": 0.0020653000000000004,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0020778000000000003
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "818cf7e8",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 301,
+        "output": 18,
+        "cacheRead": 20480,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 20799,
+        "cost": {
+          "input": 0.000030100000000000003,
+          "output": 0.000009,
+          "cacheRead": 0.0002048,
+          "cacheWrite": 0,
+          "total": 0.0002439
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "40cebe1d",
+      "stopReason": "stop",
+      "usage": {
+        "input": 403,
+        "output": 77,
+        "cacheRead": 20608,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 21088,
+        "cost": {
+          "input": 0.000040300000000000004,
+          "output": 0.0000385,
+          "cacheRead": 0.00020608,
+          "cacheWrite": 0,
+          "total": 0.00028488
+        }
+      },
+      "text": "**Synthetic audit acceptance continued.** Preserve the public response codes: invalid input **422**, unavailable **503**, and duplicate **409**. Do not deploy or delete service data. The remaining work is to compare the archived audit with the next supplied change, checking for response-code changes and retry-exhaustion persistence effects.\n\n**ACCEPTANCE-CONTINUED**"
+    }
+  ]
+}
