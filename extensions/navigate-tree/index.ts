@@ -1089,7 +1089,11 @@ function noteOutgoingRequest(
 }
 
 /** Calibrate from the usage the model reported for the noted request. */
-function noteRequestUsage(sessionId: string, message: unknown): void {
+function noteRequestUsage(
+  sessionId: string,
+  message: unknown,
+  contextWindow = 0,
+): void {
   const current = tokenCalibration.get(sessionId);
   const m = message as Partial<AssistantMessage> | undefined;
   if (
@@ -1104,6 +1108,7 @@ function noteRequestUsage(sessionId: string, message: unknown): void {
   const factor = measuredTokenFactor(
     calculateContextTokens(m.usage) - (m.usage.output ?? 0),
     current.pending,
+    contextWindow,
   );
   tokenCalibration.set(sessionId, {
     modelKey: current.modelKey,
@@ -3738,14 +3743,21 @@ export default function (pi: ExtensionAPI) {
       stopReason?: string;
     };
     if (message?.role !== "assistant") return;
-    noteRequestUsage(sessionId, message);
+    const operatingWindow = ctx.model?.contextWindow ?? 0;
+    noteRequestUsage(sessionId, message, operatingWindow);
+    const usage = (message as Partial<AssistantMessage>).usage;
     // The recovered request generated within the window: a later overflow in
     // this run is a new request and may recover again. Only a recovery that
-    // did not let the next request through is final.
+    // did not let the next request through is final. A tool call the provider
+    // accepted beyond the operating window did not fit either.
     if (
       message.stopReason !== "error" &&
       message.stopReason !== "aborted" &&
-      !overflowed(message, ctx.model)
+      !overflowed(message, ctx.model) &&
+      !(
+        operatingWindow > 0 &&
+        (usage?.input ?? 0) + (usage?.cacheRead ?? 0) > operatingWindow
+      )
     )
       recoveryAttempts.delete(sessionId);
     const messageEntryId =
@@ -5047,7 +5059,7 @@ export default function (pi: ExtensionAPI) {
       const details = (summary?: { strategy: string; calls: number }) => ({
         navigateTree: {
           pressure: {
-            keptTokens: cut.keptTokens,
+            keptTokens: Math.round(cut.keptTokens * tokenFactorOf(sm)),
             prefixTokens: cut.prefixTokens,
             ...(summary && {
               strategy: summary.strategy,
@@ -5121,7 +5133,10 @@ export default function (pi: ExtensionAPI) {
     };
     // The newest work stays verbatim, but a kept tail too large to land under
     // the budget shrinks first, down to a quarter of the configured share.
-    const configuredKeep = Math.floor(input.keepRecentTokens);
+    // Cut entries are raw heuristic tokens; the configured tail is calibrated.
+    const configuredKeep = Math.floor(
+      input.keepRecentTokens / tokenFactorOf(sm),
+    );
     const minKeep = Math.ceil(configuredKeep * MIN_KEPT_SHARE_OF_CONFIGURED);
     let plan = planAt(configuredKeep);
     for (let tries = 0; tries < 4; tries++) {
@@ -5197,7 +5212,7 @@ export default function (pi: ExtensionAPI) {
         preview,
         receiptText(activeTokens, "compacted-00"),
       );
-      if (before - after < MIN_REWIND_SAVINGS_TOKENS)
+      if ((before - after) * tokenFactorOf(sm) < MIN_REWIND_SAVINGS_TOKENS)
         return {
           kind: "skip",
           reason: `the compaction does not free enough context (estimated ${before} -> ${after} tokens); original history was kept`,
