@@ -225,26 +225,24 @@ When `auto_navigate.enabled` is true, two things happen at each turn boundary:
   in context. No anchor is needed. The summary carries still-open user requests
   verbatim and the continuity briefing; the compaction entry gets an
   `anchor:compacted` label, a later fold or recovery target. No anchor is folded,
-  so steering stays active and the ledger is unchanged. The result must land
-  under half of `rewind_at_tokens`, priced like the request guard prices the
-  next request (system, tools, summary, kept work and receipt). Before any
-  summary call, a summary of the full reduce-output size is assumed; after it,
-  the real summary is priced. When the configured share cannot land under the
-  budget, the kept tail shrinks first, down to a quarter of the configured share,
-  never splitting a tool call from its result. Only then is nothing written, and
-  a warning names the kept and resulting sizes. Leave room: half of
-  `rewind_at_tokens` must hold the system prompt, tools, a full-size summary and
-  the kept work. The same retry rule as pressure folds applies.
+  so steering stays active and the ledger is unchanged. The target is half of
+  `rewind_at_tokens`, priced like the request guard prices the next request
+  (system, tools, summary, kept work and receipt), with a full-size summary
+  assumed before the call. When the configured share cannot reach the target,
+  the kept tail shrinks first, down to a quarter of the configured share, never
+  splitting a tool call from its result. The target guides sizing only: a
+  compaction that still lands above it runs anyway, and its receipt names the
+  result and the target. It is skipped only when it would free too little
+  context (see below). The same retry rule as pressure folds applies.
 - **Pressure fold (`pressure: "fold"`, deterministic).** At the same threshold
   the independent engine folds back to an anchor instead, without asking a
   classifier. It uses the canonical cut and the shared
   materialized preview, and folds to the newest anchor whose result lands under
-  half of `rewind_at_tokens`. There is no oldest-anchor fallback: a fold that
-  lands just under the threshold would fire again after a few file reads and
-  discard the agent's current work each time. When no anchor reaches that budget,
-  a warning names the smallest reachable size and the `rewind_at_tokens` it needs.
-  A retry (after a fold or a skip) needs half of `rewind_at_tokens`, at least
-  `min_tokens_since_anchor`, of fresh estimated tokens. Unfinished work is folded
+  half of `rewind_at_tokens`. When no anchor reaches that target, it folds to the
+  oldest valid anchor, which still relieves context, and the receipt says it
+  landed above the target. A retry (after a fold or a skip) needs half of
+  `rewind_at_tokens`, at least `min_tokens_since_anchor`, of fresh estimated
+  tokens, so a result that lands high does not refire after a few file reads. Unfinished work is folded
   too; still-open user requests are kept verbatim after the handoff. A request
   closes on a text-only final reply, on a newer user message after the agent
   responded, or on a later handoff. An attached skill is quoted as a reference to
@@ -259,9 +257,10 @@ When `auto_navigate.enabled` is true, two things happen at each turn boundary:
 
 No user prompt or rewind steer is injected. Results are discarded when the
 branch, active model, policy or cancellation state changes while a check runs.
-Existing labels are never overwritten. When a pressure fold cannot run (no valid
-anchor, an unanswered tool call, a pre-compaction target, a non-reducing handoff),
-a visible `navigate-tree-auto-warning` names the reason; the history is kept.
+Existing labels are never overwritten. When pressure relief cannot reduce
+context at all (no valid anchor, an unanswered tool call, a non-reducing
+handoff or compaction, a failed summary), a visible `navigate-tree-auto-warning`
+names the reason; the history is kept.
 `anchor-only` mode places milestone anchors and never folds. An unavailable model,
 abstention, disagreement or provider error makes no semantic decision.
 
@@ -322,19 +321,27 @@ Successful recovery does not abort the run or ask the model to call a tool.
 
 A provider context-overflow response is handled through the same engine at the
 appropriate lifecycle boundary. Native compaction/retry ownership and user
-cancellation take precedence. Recovery attempts are bounded per request: when
-the request a recovery produced still cannot fit, the next attempt produces an
-actionable receipt instead of an unbounded retry loop. Once the recovered request generates, a
-later overflow in the same run is a new request and recovers again. A request that
-cannot fit at all is refused before dispatch with `Request stopped before generation: estimated input <n> tokens leaves fewer than 1024 output tokens plus 4096 headroom`;
+cancellation take precedence. When the request a recovery produced still cannot
+fit (estimates can undercount dense code), recovery runs again, up to three
+times per request, as long as each attempt starts from less context than the
+previous one. Progress is measured before calibration, so a token factor learned
+from the overflow does not read as growth. Once the recovered request generates,
+a later overflow in the same run is a new request and recovers again. Only when
+no attempt can reduce context is the request refused before dispatch with
+`Request stopped before generation: estimated input <n> tokens leaves fewer than 1024 output tokens plus 4096 headroom`;
 nothing is withheld and the original history is kept.
 
 Recovery does not withhold tool results or impose a rewind-only tool gate.
-Incomplete tool envelopes, stale state, missing anchors, non-reducing handoffs
-and insufficient post-fold headroom refuse the fold. The source history stays
-available; the receipt identifies why the operation could not finish. If another
-extension rejects a boundary draft, settlement checks delivery and persists the
-missing failure receipt once.
+When no anchor is valid, or the fold fails (a non-reducing handoff, too little
+post-fold headroom, a failed summary), recovery falls back to a tail-keeping
+compaction like pressure compaction: older work is summarized into a native
+compaction, the newest work stays verbatim, and a
+`navigate-tree-pressure-compaction` receipt with `origin: "recovery"` reports the
+result. Incomplete or interleaved tool envelopes and a changed model or session
+refuse without any write. The source history stays available; the receipt
+identifies why the operation could not finish. If another extension rejects a
+boundary draft, settlement checks delivery and persists the missing receipt once,
+for successes and failures.
 
 ### Compaction guidance
 

@@ -23,7 +23,10 @@ import {
   SessionManager,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import navigateTree, { estimateAdmissionTokens } from "./index.ts";
+import navigateTree, {
+  estimateAdmissionTokens,
+  PRESSURE_COMPACTION_CUSTOM_TYPE,
+} from "./index.ts";
 
 const WINDOW = 32_000;
 const RESERVE = 1_024 + 4_096;
@@ -434,7 +437,7 @@ for (const stopReason of ["error", "length", "stop"] as const) {
           assert.equal(failed.length, 1);
           assert.match(
             JSON.stringify(failed),
-            /already attempted|already.*recovery/,
+            /did not reduce context|did not help either|recoveries for this request/,
           );
         },
       );
@@ -470,7 +473,50 @@ for (const stopReason of ["error", "length", "stop"] as const) {
       );
     });
 
-    for (const mode of ["no-anchor", "side-failure", "lost-receipt"] as const) {
+    for (const mode of ["no-anchor", "lost-receipt"] as const) {
+      it(`compacts older work when no anchor is valid (${mode})`, async () => {
+        await withRecoverySession(mode, async ({ sm, prompt, calls }) => {
+          await prompt(REQUEST);
+          const main = calls.filter((call) => !call.side);
+          assert.ok(main.length >= 1 && main.length <= 2, JSON.stringify(main));
+          assert.ok(
+            calls.some((call) => call.side),
+            "a summary side call ran",
+          );
+          assert.equal(
+            sm.getBranch().some((entry) => entry.type === "branch_summary"),
+            false,
+          );
+          assert.ok(
+            sm.getBranch().some((entry) => entry.type === "compaction"),
+            "a compaction replaced the older work",
+          );
+          const receipts = sm
+            .getBranch()
+            .filter(
+              (entry) =>
+                entry.type === "custom_message" &&
+                (entry.customType === PRESSURE_COMPACTION_CUSTOM_TYPE ||
+                  entry.customType === "navigate-tree-rewind"),
+            );
+          assert.equal(receipts.length, 1, JSON.stringify(receipts));
+          assert.equal(receipts[0].type, "custom_message");
+          if (receipts[0].type !== "custom_message") return;
+          assert.equal(receipts[0].customType, PRESSURE_COMPACTION_CUSTOM_TYPE);
+          assert.equal(
+            (receipts[0].details as { origin?: string }).origin,
+            "recovery",
+          );
+          if (main.length === 2)
+            assert.ok(
+              main[1].text.includes(REQUEST),
+              "the recovered request still carries the user request",
+            );
+        });
+      });
+    }
+
+    for (const mode of ["side-failure"] as const) {
       it(`persists an actionable receipt after ${mode}`, async () => {
         await withRecoverySession(mode, async ({ sm, prompt, calls }) => {
           await prompt(REQUEST);

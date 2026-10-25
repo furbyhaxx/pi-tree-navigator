@@ -8403,7 +8403,7 @@ describe("README: independent overflow recovery", () => {
     assert.ok(
       readme.includes("Request stopped before generation: estimated input"),
     );
-    assert.match(readme, /actionable receipt instead of an unbounded retry/);
+    assert.match(readme, /up to three\s+times per request/);
   });
 });
 
@@ -8518,6 +8518,51 @@ describe("rewind-driven compaction (#101)", () => {
       assert.ok(!wire.some((message) => message.stopReason === "error"));
       assert.ok(!JSON.stringify(wire).includes("Output withheld"));
       assert.equal(f.sm.getLabel(err.id), undefined);
+    } finally {
+      cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("explicit error: recovers again when the recovered request still overflows, while each attempt shrinks", async () => {
+    const f = await forcedSetup();
+    try {
+      const first = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(first.settle.continue, true);
+      assert.equal(forcedDrafts(first.settle)[0]?.details.status, "done");
+      // The recovered request still overflows (an undercounting estimate):
+      // the agent read more, and no reply generated in between.
+      for (const id of ["r3", "r4"]) {
+        appendToolCallAssistant(
+          f.sm,
+          [{ id, name: "read", arguments: { path: id } }],
+          0,
+        );
+        appendToolResult(f.sm, id, "read", BIG);
+      }
+      const calls = f.ctx.registryCalls.length;
+      const second = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.ok(
+        f.ctx.registryCalls.length > calls,
+        "the second recovery summarized again",
+      );
+      assert.ok(
+        !JSON.stringify(second.settle).includes("already attempted"),
+        JSON.stringify(second.settle),
+      );
+      assert.equal(second.settle.continue, true, JSON.stringify(second.settle));
+      // Nothing is left to reduce: the attempts stop with a receipt, no loop.
+      const third = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(third.settle.continue, false);
+      assert.match(
+        JSON.stringify(third.settle),
+        /did not reduce context|recoveries for this request|did not help either/,
+      );
+      const fourth = await runErrorEnd(f, errorOverflow(f.sm).message);
+      assert.equal(fourth.settle.continue, false);
+      assert.match(
+        JSON.stringify(fourth.settle),
+        /did not reduce context|recoveries for this request/,
+      );
     } finally {
       cleanupConfigFixture(f.fixture);
     }
@@ -9421,28 +9466,29 @@ describe("rewind-driven compaction (#101)", () => {
     }
   });
 
-  it("auto_navigate skips a pressure fold that cannot reach half of rewind_at_tokens instead of folding to the oldest anchor", async () => {
+  it("auto_navigate folds to the oldest valid anchor when none reaches half of rewind_at_tokens, and says so", async () => {
     const f = await autoFixture(async () => ({ status: "continue" }), {
       rewind_at_tokens: 2_000,
     });
     try {
       const boundary = await autoTurn(f, 90_000);
-      assert.equal(f.summaries.calls.length, 0, "no fold ran");
+      assert.ok(f.summaries.calls.length > 0, "the fold ran");
       assert.ok(
-        !f.sm.getBranch().some((entry) => entry.type === "branch_summary"),
+        f.sm.getBranch().some((entry) => entry.type === "branch_summary"),
       );
-      const [warning] = boundary.entries.filter(
-        (entry) => entry.customType === "navigate-tree-auto-warning",
-      );
+      const [done] = forcedDrafts(boundary);
+      assert.equal(done?.details.status, "done", JSON.stringify(boundary));
+      assert.equal(done.details.aboveTarget, true);
       assert.match(
-        String(warning?.content),
-        /above the ~1k a pressure fold must reach .* Raise rewind_at_tokens to at least/,
+        String(done.content),
+        /No anchor lands under the ~1k pressure target .* oldest valid anchor/,
       );
+      const calls = f.summaries.calls.length;
       await autoTurn(f, 90_500);
       assert.equal(
         f.summaries.calls.length,
-        0,
-        "a skipped pressure fold waits for the runway before retrying",
+        calls,
+        "the next pressure fold waits for the retry runway",
       );
     } finally {
       cleanupConfigFixture(f.fixture);
@@ -9516,6 +9562,36 @@ describe("rewind-driven compaction (#101)", () => {
       cleanupConfigFixture(f.fixture);
     }
   });
+
+  /** A pressure compaction landed above `target` and its receipt says so; returns the priced result. */
+  function assertAboveTargetCompaction(
+    f: Awaited<ReturnType<typeof autoFixture>>,
+    boundary: BoundaryResult,
+    target: number,
+  ): number {
+    assert.ok(f.summaries.calls.length > 0, "the compaction ran");
+    assert.ok(
+      f.sm.getBranch().some((value) => value.type === "compaction"),
+      JSON.stringify(boundary),
+    );
+    const receipt = boundary.entries.find(
+      (value) => value.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
+    );
+    assert.ok(receipt, JSON.stringify(boundary));
+    const details = receipt.details as {
+      after: number;
+      target: number;
+      aboveTarget: boolean;
+    };
+    assert.equal(details.target, target);
+    assert.equal(details.aboveTarget, true);
+    assert.ok(details.after > target);
+    assert.match(
+      String(receipt.content),
+      new RegExp(`above the ~${target / 1000}k target`),
+    );
+    return details.after;
+  }
 
   /** A tool turn whose result carries about `tokens` tokens of evidence. */
   function toolTurn(f: Forced, id: string, tokens: number, usage = 0) {
@@ -9637,7 +9713,7 @@ describe("rewind-driven compaction (#101)", () => {
     }
   });
 
-  it("auto_navigate skips a pressure compaction whose kept work alone exceeds half of rewind_at_tokens", async () => {
+  it("auto_navigate compacts even when the kept work alone exceeds half of rewind_at_tokens, and says so", async () => {
     const f = await autoFixture(async () => ({ status: "continue" }), {
       pressure: "compact",
       rewind_at_tokens: 40_000,
@@ -9649,17 +9725,7 @@ describe("rewind-driven compaction (#101)", () => {
       const leaf = f.sm.getEntry(toolTurn(f, "big", 30_000, 50_000));
       assert.ok(leaf?.type === "message");
       const boundary = await fireTurnEndAll(f.pi, f.ctx, leaf.message);
-      assert.equal(f.summaries.calls.length, 0, "skipped before any call");
-      assert.ok(
-        !f.sm.getEntries().some((value) => value.type === "compaction"),
-      );
-      const [warning] = boundary.entries.filter(
-        (value) => value.customType === "navigate-tree-auto-warning",
-      );
-      assert.match(
-        String(warning?.content),
-        /keeps the newest ~30k tokens verbatim still leaves ~\d+k, above the ~20k a pressure compaction must reach/,
-      );
+      assertAboveTargetCompaction(f, boundary, 20_000);
     } finally {
       cleanupConfigFixture(f.fixture);
     }
@@ -9688,17 +9754,11 @@ describe("rewind-driven compaction (#101)", () => {
       const leaf = f.sm.getEntry(toolTurn(f, "new", 22_000, 41_000));
       assert.ok(leaf?.type === "message");
       const boundary = await fireTurnEndAll(f.pi, f.ctx, leaf.message);
-      assert.equal(f.summaries.calls.length, 0, "skipped before any call");
+      const after = assertAboveTargetCompaction(f, boundary, 20_000);
+      const committed = estimateAdmissionTokens(f.sm);
       assert.ok(
-        !f.sm.getEntries().some((value) => value.type === "compaction"),
-        "a compaction that cannot reach the budget is not written",
-      );
-      const [warning] = boundary.entries.filter(
-        (value) => value.customType === "navigate-tree-auto-warning",
-      );
-      assert.match(
-        String(warning?.content),
-        /still leaves ~\d+k, above the ~20k a pressure compaction must reach/,
+        after >= committed && after - committed < 200,
+        `the receipt prices the committed request (${committed}), not usage minus a heuristic (${after})`,
       );
     } finally {
       cleanupConfigFixture(f.fixture);
@@ -9762,12 +9822,14 @@ describe("rewind-driven compaction (#101)", () => {
     };
 
     const small = await run(8_000);
+    let smallPriced = 0;
     try {
       const receipt = small.boundary.entries.find(
         (value) => value.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
       );
       assert.ok(receipt, JSON.stringify(small.boundary));
       const priced = (receipt.details as { after: number }).after;
+      smallPriced = priced;
       const committed = estimateAdmissionTokens(small.f.sm);
       assert.ok(
         priced >= committed && priced - committed < 200,
@@ -9779,21 +9841,14 @@ describe("rewind-driven compaction (#101)", () => {
 
     const large = await run(60_000);
     try {
-      assert.equal(
-        large.f.summaries.calls.length,
-        0,
-        "skipped before any call",
+      const receipt = large.boundary.entries.find(
+        (value) => value.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
       );
+      assert.ok(receipt, JSON.stringify(large.boundary));
+      const after = (receipt.details as { after: number }).after;
       assert.ok(
-        !large.f.sm.getEntries().some((value) => value.type === "compaction"),
-        "the kept system prompt pushes the compaction over its budget",
-      );
-      const [warning] = large.boundary.entries.filter(
-        (value) => value.customType === "navigate-tree-auto-warning",
-      );
-      assert.match(
-        String(warning?.content),
-        /still leaves ~\d+k, above the ~30k a pressure compaction must reach/,
+        after - smallPriced >= 12_000,
+        `the larger kept system prompt is priced into the result (${smallPriced} -> ${after})`,
       );
     } finally {
       cleanupConfigFixture(large.f.fixture);

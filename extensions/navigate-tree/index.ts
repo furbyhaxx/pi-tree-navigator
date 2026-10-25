@@ -314,6 +314,8 @@ export const PRESSURE_COMPACTION_CUSTOM_TYPE =
   "navigate-tree-pressure-compaction";
 const RECOVERY_MIN_OUTPUT_TOKENS = 1_024;
 const RECOVERY_HEADROOM_TOKENS = 4_096;
+/** Recoveries one request may get; each must start from less context than the last. */
+const MAX_RECOVERY_ATTEMPTS = 3;
 // Hint length cap for the per-row hint shown in `list` output. 50 chars
 // fits one terminal column without wrapping in typical 80-column TUIs.
 const LIST_HINT_MAX_LENGTH = 50;
@@ -2719,10 +2721,39 @@ export default function (pi: ExtensionAPI) {
       providerOverflow?: boolean;
     }
   >();
-  // One independent recovery per agent run. Native overflow retry owns the next request.
-  const preflightAttempted = new Set<string>();
+  // Recoveries for the current request: each must start from less context than
+  // the last, up to MAX_RECOVERY_ATTEMPTS. Native overflow retry owns the next request.
+  const recoveryAttempts = new Map<
+    string,
+    { attempts: number; heuristicTokens: number }
+  >();
   const nativeRetryOwned = new Set<string>();
   const recoveryCuts = new Map<string, string>();
+  // Receipts of recoveries that landed at a turn boundary; another handler can
+  // replace the boundary's entries, so settlement persists what went missing.
+  const recoveryReceipts = new Map<string, RewindMessageDraft[]>();
+  const holdRecoveryReceipt = (
+    sessionId: string,
+    draft: RewindMessageDraft,
+  ) => {
+    draft.details.receiptId = randomUUID();
+    recoveryReceipts.set(sessionId, [
+      ...(recoveryReceipts.get(sessionId) ?? []),
+      draft,
+    ]);
+    return draft;
+  };
+  const receiptOnBranch = (sm: SessionManager, receiptId: unknown) =>
+    sm
+      .getBranch()
+      .some(
+        (entry) =>
+          entry.type === "custom_message" &&
+          typeof entry.details === "object" &&
+          entry.details !== null &&
+          "receiptId" in entry.details &&
+          entry.details.receiptId === receiptId,
+      );
   const requestBudgetFailureDraft = (failure: {
     inputEstimate: number;
     contextWindow: number;
@@ -3022,12 +3053,25 @@ export default function (pi: ExtensionAPI) {
     const contextWindow = model?.contextWindow ?? 0;
     const runSignal = ctx.signal;
     if (signal?.aborted) return { status: "cancelled" };
-    if (preflightAttempted.has(sessionId))
+    // Factor-free, so a calibration the overflow taught does not read as growth.
+    const heuristicTokens = Math.round(
+      estimateAdmissionTokens(sm) / tokenFactorOf(sm),
+    );
+    const prior = recoveryAttempts.get(sessionId);
+    if (prior && prior.attempts >= MAX_RECOVERY_ATTEMPTS)
       return {
         status: "failed",
-        detail: "a recovery was already attempted for this request",
+        detail: `${prior.attempts} recoveries for this request did not bring it under the window`,
       };
-    preflightAttempted.add(sessionId);
+    if (prior && heuristicTokens >= prior.heuristicTokens)
+      return {
+        status: "failed",
+        detail: `the previous recovery for this request did not reduce context (~${formatWindow(prior.heuristicTokens)} -> ~${formatWindow(heuristicTokens)} heuristic tokens)`,
+      };
+    recoveryAttempts.set(sessionId, {
+      attempts: (prior?.attempts ?? 0) + 1,
+      heuristicTokens,
+    });
     if (!model || contextWindow <= 0)
       return { status: "failed", detail: "no operating window is available" };
     const captured = capturedSystems.get(sessionId);
@@ -3055,37 +3099,86 @@ export default function (pi: ExtensionAPI) {
       `${ctx.model?.provider}/${ctx.model?.id}` === modelKey &&
       ctx.model?.contextWindow === contextWindow &&
       capturedSystems.get(sessionId) === captured;
+    const handoffMode =
+      parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT;
+    const budget = foldRecommendationBudget(
+      contextWindow,
+      resolveRewindHintReserve(
+        {
+          rewindHintReserveTokens,
+          rewindHintModelReserveTokens: hintByModel,
+        },
+        modelKey,
+      ),
+    );
+    // Without a usable fold, a tail-keeping compaction is the next relief.
+    const compactInstead = async (
+      why: string,
+    ): Promise<
+      | { status: "done"; draft: RewindMessageDraft }
+      | { status: "failed"; detail: string }
+      | { status: "cancelled" }
+    > => {
+      if (signal?.aborted) return { status: "cancelled" };
+      // A changed model or session is not a size problem; nothing may write.
+      if (host.isIdle?.() === false) return { status: "failed", detail: why };
+      const config = resolveAutoNavigateConfig(
+        {
+          autoNavigate: autoNavigateBase,
+          autoNavigateByModel,
+          proposal: proposalConfig,
+        },
+        modelKey,
+      );
+      const before = estimateAdmissionTokens(sm);
+      let compacted: Awaited<ReturnType<typeof compactUnderPressure>>;
+      try {
+        compacted = await compactUnderPressure({
+          sm,
+          sessionId,
+          host,
+          budget,
+          keepRecentTokens:
+            Math.min(config.rewindAtTokens, budget) * config.keepRecentShare,
+          trigger: `The next request (~${formatWindow(before)} tokens) does not fit the ${formatWindow(contextWindow)} operating window and no fold could relieve it (${toOneLine(why, 200) ?? "no target"})`,
+          origin: "recovery",
+          activeTokens: before,
+          captured: capturedSystems.get(sessionId),
+          handoffMode,
+          signal,
+          isCurrent: () => host.isIdle?.() ?? false,
+        });
+      } catch (error) {
+        compacted = {
+          kind: "skip",
+          reason: error instanceof Error ? error.message : String(error),
+        };
+      }
+      if (signal?.aborted || compacted.kind === "stale")
+        return { status: "cancelled" };
+      if (compacted.kind === "done")
+        return { status: "done", draft: compacted.draft };
+      return {
+        status: "failed",
+        detail: `${why}; a compaction did not help either: ${compacted.reason}`,
+      };
+    };
     const cut = recoveryCutOf(sm, host.recoveryEvidenceId);
-    if (!cut.ok) {
-      return { status: "failed", detail: cut.detail };
-    }
+    // A malformed tool envelope is not a size problem; nothing may rewrite it.
+    if (!cut.ok) return { status: "failed", detail: cut.detail };
     try {
       const focus = defaultFoldFocus(sm);
       const candidates = priceFoldCandidates(sm, {
         model,
-        handoffMode: parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
+        handoffMode,
         captured: capturedSystems.get(sessionId),
         focus,
         suggestLabel: (name) => suggestFoldLabel(sm, name),
         foldPointId: cut.foldPointId,
         thinking: host.thinking,
       });
-      const selected = selectFoldTarget(
-        candidates,
-        foldRecommendationBudget(
-          contextWindow,
-          resolveRewindHintReserve(
-            {
-              rewindHintReserveTokens,
-              rewindHintModelReserveTokens: hintByModel,
-            },
-            `${model.provider}/${model.id}`,
-          ),
-        ),
-      );
-      if (!selected.ok) {
-        return { status: "failed", detail: selected.reasons.join("; ") };
-      }
+      const selected = selectFoldTarget(candidates, budget);
+      if (!selected.ok) return compactInstead(selected.reasons.join("; "));
       const request: FoldRequest = {
         sessionId,
         origin: "recovery",
@@ -3103,13 +3196,16 @@ export default function (pi: ExtensionAPI) {
       if (signal?.aborted || outcome.status === "cancelled")
         return { status: "cancelled" };
       if (outcome.status !== "done") {
-        return {
-          status: "failed",
-          detail:
-            outcome.status === "failed"
-              ? `${outcome.reason}: ${outcome.detail}`
-              : outcome.status,
-        };
+        const detail =
+          outcome.status === "failed"
+            ? `${outcome.reason}: ${outcome.detail}`
+            : outcome.status;
+        // A fold whose write left the cursor uncertain must not be followed by another write.
+        return unrestoredFoldCursors.has(sm)
+          ? { status: "failed", detail }
+          : compactInstead(
+              `the fold to '${request.rewindTo}' failed: ${detail}`,
+            );
       }
       return { status: "done", draft: foldDoneDraft(request, outcome) };
     } catch (error) {
@@ -3651,7 +3747,7 @@ export default function (pi: ExtensionAPI) {
       message.stopReason !== "aborted" &&
       !overflowed(message, ctx.model)
     )
-      preflightAttempted.delete(sessionId);
+      recoveryAttempts.delete(sessionId);
     const messageEntryId =
       typeof event.messageEntryId === "string" ? event.messageEntryId : "";
     const turnIds = messageEntryId
@@ -3717,7 +3813,7 @@ export default function (pi: ExtensionAPI) {
         return deliverRaw([requestBudgetFailureDraft(failure)], false);
       }
       refreshAgentMessages(sm);
-      return deliverRaw([outcome.draft], true);
+      return deliverRaw([holdRecoveryReceipt(sessionId, outcome.draft)], true);
     }
     if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
       await captureContinuity(sm, sessionId, ctx, message);
@@ -3836,7 +3932,7 @@ export default function (pi: ExtensionAPI) {
         return {
           entries: keepValidDrafts(sm, [
             ...(event.entries ?? []),
-            outcome.draft,
+            holdRecoveryReceipt(sessionId, outcome.draft),
           ]),
           continue: true,
         };
@@ -3853,26 +3949,19 @@ export default function (pi: ExtensionAPI) {
     } catch {
       return;
     }
-    preflightAttempted.delete(sessionId);
+    recoveryAttempts.delete(sessionId);
     nativeRetryOwned.delete(sessionId);
     // A rewind the run never reached a boundary for would fold at an
     // unrelated later turn, and block every rewind until then.
     if (queuedFolds.get(sessionId)?.origin === "agent")
       queuedFolds.delete(sessionId);
+    for (const draft of recoveryReceipts.get(sessionId) ?? [])
+      if (!receiptOnBranch(sm, draft.details.receiptId))
+        appendFoldMessage(sm, draft);
+    recoveryReceipts.delete(sessionId);
     const budgetFailure = requestBudgetFailures.get(sessionId);
     if (budgetFailure) {
-      const delivered = sm
-        .getBranch()
-        .some(
-          (entry) =>
-            entry.type === "custom_message" &&
-            entry.customType === REWIND_CUSTOM_TYPE &&
-            typeof entry.details === "object" &&
-            entry.details !== null &&
-            "receiptId" in entry.details &&
-            entry.details.receiptId === budgetFailure.receiptId,
-        );
-      if (!delivered)
+      if (!receiptOnBranch(sm, budgetFailure.receiptId))
         appendFoldMessage(sm, requestBudgetFailureDraft(budgetFailure));
       requestBudgetFailures.delete(sessionId);
       return;
@@ -3884,8 +3973,9 @@ export default function (pi: ExtensionAPI) {
     try {
       const sessionId = ctx.sessionManager.getSessionId();
       requestBudgetFailures.delete(sessionId);
+      recoveryReceipts.delete(sessionId);
       capturedSystems.delete(sessionId);
-      preflightAttempted.delete(sessionId);
+      recoveryAttempts.delete(sessionId);
       nativeRetryOwned.delete(sessionId);
       recoveryCuts.delete(sessionId);
       queuedFolds.delete(sessionId);
@@ -4123,7 +4213,7 @@ export default function (pi: ExtensionAPI) {
     piSettingsSource = { cwd, agentDir, projectTrusted };
     requestBudgetFailures.delete(sessionId);
     capturedSystems.delete(sessionId);
-    preflightAttempted.delete(sessionId);
+    recoveryAttempts.delete(sessionId);
     nativeRetryOwned.delete(sessionId);
     recoveryCuts.delete(sessionId);
     queuedFolds.delete(sessionId);
@@ -4350,7 +4440,8 @@ export default function (pi: ExtensionAPI) {
     try {
       const sessionId = ctx.sessionManager.getSessionId();
       requestBudgetFailures.delete(sessionId);
-      preflightAttempted.delete(sessionId);
+      recoveryReceipts.delete(sessionId);
+      recoveryAttempts.delete(sessionId);
       nativeRetryOwned.delete(sessionId);
       toolActiveBySession.set(sessionId, toolActive);
     } catch {
@@ -4766,8 +4857,10 @@ export default function (pi: ExtensionAPI) {
     if (plan.action.kind === "anchor") {
       anchor(plan.action.entryId, plan.action.suggestedName);
     } else if (plan.action.kind === "pressure-fold") {
-      // Canonical cut and shared materialized preview as in recovery, but only
-      // the newest anchor that lands under the pressure budget; no oldest-anchor fallback.
+      // Canonical cut and shared materialized preview as in recovery: the newest
+      // anchor that lands under the pressure budget, else the oldest valid one.
+      // A fold that lands high still relieves pressure; the retry runway keeps
+      // it from repeating every few turns.
       const skipped = (reason: string) => {
         const text = `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}, but no fold ran: ${toOneLine(reason, 400) ?? "no target"}`;
         try {
@@ -4788,7 +4881,10 @@ export default function (pi: ExtensionAPI) {
           sm,
           sessionId,
           host,
-          config,
+          budget: pressureFoldBudget(config.rewindAtTokens),
+          keepRecentTokens: config.rewindAtTokens * config.keepRecentShare,
+          trigger: `Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}`,
+          origin: "pressure",
           activeTokens,
           captured,
           handoffMode,
@@ -4797,7 +4893,7 @@ export default function (pi: ExtensionAPI) {
         });
         if (compacted.kind === "stale") return;
         if (compacted.kind === "skip") return skipped(compacted.reason);
-        drafts.push(...compacted.drafts);
+        drafts.push(compacted.draft);
         return deliver(undefined, event.continue ?? false);
       }
       const cut = recoveryCutOf(sm);
@@ -4815,16 +4911,6 @@ export default function (pi: ExtensionAPI) {
       const budget = pressureFoldBudget(config.rewindAtTokens);
       const selected = selectFoldTarget(candidates, budget);
       if (!selected.ok) return skipped(selected.reasons.join("; "));
-      if (!selected.withinBudget) {
-        const floor = Math.min(
-          ...candidates
-            .filter((candidate) => candidate.valid)
-            .map((candidate) => candidate.projectedAfterTokens),
-        );
-        return skipped(
-          `the smallest fold leaves ~${formatWindow(floor)}, above the ~${formatWindow(budget)} a pressure fold must reach (half of rewind_at_tokens), so it would trigger again after a few turns and discard the current work. Raise rewind_at_tokens to at least ~${formatWindow(floor * 2)} or fold manually with /anchor fold`,
-        );
-      }
       if (!isCurrent() || runningFolds.has(sessionId)) return;
       const request: FoldRequest = {
         sessionId,
@@ -4845,8 +4931,15 @@ export default function (pi: ExtensionAPI) {
           error instanceof Error ? error.message : String(error),
         );
       }
-      if (outcome.status === "done")
-        return deliver(foldDoneDraft(request, outcome), true);
+      if (outcome.status === "done") {
+        const done = foldDoneDraft(request, outcome);
+        if (!selected.withinBudget) {
+          done.content += `\n\n[${TOOL_NAME} auto_navigate] No anchor lands under the ~${formatWindow(budget)} pressure target (half of rewind_at_tokens), so this fold used the oldest valid anchor; it still relieves context, and the next pressure fold waits for the retry runway.`;
+          done.details.aboveTarget = true;
+          done.details.target = budget;
+        }
+        return deliver(done, true);
+      }
       const draft = foldFailedDraft(request, outcome);
       if (unrestoredFoldCursors.has(sm)) {
         try {
@@ -4872,22 +4965,26 @@ export default function (pi: ExtensionAPI) {
     sm: SessionManager;
     sessionId: string;
     host: FoldHost;
-    config: ReturnType<typeof resolveAutoNavigateConfig>;
+    /** Tokens the compacted request should land under; a guide, not a gate. */
+    budget: number;
+    keepRecentTokens: number;
+    /** Receipt lead, e.g. "Context ~150k crossed rewind_at_tokens 200k". */
+    trigger: string;
+    origin: "pressure" | "recovery";
     activeTokens: number;
     captured: { modelKey: string; messages: Message[] } | undefined;
     handoffMode: HandoffMode;
     signal: AbortSignal | undefined;
     isCurrent(): boolean;
   }): Promise<
-    | { kind: "done"; drafts: SessionBoundaryDraft[] }
+    | { kind: "done"; draft: RewindMessageDraft }
     | { kind: "skip"; reason: string }
     | { kind: "stale" }
   > {
-    const { sm, sessionId, host, config, activeTokens, signal } = input;
+    const { sm, sessionId, host, budget, activeTokens, signal } = input;
     const { model, registry } = host;
     const leafId = sm.getLeafId();
     if (!model || !leafId) return { kind: "stale" };
-    const budget = pressureFoldBudget(config.rewindAtTokens);
     const all = sm.getEntries();
     const projected = buildFoldProjection(all, leafId).entries;
     if (!registry.hasConfiguredAuth(model))
@@ -5000,7 +5097,7 @@ export default function (pi: ExtensionAPI) {
         ]).tokens;
       };
       const receiptText = (after: number, anchor?: string) =>
-        `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(after)} tokens. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchor ? ` Anchor '${anchor}' marks the compaction.` : ""} The original entries remain in the session file.`;
+        `[${TOOL_NAME} ${input.origin === "pressure" ? "auto_navigate" : "recovery"}] ${input.trigger}: older work was compacted, context ~${formatWindow(activeTokens)} -> ~${formatWindow(after)} tokens${after > budget ? `, above the ~${formatWindow(budget)} target (the system prompt, tools, kept work and summary leave no smaller result)` : ""}. The newest ~${formatWindow(cut.keptTokens)} tokens of work stay verbatim${requests.length ? `; ${requests.length} open request(s) are quoted in the summary` : ""}.${anchor ? ` Anchor '${anchor}' marks the compaction.` : ""} The original entries remain in the session file.`;
       const floor = admissionAfter(
         previewOf(
           compactionText(foldPlaceholderSummary(summarizerReduceTokens(model))),
@@ -5024,9 +5121,7 @@ export default function (pi: ExtensionAPI) {
     };
     // The newest work stays verbatim, but a kept tail too large to land under
     // the budget shrinks first, down to a quarter of the configured share.
-    const configuredKeep = Math.floor(
-      config.rewindAtTokens * config.keepRecentShare,
-    );
+    const configuredKeep = Math.floor(input.keepRecentTokens);
     const minKeep = Math.ceil(configuredKeep * MIN_KEPT_SHARE_OF_CONFIGURED);
     let plan = planAt(configuredKeep);
     for (let tries = 0; tries < 4; tries++) {
@@ -5043,12 +5138,9 @@ export default function (pi: ExtensionAPI) {
         break;
       plan = smaller;
     }
+    // Over budget is still relief: the compaction runs with the smallest tail
+    // tried, and only a compaction that frees too little is skipped.
     if (plan.kind !== "plan") return plan;
-    if (plan.floor > budget)
-      return {
-        kind: "skip",
-        reason: `a compaction that keeps the newest ~${formatWindow(plan.cut.keptTokens)} tokens verbatim still leaves ~${formatWindow(plan.floor)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); the rest is the system prompt, tools and a full-size summary, so raise rewind_at_tokens`,
-      };
     const {
       cut,
       cutAt,
@@ -5110,11 +5202,6 @@ export default function (pi: ExtensionAPI) {
           kind: "skip",
           reason: `the compaction does not free enough context (estimated ${before} -> ${after} tokens); original history was kept`,
         };
-      if (projectedAfter > budget)
-        return {
-          kind: "skip",
-          reason: `the compaction leaves ~${formatWindow(projectedAfter)}, above the ~${formatWindow(budget)} a pressure compaction must reach (half of rewind_at_tokens); lower keep_recent_share or raise rewind_at_tokens`,
-        };
       const written = trySessionWrite(sm, () =>
         sm.appendCompaction(
           text,
@@ -5139,24 +5226,25 @@ export default function (pi: ExtensionAPI) {
       await emitSessionCompact(sm, written.value);
       return {
         kind: "done",
-        drafts: [
-          {
-            type: "custom_message",
-            customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
-            content: receiptText(projectedAfter, anchored ? name : undefined),
-            display: true,
-            details: {
-              compactionId: written.value,
-              anchor: anchored ? name : undefined,
-              before: activeTokens,
-              after: projectedAfter,
-              keptTokens: cut.keptTokens,
-              strategy: summary.strategy,
-              calls: summary.calls,
-              openUserRequests: requests.length,
-            },
+        draft: {
+          type: "custom_message",
+          customType: PRESSURE_COMPACTION_CUSTOM_TYPE,
+          content: receiptText(projectedAfter, anchored ? name : undefined),
+          display: true,
+          details: {
+            origin: input.origin,
+            compactionId: written.value,
+            anchor: anchored ? name : undefined,
+            before: activeTokens,
+            after: projectedAfter,
+            target: budget,
+            aboveTarget: projectedAfter > budget,
+            keptTokens: cut.keptTokens,
+            strategy: summary.strategy,
+            calls: summary.calls,
+            openUserRequests: requests.length,
           },
-        ],
+        },
       };
     } catch (error) {
       return {

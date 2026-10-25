@@ -105,7 +105,12 @@ for the clone workflow and supported inputs.
 - Only the active ancestry supplies model context; raw history remains available.
   Compaction and context edits affect projection, not source message payloads.
   Recovery eligibility follows the canonical projection, not summary markers.
-- Recovery does not withhold tool results. Infeasible plans refuse without a fold.
+- Recovery does not withhold tool results. Relief is best-effort: pressure and
+  recovery run whenever they reduce context, even above their target; targets only
+  size the kept tail and pick the anchor. Recovery retries up to three times per
+  request while each attempt starts smaller, and falls back to a tail-keeping
+  compaction when no fold can run. Malformed tool envelopes and stale state refuse
+  without a write.
   The final complete-request estimate includes system/tools, materialized children,
   protected continuity, active requests, late input and continuation headroom.
 - Live folds preview materialized child reports, late input and continuation
