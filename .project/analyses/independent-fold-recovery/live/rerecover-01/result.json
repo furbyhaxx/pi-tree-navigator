@@ -1,0 +1,93 @@
+{
+  "passed": true,
+  "scenario": "rerecover",
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/rerecover-01/sessions/2026-10-25T06-23-23-273Z_01a171ba-6488-75d3-8c3f-2996176bfba1.jsonl",
+  "initialTokens": 84486,
+  "afterTokens": 2637,
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 40,
+      "startedAt": "2026-10-25T06:23:23.286Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-25T06:23:26.467Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 2,
+      "startedAt": "2026-10-25T06:23:43.244Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 13,
+      "startedAt": "2026-10-25T06:23:51.575Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-25T06:23:54.757Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 2,
+      "startedAt": "2026-10-25T06:24:11.396Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 5,
+      "startedAt": "2026-10-25T06:24:22.388Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 7,
+      "startedAt": "2026-10-25T06:24:27.254Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 9,
+      "startedAt": "2026-10-25T06:24:29.408Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 11,
+      "startedAt": "2026-10-25T06:24:33.657Z"
+    }
+  ],
+  "scratch": "/tmp/independent-fold-acceptance-U8CMf2",
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "completedAt": "2026-10-25T06:24:38.244Z"
+}

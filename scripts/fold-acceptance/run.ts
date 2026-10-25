@@ -28,6 +28,7 @@ import navigateTree, {
   __testHooks,
   estimateAdmissionTokens,
   PRESSURE_COMPACTION_CUSTOM_TYPE,
+  REWIND_CUSTOM_TYPE,
 } from "../../extensions/navigate-tree/index.ts";
 import { parseClassifierModel } from "../../extensions/navigate-tree/intent-policy.ts";
 import { RECOMMENDED_MILESTONE_POLICY } from "../../extensions/navigate-tree/milestone-policy.ts";
@@ -43,6 +44,7 @@ import {
   AUTOMATIC_CONFIG,
   AUTOMATIC_REQUEST,
   buildCorpus,
+  buildDenseCorpus,
   corpusManifest,
   FACTS,
   PRESSURE_CONFIG,
@@ -55,13 +57,31 @@ import {
   type PricedModel,
 } from "./transport.ts";
 
-/** Acceptance scenarios for manual, recovery, tool-driven and automatic engine folds, and pressure compaction. */
+/**
+ * Acceptance scenarios for manual, recovery, tool-driven and automatic engine
+ * folds, pressure compaction, the anchorless recovery compaction (`fallback`),
+ * recovery when the heuristic undercounts dense text (`undercount`), and a second
+ * recovery when the first one still overflows (`rerecover`).
+ */
 export type Scenario =
   | "manual"
   | "preflight"
   | "agent"
   | "automatic"
-  | "pressure";
+  | "pressure"
+  | "fallback"
+  | "undercount"
+  | "rerecover";
+const SCENARIOS: readonly Scenario[] = [
+  "manual",
+  "preflight",
+  "agent",
+  "automatic",
+  "pressure",
+  "fallback",
+  "undercount",
+  "rerecover",
+];
 /** Options contain no credentials; they are safe to persist with the result. */
 export interface RunOptions {
   scenario: Scenario;
@@ -164,6 +184,114 @@ export function verifyPressureCompaction(
   );
 }
 
+const receiptsOf = (
+  entries: readonly SessionEntry[],
+  customType: string,
+): Record<string, unknown>[] =>
+  entries.flatMap((entry) =>
+    entry.type === "custom_message" &&
+    entry.customType === customType &&
+    typeof entry.details === "object" &&
+    entry.details !== null
+      ? [entry.details as Record<string, unknown>]
+      : [],
+  );
+
+/** Require an anchorless recovery to compact before the first main request and keep the request. */
+export function verifyRecoveryCompaction(
+  branch: readonly SessionEntry[],
+  request: string,
+): void {
+  const at = branch.findIndex((entry) => entry.type === "compaction");
+  assert.ok(at >= 0, "recovery without an anchor must write a compaction");
+  assert.ok(
+    !branch.some((entry) => entry.type === "branch_summary"),
+    "recovery without an anchor cannot fold",
+  );
+  assert.ok(
+    receiptsOf(branch.slice(at + 1), PRESSURE_COMPACTION_CUSTOM_TYPE).some(
+      (details) => details.origin === "recovery",
+    ),
+    "the recovery compaction must leave a receipt with origin recovery",
+  );
+  const compaction = branch[at];
+  const keptFrom = branch.findIndex(
+    (entry) =>
+      compaction.type === "compaction" &&
+      entry.id === compaction.firstKeptEntryId,
+  );
+  assert.ok(
+    branch
+      .slice(keptFrom >= 0 ? keptFrom : at + 1)
+      .some(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "user" &&
+          textOf(entry.message) === request,
+      ),
+    "unanswered request must stay verbatim in the kept tail or after the compaction",
+  );
+  assert.ok(
+    branch
+      .slice(at + 1)
+      .some(
+        (entry) =>
+          entry.type === "message" &&
+          entry.message.role === "assistant" &&
+          entry.message.stopReason === "stop" &&
+          textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
+      ),
+    "the agent must answer in the same run after the compaction",
+  );
+}
+
+/**
+ * Require at least `minRecoveries` recoveries in one run, none refused, and a
+ * final answer whose reported input fits the operating window.
+ */
+export function verifyRepeatedRecovery(
+  branch: readonly SessionEntry[],
+  entries: readonly SessionEntry[],
+  contextWindow: number,
+  minRecoveries: number,
+): void {
+  const recoveries = [
+    ...receiptsOf(entries, REWIND_CUSTOM_TYPE),
+    ...receiptsOf(entries, PRESSURE_COMPACTION_CUSTOM_TYPE),
+  ].filter((details) => details.origin === "recovery");
+  assert.ok(
+    !recoveries.some((details) => details.status === "failed"),
+    "no recovery may be refused or fail",
+  );
+  assert.ok(
+    !receiptsOf(entries, REWIND_CUSTOM_TYPE).some(
+      (details) => details.providerOverflow === true,
+    ),
+    "the run must not end in a request-budget failure",
+  );
+  assert.ok(
+    recoveries.length >= minRecoveries,
+    `expected at least ${minRecoveries} recoveries (saw ${recoveries.length})`,
+  );
+  const final = branch.findLast(
+    (entry) => entry.type === "message" && entry.message.role === "assistant",
+  );
+  assert.ok(
+    final?.type === "message" &&
+      final.message.role === "assistant" &&
+      final.message.stopReason === "stop" &&
+      textOf(final.message).includes("ACCEPTANCE-CONTINUED"),
+    "main model must answer after the recoveries",
+  );
+  const usage = (
+    final.message as { usage?: { input?: number; cacheRead?: number } }
+  ).usage;
+  assert.ok(
+    (usage?.input ?? 0) + (usage?.cacheRead ?? 0) <= contextWindow,
+    "the final request must fit the operating window",
+  );
+}
+
 /**
  * Split a Pi `provider/modelId` selector. A model id may itself contain
  * slashes, e.g. `openrouter/openai/gpt-6-luna`.
@@ -189,7 +317,7 @@ export function parseOptions(args: string[]): RunOptions {
     options: {
       scenario: { type: "string", default: "manual" },
       model: { type: "string", default: "openai/gpt-6-luna" },
-      window: { type: "string", default: "96000" },
+      window: { type: "string" },
       blocks: { type: "string" },
       out: { type: "string" },
       ledger: {
@@ -206,14 +334,8 @@ export function parseOptions(args: string[]): RunOptions {
   });
   if (!values.out)
     throw new Error("--out is required and must be a new directory");
-  if (
-    !["manual", "preflight", "agent", "automatic", "pressure"].includes(
-      values.scenario,
-    )
-  )
-    throw new Error(
-      "--scenario must be manual, preflight, agent, automatic or pressure",
-    );
+  if (!SCENARIOS.includes(values.scenario as Scenario))
+    throw new Error(`--scenario must be one of ${SCENARIOS.join(", ")}`);
   if (
     (values.scenario === "automatic" || values.scenario === "pressure") &&
     !values["dry-run"] &&
@@ -224,7 +346,9 @@ export function parseOptions(args: string[]): RunOptions {
     throw new Error(
       "automatic and pressure live runs require an explicit absolute --ledger path to the shared ledger",
     );
-  const window = Number(values.window),
+  const window = Number(
+      values.window ?? (values.scenario === "undercount" ? "32000" : "96000"),
+    ),
     blocks = Number(
       values.blocks ??
         (values.scenario === "automatic"
@@ -233,12 +357,16 @@ export function parseOptions(args: string[]): RunOptions {
             ? "16"
             : values.scenario === "agent"
               ? "15"
-              : "24"),
+              : values.scenario === "undercount"
+                ? "10"
+                : values.scenario === "rerecover"
+                  ? "14"
+                  : "24"),
     );
   if (!Number.isInteger(window) || window < 32000)
     throw new Error("--window must be an integer >=32000");
   parseModelSelector(values.model);
-  buildCorpus(blocks);
+  corpusFor(values.scenario as Scenario, blocks);
   return {
     scenario: values.scenario as Scenario,
     model: values.model,
@@ -250,6 +378,15 @@ export function parseOptions(args: string[]): RunOptions {
     dryRun: values["dry-run"],
   };
 }
+
+const corpusFor = (scenario: Scenario, blocks: number): string[] =>
+  scenario === "undercount"
+    ? buildDenseCorpus(blocks)
+    : scenario === "rerecover"
+      ? // Dense evidence before audit-mid, light after: the averaged ratio makes
+        // audit-mid look like it fits while its retained prefix alone overflows.
+        [...buildDenseCorpus(4, 15000), ...buildCorpus(blocks)]
+      : buildCorpus(blocks);
 
 /** Settle native calls from reported costs or a configured subscription. */
 export function nativeBilling(subscription: boolean): Billing {
@@ -318,7 +455,7 @@ export async function runAcceptance(
   createRuntime: typeof ModelRuntime.create = (opts) =>
     ModelRuntime.create(opts),
 ): Promise<void> {
-  const corpus = buildCorpus(options.blocks);
+  const corpus = corpusFor(options.scenario, options.blocks);
   const request =
     options.scenario === "automatic"
       ? AUTOMATIC_REQUEST
@@ -546,9 +683,21 @@ export async function runAcceptance(
     });
     // Seeded sessions represent an existing run whose prompt bootstrap already ran.
     __testHooks.captureSession(session);
-    seedCorpus(sm, corpus, options.scenario === "automatic");
+    seedCorpus(sm, corpus, {
+      completedReview: options.scenario === "automatic",
+      anchor: options.scenario !== "fallback",
+      ...(options.scenario === "undercount" && {
+        midAnchorAfter: Math.floor(corpus.length * 0.3) - 1,
+      }),
+      ...(options.scenario === "rerecover" && { midAnchorAfter: 3 }),
+    });
     const initialTokens = estimateAdmissionTokens(sm);
-    if (options.scenario === "preflight")
+    if (options.scenario === "undercount" || options.scenario === "rerecover")
+      assert.ok(
+        initialTokens + 5120 < model.contextWindow,
+        "undercount fixture must pass admission by the heuristic",
+      );
+    if (options.scenario === "preflight" || options.scenario === "fallback")
       assert.ok(
         initialTokens + 5120 > model.contextWindow,
         "fixture must exceed admission before any main request",
@@ -595,11 +744,57 @@ export async function runAcceptance(
       await session.prompt(request);
     }
     await session.waitForIdle();
-    if (options.scenario === "pressure") {
+    if (
+      options.scenario === "pressure" ||
+      options.scenario === "fallback" ||
+      options.scenario === "undercount" ||
+      options.scenario === "rerecover"
+    ) {
       const branch = sm.getBranch();
-      verifyPressureCompaction(branch, (id) => sm.getLabel(id));
+      save("session-evidence.json", {
+        receipts: sm
+          .getEntries()
+          .filter(
+            (entry) =>
+              entry.type === "custom_message" &&
+              (entry.customType === REWIND_CUSTOM_TYPE ||
+                entry.customType === PRESSURE_COMPACTION_CUSTOM_TYPE),
+          ),
+        mainReplies: sm.getEntries().flatMap((entry) =>
+          entry.type === "message" &&
+          entry.message.role === "assistant" &&
+          entry.message.provider !== "fixture"
+            ? [
+                {
+                  id: entry.id,
+                  stopReason: entry.message.stopReason,
+                  usage: entry.message.usage,
+                  text: textOf(entry.message).slice(0, 2000),
+                },
+              ]
+            : [],
+        ),
+      });
+      if (options.scenario === "pressure")
+        verifyPressureCompaction(branch, (id) => sm.getLabel(id));
+      else if (options.scenario === "fallback") {
+        assert.ok(
+          calls[0]?.side,
+          "recovery must precede the first main dispatch",
+        );
+        verifyRecoveryCompaction(branch, request);
+      } else
+        verifyRepeatedRecovery(
+          branch,
+          sm.getEntries(),
+          model.contextWindow,
+          options.scenario === "rerecover" ? 2 : 1,
+        );
       const afterTokens = estimateAdmissionTokens(sm);
-      assert.ok(afterTokens < initialTokens, "compaction must reduce context");
+      assert.ok(
+        afterTokens < initialTokens,
+        "relief must reduce projected context",
+      );
       await transport.drain();
       save("result.json", {
         passed: true,
@@ -609,12 +804,13 @@ export async function runAcceptance(
         afterTokens,
         compaction: branch.find((entry) => entry.type === "compaction"),
         calls,
+        scratch,
         beforeBudget,
         afterBudget: ledger.snapshot(),
         completedAt: new Date().toISOString(),
       });
       console.log(
-        `pressure: PASS; ${initialTokens} -> ${afterTokens} estimated tokens; ${calls.length} requests.`,
+        `${options.scenario}: PASS; ${initialTokens} -> ${afterTokens} estimated tokens; ${calls.length} requests.`,
       );
       return;
     }

@@ -76,6 +76,29 @@ export function buildCorpus(blocks: number): string[] {
   });
 }
 
+/**
+ * Dense synthetic evidence: seeded random CJK text costs about 1.9 real tokens
+ * per character (o200k), about 7.7x Pi's four-characters-per-token heuristic, so a
+ * request that looks small to the estimate overflows the operating window for real.
+ */
+export function buildDenseCorpus(blocks: number, chars = 7000): string[] {
+  if (!Number.isInteger(blocks) || blocks < 1 || blocks > 64)
+    throw new Error("blocks must be an integer from 1 to 64");
+  let state = 0x9e3779b9;
+  const next = () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    return state >>> 0;
+  };
+  return Array.from({ length: blocks }, (_, block) => {
+    const filler = Array.from({ length: chars }, () =>
+      String.fromCodePoint(0x4e00 + (next() % 0x5200)),
+    ).join("");
+    return `Synthetic dense audit block ${block + 1} (opaque archived log, no actionable content)\n${FACTS.join("\n")}\n${filler}`;
+  });
+}
+
 /** Records fixture provenance without treating synthetic messages as observed model output. */
 export function corpusManifest(corpus: readonly string[]) {
   return corpus.map((text, index) => ({
@@ -89,8 +112,15 @@ export function corpusManifest(corpus: readonly string[]) {
 export function seedCorpus(
   sm: SessionManager,
   corpus: readonly string[],
-  completedReview = false,
+  options: {
+    completedReview?: boolean;
+    /** Without the `audit-start` anchor, recovery has no fold target. */
+    anchor?: boolean;
+    /** Label the reply to this block `anchor:audit-mid`. */
+    midAnchorAfter?: number;
+  } = {},
 ): void {
+  const { completedReview = false, anchor: anchored = true } = options;
   sm.appendMessage({ role: "user", content: FACTS.join("\n"), timestamp: 1 });
   const anchor = sm.appendMessage({
     role: "assistant",
@@ -109,10 +139,10 @@ export function seedCorpus(
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   });
-  sm.appendLabelChange(anchor, "anchor:audit-start");
+  if (anchored) sm.appendLabelChange(anchor, "anchor:audit-start");
   for (const [index, text] of corpus.entries()) {
     sm.appendMessage({ role: "user", content: text, timestamp: 3 + index * 2 });
-    sm.appendMessage({
+    const reply = sm.appendMessage({
       role: "assistant",
       content: [
         {
@@ -137,5 +167,7 @@ export function seedCorpus(
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
     });
+    if (index === options.midAnchorAfter)
+      sm.appendLabelChange(reply, "anchor:audit-mid");
   }
 }

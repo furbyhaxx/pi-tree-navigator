@@ -1118,6 +1118,55 @@ describe("context event handler", () => {
     assert.ok(Math.abs(switched - (10_000 * 8) / 7) < 50, `${switched}`);
   });
 
+  it("learns the token ratio from a small request the operating window could not hold", async () => {
+    const f = setup({ contextWindow: 32_000 });
+    const model = f.ctx.model as { provider: string; id: string };
+    const exchange = async (reportedRatio: number) => {
+      const request = [
+        { role: "system", content: "rules", timestamp: 0 },
+        ...fireContext(f.pi, f.ctx),
+      ];
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? [])
+        await handler(
+          { type: "context_with_system", messages: request } as never,
+          f.ctx as never,
+        );
+      const reply = {
+        ...assistantMessage([{ type: "text", text: "ok" }], "toolUse"),
+        provider: model.provider,
+        model: model.id,
+        usage: usageOf(
+          Math.round(
+            estimateRawRequestTokens(request as never) * reportedRatio,
+          ),
+        ),
+      };
+      f.sm.appendMessage(reply as never);
+      await fireTurnEndAll(f.pi, f.ctx, reply);
+    };
+    const growth = () => {
+      const before = estimateAdmissionTokens(f.sm);
+      f.sm.appendMessage({
+        role: "user",
+        content: "x".repeat(4_000),
+        timestamp: 1,
+      });
+      return estimateAdmissionTokens(f.sm) - before;
+    };
+    // Dense text: ~10k heuristic tokens that the tokenizer counts 2.5x higher.
+    f.sm.appendMessage({
+      role: "user",
+      content: "x".repeat(40_000),
+      timestamp: 1,
+    });
+    await exchange(2.5);
+    // 25k fits the 32k window: below 50k heuristic tokens it is not evidence.
+    assert.ok(Math.abs(growth() - (1_000 * 8) / 7) < 20);
+    // Dense text the tokenizer counts 7x: the window could not hold it.
+    await exchange(7);
+    assert.ok(Math.abs(growth() - 7_000) < 20, "overflow evidence calibrates");
+  });
+
   it("registers exactly one context handler via pi.on", () => {
     const { pi } = setup();
     const handlers = pi.onCalls.get("context");
@@ -9797,6 +9846,86 @@ describe("rewind-driven compaction (#101)", () => {
       assert.ok((receipt?.details as { after: number }).after <= 30_000);
     } finally {
       cleanupConfigFixture(f.fixture);
+    }
+  });
+
+  it("auto_navigate keeps the configured tail in calibrated tokens when the tokenizer counts higher", async () => {
+    const fixture = makeConfigFixture();
+    writeGlobalConfig(
+      fixture,
+      JSON.stringify({
+        auto_navigate: {
+          enabled: true,
+          milestone: {
+            classifier: { model: "test/milestone" },
+            confirmer: { model: null },
+          },
+          check_every_turns: 3,
+          min_tokens_since_anchor: 1_000_000,
+          pressure: "compact",
+          rewind_at_tokens: 60_000,
+          keep_recent_share: 0.14,
+        },
+      }),
+    );
+    try {
+      const f = setup({ contextWindow: 100_000 });
+      f.ctx.cwd = fixture.projectDir;
+      await runSessionStart(f.pi, f.ctx, fixture);
+      Object.assign(f.ctx, {
+        modelRegistry: {
+          ...fakeRegistry().registry,
+          getAvailableOfType: async () => [],
+          classify: async () => {
+            throw new Error("a classifier must not decide pressure relief");
+          },
+        },
+      });
+      f.sm.appendMessage({ role: "user", content: "read them", timestamp: 1 });
+      for (let i = 1; i <= 12; i++) {
+        appendToolCallAssistant(
+          f.sm,
+          [{ id: `d${i}`, name: "read", arguments: {} }],
+          0,
+        );
+        appendToolResult(f.sm, `d${i}`, "read", "e".repeat(16_000));
+      }
+      const request = [
+        { role: "system", content: "rules", timestamp: 0 },
+        ...f.sm.buildSessionContext().messages,
+      ];
+      for (const handler of f.pi.onCalls.get("context_with_system") ?? [])
+        await handler(
+          { type: "context_with_system", messages: request } as never,
+          f.ctx as never,
+        );
+      // The tokenizer reports 1.3x the heuristic: each 4k tool turn costs ~5.2k.
+      const model = f.ctx.model as { provider: string; id: string };
+      const reply = {
+        ...assistantMessage([{ type: "text", text: "ok" }], "stop"),
+        provider: model.provider,
+        model: model.id,
+        usage: usageOf(
+          Math.round(estimateRawRequestTokens(request as never) * 1.3),
+        ),
+      };
+      f.sm.appendMessage(reply as never);
+      const boundary = await fireTurnEndAll(f.pi, f.ctx, reply);
+      assert.ok(
+        f.sm.getBranch().some((value) => value.type === "compaction"),
+        JSON.stringify(boundary),
+      );
+      // 14% of 60k is 8.4k calibrated tokens: two tool turns, not three.
+      const keptResults = f.sm
+        .buildSessionProjection()
+        .entries.filter(
+          (value) =>
+            value.sourceEntry.type === "message" &&
+            value.sourceEntry.message.role === "toolResult",
+        ).length;
+      assert.equal(keptResults, 2);
+    } finally {
+      cleanupConfigFixture(fixture);
     }
   });
 

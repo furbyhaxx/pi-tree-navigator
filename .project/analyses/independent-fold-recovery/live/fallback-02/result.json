@@ -1,0 +1,198 @@
+{
+  "passed": true,
+  "scenario": "fallback",
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/fallback-02/sessions/2026-10-25T06-09-54-690Z_01a171ae-0e02-731e-afce-212af2fdc652.jsonl",
+  "initialTokens": 114473,
+  "afterTokens": 26075,
+  "compaction": {
+    "type": "compaction",
+    "id": "c9de08bc",
+    "parentId": "8ca86162",
+    "timestamp": "2026-10-25T06:10:28.241Z",
+    "summary": "## Goal\nFinish the synthetic service audit by comparing the archived audit with the next supplied change—not by rolling out to production.\n\n## Constraints & Preferences\n- Do not deploy or delete service data during the audit.\n- Keep existing public response codes unchanged: invalid input `422`, unavailable `503`, duplicate `409`.\n- Treat the service records as synthetic fixtures; do not claim their findings were verified in execution.\n- Latest request says: “Do not deploy or change any files.”\n\n## Progress\n### Done\n- [x] Configuration and retry boundaries are reported as audited.\n- [x] Inspected synthetic fixture records for services 0–455. They list invalid-input and retry-exhausted tests and identify namespace preservation as a verification concern.\n\n### In Progress\n- [ ] Compare the archived audit with the next supplied change; neither the archived audit contents nor the next change is present in the evidence.\n- [ ] Latest requested acceptance response and continuation have not occurred in the records.\n\n### Blocked\n- No archived-audit comparison or retry-exhaustion verification results are supplied. No other blocker is established.\n\n## Key Decisions\n- **Keep the audit synthetic and non-production**: the stated objective excludes rollout, deployment, and data deletion.\n- **Preserve public response codes**: the user explicitly requires that existing codes remain unchanged.\n- **Do not treat fixture findings as verified**: the records show concerns to verify, not execution results.\n\n## Next Steps\n1. Compare the archived audit with the next supplied change when both are available, without deploying or changing files.\n\n## Standing authorization\n“Acceptance objective: finish the synthetic service audit, not a production rollout. Never deploy or delete service data during this audit. Keep the existing public response codes unchanged. Completed: audited service configuration and retry boundaries. Remaining: compare the archived audit with the next supplied change.” The audit scope is not complete.",
+    "firstKeptEntryId": "907c58a4",
+    "tokensBefore": 115539,
+    "details": {
+      "navigateTree": {
+        "pressure": {
+          "keptTokens": 20909,
+          "prefixTokens": 79246,
+          "strategy": "chunked",
+          "calls": 3,
+          "openUserRequests": []
+        }
+      }
+    },
+    "fromHook": true,
+    "systemMessage": {
+      "role": "system",
+      "content": "",
+      "sections": {
+        "preamble": "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. When asked to fold, invoke navigate_tree rewind, then answer the remaining request after the handoff.",
+        "cwd": "<cwd>\n/tmp/independent-fold-acceptance-CCzB7c/work\n</cwd>"
+      },
+      "toolsAdded": [
+        {
+          "name": "navigate_tree",
+          "description": "Long-session context management via the pi session tree. Anchor named milestones, then collapse work between them into a model-generated summary to free context.\n`rewind` does not restore prior state: it forks a sibling branch from the anchor and continues forward from a model-generated summary.\n\nOperations (set `action`):\n  • 'anchor', name='<milestone-name>': label the current point. Anchor at the start of a stage you'll summarize (e.g. 'impl-start').\n  • 'rewind', rewindTo='<existing>', newLabel='<new>': collapse work between rewindTo and the current leaf into a branch_summary labeled newLabel, so rewinds can chain.\n  • 'list': show all anchors on the active branch, oldest first, with cumulative context % at each.\n  • 'pin', kind='sub-goal'|'decision'|'fact'|'file'|'steering', text='<what to keep>': record a durable item that survives folds; `list` shows them. 'file' takes path+why instead of text; 'steering' belongs to an anchor (scopeAnchor, default newest). Refused when the user disabled the continuity ledger (continuity.capture=false).\n\n`name` (anchor) and `newLabel` (rewind) write into one shared anchor namespace: labels are unique on the active branch — both actions refuse a name that already exists — and everything written there is addressable as a future `rewindTo`. Avoid the reserved `anchor:` prefix.",
+          "parameters": {
+            "type": "object",
+            "required": [
+              "action"
+            ],
+            "properties": {
+              "action": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "anchor"
+                  },
+                  {
+                    "type": "string",
+                    "const": "rewind"
+                  },
+                  {
+                    "type": "string",
+                    "const": "list"
+                  },
+                  {
+                    "type": "string",
+                    "const": "pin"
+                  }
+                ],
+                "description": "Which operation to perform."
+              },
+              "name": {
+                "type": "string",
+                "description": "Required when action='anchor'. Kebab-case milestone label, max 40 chars."
+              },
+              "rewindTo": {
+                "type": "string",
+                "description": "Required when action='rewind'. Kebab-case name of an existing anchor on the active branch to rewind to."
+              },
+              "newLabel": {
+                "type": "string",
+                "description": "Required when action='rewind'. Kebab-case label for the resulting branch_summary entry; reusable as a future rewindTo."
+              },
+              "summaryFocus": {
+                "type": "string",
+                "description": "Required when action='rewind'; ≥20 chars after trim. Encode: (1) the user's most recent instruction verbatim, (2) what's done in the collapsed segment, (3) what's left to do as a next action; if the user authorized continuing, name the next work item, not a report or wrap-up."
+              },
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "sub-goal"
+                  },
+                  {
+                    "type": "string",
+                    "const": "decision"
+                  },
+                  {
+                    "type": "string",
+                    "const": "fact"
+                  },
+                  {
+                    "type": "string",
+                    "const": "file"
+                  },
+                  {
+                    "type": "string",
+                    "const": "steering"
+                  }
+                ],
+                "description": "Required when action='pin'. Your sub-goal, a decision you made, a key fact, a file pointer, or steering that lapses when its anchor is folded."
+              },
+              "text": {
+                "type": "string",
+                "description": "Required when action='pin' unless kind='file'. What to remember, max 500 chars."
+              },
+              "path": {
+                "type": "string",
+                "description": "Required when action='pin' and kind='file'. File path."
+              },
+              "lines": {
+                "type": "string",
+                "description": "Optional with kind='file': N or N-M."
+              },
+              "why": {
+                "type": "string",
+                "description": "Required when action='pin' and kind='file'. Why the file matters."
+              },
+              "scopeAnchor": {
+                "type": "string",
+                "description": "Anchor name for kind='steering' (default: newest anchor); optional for 'sub-goal'."
+              }
+            }
+          }
+        }
+      ],
+      "timestamp": 1792908628241
+    }
+  },
+  "calls": [
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-25T06:09:54.712Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-25T06:10:06.689Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 3,
+      "startedAt": "2026-10-25T06:10:17.356Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 14,
+      "startedAt": "2026-10-25T06:10:28.242Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 16,
+      "startedAt": "2026-10-25T06:10:30.470Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 18,
+      "startedAt": "2026-10-25T06:10:33.050Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 20,
+      "startedAt": "2026-10-25T06:10:38.044Z"
+    }
+  ],
+  "scratch": "/tmp/independent-fold-acceptance-CCzB7c",
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "completedAt": "2026-10-25T06:10:41.347Z"
+}

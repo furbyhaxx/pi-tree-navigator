@@ -1,0 +1,128 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~137k tokens) does not fit the 32k operating window and no fold could relieve it (audit-start: the materialized handoff leaves insufficient request headroom; original history was kept; audit-mid: the materialized handoff leaves insufficient request headroom; original history was k…): older work was compacted, context ~137k -> ~25k tokens, above the ~24k target (the system prompt, tools, kept work and summary leave no smaller result). The newest ~2k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "2595671d",
+        "anchor": "compacted",
+        "before": 137083,
+        "after": 25014,
+        "target": 24000,
+        "aboveTarget": true,
+        "keptTokens": 2022,
+        "strategy": "chunked",
+        "calls": 4,
+        "openUserRequests": 0
+      },
+      "id": "85ecb63e",
+      "parentId": "0b09fd7b",
+      "timestamp": "2026-10-25T06:23:01.566Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "e16a0dc0",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 136398,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 136423,
+        "cost": {
+          "input": 0.0136398,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.013652300000000001
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "cec02338",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 15012,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 15030,
+        "cost": {
+          "input": 0.0015012,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0015102
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "0d05c14e",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 404,
+        "output": 116,
+        "cacheRead": 14848,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 15368,
+        "cost": {
+          "input": 0.000040400000000000006,
+          "output": 0.000058,
+          "cacheRead": 0.00014848000000000001,
+          "cacheWrite": 0,
+          "total": 0.00024688
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "56b2fbb3",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 379,
+        "output": 18,
+        "cacheRead": 15104,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 15501,
+        "cost": {
+          "input": 0.000037900000000000006,
+          "output": 0.000009,
+          "cacheRead": 0.00015104,
+          "cacheWrite": 0,
+          "total": 0.00019794
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "35ee2e9e",
+      "stopReason": "stop",
+      "usage": {
+        "input": 389,
+        "output": 36,
+        "cacheRead": 15360,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 15785,
+        "cost": {
+          "input": 0.000038900000000000004,
+          "output": 0.000018,
+          "cacheRead": 0.0001536,
+          "cacheWrite": 0,
+          "total": 0.0002105
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work: compare the archived audit with the next supplied change when it is available. Do not deploy or change files."
+    }
+  ]
+}

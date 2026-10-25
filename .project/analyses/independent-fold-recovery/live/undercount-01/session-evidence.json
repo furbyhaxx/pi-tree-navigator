@@ -1,0 +1,157 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[rewind to 'audit-start' · collapsed as 'audit-start-folded'] · context 426.4% → 2.1% of 32k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.\n\nThe 2 messages between the branch_summary and this one arrived while the rewind was pending — they are new and still unanswered; handle them now.",
+      "display": true,
+      "details": {
+        "status": "done",
+        "rewindTo": "audit-start",
+        "newLabel": "audit-start-folded",
+        "targetId": "a736d7aa",
+        "summaryId": "4878676f",
+        "collapsedEntries": 25,
+        "contextBefore": 136435,
+        "contextAfter": 672,
+        "contextWindow": 32000,
+        "origin": "recovery",
+        "summaryStrategy": "chunked",
+        "summaryCalls": 5,
+        "foldEstimateBefore": 18946,
+        "foldEstimateAfter": 833,
+        "agentMessagesRefreshed": true,
+        "historyRewriteNotified": true,
+        "readFiles": [],
+        "modifiedFiles": [],
+        "reappendedLateMessages": 2,
+        "openUserRequests": [],
+        "receiptId": "a1c003c2-a3a5-4f0b-8866-09ab9c34cf69"
+      },
+      "id": "f29a5a11",
+      "parentId": "53a5820b",
+      "timestamp": "2026-10-25T06:11:38.927Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "63102e7c",
+      "stopReason": "stop",
+      "usage": {
+        "input": 136397,
+        "output": 38,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 136435,
+        "cost": {
+          "input": 0.013639700000000001,
+          "output": 0.000018999999999999998,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.013658700000000001
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work: compare the archived audit with the next supplied change. No deployment or data deletion; keep existing public response codes unchanged."
+    },
+    {
+      "id": "53a5820b",
+      "stopReason": "stop",
+      "usage": {
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "cost": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work: compare the archived audit with the next supplied change. No deployment or data deletion; keep existing public response codes unchanged."
+    },
+    {
+      "id": "45c9514b",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 1446,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1471,
+        "cost": {
+          "input": 0.00014460000000000002,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00015710000000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "2c2ece11",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 296,
+        "output": 18,
+        "cacheRead": 1280,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1594,
+        "cost": {
+          "input": 0.0000296,
+          "output": 0.000009,
+          "cacheRead": 0.0000128,
+          "cacheWrite": 0,
+          "total": 0.0000514
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "db9dc9a5",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 338,
+        "output": 110,
+        "cacheRead": 1408,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1856,
+        "cost": {
+          "input": 0.0000338,
+          "output": 0.000054999999999999995,
+          "cacheRead": 0.00001408,
+          "cacheWrite": 0,
+          "total": 0.00010287999999999999
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "bb68a46b",
+      "stopReason": "stop",
+      "usage": {
+        "input": 302,
+        "output": 69,
+        "cacheRead": 1664,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2035,
+        "cost": {
+          "input": 0.000030200000000000002,
+          "output": 0.0000345,
+          "cacheRead": 0.00001664,
+          "cacheWrite": 0,
+          "total": 0.00008134
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nThe audit’s remaining work is to compare the archived audit with the next supplied change. Neither is available in the supplied records, so the comparison is blocked until they are provided. No files have been changed; do not deploy or delete service data, and keep existing public response codes unchanged."
+    }
+  ]
+}

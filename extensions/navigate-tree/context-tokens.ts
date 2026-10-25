@@ -106,9 +106,12 @@ export function estimateRawRequestTokens(messages: AgentMessage[]): number {
 export function measuredTokenFactor(
   actualInput: number,
   heuristic: number,
+  contextWindow = 0,
 ): number | undefined {
-  if (!(heuristic >= MIN_CALIBRATION_TOKENS) || !(actualInput > 0))
-    return undefined;
+  if (!(actualInput > 0) || !(heuristic > 0)) return undefined;
+  // A request the window could not hold proves the estimate wrong, however small it looked.
+  const overflowed = contextWindow > 0 && actualInput > contextWindow;
+  if (!(heuristic >= MIN_CALIBRATION_TOKENS) && !overflowed) return undefined;
   return Math.min(
     MAX_TOKEN_FACTOR,
     Math.max(DEFAULT_TOKEN_FACTOR, actualInput / heuristic),
@@ -118,7 +121,8 @@ export function measuredTokenFactor(
 // Tool schemas are in the reported usage but not always in the heuristic; on a
 // request this large they are a small share instead of the measured ratio.
 const MIN_CALIBRATION_TOKENS = 50_000;
-const MAX_TOKEN_FACTOR = 4;
+// Random CJK text measures about 7.7x the heuristic on o200k.
+const MAX_TOKEN_FACTOR = 8;
 
 /** Estimate projected context with Pi's heuristic and the effective system state. */
 export function estimateContextTokens(messages: AgentMessage[]): number {

@@ -1,0 +1,16 @@
+{
+  "scenario": "undercount",
+  "model": "openai/gpt-6-luna",
+  "window": 32000,
+  "blocks": 10,
+  "out": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/independent-fold-recovery/live/undercount-02",
+  "ledger": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+  "dryRun": false,
+  "startedAt": "2026-10-25T06:13:13.945Z",
+  "sourceCommit": "34f29a016dc6d28b8ac36edc5d4e14adca27fbc0",
+  "dirtyPaths": [
+    "M scripts/fold-acceptance/fixture.ts",
+    " M scripts/fold-acceptance/run.test.ts",
+    " M scripts/fold-acceptance/run.ts"
+  ]
+}

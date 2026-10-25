@@ -325,8 +325,10 @@ cancellation take precedence. When the request a recovery produced still cannot
 fit (estimates can undercount dense code), recovery runs again, up to three
 times per request, as long as each attempt starts from less context than the
 previous one. Progress is measured before calibration, so a token factor learned
-from the overflow does not read as growth. Once the recovered request generates,
-a later overflow in the same run is a new request and recovers again. Only when
+from the overflow does not read as growth. Once the recovered request generates
+within the operating window, a later overflow in the same run is a new request
+and recovers again; a reply whose reported input exceeded the window still
+counts as part of the same recovery. Only when
 no attempt can reduce context is the request refused before dispatch with
 `Request stopped before generation: estimated input <n> tokens leaves fewer than 1024 output tokens plus 4096 headroom`;
 nothing is withheld and the original history is kept.
@@ -603,10 +605,12 @@ Cache behavior on the bridge:
   inspect important reports and pin durable facts.
 - **Budgets are estimates.** Planning and execution share an admission policy.
   Estimated text is priced at the ratio the current model reported for its last
-  request of at least 50k estimated tokens (never below Pi's 3.5 characters per
-  token, at most 4x the four-char heuristic), because dense code and JSON cost far more on some tokenizers. The
-  first fold right after a model switch, before that model has answered once,
-  still uses the default. Provider errors still need recovery or an explicit
+  request of at least 50k estimated tokens, or for any smaller request whose
+  reported input exceeded the operating window (never below Pi's 3.5 characters
+  per token, at most 8x the four-char heuristic), because dense code, JSON and
+  CJK text cost far more on some tokenizers. Pressure compaction keeps its
+  configured tail in these calibrated tokens. The first fold right after a model
+  switch, before that model has answered once, still uses the default. Provider errors still need recovery or an explicit
   failure.
 - **Some folds cannot reduce context.** Retained prefixes, full child handoffs,
   protected continuity and unanswered input can already consume the budget.

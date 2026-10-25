@@ -1,0 +1,108 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~116k tokens) does not fit the 96k operating window and no fold could relieve it (no anchors on the active branch): older work was compacted, context ~116k -> ~26k tokens. The newest ~21k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "00a3b814",
+        "anchor": "compacted",
+        "before": 115539,
+        "after": 25683,
+        "target": 72000,
+        "aboveTarget": false,
+        "keptTokens": 20909,
+        "strategy": "chunked",
+        "calls": 3,
+        "openUserRequests": 0
+      },
+      "id": "e7a1df1a",
+      "parentId": "a8a657c5",
+      "timestamp": "2026-10-25T06:08:59.914Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "d4aaef8d",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 25390,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 25415,
+        "cost": {
+          "input": 0.002539,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0025515
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "3318421b",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 302,
+        "output": 18,
+        "cacheRead": 25216,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 25536,
+        "cost": {
+          "input": 0.000030200000000000002,
+          "output": 0.000009,
+          "cacheRead": 0.00025216,
+          "cacheWrite": 0,
+          "total": 0.00029136000000000006
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "bdb16197",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 362,
+        "output": 100,
+        "cacheRead": 25344,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 25806,
+        "cost": {
+          "input": 0.000036200000000000006,
+          "output": 0.000049999999999999996,
+          "cacheRead": 0.00025344,
+          "cacheWrite": 0,
+          "total": 0.00033964
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "8ba63040",
+      "stopReason": "stop",
+      "usage": {
+        "input": 300,
+        "output": 57,
+        "cacheRead": 25600,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 25957,
+        "cost": {
+          "input": 0.000030000000000000004,
+          "output": 0.000028499999999999998,
+          "cacheRead": 0.000256,
+          "cacheWrite": 0,
+          "total": 0.0003145
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED — Remaining work: compare the archived audit with the next supplied change. No such change or archived audit artifact is available in the supplied material, so the comparison remains open. No files were changed, and nothing was deployed or deleted."
+    }
+  ]
+}
