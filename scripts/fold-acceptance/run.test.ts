@@ -20,6 +20,7 @@ import {
   parseOptions,
   runAcceptance,
   verifyAutomaticContinuation,
+  verifyRepeatedRecovery,
 } from "./run.ts";
 import {
   createBudgetedTransport,
@@ -192,7 +193,7 @@ it("automatic dry run records the opt-in policy and finalization fixture without
     assert.equal(fixture.request, AUTOMATIC_REQUEST);
     assert.ok(fixture.corpus.join("").length > 16000);
     const sm = SessionManager.create(root, join(root, "sessions"));
-    seedCorpus(sm, fixture.corpus, true);
+    seedCorpus(sm, fixture.corpus, { completedReview: true });
     const initialTokens = estimateAdmissionTokens(sm);
     assert.ok(initialTokens > AUTOMATIC_CONFIG.auto_navigate.rewind_at_tokens);
     assert.ok(initialTokens > 4000);
@@ -454,6 +455,40 @@ it("routes an openai selector to the native Responses endpoint, refuses other ho
     globalThis.fetch = oldFetch;
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+it("repeated-recovery acceptance needs two successful recoveries and a final request that fits", () => {
+  const sm = SessionManager.inMemory();
+  const recovered = (status: string) =>
+    sm.appendCustomMessageEntry("navigate-tree-rewind", "receipt", true, {
+      status,
+      origin: "recovery",
+    });
+  sm.appendMessage({ role: "user", content: "request", timestamp: 1 });
+  recovered("done");
+  const answer = (input: number) =>
+    sm.appendMessage({
+      ...fauxAssistantMessage("ACCEPTANCE-CONTINUED"),
+      usage: {
+        input,
+        output: 1,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: input + 1,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    });
+  answer(1000);
+  const check = () =>
+    verifyRepeatedRecovery(sm.getBranch(), sm.getEntries(), 32000, 2);
+  assert.throws(check, /at least 2 recoveries \(saw 1\)/);
+  recovered("done");
+  answer(40000);
+  assert.throws(check, /fit the operating window/);
+  answer(1000);
+  check();
+  recovered("failed");
+  assert.throws(check, /refused or fail/);
 });
 
 it("rejects malformed scenarios and unsafe fixture sizes before execution", () => {
