@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { it } from "node:test";
+import { it } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 

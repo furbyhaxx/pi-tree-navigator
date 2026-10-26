@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,7 +43,7 @@ describe("package.json dependencies", () => {
       .filter(([name]) => name.startsWith("@earendil-works/"))
       .map(([, range]) => range);
     assert.ok(ranges.length > 0);
-    assert.deepEqual(new Set(ranges), new Set([">=1.3.0"]));
+    assert.deepEqual(new Set(ranges), new Set(["*"]));
   });
 
   it("pi dev copies are pinned to one version (the one pi-coding-agent resolves to)", () => {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "bun:test";
 import type { ClassifierContext } from "@earendil-works/pi-ai";
 import { RETIREMENT_YES } from "../../extensions/navigate-tree/retirement-check.ts";
 import type { Billing, RouteTable } from "./billing.ts";

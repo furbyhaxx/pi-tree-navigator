@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { beforeEach, test } from "bun:test";
 import { clampMaxTokensToContext } from "@earendil-works/pi-ai/api/simple-options";
 import {
   AgentSession,
@@ -11,6 +11,9 @@ import {
   installHandoffProjection,
   invalidateStaleUsage,
 } from "./handoff-projection.ts";
+
+// Bun shares one process across test files; extension tests leave the patch installed.
+beforeEach(() => installHandoffProjection()());
 
 const usage = {
   input: 100000,

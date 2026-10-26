@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
+import type { FetchFn } from "../fetch.ts";
 import {
   createBilling,
   loadRouteTable,
@@ -33,7 +34,7 @@ interface Seen {
 /** A fake OpenRouter that answers each request from `responses` in order. */
 function fakeApi(responses: Array<() => Response | Promise<Response>>) {
   const seen: Seen[] = [];
-  const fetch: typeof globalThis.fetch = async (input, init) => {
+  const fetch: FetchFn = async (input, init) => {
     const headers = new Headers(init?.headers);
     seen.push({
       url: String(input),
@@ -49,7 +50,7 @@ function fakeApi(responses: Array<() => Response | Promise<Response>>) {
 const json = (status: number, body: unknown) => () =>
   new Response(JSON.stringify(body), { status });
 
-function billingFor(fetch: typeof globalThis.fetch, delays = [1, 2, 4]) {
+function billingFor(fetch: FetchFn, delays = [1, 2, 4]) {
   const slept: number[] = [];
   const billing = createBilling({
     getApiKey: async () => KEY,

@@ -6,7 +6,7 @@ import * as assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "bun:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   entryIndex,
@@ -58,7 +58,7 @@ let sourcePath: string;
 let planPath: string;
 let unfinishedPath: string;
 
-before(async () => {
+beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(), "clone-views-"));
   const header = {
     type: "session",
@@ -160,7 +160,7 @@ before(async () => {
     }),
   );
 });
-after(() => rm(directory, { recursive: true, force: true }));
+afterAll(() => rm(directory, { recursive: true, force: true }));
 
 const jsonLike = /[{}]|"sourceSha256"|"previewToken"/;
 const assertFits = (lines: readonly string[], width: number) => {

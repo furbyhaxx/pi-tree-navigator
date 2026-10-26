@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { scoreObservation, summarizeScores } from "./scoring.ts";
 import type { EvalObservation, PreparedCase } from "./types.ts";
 

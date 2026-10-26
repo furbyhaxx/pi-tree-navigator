@@ -9,8 +9,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, before, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeAll, beforeEach, describe, it } from "bun:test";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { FetchFn } from "../fetch.ts";
 import { decisionsCandidate, planRequest } from "./adapters.ts";
 import { loadRouteTable, ROUTE_PRICES_URL, worstCaseUsd } from "./billing.ts";
 import { prepareCase } from "./prepare.ts";
@@ -78,7 +79,7 @@ const CASES: EvalCase[] = [
 let directory = "";
 let registry: ModelRegistry;
 
-before(async () => {
+beforeAll(async () => {
   const runtimeDir = mkdtempSync(join(tmpdir(), "run-test-runtime-"));
   const runtime = await ModelRuntime.create({
     authPath: join(runtimeDir, "auth.json"),
@@ -147,7 +148,7 @@ const decisionResponse = (
 /** The whole network: the provider endpoints, billing lookups and key usage. */
 function environment(world: World = {}) {
   const requests = { systemone: 0, chat: 0, generation: 0, key: 0, other: 0 };
-  const fetch: typeof globalThis.fetch = async (input, init) => {
+  const fetch: FetchFn = async (input, init) => {
     const url = String(input);
     const body = String(init?.body ?? "");
     if (url.endsWith("/systemone")) {

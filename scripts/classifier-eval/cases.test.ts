@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { heuristicClassifier } from "../../extensions/navigate-tree/continuity-capture.ts";
 import { CASE_LANGUAGES, CASES } from "./cases.ts";
 import { prepareCase } from "./prepare.ts";

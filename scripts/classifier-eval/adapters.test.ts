@@ -3,8 +3,9 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "bun:test";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { FetchFn } from "../fetch.ts";
 import {
   type AnswerOptions,
   answer,
@@ -78,7 +79,7 @@ const milestone = prepareCase(milestoneCase);
 let directory = "";
 let registry: ModelRegistry;
 
-before(async () => {
+beforeAll(async () => {
   directory = mkdtempSync(join(tmpdir(), "adapters-test-"));
   const runtime = await ModelRuntime.create({
     authPath: join(directory, "auth.json"),
@@ -90,7 +91,7 @@ before(async () => {
   registry = new ModelRegistry(runtime);
 });
 
-after(() => rmSync(directory, { recursive: true, force: true }));
+afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
 const jev = () => {
   const model = registry.getModelOfType(
@@ -120,7 +121,7 @@ interface Sent {
 /** Records each request and answers with `reply`; nothing leaves the process. */
 function fakeFetch(reply: () => Response) {
   const sent: Sent[] = [];
-  const fetch: typeof globalThis.fetch = async (input, init) => {
+  const fetch: FetchFn = async (input, init) => {
     sent.push({
       url: String(input),
       body: String(init?.body),
@@ -133,7 +134,7 @@ function fakeFetch(reply: () => Response) {
 }
 
 const options = (
-  fetch: typeof globalThis.fetch,
+  fetch: FetchFn,
   extra: Partial<AnswerOptions> = {},
 ): AnswerOptions => ({
   registry,
@@ -318,7 +319,7 @@ describe("decisions adapter", () => {
 
   it("settles an aborted request as dispatched without a status", async () => {
     const controller = new AbortController();
-    const fetch: typeof globalThis.fetch = async () => {
+    const fetch: FetchFn = async () => {
       controller.abort();
       throw new Error("aborted");
     };

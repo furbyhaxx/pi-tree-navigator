@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import {
   inspectRetrospectiveSession,
   readSessionSnapshot,
@@ -144,7 +144,7 @@ test("orphan results cannot borrow completion from another branch", async () => 
   );
 });
 
-test("30k completed-history rows inspect inside a 256 MiB isolated heap", async (t) => {
+test("30k completed-history rows inspect inside a 256 MiB isolated heap", async () => {
   const rows: Row[] = [];
   let parentId: string | null = null;
   for (let i = 0; i < 10_000; i++) {
@@ -173,6 +173,6 @@ test("30k completed-history rows inspect inside a 256 MiB isolated heap", async 
       { encoding: "utf8" },
     );
     assert.equal(child.status, 0, child.stderr);
-    t.diagnostic(child.stdout.trim());
+    console.info(child.stdout.trim());
   });
 });

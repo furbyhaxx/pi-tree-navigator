@@ -9,7 +9,7 @@
  */
 
 import * as assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import { LABEL_PREFIX, TOOL_NAME } from "./helpers.ts";
 import {
   buildNoAnchorText,

@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { it } from "node:test";
+import { it } from "bun:test";
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 import { buildHeuristicPlan, buildProposalRecords } from "./proposal-source.ts";
 import {

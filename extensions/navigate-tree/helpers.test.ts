@@ -8,7 +8,7 @@
  */
 
 import * as assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import { FOLD_REQUEST_RE } from "./continuity-capture.ts";
 import {
   BRANCH_LABEL_PREFIX,

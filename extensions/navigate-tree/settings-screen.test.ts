@@ -19,7 +19,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { after, describe, it } from "node:test";
+import { afterAll, describe, it } from "bun:test";
 import {
   CONFIG_DIR_NAME,
   type ExtensionCommandContext,
@@ -93,7 +93,7 @@ const at = (row: number, ...keys: string[]): Script =>
 const edit = (row: number): Script => at(row, ENTER);
 
 const roots: string[] = [];
-after(() => {
+afterAll(() => {
   for (const root of roots) {
     clearRuntimeConfig(root);
     rmSync(root, { recursive: true, force: true });

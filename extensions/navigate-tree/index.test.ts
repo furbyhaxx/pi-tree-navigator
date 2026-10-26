@@ -33,7 +33,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import { afterEach, beforeEach, describe, it, jest } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
 import {
   type AssistantMessage,
@@ -57,6 +57,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { asFetch } from "../../scripts/fetch.ts";
 import {
   START_ANCHOR_DEFAULT_TURNS,
   START_ANCHOR_MAX_TURNS,
@@ -8933,20 +8934,20 @@ describe("rewind-driven compaction (#101)", () => {
           apiKey: "offline-test-only",
           signal: aborter.signal,
           maxRetries: 0,
-          fetch: async () => {
+          fetch: asFetch(async () => {
             requests++;
             throw new Error("transport must not run");
-          },
+          }),
         },
       ).result();
       assert.equal(response.stopReason, "aborted");
       assert.equal(requests, 0);
       const originalFetch = globalThis.fetch;
       try {
-        globalThis.fetch = async () => {
+        globalThis.fetch = asFetch(async () => {
           requests++;
           throw new Error("transport must not run");
-        };
+        });
         await streamGoogle(
           {
             api: "google-generative-ai",
@@ -12085,12 +12086,12 @@ describe("continuity capture", () => {
               continuity: { intentClassifier: "typesafe/jev-latest" },
             }),
           );
-          mock.timers.enable({ apis: ["setTimeout"] });
+          jest.useFakeTimers();
           try {
             const pending = turn(f, RULE);
             await new Promise((resolve) => setImmediate(resolve));
             await runSessionStart(f.pi, f.ctx, fixture, "reload");
-            mock.timers.tick(15_000);
+            jest.advanceTimersByTime(15_000);
             await pending;
             assert.deepEqual(
               f.ctx.notifyCalls,
@@ -12103,7 +12104,7 @@ describe("continuity capture", () => {
               "new configuration still uses the classifier",
             );
           } finally {
-            mock.timers.reset();
+            jest.useRealTimers();
             cleanupConfigFixture(fixture);
           }
         },
@@ -12132,14 +12133,14 @@ describe("continuity capture", () => {
         { intentClassifier: { kind: { model: "typesafe/jev-latest" } } },
         async (f) => {
           (f.ctx as { modelRegistry?: unknown }).modelRegistry = registry;
-          mock.timers.enable({ apis: ["setTimeout"] });
+          jest.useFakeTimers();
           try {
             const pending = turn(f, RULE);
             await new Promise((resolve) => setImmediate(resolve));
-            mock.timers.tick(15_000);
+            jest.advanceTimersByTime(15_000);
             await pending;
           } finally {
-            mock.timers.reset();
+            jest.useRealTimers();
           }
           assert.equal(calls.length, 1);
           assert.equal(rulesOf(f.sm).length, 1, "the heuristic pass caught it");
@@ -12990,7 +12991,7 @@ describe("independent folds through the engine host", () => {
           name === "start" ? "parent" : `${name}-folded`,
       });
       const start = prices.find((price) => price.name === "start");
-      assert.ok(start?.valid, start?.reason);
+      assert.ok(start?.valid, start?.reason ?? "");
       if (!start?.valid) return;
       const leafId = f.sm.getLeafId();
       assert.ok(leafId);

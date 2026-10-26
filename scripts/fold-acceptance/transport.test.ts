@@ -6,8 +6,9 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import type { ModelCost } from "@earendil-works/pi-ai";
+import type { FetchFn } from "../fetch.ts";
 import { DECISION_MAX_OUTPUT_TOKENS } from "../classifier-eval/adapters.ts";
 import {
   type Billing,
@@ -143,7 +144,7 @@ interface Harness {
 
 async function withTransport(
   limitUsd: number,
-  fetch: typeof globalThis.fetch,
+  fetch: FetchFn,
   use: (ctx: Harness) => Promise<void>,
   billing: Billing = acceptanceBilling(),
 ): Promise<void> {
@@ -151,7 +152,7 @@ async function withTransport(
   const ledger = BudgetLedger.open(join(dir, "budget.jsonl"), limitUsd);
   const calls: Seen[] = [];
   const records: TransportRecord[] = [];
-  const wrapped: typeof globalThis.fetch = async (input, init) => {
+  const wrapped: FetchFn = async (input, init) => {
     calls.push({
       input,
       init,

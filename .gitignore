@@ -1,6 +1,1 @@
 node_modules/
-
-# bun — no longer used; we standardized on node + pnpm for local dev and CI.
-bun.lock
-
-# pnpm lockfile IS committed for reproducibility.

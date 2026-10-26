@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "bun:test";
 import { fileURLToPath } from "node:url";
 import {
   type ExtensionAPI,

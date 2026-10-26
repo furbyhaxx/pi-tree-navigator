@@ -36,6 +36,7 @@ import type {
   Model,
 } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { FetchFn } from "../fetch.ts";
 import {
   buildIntentClassifierContext,
   createModelClassifier,
@@ -135,7 +136,7 @@ export interface MeterOptions {
   ledger: Pick<BudgetLedger, "reserve" | "settle">;
   billing: Billing;
   table: RouteTable;
-  fetch: typeof globalThis.fetch;
+  fetch: FetchFn;
   /** Prefix of every reservation id. */
   sessionId: string;
   /** This run's own ceiling on reserved plus settled USD. */
@@ -765,7 +766,7 @@ export interface Deps {
   loadBenchmark(dirs: readonly string[]): Promise<EvalObservation[]>;
   createRegistry(storePath: string, offline: boolean): Promise<BaseRegistry>;
   loadRoutePrices(): RouteTable;
-  fetch: typeof globalThis.fetch;
+  fetch: FetchFn;
   git(): { sha: string; dirty: boolean };
   sleep(ms: number): Promise<void>;
   stdout(text: string): void;

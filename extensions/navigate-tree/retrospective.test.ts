@@ -10,7 +10,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "bun:test";
 import { getCurrentSystemMessage } from "@earendil-works/pi-ai";
 import {
   buildSessionContext,

@@ -20,6 +20,7 @@ import {
   worstCaseUsd,
 } from "../classifier-eval/billing.ts";
 import { BudgetError, type BudgetLedger } from "../classifier-eval/budget.ts";
+import { asFetch, type FetchFn } from "../fetch.ts";
 
 /** OpenAI-compatible chat completions, including image calls on that route. */
 export const OPENROUTER_CHAT_COMPLETIONS_PATH = "/api/v1/chat/completions";
@@ -78,7 +79,7 @@ export interface TransportRecord {
 }
 
 export interface BudgetedTransportOptions {
-  readonly fetch: typeof globalThis.fetch;
+  readonly fetch: FetchFn;
   readonly ledger: BudgetLedger;
   readonly models: ModelPricingTable;
   readonly billing: Billing;
@@ -668,12 +669,15 @@ export function createBudgetedTransport(
     if (recordError !== undefined) throw recordError;
   }
 
-  const fetch: typeof globalThis.fetch = async (input, init) => {
+  const fetch: FetchFn = async (input, init) => {
     if (isMetadata(input, init)) return options.fetch(input, init);
     const signal = callerSignal(input, init);
     let request: Request;
     try {
-      request = new Request(input, init);
+      request =
+        input instanceof Request
+          ? new Request(input, init)
+          : new Request(String(input), init);
     } catch (error) {
       throw publicError(error);
     }
@@ -764,7 +768,7 @@ export function createBudgetedTransport(
   };
 
   return {
-    fetch,
+    fetch: asFetch(fetch),
     drain: () => drainTasks(tasks, failures),
   };
 }

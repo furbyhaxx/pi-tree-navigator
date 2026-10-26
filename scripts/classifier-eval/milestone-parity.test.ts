@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "bun:test";
 import type { PolicyRegistry } from "../../extensions/navigate-tree/intent-policy.ts";
 import {
   evaluateMilestone,
@@ -111,7 +111,7 @@ describe("recorded holdout v3 observations replayed through the production polic
   const mismatches: string[] = [];
   let analysed: Awaited<ReturnType<typeof analyze>>;
 
-  before(async () => {
+  beforeAll(async () => {
     assert.ok(policy);
     const prepared = CASES.filter((c) => c.input.type === "milestone").map(
       prepareCase,

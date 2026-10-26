@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import {
   type AssistantMessage,
   createAssistantMessageEventStream,
@@ -306,7 +306,7 @@ describe("production preflight recovery", () => {
   it("folds an oversized request in the same run and preserves it", async () => {
     await withSession("recover", async ({ sm, prompt, calls }) => {
       const rejected = await prompt(REQUEST);
-      assert.equal(rejected, undefined, rejected);
+      assert.equal(rejected, undefined, String(rejected));
       const main = calls.filter((call) => !call.side && !call.aborted);
       const side = calls.filter((call) => call.side);
       assert.equal(
@@ -364,7 +364,7 @@ describe("production preflight recovery", () => {
   it("recovers again when the run overflows a second time after the recovered request generated", async () => {
     await withSession("regrow", async ({ sm, prompt, calls }) => {
       const rejected = await prompt(REQUEST);
-      assert.equal(rejected, undefined, rejected);
+      assert.equal(rejected, undefined, String(rejected));
       const recoveries = sm
         .getEntries()
         .flatMap((entry) =>

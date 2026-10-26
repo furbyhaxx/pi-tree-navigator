@@ -33,6 +33,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import type { ClassifierApi, ClassifierModel } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { FetchFn } from "../fetch.ts";
 import {
   type AnswerOptions,
   answer,
@@ -103,7 +104,7 @@ export interface Deps {
     offline: boolean;
   }): Promise<RunRegistry>;
   loadRoutePrices(): RouteTable;
-  fetch: typeof globalThis.fetch;
+  fetch: FetchFn;
   git(): { sha: string; dirty: boolean };
   stdout(text: string): void;
   stderr(text: string): void;
@@ -653,7 +654,7 @@ interface Execution {
   ledger: BudgetLedger;
   billing: Billing;
   registry: EvalRegistry;
-  fetch: typeof globalThis.fetch;
+  fetch: FetchFn;
   timeoutMs: number;
   concurrency: number;
   signal: AbortSignal;

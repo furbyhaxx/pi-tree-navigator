@@ -10,15 +10,22 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
+import { afterEach, test } from "bun:test";
 import {
   discoverDescendantSessions,
   planDescendantCopies,
 } from "./descendant-sessions.ts";
 
-async function fixture(t: { after(fn: () => Promise<void>): void }) {
+const directories: string[] = [];
+afterEach(() =>
+  Promise.all(
+    directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })),
+  ),
+);
+
+async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "descendants-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+  directories.push(directory);
   const sessions = join(directory, "sessions");
   const a = join(sessions, "--a--");
   const b = join(sessions, "--b--");
@@ -48,8 +55,8 @@ async function fixture(t: { after(fn: () => Promise<void>): void }) {
   return { directory, a, b, body, put, root };
 }
 
-test("discovers a two-level path-linked family and plans immutable body copies", async (t) => {
-  const f = await fixture(t);
+test("discovers a two-level path-linked family and plans immutable body copies", async () => {
+  const f = await fixture();
   const alias = join(f.a, "alias.jsonl");
   await symlink(f.root, alias);
   const child = join(f.b, "child.jsonl");
@@ -95,8 +102,8 @@ test("discovers a two-level path-linked family and plans immutable body copies",
   assert.equal((await discoverDescendantSessions(f.root, f.a)).length, 0);
 });
 
-test("rejects selected invalid versions, malformed headers, duplicate IDs and cycles", async (t) => {
-  const f = await fixture(t);
+test("rejects selected invalid versions, malformed headers, duplicate IDs and cycles", async () => {
+  const f = await fixture();
   const child = join(f.a, "child.jsonl");
   await f.put(child, "child", f.root, { version: 99 });
   await assert.rejects(discoverDescendantSessions(f.root), /header\/version/);

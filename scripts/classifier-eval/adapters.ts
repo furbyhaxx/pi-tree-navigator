@@ -19,6 +19,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { heuristicClassifier } from "../../extensions/navigate-tree/continuity-capture.ts";
+import { asFetch, type FetchFn } from "../fetch.ts";
 import {
   type CallEvidence,
   maxPriceOf,
@@ -112,7 +113,7 @@ export interface AnswerOptions {
   repetition: number;
   timeoutMs: number;
   signal?: AbortSignal;
-  fetch?: typeof globalThis.fetch;
+  fetch?: FetchFn;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -348,7 +349,7 @@ export function parseResponseBody(text: string): Captured {
  * request, and no response header, is kept.
  */
 export function createRecorder(
-  base: typeof globalThis.fetch,
+  base: FetchFn,
   maxBodyBytes: number,
 ) {
   let attempts = 0;
@@ -356,7 +357,7 @@ export function createRecorder(
   let httpStatus: number | undefined;
   let captured: Captured = {};
   let pending: Promise<void> = Promise.resolve();
-  const recordingFetch: typeof globalThis.fetch = async (input, init) => {
+  const recordingFetch: FetchFn = async (input, init) => {
     const body = init?.body;
     if (typeof body !== "string")
       throw new Error("refused an unmeasured request body");
@@ -383,7 +384,7 @@ export function createRecorder(
     return response;
   };
   return {
-    fetch: recordingFetch,
+    fetch: asFetch(recordingFetch),
     async finish() {
       let timer: NodeJS.Timeout | undefined;
       await Promise.race([

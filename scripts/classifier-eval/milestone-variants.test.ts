@@ -3,8 +3,9 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "bun:test";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { FetchFn } from "../fetch.ts";
 import {
   buildMilestoneClassifierContext,
   type MilestoneRecord,
@@ -85,7 +86,7 @@ const milestoneCase = (structure?: MilestoneStructure): EvalCase => ({
 let directory = "";
 let registry: ModelRegistry;
 
-before(async () => {
+beforeAll(async () => {
   directory = mkdtempSync(join(tmpdir(), "variants-test-"));
   const runtime = await ModelRuntime.create({
     authPath: join(directory, "auth.json"),
@@ -97,7 +98,7 @@ before(async () => {
   registry = new ModelRegistry(runtime);
 });
 
-after(() => rmSync(directory, { recursive: true, force: true }));
+afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
 const jev = () => {
   const model = registry.getModelOfType(
@@ -122,7 +123,7 @@ const luna = () => {
     : candidate;
 };
 
-const options = (fetch: typeof globalThis.fetch): AnswerOptions => ({
+const options = (fetch: FetchFn): AnswerOptions => ({
   registry,
   repetition: 0,
   timeoutMs: 5_000,
@@ -546,7 +547,7 @@ describe("generated structure", () => {
       goals: ["export command", "docs"],
       anchors: [{ name: "export done", afterRecordId: "a2" }],
     });
-    const fetch: typeof globalThis.fetch = async (_input, init) => {
+    const fetch: FetchFn = async (_input, init) => {
       sent.push(String(init?.body));
       const chunk = (extra: object) =>
         `data: ${JSON.stringify({ id: "gen-struct-1", ...extra })}\n\n`;

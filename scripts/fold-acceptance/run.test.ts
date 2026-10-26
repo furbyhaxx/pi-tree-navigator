@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { it } from "node:test";
+import { it } from "bun:test";
 import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { estimateAdmissionTokens } from "../../extensions/navigate-tree/index.ts";
 import { BudgetLedger } from "../classifier-eval/budget.ts";
+import { asFetch } from "../fetch.ts";
 import { AUTOMATIC_CONFIG, AUTOMATIC_REQUEST, seedCorpus } from "./fixture.ts";
 import {
   interceptRuntime,
@@ -63,10 +64,10 @@ it("dry run writes only synthetic evidence without opening a ledger or contactin
   const root = mkdtempSync(join(tmpdir(), "fold-runner-test-"));
   const oldFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = async () => {
+  globalThis.fetch = asFetch(async () => {
     calls++;
     throw new Error("no network allowed");
-  };
+  });
   try {
     const ledger = join(root, "budget.jsonl"),
       out = join(root, "evidence");
@@ -167,9 +168,9 @@ it("runs the production manual fold and subsequent main turn through an isolated
 it("automatic dry run records the opt-in policy and finalization fixture without runtime or network", async () => {
   const root = mkdtempSync(join(tmpdir(), "fold-auto-dry-"));
   const oldFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
+  globalThis.fetch = asFetch(async () => {
     throw new Error("no network allowed");
-  };
+  });
   try {
     const options = parseOptions([
       "--scenario",
@@ -226,9 +227,9 @@ it("intercepts chat and Decisions runtime calls with the same fetch and zero ret
     });
     const seen: unknown[] = [];
     const calls: Parameters<Parameters<typeof interceptRuntime>[2]>[0][] = [];
-    const fetch: typeof globalThis.fetch = async () => {
+    const fetch = asFetch(async () => {
       throw new Error("must not dispatch");
-    };
+    });
     const stream = createAssistantMessageEventStream();
     runtime.streamSimple = (_model, _context, options) => {
       seen.push(options);
@@ -429,10 +430,10 @@ it("routes an openai selector to the native Responses endpoint, refuses other ho
 
   const oldFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = async () => {
+  globalThis.fetch = asFetch(async () => {
     calls++;
     throw new Error("no network allowed");
-  };
+  });
   try {
     const out = join(root, "dry");
     const options = parseOptions([

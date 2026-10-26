@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { dirname, join } from "node:path";
-import { test } from "node:test";
+import { test } from "bun:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import {

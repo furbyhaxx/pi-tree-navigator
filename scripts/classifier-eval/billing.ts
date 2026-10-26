@@ -9,6 +9,7 @@
 
 import { readFileSync } from "node:fs";
 import type { ModelCost } from "@earendil-works/pi-ai";
+import type { FetchFn } from "../fetch.ts";
 import type { CostSource } from "./types.ts";
 
 /** Bytes added to the request body before pricing it, for provider-side framing. */
@@ -72,7 +73,7 @@ export interface Billing {
 export interface BillingOptions {
   /** Resolves the OpenRouter key at call time; the key is never stored or logged. */
   getApiKey: () => Promise<string | undefined>;
-  fetch?: typeof globalThis.fetch;
+  fetch?: FetchFn;
   baseUrl?: string;
   delaysMs?: readonly number[];
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;

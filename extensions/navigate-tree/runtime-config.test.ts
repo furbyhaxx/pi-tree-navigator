@@ -1,7 +1,7 @@
 /** Tests for the in-memory runtime config store. Node test runner. */
 
 import * as assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, it } from "bun:test";
 import {
   clearRuntimeConfig,
   readRuntimeConfig,

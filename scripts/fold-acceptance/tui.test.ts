@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { it } from "node:test";
+import { it } from "bun:test";
+import { asFetch } from "../fetch.ts";
 import { launchTui, parseTuiOptions } from "./tui.ts";
 
 it("validates a native TUI plan without runtime, network, auth, ledger or terminal calls", async () => {
@@ -10,10 +11,10 @@ it("validates a native TUI plan without runtime, network, auth, ledger or termin
   const previousFetch = globalThis.fetch;
   let requests = 0;
   let launches = 0;
-  globalThis.fetch = async () => {
+  globalThis.fetch = asFetch(async () => {
     requests++;
     throw new Error("Network is forbidden in this test");
-  };
+  });
   try {
     const out = join(root, "evidence");
     const ledger = join(root, "shared-ledger.jsonl");

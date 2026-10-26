@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "bun:test";
 import {
   type ExtensionAPI,
   type ExtensionCommandContext,
@@ -595,7 +595,7 @@ describe("/anchor screens", () => {
     const row = test.rendered[0].find((line) =>
       line.includes("Current briefing & cont"),
     );
-    assert.ok(row?.includes("2 rules · rev 1"), row);
+    assert.ok(row?.includes("2 rules · rev 1"), row ?? "");
     assert.ok(!row?.includes("not available yet"));
     assert.ok(test.rendered[1][0].startsWith("─ Anchor/Current "));
     assert.ok(test.rendered[1][0].includes("rev 1 · 2 rules"));
