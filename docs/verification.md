@@ -17,7 +17,7 @@ node scripts/pi-upstream-probe.mjs
 ```
 
 The npm scripts also support `pnpm test`, `pnpm run lint` and `pnpm run typecheck` when
-pnpm is available. Do not change the package version or changelog outside a release.
+pnpm is available. Do not change the package version outside a release.
 Run focused tests during implementation, then the combined gate before delivery.
 
 Tests must protect behavior, not obsolete implementation details. Historical in-band
