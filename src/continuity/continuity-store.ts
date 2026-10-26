@@ -81,20 +81,20 @@ export function userEntryIndexOf(
 }
 
 function parseOpsData(data: unknown): ContinuityOpsData {
-	if (!isRecord(data) || !Array.isArray(data.ops)) {
+	if (!isRecord(data) || !Array.isArray(data["ops"])) {
 		throw new Error("expected { ops: [...] }");
 	}
-	if (data.watermark !== undefined && typeof data.watermark !== "string") {
+	if (data["watermark"] !== undefined && typeof data["watermark"] !== "string") {
 		throw new Error("watermark must be a string");
 	}
-	for (const stored of data.ops as unknown[]) {
+	for (const stored of data["ops"] as unknown[]) {
 		if (
 			!isRecord(stored) ||
-			!isRecord(stored.op) ||
-			typeof stored.op.op !== "string" ||
-			!isRecord(stored.ctx) ||
-			!ITEM_ORIGINS.includes(stored.ctx.origin as ItemOrigin) ||
-			(stored.ctx.entryId !== undefined && typeof stored.ctx.entryId !== "string")
+			!isRecord(stored["op"]) ||
+			typeof stored["op"]["op"] !== "string" ||
+			!isRecord(stored["ctx"]) ||
+			!ITEM_ORIGINS.includes(stored["ctx"]["origin"] as ItemOrigin) ||
+			(stored["ctx"]["entryId"] !== undefined && typeof stored["ctx"]["entryId"] !== "string")
 		) {
 			throw new Error("malformed op");
 		}
@@ -184,8 +184,8 @@ function userText(content: unknown): string {
 	if (!Array.isArray(content)) return "";
 	return content
 		.flatMap((block: unknown) =>
-			isRecord(block) && block.type === "text" && typeof block.text === "string"
-				? [block.text]
+			isRecord(block) && block["type"] === "text" && typeof block["text"] === "string"
+				? [block["text"]]
 				: [],
 		)
 		.join(" ");

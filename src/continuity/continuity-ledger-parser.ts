@@ -83,14 +83,14 @@ function readCount(value: unknown, path: string, min: number): number {
 function readFilePointer(value: unknown, path: string, code: ParseCode): FilePointer {
 	const raw = readRecord(value, path, code, ["path", "lines", "sha256", "why"]);
 	const file: FilePointer = {
-		path: readString(raw.path, `${path}.path`, code),
-		...(raw.lines !== undefined && {
-			lines: readString(raw.lines, `${path}.lines`, code),
+		path: readString(raw["path"], `${path}.path`, code),
+		...(raw["lines"] !== undefined && {
+			lines: readString(raw["lines"], `${path}.lines`, code),
 		}),
-		...(raw.sha256 !== undefined && {
-			sha256: readString(raw.sha256, `${path}.sha256`, code),
+		...(raw["sha256"] !== undefined && {
+			sha256: readString(raw["sha256"], `${path}.sha256`, code),
 		}),
-		why: readString(raw.why, `${path}.why`, code),
+		why: readString(raw["why"], `${path}.why`, code),
 	};
 	if (file.lines !== undefined && !LINES_RE.test(file.lines)) {
 		throw new ContinuityError(code, `${path}.lines: expected N or N-M`);
@@ -104,18 +104,18 @@ function readFilePointer(value: unknown, path: string, code: ParseCode): FilePoi
 function parseNewItem(value: unknown, path: string, code: ParseCode): NewItem {
 	const raw = readRecord(value, path, code, ["kind", "text", "quote", "scopeAnchor", "file"]);
 	return {
-		kind: readOneOf(raw.kind, ITEM_KINDS, `${path}.kind`, code),
-		...(raw.text !== undefined && {
-			text: readString(raw.text, `${path}.text`, code),
+		kind: readOneOf(raw["kind"], ITEM_KINDS, `${path}.kind`, code),
+		...(raw["text"] !== undefined && {
+			text: readString(raw["text"], `${path}.text`, code),
 		}),
-		...(raw.quote !== undefined && {
-			quote: readString(raw.quote, `${path}.quote`, code),
+		...(raw["quote"] !== undefined && {
+			quote: readString(raw["quote"], `${path}.quote`, code),
 		}),
-		...(raw.scopeAnchor !== undefined && {
-			scopeAnchor: readString(raw.scopeAnchor, `${path}.scopeAnchor`, code),
+		...(raw["scopeAnchor"] !== undefined && {
+			scopeAnchor: readString(raw["scopeAnchor"], `${path}.scopeAnchor`, code),
 		}),
-		...(raw.file !== undefined && {
-			file: readFilePointer(raw.file, `${path}.file`, code),
+		...(raw["file"] !== undefined && {
+			file: readFilePointer(raw["file"], `${path}.file`, code),
 		}),
 	};
 }
@@ -140,29 +140,30 @@ function parseItem(value: unknown, path: string, ledgerRev: number, nextId: numb
 		"createdRev",
 		"updatedRev",
 	]);
-	const id = readString(raw.id, `${path}.id`, code);
-	const kind = readOneOf(raw.kind, ITEM_KINDS, `${path}.kind`, code);
+	const id = readString(raw["id"], `${path}.id`, code);
+	const kind = readOneOf(raw["kind"], ITEM_KINDS, `${path}.kind`, code);
 	if (!ID_RE.test(id) || id[0] !== ID_PREFIX[kind]) {
 		fail(`id ${id} does not match kind ${kind}`);
 	}
 	if (Number(id.slice(1)) >= nextId) fail(`id ${id} is at or beyond nextId`);
-	const text = readString(raw.text, `${path}.text`, code);
-	const status = readOneOf(raw.status, ITEM_STATUSES, `${path}.status`, code);
-	const src = readRecord(raw.source, `${path}.source`, code, ["entryId", "origin"]);
+	const text = readString(raw["text"], `${path}.text`, code);
+	const status = readOneOf(raw["status"], ITEM_STATUSES, `${path}.status`, code);
+	const src = readRecord(raw["source"], `${path}.source`, code, ["entryId", "origin"]);
 	const source: ItemSource = {
-		...(src.entryId !== undefined && {
-			entryId: readString(src.entryId, `${path}.source.entryId`, code),
+		...(src["entryId"] !== undefined && {
+			entryId: readString(src["entryId"], `${path}.source.entryId`, code),
 		}),
-		origin: readOneOf(src.origin, ITEM_ORIGINS, `${path}.source.origin`, code),
+		origin: readOneOf(src["origin"], ITEM_ORIGINS, `${path}.source.origin`, code),
 	};
-	const quote = raw.quote === undefined ? undefined : readString(raw.quote, `${path}.quote`, code);
+	const quote =
+		raw["quote"] === undefined ? undefined : readString(raw["quote"], `${path}.quote`, code);
 	if (quote !== undefined && quote.length > MAX_QUOTE_CHARS) {
 		fail("quote exceeds the cap");
 	}
 	const scopeAnchor =
-		raw.scopeAnchor === undefined
+		raw["scopeAnchor"] === undefined
 			? undefined
-			: readString(raw.scopeAnchor, `${path}.scopeAnchor`, code);
+			: readString(raw["scopeAnchor"], `${path}.scopeAnchor`, code);
 	if (kind === "steering" && scopeAnchor === undefined) {
 		fail("steering requires scopeAnchor");
 	}
@@ -172,7 +173,8 @@ function parseItem(value: unknown, path: string, ledgerRev: number, nextId: numb
 		}
 		if (!isValidName(scopeAnchor)) fail("scopeAnchor is not an anchor name");
 	}
-	const file = raw.file === undefined ? undefined : readFilePointer(raw.file, `${path}.file`, code);
+	const file =
+		raw["file"] === undefined ? undefined : readFilePointer(raw["file"], `${path}.file`, code);
 	if ((kind === "file") !== (file !== undefined)) {
 		fail("file pointer is required for, and only for, file items");
 	}
@@ -189,21 +191,21 @@ function parseItem(value: unknown, path: string, ledgerRev: number, nextId: numb
 		fail("only goals can be completed");
 	}
 	const supersedes =
-		raw.supersedes === undefined
+		raw["supersedes"] === undefined
 			? undefined
-			: readStringList(raw.supersedes, `${path}.supersedes`, code);
+			: readStringList(raw["supersedes"], `${path}.supersedes`, code);
 	const supersededBy =
-		raw.supersededBy === undefined
+		raw["supersededBy"] === undefined
 			? undefined
-			: readString(raw.supersededBy, `${path}.supersededBy`, code);
+			: readString(raw["supersededBy"], `${path}.supersededBy`, code);
 	if ((status === "superseded") !== (supersededBy !== undefined)) {
 		fail("supersededBy is required for, and only for, superseded items");
 	}
-	if (raw.pinned !== undefined && raw.pinned !== true) {
+	if (raw["pinned"] !== undefined && raw["pinned"] !== true) {
 		fail("pinned must be true when present");
 	}
-	const createdRev = readCount(raw.createdRev, `${path}.createdRev`, 1);
-	const updatedRev = readCount(raw.updatedRev, `${path}.updatedRev`, 1);
+	const createdRev = readCount(raw["createdRev"], `${path}.createdRev`, 1);
+	const updatedRev = readCount(raw["updatedRev"], `${path}.updatedRev`, 1);
 	if (createdRev > updatedRev || updatedRev > ledgerRev) {
 		fail("revisions must satisfy createdRev <= updatedRev <= rev");
 	}
@@ -218,7 +220,7 @@ function parseItem(value: unknown, path: string, ledgerRev: number, nextId: numb
 		...(file !== undefined && { file }),
 		...(supersedes !== undefined && { supersedes }),
 		...(supersededBy !== undefined && { supersededBy }),
-		...(raw.pinned === true && { pinned: true as const }),
+		...(raw["pinned"] === true && { pinned: true as const }),
 		createdRev,
 		updatedRev,
 	};
@@ -262,8 +264,8 @@ export function parseDelta(value: unknown): ContinuityDelta {
 	const ratified = list("ratified");
 	const superseded = list("superseded");
 	return {
-		...(raw.completed !== undefined && {
-			completed: readStringList(raw.completed, "delta.completed", code),
+		...(raw["completed"] !== undefined && {
+			completed: readStringList(raw["completed"], "delta.completed", code),
 		}),
 		...(ratified && {
 			ratified: ratified.map((entry, i) => parseNewItem(entry, `delta.ratified[${i}]`, code)),
@@ -273,16 +275,16 @@ export function parseDelta(value: unknown): ContinuityDelta {
 				const path = `delta.superseded[${i}]`;
 				const item = readRecord(entry, path, code, ["ids", "with", "citedEntryId"]);
 				return {
-					ids: readStringList(item.ids, `${path}.ids`, code),
-					with: parseNewItem(item.with, `${path}.with`, code),
-					...(item.citedEntryId !== undefined && {
-						citedEntryId: readString(item.citedEntryId, `${path}.citedEntryId`, code),
+					ids: readStringList(item["ids"], `${path}.ids`, code),
+					with: parseNewItem(item["with"], `${path}.with`, code),
+					...(item["citedEntryId"] !== undefined && {
+						citedEntryId: readString(item["citedEntryId"], `${path}.citedEntryId`, code),
 					}),
 				};
 			}),
 		}),
-		...(raw.expiredSteering !== undefined && {
-			expiredSteering: readStringList(raw.expiredSteering, "delta.expiredSteering", code),
+		...(raw["expiredSteering"] !== undefined && {
+			expiredSteering: readStringList(raw["expiredSteering"], "delta.expiredSteering", code),
 		}),
 	};
 }
@@ -293,25 +295,25 @@ export function parseLedger(value: unknown): Ledger {
 	if (!isRecord(value)) {
 		throw new ContinuityError(code, "ledger: expected an object");
 	}
-	if (value.version !== LEDGER_VERSION) {
+	if (value["version"] !== LEDGER_VERSION) {
 		throw new ContinuityError(
 			"unsupported_version",
-			`ledger: unsupported version ${JSON.stringify(value.version)}`,
+			`ledger: unsupported version ${JSON.stringify(value["version"])}`,
 		);
 	}
 	const raw = readRecord(value, "ledger", code, ["version", "rev", "nextId", "items"]);
-	const rev = readCount(raw.rev, "ledger.rev", 0);
-	const nextId = readCount(raw.nextId, "ledger.nextId", 1);
-	if (!Array.isArray(raw.items)) {
+	const rev = readCount(raw["rev"], "ledger.rev", 0);
+	const nextId = readCount(raw["nextId"], "ledger.nextId", 1);
+	if (!Array.isArray(raw["items"])) {
 		throw new ContinuityError(code, "ledger.items: expected an array");
 	}
-	if (raw.items.length > MAX_LEDGER_ITEMS) {
+	if (raw["items"].length > MAX_LEDGER_ITEMS) {
 		throw new ContinuityError(
 			code,
-			`ledger.items: ${raw.items.length} exceeds the cap of ${MAX_LEDGER_ITEMS}`,
+			`ledger.items: ${raw["items"].length} exceeds the cap of ${MAX_LEDGER_ITEMS}`,
 		);
 	}
-	const items = raw.items.map((entry, i) => parseItem(entry, `ledger.items[${i}]`, rev, nextId));
+	const items = raw["items"].map((entry, i) => parseItem(entry, `ledger.items[${i}]`, rev, nextId));
 	checkLineage(items);
 	return { version: LEDGER_VERSION, rev, nextId, items };
 }

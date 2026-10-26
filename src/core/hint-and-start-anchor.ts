@@ -41,7 +41,7 @@ export function createHintController({ pi, state, piCompaction }: HintDeps) {
 	function writeStartAnchorIfNeeded(sm: SessionManager, completedTurns: number): void {
 		// Kill switch read at write time:
 		// a mid-process change applies without an extension reload.
-		if (process.env.PI_NAVIGATE_TREE_START_ANCHOR === "0") return;
+		if (process.env["PI_NAVIGATE_TREE_START_ANCHOR"] === "0") return;
 		let sessionId: string;
 		try {
 			sessionId = sm.getSessionId();

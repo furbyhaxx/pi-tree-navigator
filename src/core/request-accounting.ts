@@ -78,7 +78,7 @@ export function requestAccounting(sm: SessionManager, messages: AgentMessage[]) 
  */
 export const tokenCalibration = new Map<
 	string,
-	{ modelKey: string; factor?: number; pending?: number }
+	{ modelKey: string; factor?: number | undefined; pending?: number }
 >();
 
 export function tokenFactorOf(sm: { getSessionId(): string }): number {

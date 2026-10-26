@@ -142,8 +142,8 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 
 function parseCaptureField(block: Record<string, unknown>): ContinuityLayer["capture"] {
 	if (!("capture" in block)) return { kind: "absent" };
-	return typeof block.capture === "boolean"
-		? { kind: "ok", value: block.capture }
+	return typeof block["capture"] === "boolean"
+		? { kind: "ok", value: block["capture"] }
 		: { kind: "invalid" };
 }
 
@@ -152,7 +152,7 @@ function parseIntentClassifierField(
 ): ContinuityLayer["intentClassifier"] {
 	const hasSnake = "intent_classifier" in block;
 	if (!hasSnake && !("intentClassifier" in block)) return { kind: "absent" };
-	const value = hasSnake ? block.intent_classifier : block.intentClassifier;
+	const value = hasSnake ? block["intent_classifier"] : block["intentClassifier"];
 	if (value === null || value === false) return { kind: "ok", value: null };
 	if (isPlainObject(value)) {
 		const checked = parseIntentPolicyObject(value);
@@ -177,7 +177,7 @@ export function parseConsolidationField(
 	record: Record<string, unknown>,
 ): Pick<ParsedLayer, "consolidation"> {
 	if (!("consolidation" in record)) return {};
-	const block = record.consolidation;
+	const block = record["consolidation"];
 	const object = isPlainObject(block);
 	const read = <T>(
 		snake: string,
@@ -215,7 +215,7 @@ export function parseContinuityField(
 	record: Record<string, unknown>,
 ): Pick<ParsedLayer, "continuity"> {
 	if (!("continuity" in record)) return {};
-	const block = record.continuity;
+	const block = record["continuity"];
 	if (!isPlainObject(block)) {
 		return {
 			continuity: {
@@ -241,7 +241,7 @@ export function parseProposalField(record: Record<string, unknown>): Pick<Parsed
 		return {
 			proposal: {
 				kind: "ok",
-				value: parseProposalOptions(hasSnake ? record.tree_proposal : record.treeProposal),
+				value: parseProposalOptions(hasSnake ? record["tree_proposal"] : record["treeProposal"]),
 			},
 		};
 	} catch (error) {
@@ -263,7 +263,9 @@ export function parseAutoNavigateField(
 		return {
 			autoNavigate: {
 				kind: "ok",
-				value: parseAutoNavigatePartial(hasSnake ? record.auto_navigate : record.autoNavigate),
+				value: parseAutoNavigatePartial(
+					hasSnake ? record["auto_navigate"] : record["autoNavigate"],
+				),
 			},
 		};
 	} catch (error) {

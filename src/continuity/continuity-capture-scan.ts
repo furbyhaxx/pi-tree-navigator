@@ -107,31 +107,31 @@ export function askUserAnswers(entry: SessionEntry): AskAnswer[] {
 	const details: unknown = entry.message.details;
 	if (toolName !== "ask_user" || isError || !isRecord(details)) return [];
 	if (
-		details.cancelled !== false ||
-		details.error !== undefined ||
-		details.mode !== "submit" ||
-		!Array.isArray(details.questions) ||
-		!isRecord(details.answers)
+		details["cancelled"] !== false ||
+		details["error"] !== undefined ||
+		details["mode"] !== "submit" ||
+		!Array.isArray(details["questions"]) ||
+		!isRecord(details["answers"])
 	) {
 		return [];
 	}
 	const answers: AskAnswer[] = [];
-	for (const question of details.questions) {
-		if (!isRecord(question) || typeof question.id !== "string") continue;
-		const answer = details.answers[question.id];
-		if (!isRecord(answer) || !Array.isArray(answer.labels)) continue;
-		const labels = answer.labels
+	for (const question of details["questions"]) {
+		if (!isRecord(question) || typeof question["id"] !== "string") continue;
+		const answer = details["answers"][question["id"]];
+		if (!isRecord(answer) || !Array.isArray(answer["labels"])) continue;
+		const labels = answer["labels"]
 			.map(nonBlank)
 			.filter((label): label is string => label !== undefined);
 		if (labels.length === 0) continue;
 		const chosen = labels.join(", ");
-		const note = nonBlank(answer.note);
+		const note = nonBlank(answer["note"]);
 		const answerText = capText(
 			oneLine(note ? `${chosen} (note: ${note})` : chosen),
 			ASK_ANSWER_MAX_CHARS,
 		);
-		const prompt = nonBlank(question.prompt) ?? nonBlank(question.label);
-		const questionText = oneLine(prompt ?? question.id);
+		const prompt = nonBlank(question["prompt"]) ?? nonBlank(question["label"]);
+		const questionText = oneLine(prompt ?? question["id"]);
 		answers.push({
 			entryId: entry.id,
 			question: questionText,
@@ -247,7 +247,7 @@ export function userOp(
 		kind: target,
 		text,
 		quote: text,
-		...(target === "steering" && { scopeAnchor: anchor }),
+		...(target === "steering" && anchor !== undefined && { scopeAnchor: anchor }),
 	};
 	return {
 		op:

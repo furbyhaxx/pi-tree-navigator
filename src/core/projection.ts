@@ -132,7 +132,8 @@ export function buildContextMessages(
 export function findLabeledEntry(sm: SessionManager, fullLabel: string): string | null {
 	const path = sm.getBranch();
 	for (let i = path.length - 1; i >= 0; i--) {
-		if (sm.getLabel(path[i].id) === fullLabel) return path[i].id;
+		const entry = path[i];
+		if (entry !== undefined && sm.getLabel(entry.id) === fullLabel) return entry.id;
 	}
 	return null;
 }

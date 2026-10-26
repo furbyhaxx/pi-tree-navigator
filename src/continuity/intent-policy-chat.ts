@@ -71,20 +71,20 @@ export function parseChatAnswers(text: string, questions: ChoiceKeys): Record<st
 	} catch {
 		return {};
 	}
-	const raw = isRecord(parsed) ? parsed.answers : undefined;
+	const raw = isRecord(parsed) ? parsed["answers"] : undefined;
 	const answers: Record<string, StageAnswer> = {};
 	if (!isRecord(raw)) return answers;
 	for (const [id, keys] of Object.entries(questions)) {
 		const entry = raw[id];
 		if (
 			isRecord(entry) &&
-			typeof entry.choice === "string" &&
-			keys.includes(entry.choice) &&
-			typeof entry.confidence === "number" &&
-			entry.confidence >= 0 &&
-			entry.confidence <= 1
+			typeof entry["choice"] === "string" &&
+			keys.includes(entry["choice"]) &&
+			typeof entry["confidence"] === "number" &&
+			entry["confidence"] >= 0 &&
+			entry["confidence"] <= 1
 		) {
-			answers[id] = { choice: entry.choice, confidence: entry.confidence };
+			answers[id] = { choice: entry["choice"], confidence: entry["confidence"] };
 		}
 	}
 	return answers;

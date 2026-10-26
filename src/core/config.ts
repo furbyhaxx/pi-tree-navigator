@@ -119,7 +119,7 @@ function parseModelOverrides(
 	if (!hasCamel && !hasSnake) {
 		return { modelHints, modelOverridesProblems: problems };
 	}
-	const overrides = hasSnake ? record.model_overrides : record.modelOverrides;
+	const overrides = hasSnake ? record["model_overrides"] : record["modelOverrides"];
 	if (!isPlainObject(overrides)) {
 		problems.notObject = true;
 		return { modelHints, modelOverridesProblems: problems };
@@ -132,7 +132,7 @@ function parseModelOverrides(
 		const hint = parseHintField(entry);
 		if (hint.kind !== "absent") modelHints.set(key, hint);
 		if ("auto_navigate" in entry || "autoNavigate" in entry) {
-			const rawAuto = "auto_navigate" in entry ? entry.auto_navigate : entry.autoNavigate;
+			const rawAuto = "auto_navigate" in entry ? entry["auto_navigate"] : entry["autoNavigate"];
 			try {
 				modelAutoNavigate.set(key, {
 					kind: "ok",
@@ -161,7 +161,7 @@ function parseHintField(record: Record<string, unknown>): HintField {
 	if (!hasSnake && !("rewindHintReserveTokens" in record)) {
 		return { kind: "absent" };
 	}
-	const value = hasSnake ? record.rewind_hint_reserve_tokens : record.rewindHintReserveTokens;
+	const value = hasSnake ? record["rewind_hint_reserve_tokens"] : record["rewindHintReserveTokens"];
 	if (value === null || value === false) return { kind: "disabled" };
 	if (typeof value === "string") {
 		const trimmed = value.trim();
@@ -180,7 +180,7 @@ function parseStartAnchorField(record: Record<string, unknown>): StartAnchorFiel
 	if (!hasSnake && !("anchorStartAfterTurns" in record)) {
 		return { kind: "absent" };
 	}
-	const value = hasSnake ? record.anchor_start_after_turns : record.anchorStartAfterTurns;
+	const value = hasSnake ? record["anchor_start_after_turns"] : record["anchorStartAfterTurns"];
 	if (typeof value === "string") {
 		const trimmed = value.trim();
 		// Digits only, mirroring the hint's string tolerance. There are no
@@ -195,7 +195,7 @@ function parseStartAnchorField(record: Record<string, unknown>): StartAnchorFiel
 function parseParentHandoffModeField(record: Record<string, unknown>): ParentHandoffModeField {
 	const hasSnake = "parent_handoff_mode" in record;
 	if (!hasSnake && !("parentHandoffMode" in record)) return { kind: "absent" };
-	const value = hasSnake ? record.parent_handoff_mode : record.parentHandoffMode;
+	const value = hasSnake ? record["parent_handoff_mode"] : record["parentHandoffMode"];
 	return value === "full" || value === "synthesized" || value === "digest"
 		? { kind: "ok", value }
 		: { kind: "invalid" };

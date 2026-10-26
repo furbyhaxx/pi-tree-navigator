@@ -157,7 +157,7 @@ export interface OpContext {
 	 * Position of a user-authored entry on the active branch, or undefined when the
 	 * entry is not a user message. Used to verify supersession citations.
 	 */
-	readonly userEntryIndex?: (entryId: string) => number | undefined;
+	readonly userEntryIndex?: ((entryId: string) => number | undefined) | undefined;
 }
 
 export type OpEffect =

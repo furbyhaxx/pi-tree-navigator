@@ -114,7 +114,7 @@ export type Answers = Record<string, StageAnswer> | undefined;
 
 // `undefined` is an abstention: low confidence, or no usable kind answer.
 export function acceptedKind(answers: Answers, minConfidence: number): IntentKind | undefined {
-	const kind = answers?.kind;
+	const kind = answers?.["kind"];
 	return kind !== undefined && kind.confidence >= minConfidence && isIntentKind(kind.choice)
 		? kind.choice
 		: undefined;
@@ -126,7 +126,7 @@ export function acceptedContradiction(
 	items: IntentInput["activeItems"],
 	minConfidence: number,
 ): string | undefined {
-	const contradicts = answers?.contradicts;
+	const contradicts = answers?.["contradicts"];
 	return contradicts !== undefined &&
 		contradicts.confidence >= minConfidence &&
 		(contradicts.choice === NO_CONTRADICTION ||

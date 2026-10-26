@@ -36,22 +36,22 @@ const count = (value: unknown): number =>
 /** The one-line row of a historical summary request. */
 export function legacySummaryRequestRow(details: unknown): string {
 	const d = (details ?? {}) as Record<string, unknown>;
-	const before = count(d.contextBefore);
-	const target = count(d.tokensAtTarget);
-	const window = count(d.contextWindow);
+	const before = count(d["contextBefore"]);
+	const target = count(d["tokensAtTarget"]);
+	const window = count(d["contextWindow"]);
 	const delta =
 		window > 0
 			? `context ${formatPct1(before, window)} → ~${formatPct1(target, window)} of ${formatWindow(window)}`
 			: `tokens ${before} → ~${target}`;
-	return `${rowPrefix(d.rewindTo, d.newLabel)} · summary requested · ${delta}`;
+	return `${rowPrefix(d["rewindTo"], d["newLabel"])} · summary requested · ${delta}`;
 }
 
 /** The one-line row of a historical failed or aborted rewind, or undefined for any other data. */
 export function legacyRewindOutcomeRow(data: unknown): string | undefined {
 	const d = (data ?? {}) as Record<string, unknown>;
-	if (d.status !== "failed" && d.status !== "aborted") return undefined;
-	const middle = d.status === "aborted" ? "aborted" : `failed: ${oneLine(d.reason, "")}`;
-	return `${rowPrefix(d.rewindTo, d.newLabel)} · ${middle} · nothing collapsed`;
+	if (d["status"] !== "failed" && d["status"] !== "aborted") return undefined;
+	const middle = d["status"] === "aborted" ? "aborted" : `failed: ${oneLine(d["reason"], "")}`;
+	return `${rowPrefix(d["rewindTo"], d["newLabel"])} · ${middle} · nothing collapsed`;
 }
 
 /** Tool-result entry id → the text its failed or aborted rewind left, for the active branch. */
@@ -61,11 +61,11 @@ export function collectLegacyRewindOutcomes(branch: readonly SessionEntry[]): Ma
 		if (entry.type !== "custom" || entry.customType !== LEGACY_REWIND_OUTCOME_CUSTOM_TYPE) continue;
 		const data = entry.data as Record<string, unknown> | undefined;
 		if (
-			typeof data?.toolResultEntryId === "string" &&
-			typeof data.text === "string" &&
-			(data.status === "failed" || data.status === "aborted")
+			typeof data?.["toolResultEntryId"] === "string" &&
+			typeof data["text"] === "string" &&
+			(data["status"] === "failed" || data["status"] === "aborted")
 		)
-			out.set(data.toolResultEntryId, data.text);
+			out.set(data["toolResultEntryId"], data["text"]);
 	}
 	return out;
 }

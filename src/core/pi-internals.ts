@@ -78,7 +78,8 @@ export function captureSession(session: AgentSession): void {
 	// across /new and /resume cycles.
 	if (sessionInstances.length > MAX_SESSION_REFS) {
 		for (let i = sessionInstances.length - 1; i >= 0; i--) {
-			if (!sessionInstances[i].deref()) sessionInstances.splice(i, 1);
+			const ref = sessionInstances[i];
+			if (ref !== undefined && !ref.deref()) sessionInstances.splice(i, 1);
 		}
 	}
 }
@@ -89,7 +90,7 @@ export function patchAgentSessionPrototype(): void {
 	// /reloads the value is already there — we don't overwrite, we just read it
 	// back so the new wrapper still calls the original (not a previous wrapper).
 	if (!proto[ORIG_PROMPT_KEY]) {
-		proto[ORIG_PROMPT_KEY] = proto.prompt;
+		proto[ORIG_PROMPT_KEY] = proto["prompt"];
 	}
 	const orig = proto[ORIG_PROMPT_KEY] as (...args: unknown[]) => unknown;
 
@@ -101,7 +102,7 @@ export function patchAgentSessionPrototype(): void {
 		captureSession(this);
 		return orig.apply(this, args);
 	};
-	proto.prompt = patched;
+	proto["prompt"] = patched;
 }
 
 export function findOwningSession(sm: SessionManager): AgentSession | null {
@@ -191,7 +192,7 @@ export function resetPrototype(): void {
 	const proto = AgentSession.prototype as unknown as Record<PropertyKey, unknown>;
 	const orig = proto[ORIG_PROMPT_KEY];
 	if (typeof orig === "function") {
-		proto.prompt = orig;
+		proto["prompt"] = orig;
 		delete proto[ORIG_PROMPT_KEY];
 	}
 	sessionInstances.length = 0;

@@ -146,7 +146,7 @@ function stageOf(
 	checkKeys(where, value, ["model", "instructions", ...extra], problems);
 	const out: IntentStageSetting = {};
 	if ("model" in value) {
-		const model = value.model;
+		const model = value["model"];
 		if (model === null) out.model = null;
 		else if (typeof model === "string" && parseClassifierModel(model.trim()) !== undefined) {
 			out.model = model.trim();
@@ -155,7 +155,7 @@ function stageOf(
 		}
 	}
 	if ("instructions" in value) {
-		const text = value.instructions;
+		const text = value["instructions"];
 		if (
 			typeof text === "string" &&
 			text.trim().length > 0 &&
@@ -210,39 +210,39 @@ export function parseIntentPolicyObject(
 	);
 	const setting: IntentPolicySetting = {};
 	if ("preset" in value) {
-		if (value.preset === RECOMMENDED_INTENT_CLASSIFIER) {
+		if (value["preset"] === RECOMMENDED_INTENT_CLASSIFIER) {
 			setting.preset = RECOMMENDED_INTENT_CLASSIFIER;
 		} else {
 			problems.push(`${root}.preset must be "${RECOMMENDED_INTENT_CLASSIFIER}"`);
 		}
 	}
 	if ("heuristics" in value) {
-		if (typeof value.heuristics === "boolean") {
-			setting.heuristics = value.heuristics;
+		if (typeof value["heuristics"] === "boolean") {
+			setting.heuristics = value["heuristics"];
 		} else {
 			problems.push(`${root}.heuristics must be true or false`);
 		}
 	}
 	if ("minConfidence" in value) {
-		const confidence = value.minConfidence;
+		const confidence = value["minConfidence"];
 		if (typeof confidence === "number" && confidence > 0 && confidence <= 1) {
 			setting.minConfidence = confidence;
 		} else {
 			problems.push(`${root}.minConfidence must be a number above 0 up to 1`);
 		}
 	}
-	const kind = stageOf(`${root}.kind`, value.kind, problems);
+	const kind = stageOf(`${root}.kind`, value["kind"], problems);
 	if (kind) setting.kind = kind;
 	const supersession = stageOf(
 		`${root}.supersession`,
-		value.supersession,
+		value["supersession"],
 		problems,
 		SUPERSESSION_STAGES,
 	);
 	if (supersession) {
 		setting.supersession = {
 			...supersession,
-			...nestedStages(`${root}.supersession`, value.supersession, problems),
+			...nestedStages(`${root}.supersession`, value["supersession"], problems),
 		};
 	}
 	if (problems.length > 0) return { ok: false, problems };

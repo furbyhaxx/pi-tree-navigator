@@ -32,12 +32,14 @@ export function splitContextEstimate(messages: AgentMessage[]): {
 	tail: number;
 } {
 	const anchor = newestUsageIndex(messages);
-	const usage = anchor >= 0 ? validAssistantUsage(messages[anchor]) : undefined;
+	const anchorMessage = messages[anchor];
+	const usage = anchorMessage === undefined ? undefined : validAssistantUsage(anchorMessage);
 	const currentSystem = anchor < 0 ? getCurrentSystemMessage(messages) : undefined;
 	let tail = currentSystem ? estimateTokens(currentSystem) : 0;
 	for (let j = anchor + 1; j < messages.length; j++) {
-		if (anchor < 0 && messages[j].role === "system") continue;
-		tail += estimateTokens(messages[j]);
+		const message = messages[j];
+		if (message === undefined || (anchor < 0 && message.role === "system")) continue;
+		tail += estimateTokens(message);
 	}
 	return {
 		baseline: usage ? calculateContextTokens(usage) : 0,
@@ -48,7 +50,8 @@ export function splitContextEstimate(messages: AgentMessage[]): {
 /** Find the newest valid usage in messages whose stale baselines have been invalidated. */
 export function newestUsageIndex(messages: AgentMessage[]): number {
 	for (let i = messages.length - 1; i >= 0; i--) {
-		if (validAssistantUsage(messages[i])) return i;
+		const message = messages[i];
+		if (message !== undefined && validAssistantUsage(message)) return i;
 	}
 	return -1;
 }
@@ -78,7 +81,8 @@ export function estimateRequestTokens(
 ): number {
 	const converted = convertToLlm(messages);
 	const anchor = newestUsageIndex(converted);
-	const usage = anchor >= 0 ? validAssistantUsage(converted[anchor]) : undefined;
+	const anchorMessage = converted[anchor];
+	const usage = anchorMessage === undefined ? undefined : validAssistantUsage(anchorMessage);
 	const tail = converted
 		.slice(anchor + 1)
 		.reduce((sum, message) => sum + estimateTokens(message), 0);

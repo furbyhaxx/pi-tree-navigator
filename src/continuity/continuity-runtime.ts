@@ -207,6 +207,7 @@ export function createContinuityRuntime({ pi, state }: ContinuityRuntimeDeps) {
 					: branch.length - 1;
 			for (let i = at - 1; i >= 0; i--) {
 				const entry = branch[i];
+				if (entry === undefined) continue;
 				if (
 					entry.type === "message" ||
 					entry.type === "branch_summary" ||

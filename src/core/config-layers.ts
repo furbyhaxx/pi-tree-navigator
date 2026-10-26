@@ -116,8 +116,8 @@ export function configFieldWarnings(
 		);
 	}
 	const autoRoot =
-		(root as Record<string, unknown>).auto_navigate ??
-		(root as Record<string, unknown>).autoNavigate;
+		(root as Record<string, unknown>)["auto_navigate"] ??
+		(root as Record<string, unknown>)["autoNavigate"];
 	if (
 		typeof autoRoot === "object" &&
 		autoRoot !== null &&
