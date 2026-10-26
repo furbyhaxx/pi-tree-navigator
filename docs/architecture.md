@@ -2,7 +2,7 @@
 
 ## Code overview
 
-`extensions/navigate-tree/index.ts` registers the `navigate_tree` tool and owns
+`src/index.ts` registers the `navigate_tree` definition from `src/tool/navigate-tree-tool.ts` and owns
 the shared independent fold host: manual and queued operations, overflow recovery,
 branch creation, agent-context refresh and history-rewrite notifications.
 
