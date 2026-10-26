@@ -9,6 +9,12 @@ import {
 	resetHandoffProjection,
 } from "../../src/fold/handoff-projection.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 test("reset removes every stacked installation of the projection patch", () => {
 	const original = SessionManager.prototype.buildSessionProjection;
 	installHandoffProjection();
@@ -198,8 +204,8 @@ test("retained pre-compaction assistants stay invalid although the projection li
 	const retained = sm.appendMessage(assistant("kept answer", STALE));
 	sm.appendCompaction("summary", kept, STALE);
 	const projected = sm.buildSessionProjection();
-	assert.equal(projected.entries[0].sourceEntry.type, "compaction");
-	assert.equal(projected.entries[2].sourceEntry.id, retained);
+	assert.equal(at(projected.entries, 0).sourceEntry.type, "compaction");
+	assert.equal(at(projected.entries, 2).sourceEntry.id, retained);
 	const stale = compare(sm);
 	assert.ok(stale.raw.local >= STALE);
 	assert.ok(stale.safe.local < 200);
@@ -301,11 +307,11 @@ test("invalidateStaleUsage works on flat entries without sources", () => {
 		},
 	];
 	const [result] = invalidateStaleUsage(flat, model);
+	assert.ok(result);
 	const [old, , kept] = result.messages;
+	assert.ok(old);
 	assert.ok(old.role === "assistant" && old.usage.totalTokens === 0);
 	assert.equal(kept, clean);
-	assert.equal(
-		flat[0].messages[0].role === "assistant" && flat[0].messages[0].usage.totalTokens,
-		100,
-	);
+	const original = at(at(flat, 0).messages, 0);
+	assert.equal(original.role === "assistant" && original.usage.totalTokens, 100);
 });

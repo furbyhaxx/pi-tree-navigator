@@ -149,8 +149,10 @@ describe("fold engine run", () => {
 		assert.equal(outcome.commit.summaryId, "summary-1");
 
 		assert.equal(h.committed.length, 1);
-		assert.equal(h.committed[0].text, extractSummaryText(SUMMARY));
-		assert.equal(h.committed[0].prepared.targetId, "target");
+		const committed = h.committed[0];
+		assert.ok(committed);
+		assert.equal(committed.text, extractSummaryText(SUMMARY));
+		assert.equal(committed.prepared.targetId, "target");
 
 		const parts: string[] = [];
 		const header = /\[big part (\d+)\/(\d+)\] tool:\n/;
@@ -373,7 +375,7 @@ describe("selectFoldTarget", () => {
 	const anchor = (name: string, projectedAfterTokens: number, valid = true, reason?: string) => ({
 		name,
 		valid,
-		reason,
+		...(reason === undefined ? {} : { reason }),
 		projectedAfterTokens,
 	});
 

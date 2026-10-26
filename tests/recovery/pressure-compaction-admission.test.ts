@@ -49,6 +49,12 @@ import {
 	usageOf,
 } from "../support/session-messages.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 installHarnessHooks();
 
 async function autoFixture(
@@ -119,7 +125,7 @@ async function autoTurn(f: Forced, tokens: number, text = "working") {
 }
 
 const newestBoundary = (context: ClassifierContext) => {
-	const question = context.questions.boundary;
+	const question = context.questions["boundary"];
 	assert.ok(question?.type === "choice");
 	const records = (context.state as { records: { id: string }[] }).records;
 	const id = records.at(-1)?.id;
@@ -230,8 +236,8 @@ describe("rewind-driven compaction (#101)", () => {
 			});
 			assert.equal(result.continue, false);
 			const failed = forcedDrafts(result).at(-1);
-			assert.equal(failed?.details.reason, "insufficient request headroom");
-			return Number(failed?.details.inputEstimate);
+			assert.equal(failed?.details["reason"], "insufficient request headroom");
+			return Number(failed?.details["inputEstimate"]);
 		}
 
 		// The reported session: a 372k window, a valid 307,882-token usage
@@ -350,9 +356,9 @@ describe("rewind-driven compaction (#101)", () => {
 					undefined,
 					f.ctx,
 				);
-				assert.equal(listed.details.contextTokens, admission);
+				assert.equal(listed.details["contextTokens"], admission);
 				assert.match(
-					listed.content[0].text,
+					at(listed.content, 0).text,
 					new RegExp(`ctx ${formatPct1(admission, WINDOW_TOKENS)} of 100k`),
 				);
 
@@ -366,8 +372,8 @@ describe("rewind-driven compaction (#101)", () => {
 				// The anchor sits on the measured turn: its footprint is the usage and the mandate.
 				const savable = admission - (95_000 + mandate);
 				assert.ok(
-					command.notifyCalls[0][0].includes(`−${(savable / 1000).toFixed(1)}k savable`),
-					command.notifyCalls[0][0],
+					at(command.notifyCalls, 0)[0].includes(`−${(savable / 1000).toFixed(1)}k savable`),
+					at(command.notifyCalls, 0)[0],
 				);
 
 				const messages = [
@@ -377,7 +383,7 @@ describe("rewind-driven compaction (#101)", () => {
 				assert.equal(await guard(f, messages), true);
 
 				fireTurnEnd(f.pi, f.ctx);
-				const hint = (f.pi.sendMessageCalls[0][0] as { content: string }).content;
+				const hint = (at(f.pi.sendMessageCalls, 0)[0] as { content: string }).content;
 				assert.equal(
 					hint.split("\n")[0],
 					buildRewindHintText(
@@ -427,7 +433,7 @@ describe("rewind-driven compaction (#101)", () => {
 			assert.deepEqual(boundary.entries, [], "Pi rejects the whole boundary");
 			await fireAgentSettled(f.pi, f.ctx, true);
 			assert.equal(f.pi.sendMessageCalls.length, 1);
-			const receipt = f.pi.sendMessageCalls[0][0] as { content: string };
+			const receipt = at(f.pi.sendMessageCalls, 0)[0] as { content: string };
 			assert.match(receipt.content, /Request stopped before generation/);
 			await fireAgentSettled(f.pi, f.ctx, true);
 			assert.equal(f.pi.sendMessageCalls.length, 1);
@@ -480,8 +486,8 @@ describe("rewind-driven compaction (#101)", () => {
 			const { settle } = await runErrorEnd(f, errorOverflow(f.sm).message);
 			assert.equal(settle.continue, false);
 			assert.ok(!settle.entries.some((entry) => entry.type === "context_edit"));
-			assert.equal(forcedDrafts(settle)[0].details.status, "failed");
-			assert.match(forcedDrafts(settle)[0].content, /system prompt alone/);
+			assert.equal(at(forcedDrafts(settle), 0).details["status"], "failed");
+			assert.match(at(forcedDrafts(settle), 0).content, /system prompt alone/);
 		} finally {
 			cleanupConfigFixture(f.fixture);
 		}
@@ -505,7 +511,7 @@ describe("rewind-driven compaction (#101)", () => {
 				assert.equal(result, undefined);
 			}
 			assert.equal(aborter.signal.aborted, false);
-			assert.equal(messages[0].content, "rules");
+			assert.equal(at(messages, 0).content, "rules");
 		} finally {
 			cleanupConfigFixture(f.fixture);
 		}
@@ -557,9 +563,9 @@ describe("rewind-driven compaction (#101)", () => {
 			const boundary = await autoTurn(f, 90_000);
 			assert.equal(boundary.continue, true);
 			const [done] = forcedDrafts(boundary);
-			assert.equal(done?.details.status, "done", JSON.stringify(boundary));
-			assert.equal(done.details.origin, "auto");
-			assert.equal(done.details.rewindTo, "start");
+			assert.equal(done?.details["status"], "done", JSON.stringify(boundary));
+			assert.equal(done.details["origin"], "auto");
+			assert.equal(done.details["rewindTo"], "start");
 			assert.equal(f.questions.length, 0);
 			assert.ok(f.summaries.calls.length > 0);
 			assert.ok(f.sm.getBranch().some((entry) => entry.type === "branch_summary"));
@@ -586,8 +592,8 @@ describe("rewind-driven compaction (#101)", () => {
 			assert.ok(f.summaries.calls.length > 0, "the fold ran");
 			assert.ok(f.sm.getBranch().some((entry) => entry.type === "branch_summary"));
 			const [done] = forcedDrafts(boundary);
-			assert.equal(done?.details.status, "done", JSON.stringify(boundary));
-			assert.equal(done.details.aboveTarget, true);
+			assert.equal(done?.details["status"], "done", JSON.stringify(boundary));
+			assert.equal(done.details["aboveTarget"], true);
 			assert.match(
 				String(done.content),
 				/No anchor lands under the ~1k pressure target .* oldest valid anchor/,
@@ -615,7 +621,7 @@ describe("rewind-driven compaction (#101)", () => {
 				(entry) => entry.customType === "navigate-tree-auto-warning",
 			);
 			assert.equal(warnings.length, 1, JSON.stringify(boundary));
-			assert.match(String(warnings[0].content), /crossed rewind_at_tokens .* but no fold ran/);
+			assert.match(String(at(warnings, 0).content), /crossed rewind_at_tokens .* but no fold ran/);
 			assert.ok(
 				f.ctx.notifyCalls.some(
 					([text, level]) => level === "warning" && text.includes("no fold ran"),
@@ -641,7 +647,7 @@ describe("rewind-driven compaction (#101)", () => {
 			f.sm.appendMessage({ role: "user", content: request, timestamp: 1 });
 			const boundary = await fireTurnEndAll(f.pi, f.ctx, entry.message);
 			const [result] = forcedDrafts(boundary);
-			assert.equal(result?.details.status, "done", JSON.stringify(boundary));
+			assert.equal(result?.details["status"], "done", JSON.stringify(boundary));
 			const branch = f.sm.getBranch();
 			const summaryAt = branch.findIndex((value) => value.type === "branch_summary");
 			assert.ok(summaryAt >= 0);
@@ -691,7 +697,7 @@ describe("rewind-driven compaction (#101)", () => {
 				"a compaction, not a fold",
 			);
 			const projected = f.sm.buildSessionProjection().entries;
-			assert.equal(projected[0].sourceEntry.id, compaction.id);
+			assert.equal(at(projected, 0).sourceEntry.id, compaction.id);
 			assert.ok(
 				projected.some((value) => value.sourceEntry.id === last.userId),
 				"the newest turn stays verbatim",
@@ -714,7 +720,7 @@ describe("rewind-driven compaction (#101)", () => {
 			const summary = f.sm.getBranch().findLast((value) => value.type === "branch_summary");
 			assert.equal(summary?.parentId, compaction.id);
 			assert.equal(
-				f.sm.buildSessionProjection().entries[0].sourceEntry.id,
+				at(f.sm.buildSessionProjection().entries, 0).sourceEntry.id,
 				compaction.id,
 				"the fold keeps the compaction summary in context",
 			);
@@ -1012,7 +1018,7 @@ describe("rewind-driven compaction (#101)", () => {
 				latest.summary.includes("Look at the parser first"),
 				"steering whose anchor is retained stays in the briefing",
 			);
-			assert.equal(f.sm.getLabel(compactions[0].id), "anchor:compacted");
+			assert.equal(f.sm.getLabel(at(compactions, 0).id), "anchor:compacted");
 		} finally {
 			cleanupConfigFixture(f.fixture);
 		}
@@ -1066,8 +1072,8 @@ describe("rewind-driven compaction (#101)", () => {
 			await workTurn(40_000);
 			const boundary = await workTurn(93_000);
 			const [done] = forcedDrafts(boundary);
-			assert.equal(done?.details.status, "done", JSON.stringify(boundary));
-			assert.equal(done.details.rewindTo, "fresh");
+			assert.equal(done?.details["status"], "done", JSON.stringify(boundary));
+			assert.equal(done.details["rewindTo"], "fresh");
 			assert.ok(f.summaries.calls.length > 0);
 			assertNoAutoSteer(f, boundary);
 		} finally {
@@ -1264,9 +1270,9 @@ describe("rewind-driven compaction (#101)", () => {
 				}
 				const boundary = await autoTurn(f, 90_000);
 				const [failed] = forcedDrafts(boundary);
-				assert.equal(failed?.details.status, "failed", JSON.stringify(boundary));
-				assert.equal(failed.details.stage, stage);
-				assert.equal(failed.details.origin, "auto");
+				assert.equal(failed?.details["status"], "failed", JSON.stringify(boundary));
+				assert.equal(failed.details["stage"], stage);
+				assert.equal(failed.details["origin"], "auto");
 				assert.equal(boundary.continue, false);
 				assert.ok(!f.sm.getBranch().some((entry) => entry.type === "branch_summary"));
 				assertNoAutoSteer(f, boundary);
@@ -1349,7 +1355,7 @@ describe("rewind-driven compaction (#101)", () => {
 				(entry) => entry.customType === "navigate-tree-auto-warning",
 			);
 			assert.equal(warnings.length, 1);
-			assert.match(String(warnings[0].content), /offline failure/);
+			assert.match(String(at(warnings, 0).content), /offline failure/);
 			assert.ok(
 				f.ctx.notifyCalls.some(
 					([text, level]) => level === "warning" && text.includes("offline failure"),
@@ -1363,7 +1369,7 @@ describe("rewind-driven compaction (#101)", () => {
 							entry.type === "custom_message" && entry.customType === "navigate-tree-auto-warning",
 					),
 			);
-			assert.ok(String(warnings[0].content).length <= 1502);
+			assert.ok(String(at(warnings, 0).content).length <= 1502);
 			assert.equal(boundary.continue, false);
 			assert.equal(forcedDrafts(boundary).length, 0);
 			assert.equal(f.summaries.calls.length, 0);

@@ -21,6 +21,12 @@ import {
 import { estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
 import navigateTree, { PRESSURE_COMPACTION_CUSTOM_TYPE } from "../../src/index.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 const WINDOW = 32_000;
 const RESERVE = 1_024 + 4_096;
 const REQUEST = "preserve-9f3c2a answer this exact request";
@@ -89,10 +95,10 @@ async function withSession(
 	stopReason: "error" | "length" | "stop" = "error",
 ): Promise<void> {
 	const dir = await mkdtemp(join(tmpdir(), "pi-provider-recovery-"));
-	const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-	const previousOffline = process.env.PI_OFFLINE;
-	process.env.PI_CODING_AGENT_DIR = dir;
-	process.env.PI_OFFLINE = "1";
+	const previousAgentDir = process.env["PI_CODING_AGENT_DIR"];
+	const previousOffline = process.env["PI_OFFLINE"];
+	process.env["PI_CODING_AGENT_DIR"] = dir;
+	process.env["PI_OFFLINE"] = "1";
 	const cwd = join(dir, "work");
 	const api = `mock-api-${mode}`;
 	const faux = createFauxCore({
@@ -314,10 +320,10 @@ async function withSession(
 		} catch {
 			// The temp directory is removed either way.
 		}
-		if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-		if (previousOffline === undefined) delete process.env.PI_OFFLINE;
-		else process.env.PI_OFFLINE = previousOffline;
+		if (previousAgentDir === undefined) delete process.env["PI_CODING_AGENT_DIR"];
+		else process.env["PI_CODING_AGENT_DIR"] = previousAgentDir;
+		if (previousOffline === undefined) delete process.env["PI_OFFLINE"];
+		else process.env["PI_OFFLINE"] = previousOffline;
 		await rm(dir, { recursive: true, force: true });
 	}
 }
@@ -346,16 +352,16 @@ for (const stopReason of ["error", "length", "stop"] as const) {
 					JSON.stringify(calls.map(({ side, tokens }) => ({ side, tokens }))),
 				);
 				assert.ok(side.length > 0 && side.length <= 16);
-				assert.ok(main[0].tokens + RESERVE < WINDOW);
-				assert.ok(main[1].tokens < main[0].tokens);
+				assert.ok(at(main, 0).tokens + RESERVE < WINDOW);
+				assert.ok(at(main, 1).tokens < at(main, 0).tokens);
 				assert.ok(side.some((call) => call.text.includes(EVIDENCE)));
 				assert.ok(side.some((call) => call.text.includes(TOOL_EVIDENCE)));
-				assert.ok(main[0].text.includes(TOOL_EVIDENCE));
-				assert.equal(main[1].text.includes(TOOL_EVIDENCE), false);
-				assert.equal(main[1].text.includes(EVIDENCE), false);
+				assert.ok(at(main, 0).text.includes(TOOL_EVIDENCE));
+				assert.equal(at(main, 1).text.includes(TOOL_EVIDENCE), false);
+				assert.equal(at(main, 1).text.includes(EVIDENCE), false);
 				assert.ok(main.every((call) => call.text.includes(REQUEST)));
 				if (stopReason === "stop") {
-					assert.ok(main[1].text.includes("Successful overflow evidence 8e19"));
+					assert.ok(at(main, 1).text.includes("Successful overflow evidence 8e19"));
 					const evidence = sm
 						.getEntries()
 						.filter(
@@ -471,13 +477,14 @@ for (const stopReason of ["error", "length", "stop"] as const) {
 									entry.customType === "navigate-tree-rewind"),
 						);
 					assert.equal(receipts.length, 1, JSON.stringify(receipts));
-					assert.equal(receipts[0].type, "custom_message");
-					if (receipts[0].type !== "custom_message") return;
-					assert.equal(receipts[0].customType, PRESSURE_COMPACTION_CUSTOM_TYPE);
-					assert.equal((receipts[0].details as { origin?: string }).origin, "recovery");
+					const receipt = at(receipts, 0);
+					assert.equal(receipt.type, "custom_message");
+					if (receipt.type !== "custom_message") return;
+					assert.equal(receipt.customType, PRESSURE_COMPACTION_CUSTOM_TYPE);
+					assert.equal((receipt.details as { origin?: string }).origin, "recovery");
 					if (main.length === 2)
 						assert.ok(
-							main[1].text.includes(REQUEST),
+							at(main, 1).text.includes(REQUEST),
 							"the recovered request still carries the user request",
 						);
 				});

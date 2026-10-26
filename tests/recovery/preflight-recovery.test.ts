@@ -26,6 +26,12 @@ import { Type } from "typebox";
 import { estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
 import navigateTree, { PRESSURE_COMPACTION_CUSTOM_TYPE } from "../../src/index.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 const WINDOW = 32_000;
 const RESERVE = 1_024 + 4_096;
 const REQUEST = "preserve-9f3c2a answer this exact request";
@@ -88,10 +94,10 @@ async function withSession(
 	}) => Promise<void>,
 ): Promise<void> {
 	const dir = await mkdtemp(join(tmpdir(), "pi-preflight-"));
-	const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-	const previousOffline = process.env.PI_OFFLINE;
-	process.env.PI_CODING_AGENT_DIR = dir;
-	process.env.PI_OFFLINE = "1";
+	const previousAgentDir = process.env["PI_CODING_AGENT_DIR"];
+	const previousOffline = process.env["PI_OFFLINE"];
+	process.env["PI_CODING_AGENT_DIR"] = dir;
+	process.env["PI_OFFLINE"] = "1";
 	const cwd = join(dir, "work");
 	const api = `mock-api-${mode}`;
 	const faux = createFauxCore({
@@ -278,10 +284,10 @@ async function withSession(
 		} catch {
 			// The temp directory is removed either way.
 		}
-		if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-		if (previousOffline === undefined) delete process.env.PI_OFFLINE;
-		else process.env.PI_OFFLINE = previousOffline;
+		if (previousAgentDir === undefined) delete process.env["PI_CODING_AGENT_DIR"];
+		else process.env["PI_CODING_AGENT_DIR"] = previousAgentDir;
+		if (previousOffline === undefined) delete process.env["PI_OFFLINE"];
+		else process.env["PI_OFFLINE"] = previousOffline;
 		await rm(dir, { recursive: true, force: true });
 	}
 }
@@ -312,9 +318,9 @@ describe("production preflight recovery", () => {
 				true,
 				"a side call must see the folded evidence",
 			);
-			assert.ok(main[0].tokens + RESERVE <= WINDOW, `main transport ${main[0].tokens}`);
-			assert.equal(main[0].text.includes(EVIDENCE), false);
-			assert.equal(main[0].text.includes(REQUEST), true);
+			assert.ok(at(main, 0).tokens + RESERVE <= WINDOW, `main transport ${at(main, 0).tokens}`);
+			assert.equal(at(main, 0).text.includes(EVIDENCE), false);
+			assert.equal(at(main, 0).text.includes(REQUEST), true);
 			const branch = sm.getBranch();
 			const summaryAt = branch.findIndex((entry) => entry.type === "branch_summary");
 			assert.ok(summaryAt >= 0, "branch_summary was not written");
@@ -541,7 +547,7 @@ describe("production preflight recovery", () => {
 			assert.equal(error, undefined);
 			const main = calls.filter((call) => !call.side && !call.aborted);
 			assert.equal(main.length, 1, JSON.stringify(calls));
-			assert.ok(main[0].tokens + RESERVE <= WINDOW, "the sent request fits");
+			assert.ok(at(main, 0).tokens + RESERVE <= WINDOW, "the sent request fits");
 			assert.ok(
 				calls.some((call) => call.side),
 				"a summary side call ran",
@@ -555,7 +561,7 @@ describe("production preflight recovery", () => {
 						entry.type === "custom_message" && entry.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
 				);
 			assert.equal(receipts.length, 1, JSON.stringify(receipts));
-			const receipt = receipts[0];
+			const receipt = at(receipts, 0);
 			assert.equal(receipt.type, "custom_message");
 			if (receipt.type !== "custom_message") return;
 			assert.equal((receipt.details as { origin?: string }).origin, "recovery");

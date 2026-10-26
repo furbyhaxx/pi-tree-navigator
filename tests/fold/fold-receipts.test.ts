@@ -23,6 +23,12 @@ import {
 	assistantMessage,
 } from "../support/session-messages.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 installHarnessHooks();
 
 describe("rewind: one-time continue nudge after a fold", () => {
@@ -48,7 +54,7 @@ describe("rewind: one-time continue nudge after a fold", () => {
 			message,
 			boundary,
 			nudges: boundary.entries.filter(
-				(d) => d.customType === REWIND_CUSTOM_TYPE && d.details?.status === "continue-nudge",
+				(d) => d.customType === REWIND_CUSTOM_TYPE && d.details?.["status"] === "continue-nudge",
 			),
 		};
 	}
@@ -62,14 +68,15 @@ describe("rewind: one-time continue nudge after a fold", () => {
 
 	it("nudges once, with continue, when the first post-fold turn is text-only and the summary has open work", async () => {
 		const f = await foldedFixture();
+		assert.ok(f.done);
 		const { boundary, nudges } = await turn(f);
 		assert.equal(nudges.length, 1);
 		assert.equal(boundary.continue, true);
-		assert.equal(nudges[0].content, CONTINUE_NUDGE_TEXT);
-		assert.equal(nudges[0].display, true);
-		assert.deepEqual(nudges[0].details, {
+		assert.equal(at(nudges, 0).content, CONTINUE_NUDGE_TEXT);
+		assert.equal(at(nudges, 0).display, true);
+		assert.deepEqual(at(nudges, 0).details, {
 			status: "continue-nudge",
-			summaryId: f.done.message.details.summaryId,
+			summaryId: f.done.message.details["summaryId"],
 		});
 		const last = f.sm.getBranch().at(-1);
 		assert.ok(last && last.type === "custom_message");
@@ -110,7 +117,7 @@ describe("rewind: one-time continue nudge after a fold", () => {
 			"tc-rewind-2",
 			50_000,
 		);
-		const folds = rewindMessages(f.pi).filter((m) => m.message.details.status === "done");
+		const folds = rewindMessages(f.pi).filter((m) => m.message.details["status"] === "done");
 		assert.equal(folds.length, 2);
 		assert.equal((await turn(f)).nudges.length, 1);
 	});
@@ -140,7 +147,10 @@ describe("rewind: one-time continue nudge after a fold", () => {
 		setupRewindable(f.sm, f.pi, { capture: true });
 		f.ctx.modelRegistry = fakeRegistry(() => reply("", "error", "overloaded")).registry;
 		await requestRewind(f);
-		assert.equal(rewindMessages(f.pi).filter((m) => m.message.details.status === "done").length, 0);
+		assert.equal(
+			rewindMessages(f.pi).filter((m) => m.message.details["status"] === "done").length,
+			0,
+		);
 		assert.deepEqual((await turn(f)).nudges, []);
 	});
 
@@ -158,7 +168,7 @@ describe("rewind: one-time continue nudge after a fold", () => {
 			return reply(SUMMARY_TEXT);
 		}).registry;
 		await requestRewind(f);
-		assert.equal(rewindMessages(f.pi).at(-1)?.message.details.reappendedLateMessages, 1);
+		assert.equal(rewindMessages(f.pi).at(-1)?.message.details["reappendedLateMessages"], 1);
 		assert.deepEqual((await turn(f)).nudges, []);
 	});
 
@@ -200,6 +210,7 @@ describe("rewind: one-time continue nudge after a fold", () => {
 
 	it("renders as one line, expanding to the full text; the continuation keeps pi's default box", async () => {
 		const f = await foldedFixture();
+		assert.ok(f.done);
 		const { nudges } = await turn(f);
 		const renderer = f.pi.messageRenderers.get(REWIND_CUSTOM_TYPE) as (
 			...a: unknown[]
@@ -209,9 +220,9 @@ describe("rewind: one-time continue nudge after a fold", () => {
 		const message = {
 			role: "custom",
 			customType: REWIND_CUSTOM_TYPE,
-			content: nudges[0].content,
+			content: at(nudges, 0).content,
 			display: true,
-			details: nudges[0].details,
+			details: at(nudges, 0).details,
 			timestamp: 0,
 		};
 		const row = renderer(message, { expanded: false, outputPad: 1 }, theme);

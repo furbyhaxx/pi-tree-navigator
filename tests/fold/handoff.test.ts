@@ -9,6 +9,12 @@ import {
 	materializeHandoff,
 } from "../../src/fold/handoff.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 const data = (name: string) =>
 	makeHandoff({
 		name,
@@ -61,7 +67,7 @@ SECRET_GRANDCHILD`,
 		];
 		const output = materializeHandoff({ ...data("parent"), mode: "digest" }, [
 			...children,
-			children[0],
+			at(children, 0),
 		]);
 		const lines = output.split("\n").filter((line) => line.startsWith("- "));
 		assert.equal(lines.length, 2);
@@ -69,8 +75,8 @@ SECRET_GRANDCHILD`,
 			lines[0],
 			"- Metadata title · goal: Metadata goal · outcome: Metadata outcome · entry meta",
 		);
-		assert.match(lines[1], /^- Plain phase · goal: Plain goal · outcome: Delivered/);
-		assert.match(lines[1], /… · entry plain$/);
+		assert.match(at(lines, 1), /^- Plain phase · goal: Plain goal · outcome: Delivered/);
+		assert.match(at(lines, 1), /… · entry plain$/);
 		assert.ok(lines.every((line) => line.length <= 300 && !/\p{Cc}/u.test(line)));
 		assert.doesNotMatch(output, /SECRET_|Grandchild/);
 		assert.equal(
