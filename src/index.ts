@@ -78,14 +78,12 @@ import {
 	hashPinnedFile,
 	isFilled,
 	resolveAnchorTarget,
-	suggestFoldLabel,
 } from "./core/anchors.ts";
 import {
 	CONSOLIDATION_DEFAULTS,
 	CONTINUITY_CAPTURE_DEFAULT,
 	loadTreeNavigatorConfig,
 	PARENT_HANDOFF_MODE_DEFAULT,
-	resolveAutoNavigateConfig,
 	resolveRewindHintReserve,
 	START_ANCHOR_DEFAULT_TURNS,
 	TREE_NAVIGATOR_CONFIG_FILENAME,
@@ -146,7 +144,7 @@ import {
 	REWIND_HINT_CUSTOM_TYPE,
 	RewindHintTracker,
 } from "./core/rewind-hint.ts";
-import { clearRuntimeConfig, readRuntimeConfig } from "./core/runtime-config.ts";
+import { clearRuntimeConfig } from "./core/runtime-config.ts";
 import { trySessionWrite } from "./core/session-write.ts";
 import { createConsolidationController } from "./fold/consolidation-runtime.ts";
 import { createFoldAdaptersController } from "./fold/fold-adapters.ts";
@@ -172,11 +170,9 @@ import { installHandoffProjection } from "./fold/handoff-projection.ts";
 import { createIndependentRecoveryController } from "./recovery/independent-recovery.ts";
 import { createPressureCompactionController } from "./recovery/pressure-compaction.ts";
 import { registerAnchorCommand } from "./ui/anchor-command.ts";
-import { createUserOpsWriter } from "./ui/current-screen.ts";
-import { runFoldWithoutUi } from "./ui/fold-plan-screen.ts";
+import { createAnchorCommandDeps } from "./ui/anchor-command-deps.ts";
 import { registerHandoffRenderer } from "./ui/handoff-renderer.ts";
 import { registerHistoryOutline } from "./ui/history-outline.ts";
-import { createSettingsScreenDeps } from "./ui/settings-screen.ts";
 import { renderContinuityOps, renderToolCall, renderToolResult } from "./ui/tool-renderer.ts";
 // Floor on the *apparent* token savings (`beforeTokens − tokensAtTarget`) a
 // `rewind` must clear to execute. Absolute threshold, deliberately NOT
@@ -212,117 +208,18 @@ const ANCHOR_HINT_MAX_LENGTH = 60;
 const foldApis = new WeakMap<ExtensionAPI, FoldApi>();
 
 export default function (pi: ExtensionAPI) {
-	registerAnchorCommand(pi, {
-		settings: {
-			...createSettingsScreenDeps(),
-			async onSaved(ctx) {
-				const sm = ctx.sessionManager;
-				const sessionId = sm.getSessionId();
-				const hasUI = ctx.hasUI;
-				const ui = ctx.ui;
-				const modelKey = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
-				const oldReserve = resolveRewindHintReserve(
-					{
-						rewindHintReserveTokens: state.config.rewindHintReserveTokens,
-						rewindHintModelReserveTokens: state.config.hintByModel,
-					},
-					modelKey,
-				);
-				const oldController = resolveAutoNavigateConfig(
-					{
-						autoNavigate: state.config.autoNavigateBase,
-						autoNavigateByModel: state.config.autoNavigateByModel,
-						proposal: state.config.proposalConfig,
-					},
-					modelKey,
-				);
-				const oldContinuity = state.config.continuity;
-				const loaded = await loadTreeNavigatorConfig({
-					agentDir: getAgentDir(),
-					projectPath: join(ctx.cwd, CONFIG_DIR_NAME, TREE_NAVIGATOR_CONFIG_FILENAME),
-					projectTrusted: ctx.isProjectTrusted(),
-					runtime: readRuntimeConfig(sessionId),
-				});
-				if (sm.getSessionId() !== sessionId) return;
-				applyNavigatorConfig(sessionId, loaded.config);
-				if (oldReserve !== resolveRewindHintReserve(loaded.config, modelKey))
-					state.anchors.hintTracker = new RewindHintTracker();
-				if (
-					JSON.stringify(oldController) !==
-					JSON.stringify(resolveAutoNavigateConfig(loaded.config, modelKey))
-				)
-					state.automatic.autoFoldStateBySession.delete(sessionId);
-				if (
-					oldContinuity.capture !== state.config.continuity.capture ||
-					oldContinuity.intentClassifier !== state.config.continuity.intentClassifier
-				) {
-					state.continuity.classifierTimedOut.delete(sessionId);
-					state.continuity.continuityWarned.delete(sessionId);
-				}
-				if (hasUI) for (const warning of loaded.warnings) ui.notify(warning, "warning");
-			},
-		},
-		listAnchors(ctx) {
-			const sm = ctx.sessionManager as SessionManager;
-			const cw = ctx.model?.contextWindow ?? 0;
-			const totalTokens = estimateAdmissionTokens(sm);
-			return collectActiveAnchors(sm).map(({ name, tokens, beforeCompaction, hint }) => ({
-				name,
-				percent: cw > 0 ? (tokens / cw) * 100 : 0,
-				tokens,
-				savableTokens: Math.max(0, totalTokens - tokens),
-				...(beforeCompaction ? { beforeCompaction } : {}),
-				...(hint ? { afterPreview: hint } : {}),
-				...(LABEL_PREFIX + name === START_ANCHOR_LABEL ? { auto: true } : {}),
-			}));
-		},
-		setAnchor(ctx, name) {
-			const sm = ctx.sessionManager as SessionManager;
-			const sessionId = sm.getSessionId();
-			if (
-				!ctx.isIdle() ||
-				state.folds.queuedFolds.has(sessionId) ||
-				state.folds.runningFolds.has(sessionId)
-			)
-				return {
-					ok: false,
-					reason: "Wait until the agent and any pending fold finish before setting an anchor.",
-				};
-			const target = resolveAnchorTarget(sm, name);
-			if (!target.ok) {
-				const reasons = {
-					"invalid-name": `Anchor names are lowercase kebab-case, at most ${MAX_NAME_LENGTH} characters (e.g. 'impl-start').`,
-					"no-leaf": "No session entries yet — nothing to anchor.",
-					duplicate: `A label '${name}' already exists on the active branch — labels are unique and immutable once written. Pick a fresh name.`,
-				};
-				return { ok: false, reason: reasons[target.problem] };
-			}
-			if (!writeLabel(sm, target.leafId, target.fullLabel)) {
-				return { ok: false, reason: "The anchor label could not be written." };
-			}
-			return { ok: true };
-		},
-		suggestLabel: (ctx, anchor) =>
-			suggestFoldLabel(ctx.sessionManager as SessionManager, anchor.name),
-		minSavingsTokens: MIN_REWIND_SAVINGS_TOKENS,
-		minFocusLength: MIN_SUMMARY_FOCUS_LENGTH,
-		requestFold(ctx, anchorName) {
-			void openManualFold(ctx, anchorName);
-		},
-		openFoldPlan(ctx, preselect) {
-			return openManualFold(ctx, preselect);
-		},
-		foldWithoutUi(ctx, args) {
-			return runFoldWithoutUi(ctx, manualFoldDeps(ctx), args);
-		},
-		contextBadge(ctx) {
-			const cw = ctx.model?.contextWindow ?? 0;
-			const tokens = estimateAdmissionTokens(ctx.sessionManager as SessionManager);
-			return `ctx ${formatPct1(tokens, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}`;
-		},
-		readLedger: (ctx) => readBranchLedger(ctx.sessionManager.getBranch()).ledger,
-		applyUserOps: createUserOpsWriter(pi, () => state.config.continuity.capture),
-	});
+	registerAnchorCommand(
+		pi,
+		createAnchorCommandDeps({
+			pi,
+			getState: () => state,
+			minRewindSavingsTokens: MIN_REWIND_SAVINGS_TOKENS,
+			applyNavigatorConfig,
+			writeLabel,
+			openManualFold: (...args) => openManualFold(...args),
+			manualFoldDeps: (...args) => manualFoldDeps(...args),
+		}),
+	);
 	patchAgentSessionPrototype();
 
 	const state = createNavigatorState();
