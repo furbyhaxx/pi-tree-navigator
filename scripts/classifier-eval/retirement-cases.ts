@@ -13,7 +13,7 @@ import {
 	RETIREMENT_NO,
 	RETIREMENT_QUESTION,
 	RETIREMENT_YES,
-} from "../../extensions/navigate-tree/retirement-check.ts";
+} from "../../src/continuity/retirement-check.ts";
 import { CASES as SOURCE_CASES } from "./cases.ts";
 import type { EvalCase, ExpectedAnswer } from "./types.ts";
 

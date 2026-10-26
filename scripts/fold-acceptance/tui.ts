@@ -111,7 +111,7 @@ export async function launchTui(
 		"--no-prompt-templates",
 		"--no-themes",
 		"-e",
-		join(root, "extensions/navigate-tree/index.ts"),
+		join(root, "src/index.ts"),
 		"-e",
 		join(root, "scripts/fold-acceptance/tui-observer.ts"),
 		"--model",
@@ -149,7 +149,7 @@ export async function launchTui(
 		}).trim(),
 		dirtyPaths: execFileSync(
 			"git",
-			["status", "--porcelain", "--", "extensions", "scripts", "package.json", "tsconfig.json"],
+			["status", "--porcelain", "--", "src", "scripts", "package.json", "tsconfig.json"],
 			{ cwd: root, encoding: "utf8" },
 		)
 			.trim()

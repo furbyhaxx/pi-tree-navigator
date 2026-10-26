@@ -4,7 +4,7 @@ import type {
 	MilestoneRecord,
 	MilestoneStatus,
 	MilestoneStructure,
-} from "../../extensions/navigate-tree/milestone-classifier.ts";
+} from "../../src/auto/milestone-classifier.ts";
 import type { EvalCase, ExpectedAnswer } from "./types.ts";
 
 /** Language of the user-written text in a case; milestone cases use the user's language. */

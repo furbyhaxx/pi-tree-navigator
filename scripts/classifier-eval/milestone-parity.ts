@@ -21,13 +21,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { MilestoneInput } from "../../extensions/navigate-tree/milestone-classifier.ts";
+import type { MilestoneInput } from "../../src/auto/milestone-classifier.ts";
 import {
 	evaluateMilestone,
 	type MilestoneEvaluation,
 	RECOMMENDED_MILESTONE_CLASSIFIER,
 	resolveMilestonePolicy,
-} from "../../extensions/navigate-tree/milestone-policy.ts";
+} from "../../src/auto/milestone-policy.ts";
 import {
 	CHAT_MAX_OUTPUT_TOKENS,
 	chatCandidate,

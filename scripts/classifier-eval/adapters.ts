@@ -18,7 +18,7 @@ import type {
 	Model,
 } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { heuristicClassifier } from "../../extensions/navigate-tree/continuity-capture.ts";
+import { heuristicClassifier } from "../../src/continuity/continuity-capture.ts";
 import { asFetch, type FetchFn } from "../fetch.ts";
 import {
 	type CallEvidence,

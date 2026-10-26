@@ -6,31 +6,28 @@ import {
 	ModelRegistry,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
-import {
-	loadTreeNavigatorConfig,
-	TREE_NAVIGATOR_CONFIG_FILENAME,
-} from "../extensions/navigate-tree/config.ts";
+import { loadTreeNavigatorConfig, TREE_NAVIGATOR_CONFIG_FILENAME } from "../src/core/config.ts";
 import {
 	formatProposalOutline,
 	parseProposalArguments,
 	saveTreeProposal,
 	validateTreeProposal,
-} from "../extensions/navigate-tree/proposal-command.ts";
-import { proposeTree } from "../extensions/navigate-tree/proposal-engine.ts";
+} from "../src/retrospective/proposal-command.ts";
+import { proposeTree } from "../src/retrospective/proposal-engine.ts";
 import {
 	createProposalModelRunner,
 	resolveProposalModel,
-} from "../extensions/navigate-tree/proposal-model.ts";
-import { mergeProposalOptions } from "../extensions/navigate-tree/proposal-options.ts";
+} from "../src/retrospective/proposal-model.ts";
+import { mergeProposalOptions } from "../src/retrospective/proposal-options.ts";
 import {
 	cloneRetrospectiveSession,
 	previewRetrospectiveSession,
-} from "../extensions/navigate-tree/retrospective.ts";
+} from "../src/retrospective/retrospective.ts";
 import {
 	inspectRetrospectiveSession,
 	readSessionSnapshot,
 	validateCompleteToolCalls,
-} from "../extensions/navigate-tree/retrospective-plan.ts";
+} from "../src/retrospective/retrospective-plan.ts";
 
 const SUBCOMMANDS = ["inspect", "propose", "preview", "create"];
 const COMMAND = "node scripts/restructure-session.mjs";

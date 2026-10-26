@@ -27,7 +27,8 @@
 	},
 	"files": {
 		"includes": [
-			"extensions/**/*.ts",
+			"src/**/*.ts",
+			"tests/**/*.ts",
 			"scripts/**/*.ts",
 			"scripts/**/*.mjs",
 			"!**/fixtures",

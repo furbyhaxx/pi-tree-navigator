@@ -23,7 +23,7 @@ import {
 	heuristicClassifier,
 	type IntentInput,
 	type IntentVerdict,
-} from "../../extensions/navigate-tree/continuity-capture.ts";
+} from "../../src/continuity/continuity-capture.ts";
 import { prepareCase } from "./prepare.ts";
 import { scoreObservation, summarizeScores } from "./scoring.ts";
 import type {

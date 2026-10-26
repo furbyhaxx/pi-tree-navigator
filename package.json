@@ -27,8 +27,7 @@
 		"context-management"
 	],
 	"files": [
-		"extensions/**/*.ts",
-		"!extensions/**/*.test.ts",
+		"src",
 		"scripts/restructure-session.mjs",
 		"docs",
 		"CHANGELOG.md",
@@ -37,7 +36,7 @@
 	],
 	"pi": {
 		"extensions": [
-			"./extensions/navigate-tree/index.ts"
+			"./src/index.ts"
 		]
 	},
 	"scripts": {

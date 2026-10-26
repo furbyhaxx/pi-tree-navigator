@@ -1,8 +1,5 @@
 import type { ClassifierContext } from "@earendil-works/pi-ai";
-import type {
-	MilestoneRecord,
-	MilestoneStructure,
-} from "../../extensions/navigate-tree/milestone-classifier.ts";
+import type { MilestoneRecord, MilestoneStructure } from "../../src/auto/milestone-classifier.ts";
 
 /** The independent decisions measured by this benchmark. */
 export type EvalTask =

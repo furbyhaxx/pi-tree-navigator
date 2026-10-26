@@ -46,7 +46,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { getHandoff } from "../extensions/navigate-tree/handoff.ts";
+import { getHandoff } from "../src/fold/handoff.ts";
 
 /** pi's `BRANCH_SUMMARY_PREAMBLE`, prepended to every legacy stored summary. */
 const PREAMBLE =

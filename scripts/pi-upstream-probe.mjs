@@ -472,12 +472,7 @@ try {
 // sources and assert it exists on the package entry the host would load.
 // ---------------------------------------------------------------------------
 
-const EXTENSION_SOURCE_DIR = path.join(
-	path.dirname(fileURLToPath(import.meta.url)),
-	"..",
-	"extensions",
-	"navigate-tree",
-);
+const EXTENSION_SOURCE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "src");
 const IMPORT_SURFACE_PACKAGES = [
 	"@earendil-works/pi-coding-agent",
 	"@earendil-works/pi-agent-core",
@@ -734,8 +729,8 @@ function resolveHostPackageEntry(pkgName) {
 
 let importSurface;
 try {
-	const files = readdirSync(EXTENSION_SOURCE_DIR)
-		.filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+	const files = readdirSync(EXTENSION_SOURCE_DIR, { recursive: true, encoding: "utf8" })
+		.filter((file) => file.endsWith(".ts"))
 		.sort();
 	const used = new Map();
 	const expectedRuntime = new Set();

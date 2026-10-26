@@ -1,7 +1,7 @@
 import type { ClassifierContext } from "@earendil-works/pi-ai";
-import { buildIntentClassifierContext } from "../../extensions/navigate-tree/continuity-capture.ts";
-import { buildMilestoneClassifierContext } from "../../extensions/navigate-tree/milestone-classifier.ts";
-import { buildRetirementCheckContext } from "../../extensions/navigate-tree/retirement-check.ts";
+import { buildMilestoneClassifierContext } from "../../src/auto/milestone-classifier.ts";
+import { buildIntentClassifierContext } from "../../src/continuity/continuity-capture.ts";
+import { buildRetirementCheckContext } from "../../src/continuity/retirement-check.ts";
 import type { EvalCase, EvalQuestion, PreparedCase } from "./types.ts";
 
 /** The choice questions of a request; any other question type is a benchmark error. */

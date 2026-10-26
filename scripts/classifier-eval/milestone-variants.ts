@@ -18,7 +18,7 @@ import {
 	type MilestoneRecord,
 	type MilestoneStructure,
 	NO_BOUNDARY,
-} from "../../extensions/navigate-tree/milestone-classifier.ts";
+} from "../../src/auto/milestone-classifier.ts";
 import {
 	type AdapterResult,
 	type AnswerOptions,

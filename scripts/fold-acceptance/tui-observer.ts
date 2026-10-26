@@ -8,7 +8,7 @@ import {
 	type ModelRuntime,
 	type SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { estimateAdmissionTokens } from "../../extensions/navigate-tree/index.ts";
+import { estimateAdmissionTokens } from "../../src/index.ts";
 import { safeMessage } from "../classifier-eval/adapters.ts";
 import { createBilling, loadRouteTable, ROUTE_PRICES_URL } from "../classifier-eval/billing.ts";
 import { BudgetLedger } from "../classifier-eval/budget.ts";

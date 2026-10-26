@@ -471,9 +471,7 @@ const SCREENS = [
 ];
 
 // The real row builders (TypeScript, pi-tui); absent without node_modules or Node >= 22.18.
-const liveRows = await import("../extensions/navigate-tree/tool-renderer.ts").catch(
-	() => undefined,
-);
+const liveRows = await import("../src/ui/tool-renderer.ts").catch(() => undefined);
 
 const piRoles = {
 	toolTitle: theme.accent,
@@ -554,7 +552,7 @@ function renderLiveRows(width) {
 		{
 			action: "pin",
 			kind: "file",
-			path: "extensions/navigate-tree/tool-renderer.ts",
+			path: "src/ui/tool-renderer.ts",
 			lines: "40-90",
 			why: "row builders",
 		},
@@ -626,9 +624,9 @@ function renderLiveRows(width) {
 
 // The real /anchor current screen: real row builders, real FrameList, a faked host.
 const liveScreen = await Promise.all([
-	import("../extensions/navigate-tree/current-screen.ts"),
-	import("../extensions/navigate-tree/frame.ts"),
-	import("../extensions/navigate-tree/continuity-ledger.ts"),
+	import("../src/ui/current-screen.ts"),
+	import("../src/ui/frame.ts"),
+	import("../src/continuity/continuity-ledger.ts"),
 ]).catch(() => undefined);
 
 function sampleLedger({ applyOps, createLedger }) {
@@ -665,7 +663,7 @@ function sampleLedger({ applyOps, createLedger }) {
 			op: "add",
 			kind: "file",
 			file: {
-				path: "extensions/navigate-tree/frame.ts",
+				path: "src/ui/frame.ts",
 				lines: "180-260",
 				why: "FrameList geometry and hint bar",
 			},

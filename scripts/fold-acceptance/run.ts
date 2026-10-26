@@ -18,14 +18,14 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { RECOMMENDED_MILESTONE_POLICY } from "../../src/auto/milestone-policy.ts";
+import { parseClassifierModel } from "../../src/continuity/intent-policy.ts";
 import navigateTree, {
 	__testHooks,
 	estimateAdmissionTokens,
 	PRESSURE_COMPACTION_CUSTOM_TYPE,
 	REWIND_CUSTOM_TYPE,
-} from "../../extensions/navigate-tree/index.ts";
-import { parseClassifierModel } from "../../extensions/navigate-tree/intent-policy.ts";
-import { RECOMMENDED_MILESTONE_POLICY } from "../../extensions/navigate-tree/milestone-policy.ts";
+} from "../../src/index.ts";
 import { safeMessage } from "../classifier-eval/adapters.ts";
 import {
 	type Billing,
@@ -458,7 +458,7 @@ export async function runAcceptance(
 				"status",
 				"--porcelain",
 				"--",
-				"extensions",
+				"src",
 				"scripts",
 				"README.md",
 				"docs",

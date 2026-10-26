@@ -45,7 +45,7 @@ function jsonLog(file) {
 }
 
 async function buildCorpus() {
-	const files = execFileSync("git", ["ls-files", "extensions", "docs", "README.md"], {
+	const files = execFileSync("git", ["ls-files", "src", "docs", "README.md"], {
 		cwd: root,
 		encoding: "utf8",
 	})
@@ -237,7 +237,7 @@ async function runChild() {
 		agentDir: process.env.PI_CODING_AGENT_DIR,
 		settingsManager: settings,
 		noExtensions: true,
-		additionalExtensionPaths: [path.join(root, "extensions/navigate-tree/index.ts")],
+		additionalExtensionPaths: [path.join(root, "src/index.ts")],
 		extensionFactories: [observer],
 		noSkills: true,
 		noPromptTemplates: true,

@@ -36,11 +36,11 @@ import {
 	DEFAULT_MIN_CONFIDENCE,
 	type IntentInput,
 	type IntentVerdict,
-} from "../../extensions/navigate-tree/continuity-capture.ts";
+} from "../../src/continuity/continuity-capture.ts";
 import {
 	RECOMMENDED_INTENT_CLASSIFIER,
 	resolveStageModels,
-} from "../../extensions/navigate-tree/intent-policy.ts";
+} from "../../src/continuity/intent-policy.ts";
 import type { FetchFn } from "../fetch.ts";
 import { createRecorder, DECISION_MAX_OUTPUT_TOKENS, safeMessage } from "./adapters.ts";
 import { loadRun } from "./analyze.ts";

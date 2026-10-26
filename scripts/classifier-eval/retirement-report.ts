@@ -15,10 +15,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import {
-	RETIREMENT_QUESTION,
-	retirementConfirmed,
-} from "../../extensions/navigate-tree/retirement-check.ts";
+import { RETIREMENT_QUESTION, retirementConfirmed } from "../../src/continuity/retirement-check.ts";
 import { parseObservations } from "./analyze.ts";
 import { prepareCase } from "./prepare.ts";
 import {
