@@ -57,7 +57,7 @@ export function rawOf(root: Root, { path }: { path: readonly KeyName[] }): Raw {
 		if (found === undefined) return { present: false };
 		const value = node[found];
 		if (index === path.length - 1) return { present: true, value };
-		if (typeof value === "boolean" && part.shorthand === path[index + 1].snake) {
+		if (typeof value === "boolean" && part.shorthand === path[index + 1]?.snake) {
 			return { present: true, value };
 		}
 		if (!isRoot(value)) return { present: false };
@@ -124,7 +124,7 @@ function removeAt(root: Root, path: readonly KeyName[]): void {
 /** True when `path` is `ancestor` or lies below it. */
 export const isUnder = (path: readonly KeyName[], ancestor: readonly KeyName[]): boolean =>
 	ancestor.length <= path.length &&
-	ancestor.every((part, index) => part.snake === path[index].snake);
+	ancestor.every((part, index) => part.snake === path[index]?.snake);
 
 /** The first container above the leaf that exists but is not an object, which an edit would replace. */
 export function blockedBy(root: Root, path: readonly KeyName[]): string | undefined {

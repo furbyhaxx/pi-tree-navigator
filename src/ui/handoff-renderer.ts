@@ -49,9 +49,9 @@ export function handoffView(
 		for (const id of child.sourceIds) sources.add(id);
 	};
 	const details = entry.details as Record<string, unknown> | undefined;
-	const first = entries.findIndex((item) => item.id === details?.firstEntryId);
-	const last = entries.findIndex((item) => item.id === details?.lastEntryId);
-	if (details?.retrospective === true && first >= 0 && last >= first) {
+	const first = entries.findIndex((item) => item.id === details?.["firstEntryId"]);
+	const last = entries.findIndex((item) => item.id === details?.["lastEntryId"]);
+	if (details?.["retrospective"] === true && first >= 0 && last >= first) {
 		for (const item of entries.slice(first, last + 1)) include(item);
 	} else {
 		const walked = new Set<string>();
@@ -201,7 +201,8 @@ export function installHandoffPatches(options: {
 									entry.fromId === this.message.fromId &&
 									entry.summary === this.message.summary,
 							);
-							const data = matches.length === 1 ? handoffView(matches[0], entries) : undefined;
+							const [match] = matches;
+							const data = matches.length === 1 && match ? handoffView(match, entries) : undefined;
 							if (data) {
 								const body = handoffCard(
 									data,

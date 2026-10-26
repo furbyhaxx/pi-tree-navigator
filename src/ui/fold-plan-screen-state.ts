@@ -61,7 +61,7 @@ export function wrapClamp(text: string, width: number, rows: number): string[] {
 	const lines = wrapTextWithAnsi(text, Math.max(1, width));
 	if (lines.length <= rows) return lines;
 	const kept = lines.slice(0, rows);
-	kept[rows - 1] = `${truncateToWidth(kept[rows - 1], Math.max(0, width - 1), "")}…`;
+	kept[rows - 1] = `${truncateToWidth(kept[rows - 1] ?? "", Math.max(0, width - 1), "")}…`;
 	return kept;
 }
 
@@ -95,12 +95,12 @@ export const padTo = (lines: readonly string[], rows: number): string[] => [
 export interface PlanState {
 	/** Newest first. */
 	candidates: FoldPlanCandidate[];
-	recommended?: string;
+	recommended?: string | undefined;
 	selected: number;
 	/** Labels the user typed, per anchor; every other anchor shows its suggestion. */
 	labels: Map<string, string>;
 	/** Kept while switching anchors; absent when the host supplies the default. */
-	focus?: string;
+	focus?: string | undefined;
 }
 
 export function openState(ctx: ExtensionCommandContext, deps: FoldPlanDeps): PlanState {

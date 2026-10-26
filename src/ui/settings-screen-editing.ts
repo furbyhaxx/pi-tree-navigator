@@ -47,7 +47,7 @@ const OFF_WORDS = new Set(["off", "disabled", "disable", "none", "no", "false", 
 function parseCount(text: string): number | undefined {
 	const compact = text.toLowerCase().replace(/[\s_]/g, "");
 	const match = /^(\d+(?:\.\d+)?|\d{1,3}(?:,\d{3})+)([km])?$/.exec(compact);
-	if (!match) return undefined;
+	if (match?.[1] === undefined) return undefined;
 	const factor = match[2] === "k" ? 1_000 : match[2] === "m" ? 1_000_000 : 1;
 	const value = Number(match[1].replace(/,/g, "")) * factor;
 	const whole = Math.round(value);

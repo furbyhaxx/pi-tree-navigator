@@ -21,7 +21,7 @@ export interface LinesScreen {
 	rightBadge?: string;
 	enterAction: string;
 	cancelAction: string;
-	shortcuts?: readonly { key: KeyId; action: string }[];
+	shortcuts?: readonly { key: KeyId; action: string }[] | undefined;
 	lines(width: number): readonly string[];
 }
 

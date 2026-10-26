@@ -37,7 +37,7 @@ export interface OutlineInfo {
 
 interface ViewGroup {
 	readonly name: string;
-	readonly title?: string;
+	readonly title?: string | undefined;
 	readonly depth: number;
 	readonly state: "folded" | "open";
 	readonly mode: "full" | "synthesized" | "digest";
@@ -73,6 +73,7 @@ const warning = (text: string, width: number): string[] => hanging("! ", text, w
 /** First wrapped line of a text, ending in an ellipsis when more follows. */
 function excerpt(first: string, text: string, width: number): string[] {
 	const [head, ...rest] = hanging(first, text, width);
+	if (head === undefined) return [];
 	if (rest.length === 0) return head ? [head] : [];
 	return [`${truncateToWidth(head, Math.max(1, width - 1), "")}…`];
 }
@@ -100,7 +101,8 @@ function modeSummary(groups: readonly ViewGroup[]): string {
 		}))
 		.filter(({ count }) => count > 0);
 	if (counts.length === 0) return "none";
-	if (counts.length === 1) return counts[0].mode;
+	const [only] = counts;
+	if (counts.length === 1 && only) return only.mode;
 	return `mixed (${counts.map(({ mode, count }) => `${count} ${mode}`).join(", ")})`;
 }
 

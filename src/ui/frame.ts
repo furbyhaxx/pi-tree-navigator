@@ -37,15 +37,15 @@ export type FrameTone = "text" | "muted" | "dim" | "accent" | "success" | "warni
 export interface FrameRow {
 	label: string;
 	/** Dim suffix after the label, e.g. `(auto)`. */
-	labelHint?: string;
+	labelHint?: string | undefined;
 	/** Right column, aligned across the whole unfiltered list. */
 	value?: string;
 	/** Colour of `value`. */
 	tone?: FrameTone;
 	/** One line shown under the row while it is selected. */
-	detail?: string;
+	detail?: string | undefined;
 	/** Help shown in the description slot while the row is selected. */
-	description?: string;
+	description?: string | undefined;
 }
 
 /** Hint-bar survival order on narrow terminals: essential hints are dropped last. */
@@ -56,7 +56,7 @@ export interface FrameKeybinding {
 	key: string;
 	action: string;
 	/** Default `optional`. */
-	priority?: FrameKeybindingPriority;
+	priority?: FrameKeybindingPriority | undefined;
 }
 
 /** Strip terminal escape sequences and control characters; tab and newline survive. */
@@ -81,7 +81,7 @@ export type FrameAction = (row: FrameRow, index: number) => void;
 /** A key active while the list (not the search input) has focus. */
 export interface FrameShortcut {
 	key: KeyId;
-	priority?: FrameKeybindingPriority;
+	priority?: FrameKeybindingPriority | undefined;
 	/** Hint-bar label; a function is resolved for the selected row. */
 	action: string | ((row: FrameRow, index: number) => string);
 	/** Hidden and ignored on rows where this returns false. */
@@ -95,20 +95,20 @@ export interface FrameListOptions {
 	theme: FrameTheme;
 	breadcrumbs: readonly string[];
 	rows: readonly FrameRow[];
-	rightBadge?: string;
+	rightBadge?: string | undefined;
 	placeholder?: string;
 	/** Hint-bar label for Enter. Default `select`. */
 	enterAction?: string;
 	/** Hint-bar label for Escape in list focus. Default `back`. */
 	cancelAction?: string;
-	keyboard?: KeybindingsManager;
+	keyboard?: KeybindingsManager | undefined;
 	/** Initial row index. */
 	cursor?: number;
 	/** Restore a filter when a wrapper rebuilds the list on resize. */
-	query?: string;
+	query?: string | undefined;
 	onSelect?: FrameAction;
 	onCancel?: () => void;
-	shortcuts?: readonly FrameShortcut[];
+	shortcuts?: readonly FrameShortcut[] | undefined;
 }
 
 /**
@@ -211,7 +211,8 @@ export class FrameList implements Component, Focusable {
 			if (position < 0) return undefined;
 			this.focus = "list";
 			this.input.focused = false;
-			if (index === this.cursor) this.options.onSelect?.(this.options.rows[index], index);
+			const row = this.options.rows[index];
+			if (index === this.cursor && row) this.options.onSelect?.(row, index);
 			else this.move(position);
 		}
 		return { handled: true, focus: true, render: true };
@@ -287,7 +288,9 @@ export class FrameList implements Component, Focusable {
 	}
 
 	private searchText(index: number): string {
-		const { label, labelHint, value, detail, description } = this.options.rows[index];
+		const row = this.options.rows[index];
+		if (!row) return "";
+		const { label, labelHint, value, detail, description } = row;
 		return [label, labelHint, value, detail, description]
 			.filter((part): part is string => Boolean(part))
 			.map(singleLine)
@@ -374,15 +377,17 @@ export class FrameList implements Component, Focusable {
 		const layout = this.ensureLayout();
 		this.offset = Math.min(this.offset, this.position);
 		const { rows, theme } = this.options;
-		const heights = this.visible.map(
-			(index, position) =>
-				rowLines(rows[index], position === this.position, this.width, layout.valueColumn, theme)
-					.length,
+		const heights = this.visible.map((index, position) =>
+			rows[index]
+				? rowLines(rows[index], position === this.position, this.width, layout.valueColumn, theme)
+						.length
+				: 0,
 		);
 		let used = heights
 			.slice(this.offset, this.position + 1)
 			.reduce((sum, height) => sum + height, 0);
-		while (this.offset < this.position && used > layout.listRows) used -= heights[this.offset++];
+		while (this.offset < this.position && used > layout.listRows)
+			used -= heights[this.offset++] ?? 0;
 	}
 }
 
@@ -397,7 +402,7 @@ export interface FrameChoice {
 export interface FrameScreen {
 	breadcrumbs: readonly string[];
 	rows: readonly FrameRow[];
-	rightBadge?: string;
+	rightBadge?: string | undefined;
 	placeholder?: string;
 	enterAction?: string;
 	cancelAction?: string;

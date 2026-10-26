@@ -24,21 +24,21 @@ export interface FrameOptions {
 	terminalRows: number;
 	breadcrumbs: readonly string[];
 	/** Muted badge right-aligned in the top rule. */
-	rightBadge?: string;
+	rightBadge?: string | undefined;
 	rows: readonly FrameRow[];
 	/** Indices into `rows` that pass the filter, in display order; all rows when omitted. */
 	visible?: readonly number[];
 	query?: string;
-	placeholder?: string;
+	placeholder?: string | undefined;
 	/** Pre-rendered search input (with its cursor); replaces the query/placeholder text. */
-	searchInput?: string;
+	searchInput?: string | undefined;
 	/** Position within `visible`. */
 	cursor: number;
 	/** First visible position within `visible`. */
 	scrollOffset: number;
 	keybindings: readonly FrameKeybinding[];
 	theme: FrameTheme;
-	layout?: FrameLayout;
+	layout?: FrameLayout | undefined;
 }
 
 const CURSOR_PREFIX = 3;
@@ -119,8 +119,9 @@ export function measureFrame(options: FrameOptions): FrameLayout {
 }
 
 function breadcrumbText(segments: readonly string[], budget: number, theme: FrameTheme): string {
-	if (!segments.length || budget <= 0) return "";
-	const current = theme.bold(singleLine(segments[segments.length - 1]));
+	const last = segments.at(-1);
+	if (last === undefined || budget <= 0) return "";
+	const current = theme.bold(singleLine(last));
 	const parents = segments.slice(0, -1).map(singleLine).join("/");
 	if (!parents) return truncateToWidth(current, budget, "…");
 	const remaining = budget - visibleWidth(current) - 1;
@@ -201,12 +202,12 @@ function hintLine(
 	const all = hints.map((_, index) => index);
 	const lineWidth = (shown: readonly number[]) =>
 		1 +
-		shown.reduce((sum, index) => sum + widths[index], 0) +
+		shown.reduce((sum, index) => sum + (widths[index] ?? 0), 0) +
 		HINT_SEPARATOR.length * Math.max(0, shown.length - 1);
 	if (lineWidth(all) <= width) return join(all);
 
 	const ellipsis = HINT_SEPARATOR.length + 1;
-	const tier = (index: number) => HINT_ORDER.indexOf(keybindings[index].priority ?? "optional");
+	const tier = (index: number) => HINT_ORDER.indexOf(keybindings[index]?.priority ?? "optional");
 	const byPriority = [...all].sort((a, b) => tier(a) - tier(b) || a - b);
 	const shown: number[] = [];
 	for (const index of byPriority) {
@@ -245,10 +246,13 @@ export function frameContent(options: FrameOptions): {
 	let end = start;
 	while (end < visible.length && body.length < layout.listRows) {
 		const selected = end === options.cursor;
-		const lines = rowLines(rows[visible[end]], selected, width, layout.valueColumn, theme);
+		const index = visible[end];
+		const row = index === undefined ? undefined : rows[index];
+		if (index === undefined || row === undefined) break;
+		const lines = rowLines(row, selected, width, layout.valueColumn, theme);
 		if (body.length > 0 && lines.length > layout.listRows - body.length) break;
 		for (const line of lines.slice(0, layout.listRows - body.length)) {
-			mouseRows.set(header.length + body.length, visible[end]);
+			mouseRows.set(header.length + body.length, index);
 			body.push(line);
 		}
 		end++;
@@ -263,8 +267,8 @@ export function frameContent(options: FrameOptions): {
 	const lines = [...header, ...body];
 	if (layout.descriptionRows > 0) {
 		lines.push("");
-		const selectedRow =
-			visible[options.cursor] === undefined ? undefined : rows[visible[options.cursor]];
+		const selectedIndex = visible[options.cursor];
+		const selectedRow = selectedIndex === undefined ? undefined : rows[selectedIndex];
 		const description = descriptionLines(selectedRow, width);
 		for (let n = 0; n < layout.descriptionRows; n++) {
 			let line = description[n] ?? "";

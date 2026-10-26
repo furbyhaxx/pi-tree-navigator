@@ -3,7 +3,7 @@
 import type { AutoNavigatePartial } from "../auto/auto-navigate-config.ts";
 import type { ParsedLayer } from "../core/config.ts";
 import type { ProposalToolMode } from "../retrospective/proposal-options.ts";
-import { autoRead, fieldStatus, SETTINGS } from "./settings-screen-catalog.ts";
+import { autoRead, BASE_RESERVE, fieldStatus, SETTINGS } from "./settings-screen-catalog.ts";
 import {
 	ABSENT,
 	AUTO_NAVIGATE,
@@ -39,7 +39,6 @@ const AUTO_FIELD: Record<string, keyof AutoNavigatePartial> = {
 	pressure: "pressure",
 	keep_recent_share: "keepRecentShare",
 };
-export const BASE_RESERVE = SETTINGS.filter((def) => def.key === "rewindHintReserveTokens")[0];
 const BASE_AUTO = SETTINGS.filter((def) => def.path[0] === AUTO_NAVIGATE);
 
 type ToolsPolicy = Readonly<Record<string, ProposalToolMode>>;
@@ -151,7 +150,7 @@ export function toolDef(group: ToolsGroup, tool: string): SettingDef {
 		onInvalid: "blocks",
 		expects: "full, calls-only or omit",
 		description: TOOL_HELP,
-		fallback: group.fallback && toolDef(group.fallback, tool),
+		...(group.fallback === undefined ? {} : { fallback: toolDef(group.fallback, tool) }),
 		status: (layer) => {
 			const policy = group.policy(layer);
 			if (!policy) return ABSENT;
@@ -195,8 +194,9 @@ export const OVERRIDES: Group = {
 	problem: (layer) => {
 		const { notObject, nonObjectEntries } = layer.modelOverridesProblems;
 		if (notObject) return "model_overrides must be an object keyed by model";
-		if (nonObjectEntries.length > 0) {
-			return `${quoted(nonObjectEntries[0])} must be an object`;
+		const [first] = nonObjectEntries;
+		if (first !== undefined) {
+			return `${quoted(first)} must be an object`;
 		}
 		for (const [pattern] of layer.modelHints) {
 			const problem = entryProblem(layer, pattern);
@@ -229,34 +229,38 @@ const overrideReserve = (pattern: string): SettingDef => ({
 });
 
 /** One `auto_navigate` property inside an override entry, reusing the root setting's rules. */
-function overrideAuto(base: SettingDef, pattern: string): SettingDef {
+function overrideAuto(base: SettingDef, pattern: string): SettingDef[] {
 	const part = base.path[1];
+	if (part === undefined) return [];
 	const field = AUTO_FIELD[part.snake];
-	return {
-		...base,
-		key: `${quoted(pattern)}.${base.key}`,
-		label: base.key,
-		path: [MODEL_OVERRIDES, exact(pattern), AUTO_NAVIGATE, part],
-		structured: true,
-		fallback: base,
-		status: (layer) => {
-			const entry = layer.modelAutoNavigate?.get(pattern);
-			if (!entry) return ABSENT;
-			if (entry.kind === "invalid") {
-				return { kind: "invalid", error: entry.error };
-			}
-			return entry.value[field] === undefined ? ABSENT : SET;
+	if (field === undefined) return [];
+	return [
+		{
+			...base,
+			key: `${quoted(pattern)}.${base.key}`,
+			label: base.key,
+			path: [MODEL_OVERRIDES, exact(pattern), AUTO_NAVIGATE, part],
+			structured: true,
+			fallback: base,
+			status: (layer) => {
+				const entry = layer.modelAutoNavigate?.get(pattern);
+				if (!entry) return ABSENT;
+				if (entry.kind === "invalid") {
+					return { kind: "invalid", error: entry.error };
+				}
+				return entry.value[field] === undefined ? ABSENT : SET;
+			},
+			read: (config) => {
+				const own = config.autoNavigateByModel?.get(pattern);
+				return own === null ? undefined : (own?.[field] ?? base.read(config));
+			},
 		},
-		read: (config) => {
-			const own = config.autoNavigateByModel?.get(pattern);
-			return own === null ? undefined : (own?.[field] ?? base.read(config));
-		},
-	};
+	];
 }
 
 export const entrySettings = (pattern: string): readonly SettingDef[] => [
 	overrideReserve(pattern),
-	...BASE_AUTO.map((base) => overrideAuto(base, pattern)),
+	...BASE_AUTO.flatMap((base) => overrideAuto(base, pattern)),
 ];
 
 export const entryItems = (pattern: string): readonly Item[] => [

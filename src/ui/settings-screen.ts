@@ -170,6 +170,7 @@ async function itemsScreen(
 		}
 		cursor = choice.index;
 		const item = items[choice.index];
+		if (item === undefined) continue;
 
 		if (choice.key === "t") {
 			session.target = otherLayer(target, snap.trusted);
@@ -257,13 +258,18 @@ async function editTools(
 				{
 					key: "u",
 					action: "unstage",
-					enabled: (_row, index) =>
-						index < defs.length && stagedUnder(view, defs[index].path).length > 0,
+					enabled: (_row, index) => {
+						const def = defs[index];
+						return def !== undefined && stagedUnder(view, def.path).length > 0;
+					},
 				},
 				{
 					key: "d",
 					action: "remove",
-					enabled: (_row, index) => index < defs.length && canReset(view, defs[index]),
+					enabled: (_row, index) => {
+						const def = defs[index];
+						return def !== undefined && canReset(view, def);
+					},
 				},
 			],
 		});
@@ -271,9 +277,9 @@ async function editTools(
 		cursor = choice.index;
 		const def = defs[choice.index];
 
-		if (choice.key === "u") {
+		if (choice.key === "u" && def) {
 			unstageUnder(view.staged, def.path);
-		} else if (choice.key === "d") {
+		} else if (choice.key === "d" && def) {
 			stage(ctx, view.snap, view.target, view.staged, def, { kind: "reset" });
 		} else if (def && choice.key !== "a") {
 			await chooseMode(session, view, def);
@@ -314,15 +320,18 @@ async function editOverrides(session: Session, crumbs: readonly string[]): Promi
 				{
 					key: "u",
 					action: "unstage",
-					enabled: (_row, index) =>
-						index < patterns.length &&
-						stagedUnder(view, entryTarget(patterns[index]).path).length > 0,
+					enabled: (_row, index) => {
+						const pattern = patterns[index];
+						return pattern !== undefined && stagedUnder(view, entryTarget(pattern).path).length > 0;
+					},
 				},
 				{
 					key: "d",
 					action: "remove",
-					enabled: (_row, index) =>
-						index < patterns.length && canReset(view, entryTarget(patterns[index])),
+					enabled: (_row, index) => {
+						const pattern = patterns[index];
+						return pattern !== undefined && canReset(view, entryTarget(pattern));
+					},
 				},
 			],
 		});
@@ -330,9 +339,9 @@ async function editOverrides(session: Session, crumbs: readonly string[]): Promi
 		cursor = choice.index;
 		const existing = patterns[choice.index];
 
-		if (choice.key === "u") {
+		if (choice.key === "u" && existing !== undefined) {
 			unstageUnder(view.staged, entryTarget(existing).path);
-		} else if (choice.key === "d") {
+		} else if (choice.key === "d" && existing !== undefined) {
 			await removeEntry(session, view, entryTarget(existing));
 		} else if (!usable(ctx, view.snap, view.target)) {
 		} else {

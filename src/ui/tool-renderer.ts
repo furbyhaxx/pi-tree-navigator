@@ -75,7 +75,7 @@ export function renderToolCall(args: unknown, theme: Theme, expanded: boolean): 
 		if (value) extra.push(theme.fg("muted", `  ${label}: ${value}`));
 	};
 	let head: string;
-	switch (a.action) {
+	switch (a["action"]) {
 		case "anchor":
 			head = join(title("anchor"), arg(field("name")));
 			break;
@@ -117,8 +117,8 @@ function contentText(content: unknown): string {
 	if (!Array.isArray(content)) return "";
 	return content
 		.flatMap((block: unknown) =>
-			isRecord(block) && block.type === "text" && typeof block.text === "string"
-				? [block.text]
+			isRecord(block) && block["type"] === "text" && typeof block["text"] === "string"
+				? [block["text"]]
 				: [],
 		)
 		.join("\n");
@@ -131,23 +131,23 @@ const firstLine = (text: string): string =>
 
 /** The collapsed row of a successful result, or undefined when `details` has no known shape. */
 function summarize(details: Record<string, unknown>, text: string): string | undefined {
-	if (details.status === "queued") return "accepted · folding after this turn";
-	if (details.status === "summary-requested") return "accepted · summarizing";
-	const id = oneLine(details.id);
-	if (id && typeof details.effect === "string") {
-		return details.effect === "duplicate"
+	if (details["status"] === "queued") return "accepted · folding after this turn";
+	if (details["status"] === "summary-requested") return "accepted · summarizing";
+	const id = oneLine(details["id"]);
+	if (id && typeof details["effect"] === "string") {
+		return details["effect"] === "duplicate"
 			? `already recorded as ${id}`
-			: join(id, oneLine(details.kind), "recorded");
+			: join(id, oneLine(details["kind"]), "recorded");
 	}
 	const { count, contextTokens: tokens } = details;
 	if (isCount(count)) {
-		const window = isCount(details.contextWindow) ? details.contextWindow : 0;
+		const window = isCount(details["contextWindow"]) ? details["contextWindow"] : 0;
 		const ctx = isCount(tokens)
 			? ` · ctx ${formatPct1(tokens, window)}${window > 0 ? ` of ${formatWindow(window)}` : ""}`
 			: "";
 		return `${count} label${count === 1 ? "" : "s"}${ctx}`;
 	}
-	if (typeof details.label === "string" && isCount(tokens)) {
+	if (typeof details["label"] === "string" && isCount(tokens)) {
 		// The tool text carries the window-relative position; details only the tokens.
 		const set = /\] set at (.+?)(?: \(after:.*)?$/.exec(firstLine(text));
 		return `set at ${set?.[1] ?? formatPct1(tokens, 0)}`;
@@ -163,9 +163,9 @@ export function renderToolResult(
 	isError: boolean,
 ): Component {
 	const r = isRecord(result) ? result : {};
-	const details = isRecord(r.details) ? r.details : {};
-	const text = contentText(r.content);
-	const failed = isError || details.refusal === true;
+	const details = isRecord(r["details"]) ? r["details"] : {};
+	const text = contentText(r["content"]);
+	const failed = isError || details["refusal"] === true;
 	const paint = (line: string) => theme.fg(failed ? "error" : "toolOutput", line);
 	if (options.expanded && text.trim()) {
 		return new Lines(textLines(text).map(paint), true);
@@ -181,8 +181,8 @@ interface OpView {
 
 const filePointer = (value: unknown): string => {
 	if (!isRecord(value)) return "";
-	const path = oneLine(value.path);
-	const lines = oneLine(value.lines);
+	const path = oneLine(value["path"]);
+	const lines = oneLine(value["lines"]);
 	return path && lines ? `${path}:${lines}` : path;
 };
 
@@ -196,14 +196,14 @@ function itemView(
 	mark: string,
 	replaces: string,
 ): OpView {
-	const kind = oneLine(item.kind);
-	const file = filePointer(item.file);
-	const text = oneLine(item.text);
-	const quote = oneLine(item.quote);
+	const kind = oneLine(item["kind"]);
+	const file = filePointer(item["file"]);
+	const text = oneLine(item["text"]);
+	const quote = oneLine(item["quote"]);
 	const body = text || file || quote;
 	const shown = !text && file ? file : body && `"${body}"`;
-	const why = isRecord(item.file) ? oneLine(item.file.why) : "";
-	const scope = oneLine(item.scopeAnchor);
+	const why = isRecord(item["file"]) ? oneLine(item["file"]["why"]) : "";
+	const scope = oneLine(item["scopeAnchor"]);
 	const detail: string[] = [];
 	if (quote && quote !== body) detail.push(`said "${quote}"`);
 	if (why) detail.push(`why: ${why}`);
@@ -213,15 +213,15 @@ function itemView(
 }
 
 function describeOp(stored: Record<string, unknown>): OpView {
-	const op = isRecord(stored.op) ? stored.op : {};
-	const mark = originMark(isRecord(stored.ctx) ? stored.ctx.origin : undefined);
-	const id = oneLine(op.id);
-	switch (op.op) {
+	const op = isRecord(stored["op"]) ? stored["op"] : {};
+	const mark = originMark(isRecord(stored["ctx"]) ? stored["ctx"]["origin"] : undefined);
+	const id = oneLine(op["id"]);
+	switch (op["op"]) {
 		case "add":
 			return itemView("+", op, mark, "");
 		case "supersede": {
-			const ids = Array.isArray(op.ids) ? op.ids.map(oneLine).filter(Boolean) : [];
-			return itemView("~", isRecord(op.with) ? op.with : {}, mark, ids.join(", "));
+			const ids = Array.isArray(op["ids"]) ? op["ids"].map(oneLine).filter(Boolean) : [];
+			return itemView("~", isRecord(op["with"]) ? op["with"] : {}, mark, ids.join(", "));
 		}
 		case "update": {
 			const view = itemView("~", op, mark, "");
@@ -234,16 +234,16 @@ function describeOp(stored: Record<string, unknown>): OpView {
 		case "markStale":
 			return { short: `stale ${id}${mark}`, detail: [] };
 		default:
-			return { short: join(oneLine(op.op), id) + mark, detail: [] };
+			return { short: join(oneLine(op["op"]), id) + mark, detail: [] };
 	}
 }
 
 /** Ops of a `navigate-tree-continuity-ops` entry; unusable `data` or items yield none. */
 function storedOps(data: unknown): Record<string, unknown>[] {
-	if (!isRecord(data) || !Array.isArray(data.ops)) return [];
-	return data.ops.filter(
+	if (!isRecord(data) || !Array.isArray(data["ops"])) return [];
+	return data["ops"].filter(
 		(stored): stored is Record<string, unknown> =>
-			isRecord(stored) && isRecord(stored.op) && typeof stored.op.op === "string",
+			isRecord(stored) && isRecord(stored["op"]) && typeof stored["op"]["op"] === "string",
 	);
 }
 

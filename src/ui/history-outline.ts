@@ -93,13 +93,16 @@ function manifestFrom(entries: readonly SessionEntry[]): HistoryManifest | undef
 			)
 				return false;
 			const positions = g.sourceIds.map((id) => positionsById.get(id) ?? -1);
+			const first = positions[0];
+			const last = positions.at(-1);
+			if (first === undefined || last === undefined) return false;
 			if (
-				positions[0] <= previous ||
-				positions.some((p, i) => p < 0 || (i > 0 && p !== positions[i - 1] + 1)) ||
+				first <= previous ||
+				positions.some((p, i) => p < 0 || (i > 0 && p !== (positions[i - 1] ?? -1) + 1)) ||
 				g.sourceIds.some((id) => occupied.has(id))
 			)
 				return false;
-			previous = positions[positions.length - 1];
+			previous = last;
 			for (const id of g.sourceIds) occupied.add(id);
 			names.add(g.name);
 			markers.add(g.entryId);
@@ -159,6 +162,7 @@ export function buildHistoryOutline(
 		const starts = new Map(groups.map((g) => [g.sourceIds[0], g]));
 		for (let i = 0; i < order.length; i++) {
 			const id = order[i];
+			if (id === undefined) continue;
 			const g = starts.get(id);
 			if (g) {
 				all.push({
