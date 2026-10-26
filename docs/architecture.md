@@ -79,7 +79,7 @@ replaceable configuration from the state at call time and never import `index.ts
 - `turn-boundary.ts`: fold/recovery ownership at `turn_end`, `agent_before_settle`
   and `agent_settled`.
 - `independent-recovery.ts`: decreasing-context recovery attempts and receipts.
-- `pressure-compaction.ts`: writes the native tail-keeping compaction with quoted
+- `pressure-compaction-runtime.ts`: writes the native tail-keeping compaction with quoted
   open requests and the briefing, and anchors it.
 - `recovery-cut.ts`: late entries and the recovery cut.
 

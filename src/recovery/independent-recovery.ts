@@ -30,7 +30,7 @@ import {
 	type RewindMessageDraft,
 	rewindMessageDraft,
 } from "../fold/fold-receipts.ts";
-import type { createPressureCompactionController } from "./pressure-compaction.ts";
+import type { createPressureCompactionController } from "./pressure-compaction-runtime.ts";
 import { recoveryCutOf } from "./recovery-cut.ts";
 
 /** Recoveries one request may get; each must start from less context than the last. */

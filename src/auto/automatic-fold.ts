@@ -38,7 +38,7 @@ import {
 	keepValidDrafts,
 	type RewindMessageDraft,
 } from "../fold/fold-receipts.ts";
-import type { createPressureCompactionController } from "../recovery/pressure-compaction.ts";
+import type { createPressureCompactionController } from "../recovery/pressure-compaction-runtime.ts";
 import { recoveryCutOf } from "../recovery/recovery-cut.ts";
 import { planAutomaticFold, pressureFoldBudget } from "./auto-fold-planner.ts";
 

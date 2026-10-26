@@ -68,7 +68,7 @@ import type { FoldApi } from "./fold/fold-api.ts";
 import { createFoldRuntime } from "./fold/fold-runtime.ts";
 import { installHandoffProjection } from "./fold/handoff-projection.ts";
 import { createIndependentRecoveryController } from "./recovery/independent-recovery.ts";
-import { createPressureCompactionController } from "./recovery/pressure-compaction.ts";
+import { createPressureCompactionController } from "./recovery/pressure-compaction-runtime.ts";
 import { createRequestGuard } from "./recovery/request-guard.ts";
 import { createTurnBoundary } from "./recovery/turn-boundary.ts";
 import { createNavigateTreeTool } from "./tool/navigate-tree-tool.ts";
