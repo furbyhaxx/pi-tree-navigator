@@ -59,7 +59,7 @@ export function createContinuityRuntime({ pi, state }: ContinuityRuntimeDeps) {
 			hasUI: boolean;
 			ui: { notify(message: string, type?: "warning"): void };
 			modelRegistry?: Parameters<typeof createModelClassifier>[0];
-			signal?: AbortSignal;
+			signal?: AbortSignal | undefined;
 		},
 		message: { stopReason?: string },
 	): Promise<void> {
