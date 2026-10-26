@@ -30,12 +30,11 @@ import {
 	MAX_CLASSIFIER_MESSAGE_CHARS,
 } from "../../src/continuity/continuity-capture-model.ts";
 import {
-	applyOps,
-	createLedger,
 	type Ledger,
 	MAX_ITEM_TEXT_CHARS,
 	TRUNCATION_MARKER,
-} from "../../src/continuity/continuity-ledger.ts";
+} from "../../src/continuity/continuity-ledger-model.ts";
+import { applyOps, createLedger } from "../../src/continuity/continuity-ledger-reducer.ts";
 import { CHAT_MAX_OUTPUT_TOKENS, RECOMMENDED_POLICY } from "../../src/continuity/intent-policy.ts";
 import { buildRetirementCheckContext } from "../../src/continuity/retirement-check.ts";
 

@@ -86,11 +86,11 @@ import {
 	type IntentClassifier,
 } from "./continuity/continuity-capture.ts";
 import {
-	applyOps,
 	LEDGER_DETAILS_KEY,
 	type LedgerOp,
 	MAX_ITEM_TEXT_CHARS,
-} from "./continuity/continuity-ledger.ts";
+} from "./continuity/continuity-ledger-model.ts";
+import { applyOps } from "./continuity/continuity-ledger-reducer.ts";
 import {
 	appendOpsEntry,
 	type BranchLedger,

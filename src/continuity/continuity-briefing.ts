@@ -14,8 +14,8 @@ import {
 	isUserOrigin,
 	type Ledger,
 	type LedgerItem,
-	parseDelta,
-} from "./continuity-ledger.ts";
+} from "./continuity-ledger-model.ts";
+import { parseDelta } from "./continuity-ledger-parser.ts";
 
 export const CONTINUITY_DELTA_TAG = "continuity-delta";
 const DELTA_OPEN = `<${CONTINUITY_DELTA_TAG}>`;

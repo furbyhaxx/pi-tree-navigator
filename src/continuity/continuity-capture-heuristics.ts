@@ -1,7 +1,7 @@
 /** Marker and sentence heuristics for durable user intent. */
 
 import type { IntentExcerpt, IntentKind } from "./continuity-capture.ts";
-import { MAX_QUOTE_CHARS, normalizeText } from "./continuity-ledger.ts";
+import { MAX_QUOTE_CHARS, normalizeText } from "./continuity-ledger-model.ts";
 
 // Explicit durable-rule wording. `must always` and `must never` are covered by
 // the bare words. False positives become protected ledger items, so the lists

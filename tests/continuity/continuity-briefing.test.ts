@@ -14,16 +14,14 @@ import {
 	renderFoldCaptureSection,
 	summarizeLedgerForUi,
 } from "../../src/continuity/continuity-briefing.ts";
+import { checkFilePointers, reconcileFold } from "../../src/continuity/continuity-ledger.ts";
 import {
-	applyOps,
 	ContinuityError,
-	checkFilePointers,
-	createLedger,
 	type Ledger,
 	type LedgerOp,
 	type OpContext,
-	reconcileFold,
-} from "../../src/continuity/continuity-ledger.ts";
+} from "../../src/continuity/continuity-ledger-model.ts";
+import { applyOps, createLedger } from "../../src/continuity/continuity-ledger-reducer.ts";
 
 const USER: OpContext = { origin: "user", entryId: "e1" };
 const AGENT: OpContext = { origin: "agent" };

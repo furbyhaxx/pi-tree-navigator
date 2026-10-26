@@ -11,7 +11,7 @@ import {
 	normalizeText,
 	type OpContext,
 	TRUNCATION_MARKER,
-} from "./continuity-ledger.ts";
+} from "./continuity-ledger-model.ts";
 
 export interface CaptureResult {
 	ops: CapturedOp[];

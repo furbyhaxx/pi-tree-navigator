@@ -626,7 +626,7 @@ function renderLiveRows(width) {
 const liveScreen = await Promise.all([
 	import("../src/ui/current-screen.ts"),
 	import("../src/ui/frame.ts"),
-	import("../src/continuity/continuity-ledger.ts"),
+	import("../src/continuity/continuity-ledger-reducer.ts"),
 ]).catch(() => undefined);
 
 function sampleLedger({ applyOps, createLedger }) {

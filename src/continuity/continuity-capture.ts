@@ -46,7 +46,7 @@ import {
 	scanStart,
 	userOp,
 } from "./continuity-capture-scan.ts";
-import type { Ledger, LedgerOp, OpContext } from "./continuity-ledger.ts";
+import type { Ledger, LedgerOp, OpContext } from "./continuity-ledger-model.ts";
 import { resolveIntentPolicy } from "./intent-policy.ts";
 import {
 	buildRetirementCheckContext,
