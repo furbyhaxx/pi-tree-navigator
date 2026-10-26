@@ -22,9 +22,13 @@ function shippedImports(): Set<string> {
 		const source = readFileSync(join(src, file), "utf8");
 		for (const match of source.matchAll(/from "([^"./][^"]*)"/g)) {
 			const spec = match[1];
-			if (spec.startsWith("node:")) continue;
-			const parts = spec.split("/");
-			names.add(spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0]);
+			if (spec === undefined || spec.startsWith("node:")) continue;
+			names.add(
+				spec
+					.split("/")
+					.slice(0, spec.startsWith("@") ? 2 : 1)
+					.join("/"),
+			);
 		}
 	}
 	return names;
