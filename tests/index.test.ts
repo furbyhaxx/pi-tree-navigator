@@ -91,31 +91,32 @@ import {
 	REWIND_COMPACTION_OFF_TEXT,
 	REWIND_HINT_CUSTOM_TYPE,
 } from "../src/core/rewind-hint.ts";
+import { commitFold, type FoldCommitInput } from "../src/fold/fold-commit.ts";
+import { MIN_SUMMARY_FOCUS_LENGTH, START_ANCHOR_LABEL } from "../src/fold/fold-policy.ts";
+import { type FoldPreviewInput, previewFoldCommit } from "../src/fold/fold-preview.ts";
+import {
+	foldPlaceholderSummary,
+	foldRecommendationBudget,
+	foldSummaryPlaceholderTokens,
+	priceFoldCandidates,
+	recommendFoldIndex,
+} from "../src/fold/fold-pricing.ts";
+import {
+	buildLateEntriesNote,
+	buildRewindAcceptedText,
+	buildRewindDoneText,
+	CONTINUE_NUDGE_TEXT,
+	REWIND_CUSTOM_TYPE,
+	wrapPlainLine,
+} from "../src/fold/fold-receipts.ts";
 import { DEFAULT_REDUCE_OUTPUT_TOKENS } from "../src/fold/fold-summarizer.ts";
 import { getHandoff, materializeHandoff } from "../src/fold/handoff.ts";
 import { extractSummaryText } from "../src/fold/summary-prompt.ts";
 import navigateTree, {
 	__testHooks,
-	buildLateEntriesNote,
-	buildRewindAcceptedText,
-	buildRewindDoneText,
 	CONSOLIDATION_CUSTOM_TYPE,
-	CONTINUE_NUDGE_TEXT,
-	commitFold,
-	type FoldCommitInput,
-	type FoldPreviewInput,
-	foldPlaceholderSummary,
-	foldRecommendationBudget,
-	foldSummaryPlaceholderTokens,
 	MIN_REWIND_SAVINGS_TOKENS,
-	MIN_SUMMARY_FOCUS_LENGTH,
 	PRESSURE_COMPACTION_CUSTOM_TYPE,
-	previewFoldCommit,
-	priceFoldCandidates,
-	REWIND_CUSTOM_TYPE,
-	recommendFoldIndex,
-	START_ANCHOR_LABEL,
-	wrapPlainLine,
 } from "../src/index.ts";
 
 // The extension holds captured sessions only weakly; keep test fakes alive until the test ends.

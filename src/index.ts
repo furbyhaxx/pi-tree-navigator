@@ -46,7 +46,7 @@
 import { randomUUID } from "node:crypto";
 import { join, normalize } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessage, Message, Model, ThinkingLevel } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, ThinkingLevel } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	buildSessionProjection,
@@ -58,14 +58,11 @@ import {
 	type ExtensionContext,
 	getAgentDir,
 	type ModelRegistry,
-	prepareBranchEntries,
 	type SessionBoundaryDraft,
 	type SessionEntry,
 	type SessionManager,
 	SettingsManager,
-	sessionEntryToContextMessages,
 } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
 	type AutoFoldState,
@@ -74,40 +71,25 @@ import {
 } from "./auto/auto-fold-planner.ts";
 import type { AutoNavigatePartial } from "./auto/auto-navigate-config.ts";
 import { planPressureCut } from "./auto/pressure-compaction.ts";
-import {
-	isVisible,
-	renderBriefing,
-	renderFoldCaptureSection,
-} from "./continuity/continuity-briefing.ts";
+import { isVisible, renderBriefing } from "./continuity/continuity-briefing.ts";
 import {
 	captureIntent,
 	createModelClassifier,
 	heuristicClassifier,
 	type IntentClassifier,
 } from "./continuity/continuity-capture.ts";
-import {
-	LEDGER_DETAILS_KEY,
-	type LedgerOp,
-	MAX_ITEM_TEXT_CHARS,
-} from "./continuity/continuity-ledger-model.ts";
+import { type LedgerOp, MAX_ITEM_TEXT_CHARS } from "./continuity/continuity-ledger-model.ts";
 import { applyOps } from "./continuity/continuity-ledger-reducer.ts";
 import {
 	appendOpsEntry,
 	type BranchLedger,
 	CONTINUITY_OPS_CUSTOM_TYPE,
 	compactionContinuity,
-	type FoldContinuity,
 	readBranchLedger,
-	reconcileFoldContinuity,
-	spanUserEntryRefs,
 	userEntryIndexOf,
 } from "./continuity/continuity-store.ts";
 import { resolveIntentPolicy } from "./continuity/intent-policy.ts";
-import {
-	collectOpenUserRequests,
-	type OpenUserRequest,
-	renderOpenUserRequests,
-} from "./continuity/open-user-requests.ts";
+import { collectOpenUserRequests } from "./continuity/open-user-requests.ts";
 import {
 	activeAnchorNames,
 	buildMinSavingsRejection,
@@ -130,17 +112,11 @@ import {
 	START_ANCHOR_DEFAULT_TURNS,
 	TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./core/config.ts";
-import {
-	DEFAULT_TOKEN_FACTOR,
-	estimateContentTokens,
-	fixedOverheadNote,
-} from "./core/context-tokens.ts";
+import { estimateContentTokens, fixedOverheadNote } from "./core/context-tokens.ts";
 import {
 	type AnchorTableRow,
-	BRANCH_LABEL_PREFIX,
 	extractTextContent,
 	formatAnchorTable,
-	formatContextDelta,
 	formatPct1,
 	formatWindow,
 	isValidName,
@@ -160,7 +136,6 @@ import {
 	asInternals,
 	captureSession,
 	emitSessionCompact,
-	emitSessionTree,
 	findOwningSession,
 	patchAgentSessionPrototype,
 	REFLECTION_BOOTSTRAP_WARNING_LIST,
@@ -172,13 +147,9 @@ import {
 import {
 	admissionMessages,
 	buildContextMessages,
-	carriedCompaction,
-	carriedDetails,
-	compactionCopy,
 	effectiveRequestMessages,
 	findLabeledEntry,
 	precedesLatestCompaction,
-	projectAtEntry,
 	systemCheckpoint,
 } from "./core/projection.ts";
 import {
@@ -204,43 +175,70 @@ import {
 	RewindHintTracker,
 } from "./core/rewind-hint.ts";
 import { clearRuntimeConfig, readRuntimeConfig } from "./core/runtime-config.ts";
-import { persistedOnDisk, trySessionWrite } from "./core/session-write.ts";
+import { trySessionWrite } from "./core/session-write.ts";
 import { planConsolidation } from "./fold/consolidation-planner.ts";
+import type {
+	FoldApi,
+	FoldHost,
+	FoldLanded,
+	FoldRequestInput,
+	FoldResult,
+} from "./fold/fold-api.ts";
+import { commitFold, unrestoredFoldCursors } from "./fold/fold-commit.ts";
 import {
 	createFoldEngine,
 	type FoldCommitResult,
-	type FoldOutcome,
 	type FoldPrepared,
 	type FoldRequest,
 	type FoldRunOptions,
-	type FoldTargetCandidate,
 	selectFoldTarget,
 } from "./fold/fold-engine.ts";
 import {
-	anchorMessageIndex,
 	buildConsolidationSegment,
 	buildFoldProjection,
 	buildFoldSegment,
-	buildInContextMessages,
 } from "./fold/fold-inputs.ts";
 import {
-	createFoldSummaryRunner,
-	DEFAULT_REDUCE_OUTPUT_TOKENS,
-	reasoningAllowance,
-	type SummarizeFoldOptions,
-	summarizeFold,
-} from "./fold/fold-summarizer.ts";
-import { getHandoff, type HandoffMode, makeHandoff, materializeHandoff } from "./fold/handoff.ts";
+	MIN_SUMMARY_FOCUS_LENGTH,
+	RECOVERY_HEADROOM_TOKENS,
+	RECOVERY_MIN_OUTPUT_TOKENS,
+	START_ANCHOR_LABEL,
+} from "./fold/fold-policy.ts";
+import {
+	continuityRequestSection,
+	defaultFoldFocus,
+	foldAdmission,
+	foldPlaceholderSummary,
+	foldRecommendationBudget,
+	preparedInContext,
+	priceFoldCandidates,
+	recommendFoldIndex,
+	summarizerReduceTokens,
+} from "./fold/fold-pricing.ts";
+import {
+	buildRewindAcceptedText,
+	buildRewindDoneText,
+	CONTINUE_NUDGE_STATUS,
+	CONTINUE_NUDGE_TEXT,
+	foldDoneDraft,
+	foldFailedDraft,
+	hideDrafts,
+	keepValidDrafts,
+	REWIND_CUSTOM_TYPE,
+	type RewindMessageDraft,
+	rewindMessageDraft,
+	StyledLines,
+	toolError,
+} from "./fold/fold-receipts.ts";
+import { createFoldSummaryRunner, summarizeFold } from "./fold/fold-summarizer.ts";
+import type { HandoffMode } from "./fold/handoff.ts";
 import { installHandoffProjection, projectHandoffs } from "./fold/handoff-projection.ts";
 import {
 	appendContinuityBriefing,
 	buildConsolidationRequestText,
-	buildSummaryRequestText,
-	computeFileLists,
-	formatFileOperations,
 	hasOpenWork,
-	stripContinuityBriefing,
 } from "./fold/summary-prompt.ts";
+import { recoveryCutOf } from "./recovery/recovery-cut.ts";
 import type { ProposalOptions } from "./retrospective/proposal-options.ts";
 import { registerAnchorCommand } from "./ui/anchor-command.ts";
 import { createUserOpsWriter } from "./ui/current-screen.ts";
@@ -256,32 +254,6 @@ import { registerHandoffRenderer } from "./ui/handoff-renderer.ts";
 import { registerHistoryOutline } from "./ui/history-outline.ts";
 import { createSettingsScreenDeps } from "./ui/settings-screen.ts";
 import { renderContinuityOps, renderToolCall, renderToolResult } from "./ui/tool-renderer.ts";
-
-/**
- * Label written by the automatic start anchor (#55). Exported for the test
- * suite; production callers should rely on the registered tool surface.
- */
-export const START_ANCHOR_LABEL = `${LABEL_PREFIX}start`;
-
-// ---------------------------------------------------------------------------
-// Exported boundary constants below (MIN_SUMMARY_FOCUS_LENGTH,
-// MIN_REWIND_SAVINGS_TOKENS).
-//
-// Stability: these are internal tunables. Exported only so the test suite
-// can pin boundary cases by constant rather than literal. Re-tuning is
-// NOT a semver-breaking change for this package — production callers
-// should rely on the registered `navigate_tree` tool surface, not import
-// these constants directly. The `__testHooks` JSDoc carries the same
-// caveat for module-internal helpers.
-// ---------------------------------------------------------------------------
-// Floor on `summaryFocus` length (after trim) for `rewind`. The user's most
-// recent instruction lives on the chain about to be collapsed; if the focus
-// is shorter than this, it almost always elides that instruction (a terse
-// "finish parser fix" is 17 chars and conveys nothing the next turn can
-// act on). 20 is the empirical threshold below which the post-rewind turn
-// reliably loses continuity — raising it forces more useful focus text
-// without inviting verbosity.
-export const MIN_SUMMARY_FOCUS_LENGTH = 20;
 // Floor on the *apparent* token savings (`beforeTokens − tokensAtTarget`) a
 // `rewind` must clear to execute. Absolute threshold, deliberately NOT
 // window-relative: % semantics drift with window size, so a fixed token bar
@@ -304,8 +276,6 @@ const MIN_KEPT_SHARE_OF_CONFIGURED = 0.25;
 export const CONSOLIDATION_CUSTOM_TYPE = "navigate-tree-consolidation";
 /** Receipt of a tail-keeping pressure compaction. */
 export const PRESSURE_COMPACTION_CUSTOM_TYPE = "navigate-tree-pressure-compaction";
-const RECOVERY_MIN_OUTPUT_TOKENS = 1_024;
-const RECOVERY_HEADROOM_TOKENS = 4_096;
 /** Recoveries one request may get; each must start from less context than the last. */
 const MAX_RECOVERY_ATTEMPTS = 3;
 /** Token budget of the ledger briefing appended to `list`. */
@@ -320,97 +290,6 @@ const isPinKind = (kind: unknown): kind is PinKind => PIN_KINDS.includes(kind as
 // response is a single block of prose (not a column-aligned table) so it
 // can afford a longer hint than `list`'s per-row preview.
 const ANCHOR_HINT_MAX_LENGTH = 60;
-
-// =============================================================================
-// Helpers (extension-internal; pure helpers in ./helpers.ts)
-// =============================================================================
-
-// =============================================================================
-// Extension
-// =============================================================================
-
-/**
- * Earlier handlers' boundary drafts that still apply after a rewind moved the
- * branch. A `context_edit` draft can target an entry the rewind just
- * abandoned; pi validates the whole list in a preview (`appendContextEdit`
- * throws for a target off the active branch) and drops ALL of it, ours
- * included, when one draft fails — so such drafts are dropped here instead.
- * Every other draft passes through: pi never validates a compaction's
- * `firstKeptEntryId` (`null` is a valid self-retaining compaction).
- */
-function keepValidDrafts<T>(sm: SessionManager, drafts: readonly T[]): T[] {
-	let onBranch: Set<string>;
-	try {
-		onBranch = new Set(sm.getBranch().map((e) => e.id));
-	} catch {
-		return [...drafts];
-	}
-	return drafts.filter((draft) => {
-		const d = draft as { type?: string; targetId?: string };
-		if (d?.type === "context_edit") return onBranch.has(d.targetId ?? "");
-		return true;
-	});
-}
-
-/** A `navigate-tree-rewind` message, delivered as a `turn_end` boundary entry. */
-interface RewindMessageDraft {
-	type: "custom_message";
-	customType: string;
-	content: string;
-	display: boolean;
-	details: Record<string, unknown>;
-}
-
-function rewindMessageDraft(content: string, details: Record<string, unknown>): RewindMessageDraft {
-	return {
-		type: "custom_message",
-		customType: REWIND_CUSTOM_TYPE,
-		content,
-		display: true,
-		details,
-	};
-}
-
-/** `context_edit` drafts hiding `ids` (a failed attempt). */
-function hideDrafts(ids: readonly string[]): SessionBoundaryDraft[] {
-	return ids.map((targetId) => ({
-		type: "context_edit",
-		targetId,
-		replacement: null,
-	}));
-}
-
-/** customType of the rewind continuation and receipt messages. */
-export const REWIND_CUSTOM_TYPE = "navigate-tree-rewind";
-
-/** The rewind's tool result: the fold is queued and lands after this turn's tool results. */
-export function buildRewindAcceptedText(rewindTo: string, newLabel: string): string {
-	return `[${TOOL_NAME}] Rewind to '${rewindTo}' accepted (collapse as '${newLabel}'). The fold runs after this turn's tool results; the continuation follows in the same run.`;
-}
-
-/**
- * The continuity block of the summary request: what the ledger keeps in force
- * and the user messages the model may cite. Absent (the request is then
- * byte-identical to one without a ledger) when the ledger has nothing active
- * and the folded span holds no user message. Fail-open: a fold never depends
- * on it.
- */
-function continuityRequestSection(
-	sm: SessionManager,
-	fold: { target: string; rewindTo: string },
-): string | undefined {
-	try {
-		const branch = sm.getBranch();
-		const { ledger } = readBranchLedger(branch);
-		const userEntries = spanUserEntryRefs(branch, fold.target);
-		if (userEntries.length === 0 && !ledger.items.some((item) => item.status === "active")) {
-			return undefined;
-		}
-		return renderFoldCaptureSection(ledger, fold.rewindTo, userEntries);
-	} catch {
-		return undefined;
-	}
-}
 
 /** Wall-clock bound on one continuity capture pass: a slow classifier must not stall a turn. */
 const CONTINUITY_CAPTURE_TIMEOUT_MS = 15_000;
@@ -429,1255 +308,6 @@ function endsInOpenToolBatch(branch: readonly SessionEntry[]): boolean {
 		.slice(at + 1)
 		.filter((e) => e.type === "message" && e.message.role === "toolResult").length;
 	return results < calls;
-}
-
-/**
- * Minimal TUI component (pi-tui's `Component` shape) rendering plain lines,
- * word-wrapped to the width in terminal cells and styled per line. pi-tui
- * throws on any rendered line wider than the terminal, so every line is
- * measured and wrapped with pi-tui's own helpers (pi's extension loader
- * aliases `@earendil-works/pi-tui` to its bundled copy at runtime).
- */
-class StyledLines {
-	private readonly lines: string[];
-	private readonly style: (line: string) => string;
-	private readonly padX: number;
-	private readonly wrap: boolean;
-
-	constructor(lines: string[], style: (line: string) => string, padX = 1, wrap = true) {
-		this.lines = lines;
-		this.style = style;
-		this.padX = padX;
-		this.wrap = wrap;
-	}
-
-	render(width: number): string[] {
-		const inner = Math.max(1, width - 2 * this.padX);
-		const pad = " ".repeat(Math.max(0, Math.min(this.padX, width - 1)));
-		const out: string[] = [];
-		for (const line of this.lines) {
-			const pieces = this.wrap ? wrapPlainLine(line, inner) : [truncateToWidth(line, inner, "…")];
-			for (const piece of pieces) {
-				const row = pad + this.style(piece);
-				// Final guard: pi-tui throws on a line wider than the terminal.
-				out.push(visibleWidth(row) <= width ? row : truncateToWidth(row, Math.max(0, width), ""));
-			}
-		}
-		return out;
-	}
-
-	invalidate(): void {}
-}
-
-/**
- * Word-wrap one plain-text line to `width` terminal cells (hard-break words
- * longer than the width). Cells, not code points: `summaryFocus` and error
- * reasons can carry wide characters (CJK, emoji) and tabs. Tabs are
- * expanded first (pi-tui measures one as 3 cells); every piece is then
- * truncated to the width as a final guard (a 2-cell character cannot fit a
- * 1-cell width).
- */
-export function wrapPlainLine(line: string, width: number): string[] {
-	const w = Math.max(1, Math.floor(width));
-	const text = line.replace(/\t/g, "   ");
-	if (visibleWidth(text) <= w) return [text];
-	return wrapTextWithAnsi(text, w).map((piece) =>
-		visibleWidth(piece) <= w ? piece : truncateToWidth(piece, w, ""),
-	);
-}
-
-/**
- * Why a fold no longer matches the active branch, or `null`. The fold point
- * (`afterEntryId`) must still be on the branch, and no compaction may have
- * landed after it: one landing during the summary would leave the summarized
- * evidence out of step with the raw segment.
- */
-function rewindStaleReason(sm: SessionManager, afterEntryId: string): string | null {
-	let branch: SessionEntry[];
-	try {
-		branch = sm.getBranch();
-	} catch {
-		return null;
-	}
-	const start = branch.findIndex((e) => e.id === afterEntryId);
-	if (start < 0) return "the folded work is no longer on the active branch";
-	return branch.slice(start + 1).some((e) => e.type === "compaction")
-		? "the context was compacted"
-		: null;
-}
-
-/**
- * Entries that arrived on the active branch after `afterEntryId` (the fold
- * point) from outside the conversation's own
- * turns: user messages (steers drained at the rewind turn's boundary) and
- * other extensions' custom messages (subagent results, timers). Oldest
- * first; this extension's own rewind and rewind-hint messages are excluded
- * (a pre-rewind rewind hint is stale once it lands).
- */
-export type LateEntry =
-	| {
-			kind: "user" | "assistant";
-			message: Extract<SessionEntry, { type: "message" }>["message"];
-	  }
-	| {
-			kind: "custom";
-			customType: string;
-			content: Extract<SessionEntry, { type: "custom_message" }>["content"];
-			display: boolean;
-			details: unknown;
-	  };
-
-function isPreservedLateEntry(entry: SessionEntry): boolean {
-	if (entry.type === "message" && entry.message.role === "user") return true;
-	return (
-		entry.type === "custom_message" &&
-		entry.customType !== REWIND_CUSTOM_TYPE &&
-		entry.customType !== REWIND_HINT_CUSTOM_TYPE
-	);
-}
-
-function toolEnvelopeIds(message: AgentMessage): {
-	calls: string[];
-	result?: string;
-} {
-	if (message.role === "toolResult") {
-		return { calls: [], result: message.toolCallId };
-	}
-	if (message.role !== "assistant") return { calls: [] };
-	return {
-		calls: message.content.flatMap((block) => (block.type === "toolCall" ? [block.id] : [])),
-	};
-}
-
-/** Read-only fold boundary in the current canonical context, preserving unanswered input. */
-export function recoveryCutOf(
-	sm: SessionManager,
-	incompleteReplyId?: string,
-): { ok: true; foldPointId: string } | { ok: false; detail: string } {
-	try {
-		const allEntries = sm.getEntries();
-		const byId = new Map(allEntries.map((entry) => [entry.id, entry]));
-		const order = new Map(allEntries.map((entry, index) => [entry.id, index]));
-		const projection = buildSessionProjection(allEntries, sm.getLeafId(), byId);
-		const occurrence = (entryId: string, callId: string) => JSON.stringify([entryId, callId]);
-		const archived = new Map<string, Set<string>>();
-		const visiting = new Set<string>();
-		// A summary can discharge only the exact occurrence completed on its fromId ancestry.
-		const completedThrough = (leafId: string): Set<string> => {
-			const cached = archived.get(leafId);
-			if (cached) return cached;
-			if (visiting.has(leafId)) throw new Error("cyclic summary history");
-			visiting.add(leafId);
-			const path: SessionEntry[] = [];
-			const seen = new Set<string>();
-			let id: string | null = leafId;
-			while (id !== null) {
-				if (seen.has(id)) throw new Error("cyclic session history");
-				seen.add(id);
-				const entry = byId.get(id);
-				if (!entry) throw new Error("missing summary history");
-				path.push(entry);
-				id = entry.parentId;
-			}
-			const pending = new Map<string, string>();
-			const completed = new Set<string>();
-			for (const entry of path.reverse()) {
-				if (entry.type === "branch_summary" && entry.fromId !== "root") {
-					const evidence = completedThrough(entry.fromId);
-					for (const [callId, key] of pending) {
-						if (!evidence.has(key)) continue;
-						pending.delete(callId);
-						completed.add(key);
-					}
-				}
-				for (const message of sessionEntryToContextMessages(entry)) {
-					const envelope = toolEnvelopeIds(message);
-					for (const callId of envelope.calls) {
-						if (pending.has(callId)) throw new Error("duplicate outstanding archived tool call");
-						pending.set(callId, occurrence(entry.id, callId));
-					}
-					if (envelope.result !== undefined) {
-						const key = pending.get(envelope.result);
-						if (!key) throw new Error("orphan archived tool result");
-						pending.delete(envelope.result);
-						completed.add(key);
-					}
-				}
-			}
-			visiting.delete(leafId);
-			archived.set(leafId, completed);
-			return completed;
-		};
-
-		const pending = new Map<string, string>();
-		let foldPointId: string | undefined;
-		let unansweredInput = false;
-		// Native projection places the compaction before its older retained messages.
-		const chronological = projection.entries.toSorted(
-			(a, b) => (order.get(a.sourceEntry.id) ?? -1) - (order.get(b.sourceEntry.id) ?? -1),
-		);
-		for (const { sourceEntry, messages } of chronological) {
-			if (messages.length === 0 || sourceEntry.id === incompleteReplyId) continue;
-			if (isPreservedLateEntry(sourceEntry)) unansweredInput = true;
-			if (
-				pending.size > 0 &&
-				sourceEntry.type === "branch_summary" &&
-				sourceEntry.fromId !== "root"
-			) {
-				const evidence = completedThrough(sourceEntry.fromId);
-				for (const [callId, key] of pending) {
-					if (evidence.has(key)) pending.delete(callId);
-				}
-			}
-			for (const message of messages) {
-				const envelope = toolEnvelopeIds(message);
-				for (const callId of envelope.calls) {
-					if (pending.has(callId)) throw new Error("duplicate outstanding tool call");
-					pending.set(callId, occurrence(sourceEntry.id, callId));
-				}
-				if (envelope.result !== undefined) {
-					if (unansweredInput) throw new Error("tool result crosses unanswered input");
-					if (!pending.delete(envelope.result)) throw new Error("tool result without its call");
-				}
-				if (
-					(message.role === "assistant" &&
-						message.stopReason !== "error" &&
-						message.stopReason !== "aborted") ||
-					message.role === "toolResult" ||
-					sourceEntry.type === "branch_summary"
-				) {
-					foldPointId = sourceEntry.id;
-					unansweredInput = false;
-				} else if (sourceEntry.type === "compaction" && !unansweredInput) {
-					foldPointId = sourceEntry.id;
-				}
-			}
-		}
-		if (pending.size) throw new Error("tool call without its result");
-		if (!foldPointId) {
-			return {
-				ok: false,
-				detail: "the active context has no completed work to fold",
-			};
-		}
-		return { ok: true, foldPointId };
-	} catch (error) {
-		return {
-			ok: false,
-			detail: `the recovery cut is unsafe: ${error instanceof Error ? error.message : String(error)}`,
-		};
-	}
-}
-
-function collectLateEntries(
-	sm: SessionManager,
-	afterEntryId: string,
-	recoveryEvidenceId?: string,
-): LateEntry[] {
-	let branch: SessionEntry[];
-	try {
-		branch = sm.getBranch();
-	} catch {
-		return [];
-	}
-	const start = branch.findIndex((e) => e.id === afterEntryId);
-	if (start < 0) return [];
-	const late: LateEntry[] = [];
-	for (const entry of branch.slice(start + 1)) {
-		if (
-			entry.id === recoveryEvidenceId &&
-			entry.type === "message" &&
-			entry.message.role === "assistant"
-		) {
-			// Replayed evidence is neither a fresh usage baseline nor a second billed call.
-			late.push({
-				kind: "assistant",
-				message: {
-					...entry.message,
-					usage: {
-						input: 0,
-						output: 0,
-						cacheRead: 0,
-						cacheWrite: 0,
-						totalTokens: 0,
-						cost: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							total: 0,
-						},
-					},
-				},
-			});
-			continue;
-		}
-		if (!isPreservedLateEntry(entry)) continue;
-		if (entry.type === "message" && entry.message.role === "user") {
-			late.push({ kind: "user", message: entry.message });
-		} else if (entry.type === "custom_message") {
-			late.push({
-				kind: "custom",
-				customType: entry.customType,
-				content: entry.content,
-				display: entry.display,
-				details: entry.details,
-			});
-		}
-	}
-	return late;
-}
-
-export function buildRewindDoneText(
-	fold: {
-		rewindTo: string;
-		newLabel: string;
-		beforeTokens: number;
-		contextWindow: number;
-	},
-	afterTokens: number,
-): string {
-	return (
-		`[rewind to '${fold.rewindTo}' · collapsed as '${fold.newLabel}'] · ${formatContextDelta(fold.beforeTokens, afterTokens, fold.contextWindow)}\n\n` +
-		`A branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\n` +
-		`A branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.`
-	);
-}
-
-/** Sent once when the first turn after a fold ends text-only with work still open. */
-export const CONTINUE_NUDGE_TEXT =
-	"[navigate_tree] You ended the turn immediately after a rewind. Its branch_summary is a milestone summary, not a stop condition: if the user's standing instruction or the authorized plan still has open work, continue with it now, in this turn. End the turn only when the authorized scope is done and verified, or a real blocker needs the user — and say which.";
-
-const CONTINUE_NUDGE_STATUS = "continue-nudge";
-
-export function buildLateEntriesNote(count: number): string {
-	return count === 1
-		? "The message between the branch_summary and this one arrived while the rewind was pending — it is new and still unanswered; handle it now."
-		: `The ${count} messages between the branch_summary and this one arrived while the rewind was pending — they are new and still unanswered; handle them now.`;
-}
-
-/** What the preview stage of a fold needs: a commit's input without its session writes. */
-export interface FoldPreviewInput {
-	/** The anchor entry the new branch starts from. */
-	targetId: string;
-	/** The anchor name that must still resolve to `targetId`. */
-	rewindTo: string;
-	/** The summary's label; must still be free. */
-	newLabel: string;
-	/** The model's summary, continuity delta included. */
-	summaryText: string;
-	handoffMode: HandoffMode;
-	/** Tokens; 0 skips the headroom gate. */
-	contextWindow: number;
-	/** The last folded entry: input after it is late, kept out of the fold and re-appended after it. */
-	foldPointId: string;
-	/** Successful overflow evidence retained after the pending input. */
-	recoveryEvidenceId?: string;
-	/** Gets the `branch:<newLabel>` completion marker before the branch is written. */
-	branchLabelEntryId?: string;
-	/** The continuation's lead text for a post-fold request of `afterTokens`. */
-	continuationText(afterTokens: number): string;
-}
-
-/** What the commit stage of a fold needs; the caller owns the summary and its own bookkeeping. */
-export interface FoldCommitInput extends FoldPreviewInput {
-	/** Synchronous label write; false when it failed. */
-	writeLabel(entryId: string, label: string | undefined): boolean;
-}
-
-/** Everything a fold writes, prepared from session reads alone. */
-export interface FoldMaterialization {
-	/** The leaf the fold abandons. */
-	oldLeafId: string | null;
-	/** The `branch_summary` text: handoff, full child reports and the continuity briefing. */
-	materialized: string;
-	/** The `branch_summary` details: file lists, handoff metadata and the ledger snapshot. */
-	details: Record<string, unknown>;
-	/** The entries between the target and the leaf. */
-	collapsedEntries: number;
-	readFiles: string[];
-	modifiedFiles: string[];
-	/** Input after the fold point, re-appended after the summary. */
-	lateEntries: LateEntry[];
-	continuity: FoldContinuity;
-	/** Open collapsed user instructions, separate from generated narrative. */
-	openUserRequests: OpenUserRequest[];
-	/** The latest compaction, re-appended after the summary because its kept range holds the target. */
-	carriedCompaction?: CompactionEntry;
-}
-
-/** `ok: false` is the reason `commitFold` would refuse for; nothing was written either way. */
-export type FoldPreview =
-	| { ok: false; reason: string }
-	| ({
-			ok: true;
-			/** The admission estimate of the first request after the fold, continuation included. */
-			projectedAfterTokens: number;
-			foldEstimateBefore: number;
-			foldEstimateAfter: number;
-	  } & FoldMaterialization);
-
-/** `ok: false` writes nothing; the session is as the caller found it. */
-export type FoldCommitOutcome =
-	| { ok: false; reason: string }
-	| {
-			ok: true;
-			summaryId: string;
-			oldLeafId: string | null;
-			collapsedEntries: number;
-			afterTokens: number;
-			foldEstimateBefore: number;
-			foldEstimateAfter: number;
-			/** Late entries re-appended after the summary. */
-			reappended: number;
-			refreshed: boolean;
-			historyRewriteNotified: boolean;
-			readFiles: string[];
-			modifiedFiles: string[];
-			/** The message that tells the model the fold landed. */
-			continuation: string;
-			openUserRequests: OpenUserRequest[];
-			continuityNotice?: string;
-			continuityReport?: FoldContinuity["report"];
-	  };
-
-/**
- * Everything a fold commit decides, from session reads alone: revalidate the
- * target, collect the span and the late input, reconcile the continuity
- * ledger, materialize the handoff, project the branch it leaves (full child
- * handoffs, briefing, late input and continuation included) and gate it on
- * reducing context and on the request headroom. `commitFold` lands exactly
- * this; candidate pricing reuses it with a placeholder `summaryText`.
- * A session read failing during the target checks throws; any later one is a
- * refusal.
- */
-export function previewFoldCommit(sm: SessionManager, input: FoldPreviewInput): FoldPreview {
-	const { targetId, rewindTo, newLabel, foldPointId } = input;
-	const refuse = (reason: string): FoldPreview => ({ ok: false, reason });
-	// A compaction or tree move since the summary was requested invalidates the
-	// fold: the anchor must still be the same labeled entry on the active
-	// branch, and the new label must still be free.
-	if (findLabeledEntry(sm, LABEL_PREFIX + rewindTo) !== targetId) {
-		return refuse(`'${rewindTo}' is no longer on the active branch`);
-	}
-	if (findLabeledEntry(sm, LABEL_PREFIX + newLabel)) {
-		return refuse(`a label '${newLabel}' now exists on the active branch`);
-	}
-	const staleReason = rewindStaleReason(sm, foldPointId);
-	if (staleReason) return refuse(staleReason);
-	const oldLeafId = sm.getLeafId();
-	// Input that arrived after the fold point (user steers drained at the
-	// rewind turn's boundary, other extensions' messages) sits on the segment
-	// about to be abandoned. It is new input, not collapsed work: it is
-	// re-appended onto the new branch, in order, ahead of the continuation
-	// (which flags it as unanswered).
-	const lateEntries = collectLateEntries(sm, foldPointId, input.recoveryEvidenceId);
-	try {
-		const { entries } = collectEntriesForBranchSummary(sm, oldLeafId, targetId);
-		const { fileOps } = prepareBranchEntries(entries, Number.MAX_SAFE_INTEGER);
-		const { readFiles, modifiedFiles } = computeFileLists(fileOps);
-		const children = entries.filter((entry) => entry.type === "branch_summary");
-		const all = new Map(sm.getEntries().map((entry) => [entry.id, entry]));
-		const sourceIds = new Set(
-			entries.filter((entry) => entry.type !== "branch_summary").map((entry) => entry.id),
-		);
-		for (const child of children) {
-			sourceIds.add(child.id);
-			const metadata = getHandoff(child);
-			if (metadata) for (const id of metadata.sourceIds) sourceIds.add(id);
-			else if (child.type === "branch_summary") {
-				const path = sm.getBranch(child.fromId);
-				const at = path.findIndex((entry) => entry.id === child.parentId);
-				for (const entry of path.slice(at + 1)) sourceIds.add(entry.id);
-			}
-		}
-		// Pure: the ledger only changes through the branch_summary a commit
-		// writes, so every failure ending before it leaves the ledger untouched.
-		const continuity = reconcileFoldContinuity(sm.getBranch(), input.summaryText, rewindTo);
-		const handoff = makeHandoff({
-			name: newLabel,
-			report: continuity.summaryText + formatFileOperations(readFiles, modifiedFiles),
-			mode: input.handoffMode,
-			children: children.map((child) => child.id),
-			sourceEntries: [...sourceIds].flatMap((id) => {
-				const entry = all.get(id);
-				return entry ? [entry] : [];
-			}),
-		});
-		// A child's own briefing is stale in its parent: only this fold's stays.
-		const handoffText = materializeHandoff(
-			handoff,
-			children.flatMap((child) =>
-				child.type === "branch_summary"
-					? [
-							{
-								id: child.id,
-								summary: stripContinuityBriefing(child.summary),
-								handoff: getHandoff(child),
-							},
-						]
-					: [],
-			),
-		);
-		const materialized =
-			continuity.briefing === undefined
-				? handoffText
-				: appendContinuityBriefing(handoffText, continuity.briefing);
-		const details = {
-			readFiles,
-			modifiedFiles,
-			treeNavigator: handoff,
-			...(continuity.snapshot && {
-				[LEDGER_DETAILS_KEY]: continuity.snapshot,
-			}),
-		};
-		let previewId = "tree-navigator-fold-preview";
-		while (all.has(previewId)) previewId += "-";
-		const preview: SessionEntry = {
-			type: "branch_summary",
-			id: previewId,
-			parentId: targetId,
-			timestamp: new Date().toISOString(),
-			fromId: oldLeafId ?? foldPointId,
-			summary: materialized,
-			details,
-			fromHook: true,
-		};
-		const carry = carriedCompaction(sm.getBranch(), targetId);
-		const prospectiveEntries: SessionEntry[] = [...all.values(), preview];
-		let prospectiveLeaf = previewId;
-		if (carry) {
-			const copy = compactionCopy(
-				carry,
-				previewId,
-				new Map(prospectiveEntries.map((entry) => [entry.id, entry])),
-			);
-			prospectiveEntries.push(copy);
-			prospectiveLeaf = copy.id;
-		}
-		const prospective = projectHandoffs(
-			buildSessionProjection(prospectiveEntries, prospectiveLeaf),
-			prospectiveEntries,
-		).messages;
-		const lateMessages: AgentMessage[] = lateEntries.map((late) =>
-			late.kind !== "custom"
-				? late.message
-				: {
-						role: "custom",
-						customType: late.customType,
-						content: late.content,
-						display: late.display,
-						details: late.details,
-						timestamp: Date.now(),
-					},
-		);
-		prospective.push(...lateMessages);
-		const currentEntries = sm.buildSessionProjection().entries;
-		const foldPointAt = currentEntries.findIndex((entry) => entry.sourceEntry.id === foldPointId);
-		if (foldPointAt < 0) return refuse("the folded work is no longer in the projected context");
-		const retainedIds = new Set(
-			buildSessionProjection(sm.getEntries(), targetId).entries.map(
-				(entry) => entry.sourceEntry.id,
-			),
-		);
-		const openUserRequests = collectOpenUserRequests(
-			currentEntries,
-			foldPointId,
-			retainedIds,
-			REWIND_CUSTOM_TYPE,
-		);
-		const foldEstimateBefore = estimateContentTokens([
-			...currentEntries.slice(0, foldPointAt + 1).flatMap((entry) => entry.messages),
-			...lateMessages,
-		]);
-		prospective.push({
-			role: "custom" as const,
-			customType: REWIND_CUSTOM_TYPE,
-			content:
-				input.continuationText(requestAccounting(sm, prospective).tokens) +
-				renderOpenUserRequests(openUserRequests) +
-				(continuity.notice ? `\n\n${continuity.notice}` : "") +
-				(lateEntries.length ? `\n\n${buildLateEntriesNote(lateEntries.length)}` : "") +
-				`\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`,
-			display: true,
-			timestamp: Date.now(),
-		});
-		const foldEstimateAfter = estimateContentTokens(prospective);
-		if (foldEstimateAfter >= foldEstimateBefore) {
-			const restoresCompacted =
-				precedesLatestCompaction(sm.getBranch(), targetId) &&
-				estimateContentTokens(projectAtEntry(sm.getEntries(), targetId, all)) >= foldEstimateBefore;
-			return refuse(
-				restoresCompacted
-					? `'${rewindTo}' lies before the latest compaction, so folding to it restores the compacted history instead of reducing projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`
-					: `the materialized handoff does not reduce projected context (estimated ${foldEstimateBefore} -> ${foldEstimateAfter} tokens); original history was kept`,
-			);
-		}
-		const projectedAfterTokens = requestAccounting(sm, prospective).tokens;
-		if (
-			input.contextWindow > 0 &&
-			projectedAfterTokens + RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS >
-				input.contextWindow
-		) {
-			return refuse(
-				"the materialized handoff leaves insufficient request headroom; original history was kept",
-			);
-		}
-		return {
-			ok: true,
-			projectedAfterTokens,
-			foldEstimateBefore,
-			foldEstimateAfter,
-			oldLeafId,
-			materialized,
-			details,
-			collapsedEntries: entries.length,
-			readFiles,
-			modifiedFiles,
-			lateEntries,
-			continuity,
-			openUserRequests,
-			...(carry && { carriedCompaction: carry }),
-		};
-	} catch (err) {
-		return refuse(
-			`the fold could not be prepared (${err instanceof Error ? err.message : String(err)})`,
-		);
-	}
-}
-
-const unrestoredFoldCursors = new WeakSet<SessionManager>();
-
-/**
- * The commit stage of a fold: preview it (`previewFoldCommit`), then branch
- * from the target, label, re-append late input, refresh the agent and emit
- * `session_tree`. Throws only before anything is written; every step after the
- * branch is guarded.
- */
-export async function commitFold(
-	sm: SessionManager,
-	input: FoldCommitInput,
-): Promise<FoldCommitOutcome> {
-	if (unrestoredFoldCursors.has(sm)) {
-		return {
-			ok: false,
-			reason:
-				"A previous fold could not restore the session cursor. Persistence remains uncertain; reload the session before another fold.",
-		};
-	}
-	const preview = previewFoldCommit(sm, input);
-	if (!preview.ok) return preview;
-	const {
-		oldLeafId,
-		materialized,
-		details,
-		collapsedEntries,
-		readFiles,
-		modifiedFiles,
-		lateEntries,
-		continuity,
-		openUserRequests,
-		foldEstimateBefore,
-		foldEstimateAfter,
-		carriedCompaction: carry,
-	} = preview;
-	const { targetId, newLabel, branchLabelEntryId } = input;
-	const previousLabel = branchLabelEntryId ? sm.getLabel(branchLabelEntryId) : undefined;
-	const labelWrite = (entryId: string, label: string | undefined) =>
-		trySessionWrite(sm, () => {
-			if (!input.writeLabel(entryId, label)) {
-				throw new Error("label write failed");
-			}
-		});
-	const refuseWrite = (step: string, error: unknown): FoldCommitOutcome => {
-		let cursorRestored = false;
-		try {
-			if (oldLeafId === null) sm.resetLeaf();
-			else sm.branch(oldLeafId);
-			cursorRestored = sm.getLeafId() === oldLeafId;
-		} catch {
-			// No append is safe until the original cursor has been restored.
-		}
-		let restorationAppended = false;
-		if (cursorRestored) {
-			const restoration = branchLabelEntryId
-				? labelWrite(branchLabelEntryId, previousLabel)
-				: trySessionWrite(sm, () =>
-						sm.appendCustomEntry("navigate-tree-fold-restoration", {
-							oldLeafId,
-							newLabel,
-						}),
-					);
-			restorationAppended = restoration.ok;
-			cursorRestored = restoration.ok || restoration.cursorRestored;
-		}
-		if (cursorRestored) unrestoredFoldCursors.delete(sm);
-		else unrestoredFoldCursors.add(sm);
-		refreshAgentMessages(sm);
-		return {
-			ok: false,
-			reason: `${step} (${error instanceof Error ? error.message : String(error)}). ${
-				cursorRestored
-					? "Original active branch restored in memory."
-					: "Original active branch could not be restored in memory."
-			} ${
-				restorationAppended
-					? "A restoration append succeeded."
-					: "No restoration append succeeded; durable rollback and completion-marker restoration are not confirmed."
-			} Persistence remains uncertain after the write failure; original archived entries were retained. Stop and inspect the session before continuing.`,
-		};
-	};
-	// An unrelated existing label must remain addressable on the archived branch.
-	if (branchLabelEntryId && previousLabel === undefined) {
-		const marker = labelWrite(branchLabelEntryId, BRANCH_LABEL_PREFIX + newLabel);
-		if (!marker.ok) return refuseWrite("the completion marker could not be written", marker.error);
-	}
-	const branch = trySessionWrite(sm, () =>
-		sm.branchWithSummary(targetId, materialized, details, true),
-	);
-	if (!branch.ok) return refuseWrite("the branch could not be written", branch.error);
-	const summaryId = branch.value;
-	const label = labelWrite(summaryId, LABEL_PREFIX + newLabel);
-	if (!label.ok) return refuseWrite("the summary label could not be written", label.error);
-	if (carry) {
-		const carried = trySessionWrite(sm, () =>
-			sm.appendCompaction(
-				carry.summary,
-				carry.firstKeptEntryId,
-				carry.tokensBefore,
-				carriedDetails(carry),
-				carry.fromHook,
-			),
-		);
-		if (!carried.ok)
-			return refuseWrite("the carried compaction could not be written", carried.error);
-	}
-	// Direct appends, not the steer queue: no second pass through other
-	// extensions' input handlers, and anything still queued is delivered
-	// after these, keeping the original order.
-	let reappended = 0;
-	for (const late of lateEntries) {
-		const appended = trySessionWrite(sm, () => {
-			if (late.kind !== "custom") {
-				sm.appendMessage(late.message as Parameters<SessionManager["appendMessage"]>[0]);
-			} else {
-				sm.appendCustomMessageEntry(
-					late.customType,
-					late.content as Parameters<SessionManager["appendCustomMessageEntry"]>[1],
-					late.display,
-					late.details,
-				);
-			}
-		});
-		if (!appended.ok) {
-			// Another wrapper can throw after this append reached the file. Keep a
-			// write that is durably there; refuse one that only reached memory.
-			const matched = (appended.appended ?? []).filter((entry) =>
-				late.kind === "custom"
-					? entry.type === "custom_message" && entry.customType === late.customType
-					: entry.type === "message" &&
-						entry.message.role === (late.message as { role?: string }).role,
-			);
-			const landed =
-				matched.length > 0 &&
-				persistedOnDisk(
-					sm,
-					matched.map((entry) => entry.id),
-				);
-			if (!landed) return refuseWrite("late input could not be written", appended.error);
-			// Re-branch to the landed entry: the restored cursor would drop it.
-			const keep = appended.appended.at(-1)?.id;
-			try {
-				if (keep) sm.branch(keep);
-			} catch {
-				return refuseWrite("late input could not be kept", appended.error);
-			}
-		}
-		reappended++;
-	}
-	// The branch has landed: every step below is guarded so the
-	// continuation always reaches the model.
-	let afterTokens = 0;
-	try {
-		afterTokens = estimateAdmissionTokens(sm);
-	} catch {
-		afterTokens = 0;
-	}
-	const refreshed = refreshAgentMessages(sm);
-	const historyRewriteNotified = await emitSessionTree(sm, oldLeafId, summaryId);
-	return {
-		ok: true,
-		summaryId,
-		oldLeafId,
-		collapsedEntries,
-		afterTokens,
-		foldEstimateBefore,
-		foldEstimateAfter,
-		reappended,
-		refreshed,
-		historyRewriteNotified,
-		readFiles,
-		modifiedFiles,
-		openUserRequests,
-		continuation:
-			input.continuationText(afterTokens) +
-			renderOpenUserRequests(openUserRequests) +
-			(continuity.notice ? `\n\n${continuity.notice}` : "") +
-			(reappended > 0 ? `\n\n${buildLateEntriesNote(reappended)}` : "") +
-			(refreshed ? "" : `\n\n${REFLECTION_BOOTSTRAP_WARNING_REWIND}`),
-		...(continuity.notice && { continuityNotice: continuity.notice }),
-		...(continuity.report && { continuityReport: continuity.report }),
-	};
-}
-
-/** What an engine fold needs from its session, read from the live context before any await. */
-interface FoldHost {
-	sm: SessionManager;
-	model: Model<Api> | undefined;
-	registry: Pick<ModelRegistry, "streamSimple" | "hasConfiguredAuth">;
-	thinking: ThinkingLevel | "off";
-	/** Set for an idle run: its commit refuses once the agent is working again. */
-	isIdle?: () => boolean;
-	recoveryEvidenceId?: string;
-	foldPointId?: string;
-}
-
-/** What a landed engine fold reports on top of `commitFold`'s own result. */
-type FoldLanded = Omit<Extract<FoldCommitOutcome, { ok: true }>, "ok"> & {
-	targetId: string;
-	contextBefore: number;
-	contextWindow: number;
-};
-
-type FoldResult = FoldOutcome<FoldLanded>;
-
-/** The queued-or-idle request shape: the session id comes from the caller's context. */
-export type FoldRequestInput = Omit<FoldRequest, "sessionId">;
-
-/** The engine entry points of one extension instance. */
-export interface FoldApi {
-	/**
-	 * Queue a fold for the session's next `turn_end` boundary (a running agent).
-	 * Refused while another fold is queued or running.
-	 */
-	queueFold(
-		sessionId: string,
-		request: FoldRequestInput,
-	): { ok: true } | { ok: false; reason: string };
-	/** Fold an idle session now and append the continuation without starting a turn. */
-	runFoldNow(
-		ctx: Pick<ExtensionContext, "sessionManager" | "model" | "modelRegistry" | "isIdle">,
-		request: FoldRequestInput,
-		options?: FoldRunOptions,
-	): Promise<FoldResult>;
-}
-
-/**
- * The shared admission policy for the engine's in-context request: the
- * estimate of the complete request (system prompt and tools included), the
- * output allowance and the recovery headroom must fit the model's window.
- */
-function foldAdmission(
-	contextWindow: number,
-	factor = DEFAULT_TOKEN_FACTOR,
-): SummarizeFoldOptions["admit"] {
-	return (request, maxOutputTokens) => {
-		const inputEstimate =
-			accountRequest(
-				[
-					...(request.systemPrompt
-						? [
-								{
-									role: "system" as const,
-									content: request.systemPrompt,
-									timestamp: 0,
-								},
-							]
-						: []),
-					...request.messages,
-				],
-				factor,
-			).tokens +
-			(request.tools ? Math.ceil((JSON.stringify(request.tools).length / 4) * factor) : 0);
-		return {
-			fits: inputEstimate + maxOutputTokens + RECOVERY_HEADROOM_TOKENS <= contextWindow,
-			inputEstimate,
-		};
-	};
-}
-
-/** Output cap the reduce pass and a prospective summary are sized to. */
-export function foldSummaryPlaceholderTokens(maxTokens: number | undefined): number {
-	return Math.min(
-		DEFAULT_REDUCE_OUTPUT_TOKENS,
-		typeof maxTokens === "number" && maxTokens > 0 ? maxTokens : DEFAULT_REDUCE_OUTPUT_TOKENS,
-	);
-}
-
-/** A valid summary whose text estimates to `tokens` at four characters per token. */
-export function foldPlaceholderSummary(tokens: number): string {
-	const head = "## Goal\nContinue the latest request and the open work.\n";
-	const chars = Math.max(1, tokens) * 4;
-	if (head.length >= chars) return head.slice(0, chars);
-	return head + "x".repeat(chars - head.length);
-}
-
-/**
- * Tokens the post-fold request may use: the window minus the hint reserve, or
- * 75% of the window when the hint is off.
- */
-export function foldRecommendationBudget(
-	contextWindow: number,
-	hintReserve: number | null,
-): number {
-	if (contextWindow <= 0) return 0;
-	const reserve = hintReserve === null ? Math.floor(contextWindow * 0.25) : hintReserve;
-	return Math.max(0, contextWindow - reserve);
-}
-
-/** Index of {@link selectFoldTarget}'s choice, or undefined when none is valid. */
-export function recommendFoldIndex<T extends FoldTargetCandidate>(
-	candidates: readonly T[],
-	budget: number,
-): number | undefined {
-	const selected = selectFoldTarget(candidates, budget);
-	if (!selected.ok) return undefined;
-	const index = candidates.indexOf(selected.candidate);
-	return index >= 0 ? index : undefined;
-}
-
-/** One priced fold target, root to leaf, for the plan and for recovery or auto. */
-export interface FoldCandidatePrice extends FoldPlanCandidate {
-	targetId: string;
-}
-
-/**
- * What a fold would replay for Strategy A, or undefined when that request cannot
- * be captured. Without `targetId` every message is summarized.
- */
-function preparedInContext(
-	sm: SessionManager,
-	targetId: string | undefined,
-	throughId: string,
-	captured: { modelKey: string; messages: Message[] } | undefined,
-	model: { provider: string; id: string } | undefined,
-): SummarizeFoldOptions["inContext"] | undefined {
-	if (!captured || !model || captured.modelKey !== `${model.provider}/${model.id}`)
-		return undefined;
-	const allEntries = sm.getEntries();
-	const leafId = sm.getLeafId();
-	if (!leafId) return undefined;
-	const projection = buildFoldProjection(allEntries, leafId, throughId);
-	const projectedMessages = buildContextMessages({
-		buildContextEntries: () => sm.buildContextEntries(),
-		buildSessionProjection: () => projection,
-		getBranch: () => sm.getBranch(),
-		getLabel: (id) => sm.getLabel(id),
-	});
-	return buildInContextMessages(
-		captured.messages,
-		projectedMessages,
-		targetId === undefined
-			? -1
-			: anchorMessageIndex(
-					{
-						entries: projection.entries.map((entry) => ({
-							...entry,
-							messages: entry.messages.filter((message) => message.role !== "system"),
-						})),
-					},
-					targetId,
-				),
-	);
-}
-
-/** The reduce allowance `summarizeFold` admits, including the runner's window cap. */
-function summarizerReduceTokens(
-	model:
-		| {
-				maxTokens?: number;
-				contextWindow?: number;
-		  }
-		| undefined,
-): number {
-	const runnerMax = summarizerOutputCap(model);
-	if (runnerMax === undefined) return foldSummaryPlaceholderTokens(undefined);
-	return Math.min(DEFAULT_REDUCE_OUTPUT_TOKENS, runnerMax);
-}
-
-/** `createFoldSummaryRunner`'s response cap, or undefined without a model limit. */
-function summarizerOutputCap(
-	model: { maxTokens?: number; contextWindow?: number } | undefined,
-): number | undefined {
-	const maxTokens = model?.maxTokens;
-	if (typeof maxTokens !== "number" || maxTokens <= 0) return undefined;
-	return Math.min(maxTokens, Math.floor((model?.contextWindow ?? 0) / 4));
-}
-
-function previewStrategy(
-	inContext: SummarizeFoldOptions["inContext"] | undefined,
-	contextWindow: number,
-	reduceOut: number,
-	focus: string,
-	parent: { mode: HandoffMode; childCount: number },
-	continuitySection: string | undefined,
-	factor: number,
-): "in-context" | "chunked" {
-	if (!inContext) return "chunked";
-	const admitted = foldAdmission(contextWindow, factor)(
-		{
-			systemPrompt: inContext.systemPrompt,
-			tools: inContext.tools,
-			messages: [
-				...inContext.messages,
-				{
-					role: "user",
-					content: [
-						{
-							type: "text",
-							text: buildSummaryRequestText(inContext.first, focus, parent, continuitySection),
-						},
-					],
-					timestamp: 0,
-				},
-			],
-		},
-		reduceOut,
-	);
-	return admitted.fits ? "in-context" : "chunked";
-}
-
-const FOCUS_REQUEST_CHARS = 400;
-
-/** Focus for a manual fold: the latest user request and whether a handoff still has open work. */
-function defaultFoldFocus(sm: SessionManager): string {
-	let latest = "";
-	let newestSummary = "";
-	try {
-		for (const entry of sm.getBranch()) {
-			if (entry.type === "message" && entry.message.role === "user") {
-				const text = extractTextContent(entry.message.content).replace(/\s+/g, " ").trim();
-				if (text) latest = text;
-			} else if (entry.type === "branch_summary") {
-				newestSummary = entry.summary;
-			}
-		}
-	} catch {
-		latest = "";
-		newestSummary = "";
-	}
-	const open = newestSummary !== "" && hasOpenWork(newestSummary);
-	const request = latest
-		? `Latest request: ${latest.slice(0, FOCUS_REQUEST_CHARS).trimEnd()}`
-		: "Latest request: continue the work on this branch.";
-	const remaining = open
-		? "Open work remains in the newest handoff; continue it rather than wrapping up."
-		: "Continue the unfinished work still on this branch from that request.";
-	const focus = `${request} ${remaining}`;
-	return focus.length >= MIN_SUMMARY_FOCUS_LENGTH
-		? focus
-		: `${focus} Continue the authorized work.`;
-}
-
-/**
- * Price every active anchor with the commit preview, including full child
- * handoffs, the ledger and the continuation. `projectedAfterTokens` is that
- * preview, never the anchor's own footprint subtracted from the current total.
- */
-export function priceFoldCandidates(
-	sm: SessionManager,
-	input: {
-		model?: {
-			provider: string;
-			id: string;
-			contextWindow?: number;
-			maxTokens?: number;
-		};
-		handoffMode: HandoffMode;
-		captured?: { modelKey: string; messages: Message[] };
-		focus: string;
-		suggestLabel(anchorName: string): string;
-		/** Last folded entry. Later user and custom input is priced as late, not subtracted. */
-		foldPointId?: string;
-		/** The summarizer's reasoning level; its allowance decides whether the in-context call fits. */
-		thinking?: ThinkingLevel | "off";
-	},
-): FoldCandidatePrice[] {
-	const contextWindow = input.model?.contextWindow ?? 0;
-	const beforeTokens = estimateAdmissionTokens(sm);
-	const reduceOut = summarizerReduceTokens(input.model);
-	const reduceCeiling = Math.min(
-		reduceOut + reasoningAllowance(input.thinking ?? "off"),
-		summarizerOutputCap(input.model) ?? Number.POSITIVE_INFINITY,
-	);
-	const placeholder = foldPlaceholderSummary(reduceOut);
-	const leafId = input.foldPointId ?? sm.getLeafId();
-	return collectActiveAnchors(sm).map((anchor) => {
-		const suggestedLabel = input.suggestLabel(anchor.name);
-		const targetId = findLabeledEntry(sm, LABEL_PREFIX + anchor.name) ?? "";
-		const priced = {
-			name: anchor.name,
-			targetId,
-			...(LABEL_PREFIX + anchor.name === START_ANCHOR_LABEL ? { auto: true as const } : {}),
-			...(anchor.hint ? { afterPreview: anchor.hint } : {}),
-			beforeTokens,
-			projectedAfterTokens: beforeTokens,
-			contextWindow,
-			strategy: "chunked" as const,
-			suggestedLabel,
-		};
-		if (!leafId || !targetId || !isValidName(anchor.name)) {
-			return {
-				...priced,
-				valid: false,
-				reason: !isValidName(anchor.name)
-					? `anchor names are kebab-case, at most ${MAX_NAME_LENGTH} characters`
-					: `'${anchor.name}' is no longer on the active branch`,
-			};
-		}
-		let strategy: "in-context" | "chunked" = "chunked";
-		try {
-			const { entries } = collectEntriesForBranchSummary(sm, leafId, targetId);
-			strategy = previewStrategy(
-				preparedInContext(sm, targetId, leafId, input.captured, input.model),
-				contextWindow,
-				reduceCeiling,
-				input.focus,
-				{
-					mode: input.handoffMode,
-					childCount: entries.filter((entry) => entry.type === "branch_summary").length,
-				},
-				continuityRequestSection(sm, {
-					target: targetId,
-					rewindTo: anchor.name,
-				}),
-				tokenFactorOf(sm),
-			);
-		} catch {
-			strategy = "chunked";
-		}
-		try {
-			const preview = previewFoldCommit(sm, {
-				targetId,
-				rewindTo: anchor.name,
-				newLabel: suggestedLabel,
-				summaryText: placeholder,
-				handoffMode: input.handoffMode,
-				contextWindow,
-				foldPointId: leafId,
-				continuationText: (afterTokens) =>
-					buildRewindDoneText(
-						{
-							rewindTo: anchor.name,
-							newLabel: suggestedLabel,
-							beforeTokens,
-							contextWindow,
-						},
-						afterTokens,
-					),
-			});
-			if (!preview.ok) {
-				return { ...priced, strategy, valid: false, reason: preview.reason };
-			}
-			return {
-				...priced,
-				strategy,
-				valid: true,
-				projectedAfterTokens: preview.projectedAfterTokens,
-			};
-		} catch (error) {
-			return {
-				...priced,
-				strategy,
-				valid: false,
-				reason: error instanceof Error ? error.message : String(error),
-			};
-		}
-	});
-}
-
-/** The receipt of a fold that landed: the continuation text plus the fold's figures. */
-function foldDoneDraft(
-	request: FoldRequest,
-	done: Extract<FoldResult, { status: "done" }>,
-): RewindMessageDraft {
-	const landed = done.commit;
-	return rewindMessageDraft(landed.continuation, {
-		status: "done",
-		rewindTo: request.rewindTo,
-		newLabel: request.newLabel,
-		targetId: landed.targetId,
-		summaryId: landed.summaryId,
-		collapsedEntries: landed.collapsedEntries,
-		contextBefore: landed.contextBefore,
-		contextAfter: landed.afterTokens,
-		contextWindow: landed.contextWindow,
-		origin: request.origin,
-		summaryStrategy: done.strategy,
-		summaryCalls: done.calls,
-		foldEstimateBefore: landed.foldEstimateBefore,
-		foldEstimateAfter: landed.foldEstimateAfter,
-		agentMessagesRefreshed: landed.refreshed,
-		historyRewriteNotified: landed.historyRewriteNotified,
-		readFiles: landed.readFiles,
-		modifiedFiles: landed.modifiedFiles,
-		reappendedLateMessages: landed.reappended,
-		openUserRequests: landed.openUserRequests,
-		...(landed.continuityReport && { continuity: landed.continuityReport }),
-	});
-}
-
-/** The receipt of a fold that did not finish, including uncertain commit writes. */
-function foldFailedDraft(
-	request: FoldRequest,
-	outcome: Exclude<FoldResult, { status: "done" }>,
-): RewindMessageDraft {
-	const head = `[${TOOL_NAME}] Fold to '${request.rewindTo}' (collapse as '${request.newLabel}')`;
-	const base = {
-		status: "failed",
-		rewindTo: request.rewindTo,
-		newLabel: request.newLabel,
-		origin: request.origin,
-		...(request.toolCallId && { toolCallId: request.toolCallId }),
-	};
-	if (outcome.status === "failed") {
-		return rewindMessageDraft(
-			`${head} failed at the ${outcome.stage} stage (${outcome.reason}): ${outcome.detail}${outcome.stage === "commit" ? "" : "\n\nNothing was collapsed."}`,
-			{
-				...base,
-				stage: outcome.stage,
-				reason: outcome.reason,
-				detail: outcome.detail,
-			},
-		);
-	}
-	const reason = outcome.status === "busy" ? "busy" : "cancelled";
-	return rewindMessageDraft(
-		outcome.status === "busy"
-			? `${head} was not started: another fold is running for this session. Nothing was collapsed.`
-			: `${head} was cancelled. Nothing was collapsed.`,
-		{ ...base, reason },
-	);
-}
-
-interface ToolResult {
-	content: Array<{ type: "text"; text: string }>;
-	details: Record<string, unknown>;
-	isError?: boolean;
-}
-
-function toolError(text: string, details: Record<string, unknown> = {}): ToolResult {
-	return {
-		content: [{ type: "text", text }],
-		// `isError` is a statement of intent only: pi-agent-core ignores the flag
-		// on a *returned* result (only a thrown `execute()` is finalized as
-		// failed), so without the `refusal` marker below the host records this
-		// as a successful call and the TUI paints the row with `toolSuccessBg`.
-		// The `tool_result` handler in the factory promotes the marker into the
-		// host's real error channel.
-		details: { ...details, refusal: true },
-		isError: true,
-	};
 }
 
 const foldApis = new WeakMap<ExtensionAPI, FoldApi>();

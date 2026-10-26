@@ -2,7 +2,7 @@ import { describe, it } from "bun:test";
 import assert from "node:assert/strict";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { recoveryCutOf } from "../../src/index.ts";
+import { recoveryCutOf } from "../../src/recovery/recovery-cut.ts";
 
 function call(sm: SessionManager, id = "reused") {
 	return sm.appendMessage(

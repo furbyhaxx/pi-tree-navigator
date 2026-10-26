@@ -21,11 +21,8 @@ import {
 import { RECOMMENDED_MILESTONE_POLICY } from "../../src/auto/milestone-policy.ts";
 import { parseClassifierModel } from "../../src/continuity/intent-policy.ts";
 import { estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
-import navigateTree, {
-	__testHooks,
-	PRESSURE_COMPACTION_CUSTOM_TYPE,
-	REWIND_CUSTOM_TYPE,
-} from "../../src/index.ts";
+import { REWIND_CUSTOM_TYPE } from "../../src/fold/fold-receipts.ts";
+import navigateTree, { __testHooks, PRESSURE_COMPACTION_CUSTOM_TYPE } from "../../src/index.ts";
 import { safeMessage } from "../classifier-eval/adapters.ts";
 import {
 	type Billing,
