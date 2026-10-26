@@ -23,7 +23,7 @@ export interface ProposalModelRunner {
 
 /** A failed provider response with observed billing retained for proposal accounting. */
 export class ProposalRequestError extends Error {
-	readonly usage?: Usage;
+	readonly usage?: Usage | undefined;
 	constructor(message: string, usage?: Usage) {
 		super(message);
 		this.name = "ProposalRequestError";
@@ -159,7 +159,7 @@ export async function proposeTree(
 			const response = await runner.complete({
 				systemPrompt: SYSTEM,
 				text,
-				signal: options.signal,
+				...(options.signal === undefined ? {} : { signal: options.signal }),
 			});
 			if (response.usage) usage.push(response.usage);
 			options.signal?.throwIfAborted();

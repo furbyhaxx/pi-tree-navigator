@@ -5,7 +5,7 @@ export type ProposalToolMode = "full" | "calls-only" | "omit";
 
 /** Explicit disclosure and model selection for tree proposals. */
 export interface ProposalOptions {
-	readonly model?: string;
+	readonly model?: string | undefined;
 	readonly tools: Readonly<Record<string, ProposalToolMode>>;
 }
 
@@ -45,16 +45,20 @@ export function parseProposalOptions(raw: unknown): ProposalOptions {
 	const value = raw as Record<string, unknown>;
 	for (const key of Object.keys(value))
 		if (key !== "model" && key !== "tools") throw new Error(`Unknown treeProposal field: ${key}`);
-	if (value.model !== undefined) {
-		if (typeof value.model !== "string")
+	if (value["model"] !== undefined) {
+		if (typeof value["model"] !== "string")
 			throw new Error("treeProposal.model must be current or provider/model[:thinking]");
-		parseProposalModel(value.model);
+		parseProposalModel(value["model"]);
 	}
 	const tools: Record<string, ProposalToolMode> = {};
-	if (value.tools !== undefined) {
-		if (typeof value.tools !== "object" || value.tools === null || Array.isArray(value.tools))
+	if (value["tools"] !== undefined) {
+		if (
+			typeof value["tools"] !== "object" ||
+			value["tools"] === null ||
+			Array.isArray(value["tools"])
+		)
 			throw new Error("treeProposal.tools must map exact tool names to full, calls-only or omit");
-		for (const [name, mode] of Object.entries(value.tools)) {
+		for (const [name, mode] of Object.entries(value["tools"])) {
 			if (!name.trim() || (mode !== "full" && mode !== "calls-only" && mode !== "omit"))
 				throw new Error(
 					`Invalid treeProposal.tools[${JSON.stringify(name)}]: expected full, calls-only or omit`,
@@ -63,7 +67,7 @@ export function parseProposalOptions(raw: unknown): ProposalOptions {
 		}
 	}
 	return {
-		...(value.model === undefined ? {} : { model: value.model as string }),
+		...(value["model"] === undefined ? {} : { model: value["model"] as string }),
 		tools,
 	};
 }

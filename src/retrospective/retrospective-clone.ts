@@ -64,7 +64,9 @@ function validateRanges(snapshot: SessionSnapshot, plan: RetrospectivePlan): Ind
 			if (start <= previousEnd)
 				throw new Error(`${group.name}: sibling ranges must be ordered and non-overlapping`);
 			previousEnd = end;
-			const incomingParent = entries[start].parentId;
+			const startEntry = entries[start];
+			if (startEntry === undefined) throw new Error(`${group.name}: missing range start`);
+			const incomingParent = startEntry.parentId;
 			if (
 				group.state === "folded" &&
 				(!safeCuts.has(incomingParent === null ? -1 : (indices.get(incomingParent) ?? -2)) ||
@@ -131,7 +133,7 @@ export function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
 	function resolveParent(parent: string | null): string | null {
 		for (let index = overrides.length - 1; index >= 0; index--) {
 			const override = overrides[index];
-			if (override.parent === parent) return override.marker;
+			if (override?.parent === parent) return override.marker;
 		}
 		return parent === null ? null : (completed.get(parent) ?? parent);
 	}
@@ -212,7 +214,9 @@ export function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
 		let cursor = first;
 		for (const range of children) {
 			copy(cursor, range.first - 1);
-			const originalParent = original[range.first].parentId;
+			const firstEntry = original[range.first];
+			if (firstEntry === undefined) throw new Error(`${range.group.name}: missing range start`);
+			const originalParent = firstEntry.parentId;
 			const parent = resolveParent(originalParent);
 			groups.push({
 				name: range.group.name,
@@ -277,8 +281,8 @@ export function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
 			const handoff = makeHandoff({
 				name: range.group.name,
 				title,
-				goal: range.group.goal,
-				outcome: range.group.outcome,
+				...(range.group.goal === undefined ? {} : { goal: range.group.goal }),
+				...(range.group.outcome === undefined ? {} : { outcome: range.group.outcome }),
 				report: range.group.summary,
 				mode: range.group.mode ?? plan.parentHandoffMode,
 				children: childGroups.map((group) => group.entryId),
@@ -288,10 +292,11 @@ export function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
 				const entry = entries.find((entry) => entry.id === group.entryId);
 				if (entry?.type !== "branch_summary")
 					throw new Error(`Missing child handoff ${group.name}`);
+				const childHandoff = getHandoff(entry);
 				return {
 					id: entry.id,
 					summary: entry.summary,
-					handoff: getHandoff(entry),
+					...(childHandoff === undefined ? {} : { handoff: childHandoff }),
 				};
 			});
 			append({
@@ -329,6 +334,7 @@ export function buildClone(snapshot: SessionSnapshot, plan: RetrospectivePlan) {
 	function copy(first: number, last: number) {
 		for (let index = first; index <= last; index++) {
 			const entry = original[index];
+			if (entry === undefined) throw new Error(`Missing source entry at index ${index}`);
 			const parentId = resolveParent(entry.parentId);
 			if (entry.parentId !== parentId)
 				changes.push({
