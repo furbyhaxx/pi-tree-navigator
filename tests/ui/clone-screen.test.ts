@@ -42,7 +42,9 @@ describe("text screen", () => {
 			assert.ok(narrow.every((line) => visibleWidth(line) <= 30));
 			const marked = narrow.filter((line) => line.includes("→"));
 			assert.equal(marked.length, 1);
-			assert.ok(marked[0].includes("Second"));
+			const markedLine = marked[0];
+			assert.ok(markedLine !== undefined);
+			assert.ok(markedLine.includes("Second"));
 			screen.handleInput("\x1b");
 		});
 		const key = await showView(ctx, {

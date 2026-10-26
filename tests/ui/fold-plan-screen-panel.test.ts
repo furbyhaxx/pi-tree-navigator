@@ -16,6 +16,11 @@ import {
 	unwrapped,
 } from "./fold-plan-screen-fixture.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 describe("fold plan screen", () => {
 	it("starts the recommended anchor with its suggested label and shows the progress", async () => {
 		const h = harness();
@@ -43,7 +48,7 @@ describe("fold plan screen", () => {
 				[{ anchor: "impl-start", label: "impl-start-folded" }],
 			);
 			assert.match(h.view(screen), /folding · preparing/);
-			h.calls.start[0].onProgress({ phase: "map", call: 2, plannedCalls: 5 });
+			required(h.calls.start[0]).onProgress({ phase: "map", call: 2, plannedCalls: 5 });
 			assert.match(h.view(screen), /folding · map · call 2\/5/);
 			screen.handleInput(DOWN);
 			assert.match(h.view(screen), /rewind to impl-start/, "no switching while folding");
@@ -64,9 +69,9 @@ describe("fold plan screen", () => {
 		const h = harness({ onAbort: { status: "cancelled" } });
 		const exit = await h.run(async (screen) => {
 			screen.handleInput(ENTER);
-			assert.equal(h.calls.start[0].signal.aborted, false);
+			assert.equal(required(h.calls.start[0]).signal.aborted, false);
 			screen.handleInput(ESC);
-			assert.equal(h.calls.start[0].signal.aborted, true);
+			assert.equal(required(h.calls.start[0]).signal.aborted, true);
 			assert.match(h.view(screen), /cancelling the fold/);
 			await tick();
 			assert.match(h.view(screen), /cancelled — nothing was changed/);
@@ -307,7 +312,7 @@ describe("fold plan screen", () => {
 			assert.equal(h.calls.start.length, 1, "a running fold is not started twice");
 
 			screen.handleInput(ESC);
-			assert.equal(h.calls.start[0].signal.aborted, true);
+			assert.equal(required(h.calls.start[0]).signal.aborted, true);
 			await tick();
 			assert.match(h.view(screen), /cancelled — nothing was changed/);
 			assert.equal(screen.handleMouse(mouse({ y: 5 })), undefined);
@@ -367,7 +372,7 @@ describe("fold plan screen", () => {
 			},
 		);
 		assert.equal(exit, "done");
-		assert.equal(h.dialogs.input[0][1], "impl-start-folded");
+		assert.equal(required(required(h.dialogs.input[0])[1]), "impl-start-folded");
 		assert.deepEqual(
 			h.calls.start.map(({ plan }) => plan),
 			[{ anchor: "impl-start", label: "tidy-parser" }],
@@ -397,7 +402,7 @@ describe("fold plan screen", () => {
 				h.view(screen);
 				screen.handleInput(ENTER);
 				h.view(screen);
-				h.calls.start[0].onProgress({ phase: "map", call: 1, plannedCalls: 3 });
+				required(h.calls.start[0]).onProgress({ phase: "map", call: 1, plannedCalls: 3 });
 				h.view(screen);
 				h.release(done());
 				await tick();
@@ -435,7 +440,7 @@ describe("fold plan screen", () => {
 				screen.handleInput(DOWN);
 				screen.handleInput(ENTER);
 				h.view(screen);
-				h.calls.start[0].onProgress({
+				required(h.calls.start[0]).onProgress({
 					phase: "reduce",
 					call: 12,
 					plannedCalls: 12,

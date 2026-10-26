@@ -95,7 +95,7 @@ export function harness(
 ) {
 	const columns = options.columns ?? 60;
 	const candidates = options.candidates ?? sampleCandidates();
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const dialogs = {
 		input: [] as [string, string | undefined][],
 		editor: [] as [string, string | undefined][],

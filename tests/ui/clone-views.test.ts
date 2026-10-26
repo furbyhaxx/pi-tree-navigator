@@ -259,8 +259,10 @@ describe("preview view", () => {
 
 	it("keeps deeply nested groups inside the width", async () => {
 		const preview = await previewRetrospectiveSession(planPath);
+		const group = preview.groups[0];
+		assert.ok(group);
 		const groups = Array.from({ length: 30 }, (_, depth) => ({
-			...preview.groups[0],
+			...group,
 			name: `level-${depth}`,
 			depth,
 		}));

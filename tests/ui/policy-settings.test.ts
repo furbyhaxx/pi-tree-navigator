@@ -52,7 +52,7 @@ interface Setup {
 
 function harness(setup: Setup = {}) {
 	const calls: string[] = [];
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const inputs = [...(setup.inputs ?? [])];
 	const editors = [...(setup.editors ?? [])];
 	const asked: [string, string | undefined][] = [];

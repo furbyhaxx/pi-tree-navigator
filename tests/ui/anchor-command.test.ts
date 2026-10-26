@@ -18,6 +18,11 @@ import {
 	registerAnchorCommand,
 } from "../../src/ui/anchor-command.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 const directories: string[] = [];
 afterEach(async () => {
 	for (const directory of directories.splice(0)) {
@@ -157,7 +162,7 @@ function setup(options: Options = {}) {
 	const width = options.width ?? 80;
 	const screens = [...(options.screens ?? [])];
 	const rendered: string[][] = [];
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const editors: string[] = [];
 	const theme = {
 		fg: (_color: string, text: string) => text,
@@ -209,7 +214,7 @@ function setup(options: Options = {}) {
 		},
 	} as unknown as ExtensionCommandContext;
 
-	const command = commands[0]?.options;
+	const command = required(commands[0]).options;
 	return {
 		commands,
 		command,
@@ -237,7 +242,7 @@ describe("/anchor registration and completion", () => {
 			["anchor"],
 		);
 		assert.match(
-			commands[0].options.description ?? "",
+			required(commands[0]).options.description ?? "",
 			/^\[tree\|list\|current\|fold\|clone\|settings\] — /,
 		);
 	});
@@ -326,6 +331,7 @@ describe("/anchor dispatch", () => {
 			["curent", "current"],
 		]) {
 			const test = setup({ hasUI: false });
+			assert.ok(typo !== undefined);
 			await test.run(typo);
 			const last = test.notifications.at(-1);
 			assert.equal(last?.type, "warning");
@@ -338,8 +344,8 @@ describe("/anchor dispatch", () => {
 
 		const far = setup({ hasUI: false });
 		await far.run("zzzzzzzz");
-		assert.ok(!far.notifications[0].message.includes("Did you mean"));
-		assert.ok(far.notifications[0].message.includes("Usage: /anchor"));
+		assert.ok(!required(far.notifications[0]).message.includes("Did you mean"));
+		assert.ok(required(far.notifications[0]).message.includes("Usage: /anchor"));
 	});
 
 	it("prints usage without UI, naming clone and --full-tool", async () => {
@@ -359,9 +365,9 @@ describe("/anchor dispatch", () => {
 		const files = await sessionFile();
 		const headless = setup({ hasUI: false, cwd: files.directory });
 		await headless.run('clone inspect "session.jsonl"');
-		assert.match(headless.notifications[0].message, /Inspected "Original"/);
+		assert.match(required(headless.notifications[0]).message, /Inspected "Original"/);
 		assert.match(
-			headless.notifications[0].message,
+			required(headless.notifications[0]).message,
 			/Rerun \/anchor clone inspect <session\.jsonl>/,
 		);
 		assert.equal(headless.editors.length, 0);
@@ -370,8 +376,8 @@ describe("/anchor dispatch", () => {
 		await ui.run("restructure inspect session.jsonl");
 		assert.deepEqual(ui.editors, []);
 		assert.equal(ui.rendered.length, 1);
-		assert.match(ui.rendered[0].join("\n"), /Session\s+Original/);
-		assert.match(ui.notifications[0].message, /1 user turns/);
+		assert.match(required(ui.rendered[0]).join("\n"), /Session\s+Original/);
+		assert.match(required(ui.notifications[0]).message, /1 user turns/);
 	});
 
 	it("refuses options after inspect/preview paths instead of reading them as the filename", async () => {
@@ -390,7 +396,7 @@ describe("/anchor dispatch", () => {
 
 		const quoted = setup({ hasUI: false, cwd: files.directory });
 		await quoted.run('clone inspect "session.jsonl"');
-		assert.match(quoted.notifications[0].message, /Inspected "Original"/);
+		assert.match(required(quoted.notifications[0]).message, /Inspected "Original"/);
 	});
 });
 
@@ -409,7 +415,7 @@ describe("/anchor screens", () => {
 		it(`opens the hub at ${width} columns, shows every stub and closes on escape`, async () => {
 			const test = setup({ width, screens: [press(ESC)] });
 			await test.run("");
-			const lines = test.rendered[0];
+			const lines = required(test.rendered[0]);
 			for (const line of lines)
 				assert.ok(visibleWidth(line) <= width, `${visibleWidth(line)}: ${line}`);
 			const text = lines.join("\n");
@@ -423,8 +429,8 @@ describe("/anchor screens", () => {
 			]) {
 				assert.ok(text.includes(label), label);
 			}
-			assert.ok(lines[0].includes("ctx 38.4% of 372k"));
-			assert.ok(lines[0].startsWith("─ Anchor "));
+			assert.ok(required(lines[0]).includes("ctx 38.4% of 372k"));
+			assert.ok(required(lines[0]).startsWith("─ Anchor "));
 			assert.ok(!text.includes("not available yet"));
 			assert.ok(text.includes("Current briefing"));
 			assert.equal(test.remainingScreens(), 0);
@@ -446,35 +452,37 @@ describe("/anchor screens", () => {
 		});
 		await test.run("");
 		assert.deepEqual(test.notifications, []);
-		assert.ok(test.rendered[1][0].includes("Anchor/Current"));
-		assert.ok(test.rendered[3][0].includes("Anchor/Fold"));
-		assert.ok(test.rendered[5][0].includes("Anchor/Settings"));
+		assert.ok(required(required(test.rendered[1])[0]).includes("Anchor/Current"));
+		assert.ok(required(required(test.rendered[3])[0]).includes("Anchor/Fold"));
+		assert.ok(required(required(test.rendered[5])[0]).includes("Anchor/Settings"));
 		assert.equal(test.rendered.length, 7);
 	});
 
 	it("opens the tree from the hub and returns on Escape", async () => {
 		const test = setup({ screens: [press(ENTER), press(ESC), press(ESC)] });
 		await test.run("");
-		assert.ok(test.rendered[1][0].includes("Anchor/Tree"));
+		assert.ok(required(required(test.rendered[1])[0]).includes("Anchor/Tree"));
 		assert.equal(test.remainingScreens(), 0);
 		assert.equal(test.notifications.length, 0);
-		const treeRow = test.rendered[0].find((line) => line.includes("Session tree & phases"));
+		const treeRow = required(test.rendered[0]).find((line) =>
+			line.includes("Session tree & phases"),
+		);
 		assert.ok(!treeRow?.includes("not available yet"));
 	});
 
 	it("lists anchors with savings and opens the fold plan for the chosen anchor with r", async () => {
 		const test = setup({ screens: [press(DOWN, "r"), press(ESC), press(ESC)] });
 		await test.run("list");
-		const text = test.rendered[0].join("\n");
+		const text = required(test.rendered[0]).join("\n");
 		assert.ok(text.includes("◆ start (auto)"));
 		assert.ok(text.includes("4.1% · 15.2k · −99.3k savable"));
 		assert.ok(text.includes("22.7% · 84.4k · −30.1k savable"));
 		assert.ok(text.includes("+ Set new anchor at current leaf…"));
 		assert.ok(text.includes("↳ after: “Analyze our pi-tree-navigator”"));
-		assert.ok(test.rendered[0][0].includes("2 anchors · ctx 38.4% of 372k"));
+		assert.ok(required(required(test.rendered[0])[0]).includes("2 anchors · ctx 38.4% of 372k"));
 		assert.deepEqual(test.calls.folds, []);
 		assert.deepEqual(test.calls.plans, ["context-gathered"]);
-		assert.ok(test.rendered[1][0].includes("Anchor/Fold"));
+		assert.ok(required(required(test.rendered[1])[0]).includes("Anchor/Fold"));
 		assert.equal(test.remainingScreens(), 0);
 	});
 
@@ -488,7 +496,7 @@ describe("/anchor screens", () => {
 				savableTokens: 0,
 				beforeCompaction: true,
 			},
-			{ ...ANCHORS[1], beforeCompaction: true },
+			{ ...required(ANCHORS[1]), beforeCompaction: true },
 		];
 		const test = setup({
 			width: 60,
@@ -496,17 +504,17 @@ describe("/anchor screens", () => {
 			screens: [press(ENTER), press(ESC)],
 		});
 		await test.run("list");
-		for (const line of test.rendered[0]) assert.ok(visibleWidth(line) <= 60, line);
-		assert.ok(test.rendered[0].join("\n").includes("Before compaction: folding"));
+		for (const line of required(test.rendered[0])) assert.ok(visibleWidth(line) <= 60, line);
+		assert.ok(required(test.rendered[0]).join("\n").includes("Before compaction: folding"));
 		assert.equal(
-			test.notifications[0].message,
+			required(test.notifications[0]).message,
 			`Anchor 'planned': 48.1% of the window (179.0k tok). ${note}`,
 		);
 		const headless = setup({ hasUI: false, anchors });
 		await headless.run("list");
-		const lines = headless.notifications[0].message.split("\n");
-		assert.match(lines[1], /planned .* −0 savable {2}\(before compaction\)$/);
-		assert.ok(!lines[2].includes("before compaction"));
+		const lines = required(headless.notifications[0]).message.split("\n");
+		assert.match(required(lines[1]), /planned .* −0 savable {2}\(before compaction\)$/);
+		assert.ok(!required(lines[2]).includes("before compaction"));
 	});
 
 	it("ignores r on the new-anchor row", async () => {
@@ -522,7 +530,7 @@ describe("/anchor screens", () => {
 		const test = setup({ screens: [press(ENTER), press(ESC)] });
 		await test.run("list");
 		assert.equal(
-			test.notifications[0].message,
+			required(test.notifications[0]).message,
 			"Anchor 'start' after “Analyze our pi-tree-navigator”: 4.1% of the window (15.2k tok); folding to it would free about 99.3k tok.",
 		);
 		assert.deepEqual(test.calls.folds, []);
@@ -538,9 +546,15 @@ describe("/anchor screens", () => {
 			test.notifications.map(({ type }) => type),
 			["warning", "warning", "info"],
 		);
-		assert.match(test.notifications[0].message, /^Invalid anchor name "Bad Name"/);
-		assert.match(test.notifications[1].message, /^An anchor named 'start' already exists/);
-		assert.match(test.notifications[2].message, /^Anchor 'fresh-name' set at the current leaf/);
+		assert.match(required(test.notifications[0]).message, /^Invalid anchor name "Bad Name"/);
+		assert.match(
+			required(test.notifications[1]).message,
+			/^An anchor named 'start' already exists/,
+		);
+		assert.match(
+			required(test.notifications[2]).message,
+			/^Anchor 'fresh-name' set at the current leaf/,
+		);
 		assert.deepEqual(test.calls.anchors, ["fresh-name"]);
 	});
 
@@ -560,12 +574,12 @@ describe("/anchor screens", () => {
 			screens: [press(DOWN, DOWN, ENTER), press(ESC), press(ESC)],
 		});
 		await test.run("");
-		const row = test.rendered[0].find((line) => line.includes("Current briefing & cont"));
+		const row = required(test.rendered[0]).find((line) => line.includes("Current briefing & cont"));
 		assert.ok(row?.includes("2 rules · rev 1"), row ?? "");
 		assert.ok(!row?.includes("not available yet"));
-		assert.ok(test.rendered[1][0].startsWith("─ Anchor/Current "));
-		assert.ok(test.rendered[1][0].includes("rev 1 · 2 rules"));
-		assert.ok(test.rendered[1].join("\n").includes("R1 Always answer in German"));
+		assert.ok(required(required(test.rendered[1])[0]).startsWith("─ Anchor/Current "));
+		assert.ok(required(required(test.rendered[1])[0]).includes("rev 1 · 2 rules"));
+		assert.ok(required(test.rendered[1]).join("\n").includes("R1 Always answer in German"));
 		assert.equal(test.rendered.length, 3);
 		assert.equal(test.notifications.length, 0);
 	});
@@ -575,16 +589,16 @@ describe("/anchor screens", () => {
 			const test = setup({ ledger: ledgerWithRules(), screens: [press(ESC)] });
 			await test.run(token);
 			assert.equal(test.rendered.length, 1, token);
-			assert.ok(test.rendered[0][0].includes("Current"), token);
+			assert.ok(required(required(test.rendered[0])[0]).includes("Current"), token);
 		}
 	});
 
 	it("prints the briefing for /anchor current without a UI, or says the ledger is empty", async () => {
 		const filled = setup({ hasUI: false, ledger: ledgerWithRules() });
 		await filled.run("current");
-		assert.equal(filled.notifications[0].type, "info");
+		assert.equal(required(filled.notifications[0]).type, "info");
 		assert.match(
-			filled.notifications[0].message,
+			required(filled.notifications[0]).message,
 			/^\[navigate_tree continuity ledger rev 1\]\n\nBinding rules:\nR1 Always answer in German/,
 		);
 
@@ -601,7 +615,7 @@ describe("/anchor screens", () => {
 			screens: [press(ENTER), press(ESC), press(ESC)],
 		});
 		await test.run("clone");
-		const text = test.rendered[0].join("\n");
+		const text = required(test.rendered[0]).join("\n");
 		for (const label of [
 			"Inspect a session",
 			"Propose a tree plan",
@@ -611,7 +625,7 @@ describe("/anchor screens", () => {
 			assert.ok(text.includes(label), label);
 		}
 		assert.deepEqual(test.editors, []);
-		assert.match(test.rendered[1].join("\n"), /Session\s+Original/);
+		assert.match(required(test.rendered[1]).join("\n"), /Session\s+Original/);
 		assert.equal(test.rendered.length, 3);
 	});
 

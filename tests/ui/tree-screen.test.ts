@@ -26,6 +26,11 @@ import {
 	treeSummary,
 } from "../../src/ui/tree-screen.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 const ENTER = "\r";
 const ESC = "\x1b";
 const UP = "\x1b[A";
@@ -106,7 +111,7 @@ function harness(
 ) {
 	const state = { idle: true, cancelNavigation: false };
 	const navigated: string[] = [];
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const confirms: [string, string][] = [];
 	const answers = [...(options.confirms ?? [])];
 	const rendered: string[][] = [];
@@ -191,23 +196,23 @@ describe("tree outline rows", () => {
 				["anchor", a1],
 				["handoff", fold],
 				["archived", archived],
-				["user", items[4].targetId],
+				["user", required(items[4]).targetId],
 				["leaf", a3],
 			],
 		);
 		const rows = items.map(treeRow);
-		assert.equal(rows[1].label, "◆ impl-start");
-		assert.equal(rows[1].value, "4.2%");
-		assert.match(rows[1].detail ?? "", /^at: assistant: Project created$/);
-		assert.equal(rows[2].label, "▣ Tokenizer implemented");
-		assert.equal(rows[2].value, "folded · 14.0k tok · 3 msg");
-		assert.equal(rows[2].detail, "outcome: Tokenizer passes all tests");
+		assert.equal(required(rows[1]).label, "◆ impl-start");
+		assert.equal(required(rows[1]).value, "4.2%");
+		assert.match(required(rows[1]).detail ?? "", /^at: assistant: Project created$/);
+		assert.equal(required(rows[2]).label, "▣ Tokenizer implemented");
+		assert.equal(required(rows[2]).value, "folded · 14.0k tok · 3 msg");
+		assert.equal(required(rows[2]).detail, "outcome: Tokenizer passes all tests");
 		assert.deepEqual(rows[3], {
 			label: "  ↳",
 			labelHint: "archived: impl-done",
 		});
-		assert.equal(rows[5].label, "● [current]");
-		assert.equal(rows[5].labelHint, "assistant: Working on error recovery");
+		assert.equal(required(rows[5]).label, "● [current]");
+		assert.equal(required(rows[5]).labelHint, "assistant: Working on error recovery");
 		assert.equal(items.filter(({ current }) => current).length, 1);
 		assert.equal(items.at(-1)?.current, true);
 		assert.equal(treeSummary(items), "1 fold · 1 anchor");
@@ -250,12 +255,12 @@ describe("tree outline rows", () => {
 			top.map(({ depth }) => depth),
 			[0, 1, 2, 3, 4],
 		);
-		assert.equal(top[0].targetId, ids[4]);
-		assert.equal(top[4].targetId, ids[0]);
-		assert.equal(treeRow(top[1]).label, "  ▣ Phase d");
-		assert.equal(treeRow(top[3]).label, "      ▣ Phase b");
-		assert.equal(treeRow(top[4]).label, "      ▣ Phase a");
-		const archivedUnderTop = items[items.indexOf(top[0]) + 1];
+		assert.equal(required(top[0]).targetId, required(ids[4]));
+		assert.equal(required(top[4]).targetId, required(ids[0]));
+		assert.equal(treeRow(required(top[1])).label, "  ▣ Phase d");
+		assert.equal(treeRow(required(top[3])).label, "      ▣ Phase b");
+		assert.equal(treeRow(required(top[4])).label, "      ▣ Phase a");
+		const archivedUnderTop = required(items[items.indexOf(required(top[0])) + 1]);
 		assert.equal(archivedUnderTop.kind, "archived");
 		assert.equal(archivedUnderTop.text, "archived: e");
 		assert.equal(treeSummary(items), "1 fold · 0 anchors");
@@ -269,6 +274,7 @@ describe("tree outline rows", () => {
 			"The user explored a different conversation branch before returning here.\nSummary of that exploration:\n\n## Goal\nTry the other parser\n\n## Progress\nnone",
 		);
 		const [fold] = treeItems(sm);
+		assert.ok(fold);
 		assert.equal(fold.kind, "handoff");
 		assert.equal(fold.text, "Try the other parser");
 		assert.equal(fold.value, "folded");
@@ -281,7 +287,7 @@ describe("tree screen", () => {
 		const { sm } = seed();
 		const h = harness(sm);
 		assert.equal(await h.run(press(ESC)), "back");
-		const text = textOf(h.rendered[0]);
+		const text = textOf(required(h.rendered[0]));
 		const order = [
 			"Set up the parser project",
 			"◆ impl-start",
@@ -299,7 +305,7 @@ describe("tree screen", () => {
 			at,
 			[...at].sort((a, b) => a - b),
 		);
-		assert.match(h.rendered[0][0], /1 fold · 1 anchor · ctx 12\.3% of/);
+		assert.match(required(required(h.rendered[0])[0]), /1 fold · 1 anchor · ctx 12\.3% of/);
 		assert.match(text, /→ ● \[current\]/);
 		for (const lines of h.rendered) fits(lines);
 	});
@@ -327,7 +333,7 @@ describe("tree screen", () => {
 		const exit = await h.run(press(UP, UP, "g"));
 		assert.equal(exit, "done");
 		assert.deepEqual(h.navigated, [archived]);
-		const [title, message] = h.confirms[0];
+		const [title, message] = required(h.confirms[0]);
 		assert.match(title, /archived work of 'impl-done'/);
 		assert.match(message, /leaf moves there/);
 		assert.match(message, /Nothing is deleted/);
@@ -341,9 +347,9 @@ describe("tree screen", () => {
 		await second.run(press(UP, UP, UP, UP, "g"));
 		await second.run(press(UP, "g"));
 		assert.deepEqual(second.navigated, [fold, a1, u3]);
-		assert.match(second.confirms[0][0], /fold “Tokenizer implemented”/);
-		assert.match(second.confirms[1][0], /anchor 'impl-start'/);
-		assert.match(second.confirms[2][1], /just before this message/);
+		assert.match(required(required(second.confirms[0])[0]), /fold “Tokenizer implemented”/);
+		assert.match(required(required(second.confirms[1])[0]), /anchor 'impl-start'/);
+		assert.match(required(required(second.confirms[2])[1]), /just before this message/);
 	});
 
 	it("navigates nothing when the confirmation is declined", async () => {
@@ -376,7 +382,7 @@ describe("tree screen", () => {
 		};
 		await h.run(press(UP, UP, UP, "g"), press(ESC));
 		assert.deepEqual(h.navigated, []);
-		assert.equal(h.notifications[0].message, TREE_BUSY_NOTICE);
+		assert.equal(required(h.notifications[0]).message, TREE_BUSY_NOTICE);
 	});
 
 	it("reports a cancelled or failed move and stays on the screen", async () => {
@@ -384,12 +390,15 @@ describe("tree screen", () => {
 		const h = harness(sm, { confirms: [true, true] });
 		h.state.cancelNavigation = true;
 		await h.run(press(UP, UP, UP, "g"), press(ESC));
-		assert.match(h.notifications[0].message, /cancelled.*stays where it is/);
+		assert.match(required(h.notifications[0]).message, /cancelled.*stays where it is/);
 		h.ctx.navigateTree = async () => {
 			throw new Error("Entry gone not found");
 		};
 		await h.run(press(UP, UP, UP, "g"), press(ESC));
-		assert.match(h.notifications[1].message, /Could not move there: Entry gone not found/);
+		assert.match(
+			required(h.notifications[1]).message,
+			/Could not move there: Entry gone not found/,
+		);
 	});
 
 	it("answers g on the current row with a notice instead of moving", async () => {
@@ -398,7 +407,7 @@ describe("tree screen", () => {
 		await h.run(press("g"), press(ESC));
 		assert.deepEqual(h.confirms, []);
 		assert.deepEqual(h.navigated, []);
-		assert.match(h.notifications[0].message, /already here/);
+		assert.match(required(h.notifications[0]).message, /already here/);
 	});
 
 	it("shows the goal, outcome and stats of a fold with Enter", async () => {
@@ -406,6 +415,7 @@ describe("tree screen", () => {
 		const h = harness(sm);
 		await h.run(press(UP, UP, UP, ENTER), press(ESC));
 		const [fold] = h.notifications;
+		assert.ok(fold);
 		assert.match(
 			fold.message,
 			/^Tokenizer implemented \(folded\)\nGoal: Write the tokenizer\nOutcome: Tokenizer passes all tests\n3 messages/,
@@ -417,7 +427,7 @@ describe("tree screen", () => {
 		const { sm } = seed();
 		const h = harness(sm);
 		await h.run(press(UP, ENTER), press(ESC));
-		assert.equal(h.notifications[0].message, `Your message:\n${LONG}`);
+		assert.equal(required(h.notifications[0]).message, `Your message:\n${LONG}`);
 	});
 
 	it("cycles the filter with f and searches every row", async () => {
@@ -432,6 +442,10 @@ describe("tree screen", () => {
 			screen.handleInput(ESC);
 		});
 		const [all, anchors, users, again] = h.rendered;
+		assert.ok(all);
+		assert.ok(anchors);
+		assert.ok(users);
+		assert.ok(again);
 		assert.match(textOf(all), /showing all rows/);
 		assert.match(textOf(anchors), /showing handoffs and anchors/);
 		assert.ok(!textOf(anchors).includes("Set up the parser"));
@@ -477,14 +491,14 @@ describe("tree destinations and the current marker", () => {
 				["anchor", true, "before", true],
 			],
 		);
-		assert.equal(items[2].anchor, "lex");
+		assert.equal(required(items[2]).anchor, "lex");
 		assert.equal(items.filter(({ kind }) => kind === "leaf").length, 0);
 
 		const h = harness(sm, { confirms: [true], native: true });
 		guardConfirm(h);
 		assert.equal(await h.run(press("g")), "done");
 		assert.deepEqual(h.navigated, [u2]);
-		const [title, message] = h.confirms[0];
+		const [title, message] = required(h.confirms[0]);
 		assert.match(title, /Go to just before the message at anchor 'lex'/);
 		assert.match(message, /just before this message/);
 		assert.match(message, /text goes back into the editor/);
@@ -492,7 +506,7 @@ describe("tree destinations and the current marker", () => {
 		assert.match(message, /Nothing is deleted/);
 		assert.equal(sm.getLeafId(), a1);
 		assert.equal(treeItems(sm).filter(({ kind }) => kind === "anchor").length, 0);
-		assert.match(h.notifications[0].message, /^Moved to just before the message/);
+		assert.match(required(h.notifications[0]).message, /^Moved to just before the message/);
 	});
 
 	it("goes before an anchored custom message the same way", async () => {
@@ -502,6 +516,7 @@ describe("tree destinations and the current marker", () => {
 		const note = sm.appendCustomMessageEntry("note", "Remember the key", true);
 		sm.appendLabelChange(note, `${LABEL_PREFIX}note`);
 		const [, anchor] = treeItems(sm);
+		assert.ok(anchor);
 		assert.deepEqual(
 			[anchor.kind, anchor.targetId, anchor.destination, anchor.current],
 			["anchor", note, "before", true],
@@ -511,8 +526,8 @@ describe("tree destinations and the current marker", () => {
 		guardConfirm(h);
 		assert.equal(await h.run(press("g")), "done");
 		assert.deepEqual(h.navigated, [note]);
-		assert.match(h.confirms[0][1], /just before this message/);
-		assert.match(h.confirms[0][1], /anchor 'note'.*no longer/);
+		assert.match(required(required(h.confirms[0])[1]), /just before this message/);
+		assert.match(required(required(h.confirms[0])[1]), /anchor 'note'.*no longer/);
 		assert.equal(sm.getLeafId(), a1);
 	});
 
@@ -532,7 +547,7 @@ describe("tree destinations and the current marker", () => {
 		const h = harness(sm, { native: true });
 		assert.equal(await h.run(press("g"), press(ESC)), "back");
 		assert.equal(
-			h.notifications[0].message,
+			required(h.notifications[0]).message,
 			"This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press g to go there.",
 		);
 		assert.deepEqual(h.navigated, []);
@@ -569,8 +584,8 @@ describe("tree destinations and the current marker", () => {
 		guardConfirm(h);
 		assert.equal(await h.run(press("g")), "done");
 		assert.deepEqual(h.navigated, [u2]);
-		assert.match(h.confirms[0][1], /just before this message/);
-		assert.ok(!h.confirms[0][1].includes("The anchor"));
+		assert.match(required(required(h.confirms[0])[1]), /just before this message/);
+		assert.ok(!required(required(h.confirms[0])[1]).includes("The anchor"));
 		assert.equal(sm.getLeafId(), a1);
 	});
 
@@ -583,7 +598,7 @@ describe("tree destinations and the current marker", () => {
 		await h.run(press("g"), press(ESC));
 		assert.deepEqual(h.confirms, []);
 		assert.deepEqual(h.navigated, []);
-		assert.match(h.notifications[0].message, /last entry of the session/);
+		assert.match(required(h.notifications[0]).message, /last entry of the session/);
 		assert.equal(sm.getLeafId(), u2);
 	});
 
@@ -597,19 +612,19 @@ describe("tree destinations and the current marker", () => {
 		assert.deepEqual(
 			items.map(({ kind, targetId, current }) => [kind, targetId, current]),
 			[
-				["user", items[0].targetId, false],
+				["user", required(items[0]).targetId, false],
 				["anchor", a1, false],
 				["leaf", compaction, true],
 			],
 		);
-		assert.equal(treeRow(items[2]).label, "● [current]");
-		assert.equal(treeRow(items[2]).labelHint, "compaction");
+		assert.equal(treeRow(required(items[2])).label, "● [current]");
+		assert.equal(treeRow(required(items[2])).labelHint, "compaction");
 
 		const h = harness(sm, { confirms: [true], native: true });
 		await h.run(press("g"), press(ESC));
 		assert.deepEqual(h.confirms, []);
 		assert.deepEqual(h.navigated, []);
-		assert.match(h.notifications[0].message, /already here/);
+		assert.match(required(h.notifications[0]).message, /already here/);
 		assert.equal(sm.getLeafId(), compaction);
 	});
 

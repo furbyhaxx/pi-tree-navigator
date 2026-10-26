@@ -37,6 +37,11 @@ import {
 	type UserOpsResult,
 } from "../../src/ui/current-screen.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 const ENTER = "\r";
 const ESC = "\x1b";
 const DOWN = "\x1b[B";
@@ -111,7 +116,7 @@ describe("current screen rows", () => {
 			["G1", "R6", "R7", "R9", "D3", "S4", "F2", "P5"],
 		);
 		const rows = currentRows(items);
-		const byId = (id: string) => rows[items.findIndex((item) => item.id === id)];
+		const byId = (id: string) => required(rows[items.findIndex((item) => item.id === id)]);
 		assert.equal(byId("G1").label, "G1 Ship the continuity screen");
 		assert.equal(byId("G1").value, "user");
 		assert.equal(byId("R6").value, "user");
@@ -142,9 +147,9 @@ describe("current screen rows", () => {
 	it("shows one muted row for an empty ledger and a badge that leads with the revision", () => {
 		const rows = currentRows([]);
 		assert.equal(rows.length, 1);
-		assert.equal(rows[0].tone, "muted");
+		assert.equal(required(rows[0]).tone, "muted");
 		assert.equal(
-			rows[0].labelHint,
+			required(rows[0]).labelHint,
 			'No continuity items yet. Say "from now on …" or press a to add one.',
 		);
 		assert.equal(currentBadge(createLedger(), false), "rev 0 · empty");
@@ -193,7 +198,7 @@ function harness(answers: Answers = {}, seed = true) {
 			],
 		});
 	}
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const dialogs = {
 		confirm: [] as [string, string][],
 		editor: [] as [string, string | undefined][],
@@ -289,12 +294,12 @@ describe("current screen writes", () => {
 		assert.equal(h.opsEntries().length, before + 1);
 		assert.deepEqual(lastOps(h), [{ op: { op: "archive", id: "R1" }, ctx: { origin: "user" } }]);
 		assert.equal(h.item("R1")?.status, "archived");
-		const [title, message] = h.dialogs.confirm[0];
+		const [title, message] = required(h.dialogs.confirm[0]);
 		assert.match(title, /R1/);
 		assert.match(title, /rule/);
 		assert.match(message, /From now on always answer in German/);
 		assert.match(message, /stays in the session history/);
-		assert.ok(!h.rendered[1].join("\n").includes("R1 From now on"));
+		assert.ok(!required(h.rendered[1]).join("\n").includes("R1 From now on"));
 		assert.deepEqual(
 			h.notifications.map(({ type }) => type),
 			["info"],
@@ -339,9 +344,9 @@ describe("current screen writes", () => {
 		await h.run(press("x"), press(ESC));
 		assert.equal(h.sm.getEntries().length, before);
 		assert.deepEqual(h.dialogs.confirm, []);
-		assert.match(h.notifications[0].message, /continuity\.capture/);
-		assert.equal(h.notifications[0].type, "warning");
-		assert.ok(h.rendered[0].join("\n").includes("R1 From now on"));
+		assert.match(required(h.notifications[0]).message, /continuity\.capture/);
+		assert.equal(required(h.notifications[0]).type, "warning");
+		assert.ok(required(h.rendered[0]).join("\n").includes("R1 From now on"));
 	});
 
 	it("pinning keeps the agent out: the reducer still rejects its ops afterwards", async () => {
@@ -366,7 +371,7 @@ describe("current screen writes", () => {
 			for (const origin of ["agent", "classifier"] as const) {
 				const result = applyOps(h.ledger(), [op], { origin });
 				assert.equal(result.applied.length, 0, `${origin} ${op.op}`);
-				assert.equal(result.rejected[0].reason.code, "protected_item");
+				assert.equal(required(result.rejected[0]).reason.code, "protected_item");
 			}
 		}
 		await h.run(press(DOWN, "p"), press(ESC));
@@ -376,7 +381,7 @@ describe("current screen writes", () => {
 	it("edits the text and leaves the user's quote untouched", async () => {
 		const h = harness({ editors: ["From now on answer in French"] });
 		await h.run(press("e"), press(ESC));
-		assert.deepEqual(h.dialogs.editor[0][1], WORDS);
+		assert.deepEqual(required(required(h.dialogs.editor[0])[1]), WORDS);
 		assert.deepEqual(lastOps(h), [
 			{
 				op: { op: "update", id: "R1", text: "From now on answer in French" },
@@ -385,7 +390,7 @@ describe("current screen writes", () => {
 		]);
 		assert.equal(h.item("R1")?.text, "From now on answer in French");
 		assert.equal(h.item("R1")?.quote, WORDS);
-		assert.ok(h.rendered[1].join("\n").includes(`said “${WORDS}”`));
+		assert.ok(required(h.rendered[1]).join("\n").includes(`said “${WORDS}”`));
 	});
 
 	it("ignores an unchanged or empty edit", async () => {
@@ -422,7 +427,7 @@ describe("current screen writes", () => {
 		const added = h.item("F4");
 		assert.equal(added?.pinned, true);
 		assert.equal(added?.source.origin, "pin");
-		const selected = h.rendered[1].find((line) => line.includes("→"));
+		const selected = required(h.rendered[1]).find((line) => line.includes("→"));
 		assert.match(selected ?? "", /F4 The CI runs on Node 22/);
 		assert.equal(
 			applyOps(h.ledger(), [{ op: "archive", id: "F4" }], { origin: "agent" }).applied.length,
@@ -435,7 +440,10 @@ describe("current screen writes", () => {
 		const before = h.sm.getEntries().length;
 		await h.run(press(DOWN, DOWN, DOWN, ENTER), press(ESC));
 		assert.equal(h.sm.getEntries().length, before);
-		assert.match(h.notifications[0].message, /^R1 already holds this rule; nothing added\.$/);
+		assert.match(
+			required(h.notifications[0]).message,
+			/^R1 already holds this rule; nothing added\.$/,
+		);
 	});
 
 	it("shows the reducer's reason when an op is rejected", async () => {
@@ -454,7 +462,7 @@ describe("current screen writes", () => {
 	it("shows the full item on enter, with source entry and revisions", async () => {
 		const h = harness();
 		await h.run(press(ENTER), press(ESC));
-		const message = h.notifications[0].message;
+		const message = required(h.notifications[0]).message;
 		const entryId = h.item("R1")?.source.entryId ?? "missing";
 		assert.match(message, /^R1 rule · active · protected\n/);
 		assert.ok(message.includes(`source: user (entry ${entryId})`));
@@ -465,19 +473,19 @@ describe("current screen writes", () => {
 	it("toggles history with h and shows retracted items read-only", async () => {
 		const h = harness({ confirms: [true] });
 		await h.run(press("x"), press("h"), press(DOWN, DOWN, ENTER), press(ESC));
-		assert.ok(h.rendered[2].join("\n").includes("history · archived · user"));
-		assert.match(h.rendered[2][0], /\+history/);
+		assert.ok(required(h.rendered[2]).join("\n").includes("history · archived · user"));
+		assert.match(required(required(h.rendered[2])[0]), /\+history/);
 		assert.match(h.notifications.at(-1)?.message ?? "", /^R1 rule · archived/);
 	});
 
 	it("keeps every line within the width and renders an empty ledger with the add row", async () => {
 		const h = harness({}, false);
 		await h.run(press(ESC));
-		const text = h.rendered[0].join("\n");
+		const text = required(h.rendered[0]).join("\n");
 		assert.ok(text.includes('No continuity items yet. Say "from now on …" or press a to add one.'));
 		assert.ok(text.includes("+ Add an item…"));
-		assert.ok(h.rendered[0][0].includes("rev 0 · empty"));
-		for (const line of h.rendered[0]) assert.ok(visibleWidth(line) <= 80, line);
+		assert.ok(required(required(h.rendered[0])[0]).includes("rev 0 · empty"));
+		for (const line of required(h.rendered[0])) assert.ok(visibleWidth(line) <= 80, line);
 	});
 });
 
