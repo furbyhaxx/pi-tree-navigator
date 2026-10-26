@@ -12,6 +12,11 @@ import {
 	UP,
 } from "./fold-plan-screen-fixture.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 describe("fold plan edits", () => {
 	it("edits the label and the focus; the focus stays across anchors, the label does not", async () => {
 		const focus = "Latest instruction: finish the parser; remaining: tests";
@@ -42,7 +47,7 @@ describe("fold plan edits", () => {
 			},
 		);
 		assert.equal(exit, "done");
-		assert.deepEqual(h.calls.start[0].plan, {
+		assert.deepEqual(required(h.calls.start[0]).plan, {
 			anchor: "impl-start",
 			label: "my-new-label",
 			focus,
@@ -53,7 +58,7 @@ describe("fold plan edits", () => {
 			"a too short focus reopens the editor with what was typed",
 		);
 		assert.equal(h.notifications.length, 1);
-		assert.match(h.notifications[0].message, /9 characters; it needs at least 20/);
+		assert.match(required(h.notifications[0]).message, /9 characters; it needs at least 20/);
 	});
 
 	it("refuses a label that is taken or not kebab-case, and an empty focus uses the default", async () => {

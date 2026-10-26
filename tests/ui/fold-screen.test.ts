@@ -18,6 +18,11 @@ import {
 	parseFocus,
 } from "../../src/ui/fold-screen.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 const ENTER = "\r";
 const ESC = "\x1b";
 const UP = "\x1b[A";
@@ -62,7 +67,7 @@ const press =
 
 function harness(answers: Answers = {}, anchors: AnchorRow[] = sampleAnchors()) {
 	const state = { idle: true, anchors };
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const dialogs = {
 		input: [] as [string, string | undefined][],
 		editor: [] as [string, string | undefined][],
@@ -150,17 +155,19 @@ describe("fold anchor rows", () => {
 	it("lists anchors newest first with the savings, and mutes one that frees too little", async () => {
 		const h = harness();
 		await h.run(press(ESC));
-		const text = h.rendered[0].join("\n");
+		const text = required(h.rendered[0]).join("\n");
 		assert.ok(text.indexOf("recent") < text.indexOf("impl-start"));
 		assert.ok(text.indexOf("impl-start") < text.indexOf("start (auto)"));
 		assert.match(text, /impl-start\s+−12\.3k tok/);
 		assert.match(text, /◆ recent\s+too little to fold/);
-		assert.match(h.rendered[0][0], /step 1\/4 · 2 of 3 foldable/);
-		const selected = h.rendered[0].find((line) => line.includes("→"));
+		assert.match(required(required(h.rendered[0])[0]), /step 1\/4 · 2 of 3 foldable/);
+		const selected = required(h.rendered[0]).find((line) => line.includes("→"));
 		assert.match(selected ?? "", /impl-start/, "the cursor starts on the newest foldable anchor");
 		const [recent, picked] = [anchor("r", 900), anchor("p", 4000)].map((row) =>
 			foldRow(row, h.deps),
 		);
+		assert.ok(recent);
+		assert.ok(picked);
 		assert.equal(recent.tone, "muted");
 		assert.equal(recent.value, "too little to fold");
 		assert.equal(picked.tone, "text");
@@ -177,7 +184,7 @@ describe("fold anchor rows", () => {
 			}),
 		]);
 		await h.run(press(ESC));
-		for (const line of h.rendered[0]) assert.ok(visibleWidth(line) <= COLUMNS, line);
+		for (const line of required(h.rendered[0])) assert.ok(visibleWidth(line) <= COLUMNS, line);
 	});
 
 	it("says why a pre-compaction anchor cannot be folded, and still folds one that frees enough", async () => {
@@ -186,10 +193,12 @@ describe("fold anchor rows", () => {
 			anchor("early", 30_000, { beforeCompaction: true }),
 		]);
 		await h.run(press(DOWN, ENTER), press(ESC));
-		const text = h.rendered[0].join("\n");
+		const text = required(h.rendered[0]).join("\n");
 		assert.match(text, /◆ planned\s+before compaction/);
 		assert.match(text, /◆ early\s+−30\.0k tok/);
 		const [blocked, foldableRow] = h.state.anchors.map((row) => foldRow(row, h.deps));
+		assert.ok(blocked);
+		assert.ok(foldableRow);
 		assert.equal(blocked.tone, "muted");
 		assert.equal(
 			blocked.description,
@@ -213,13 +222,13 @@ describe("fold wizard", () => {
 		const exit = await h.run(press(ENTER));
 		assert.equal(exit, "done");
 		assert.deepEqual(h.folds, [["impl-start", { label: "impl-start-folded", focus: FOCUS }]]);
-		assert.match(h.dialogs.input[0][0], /^Fold 2\/4:.*'impl-start-folded'/);
-		assert.equal(h.dialogs.input[0][1], "impl-start-folded");
+		assert.match(required(required(h.dialogs.input[0])[0]), /^Fold 2\/4:.*'impl-start-folded'/);
+		assert.equal(required(required(h.dialogs.input[0])[1]), "impl-start-folded");
 		assert.equal(
-			h.dialogs.editor[0][1],
+			required(required(h.dialogs.editor[0])[1]),
 			"Latest instruction:\nDone since 'impl-start':\nRemaining:",
 		);
-		const [title, message] = h.dialogs.confirm[0];
+		const [title, message] = required(h.dialogs.confirm[0]);
 		assert.match(title, /^Fold 4\/4: fold to 'impl-start'\?/);
 		assert.match(message, /Frees: about 12\.3k tok/);
 		assert.match(message, /Label: impl-start-folded/);
@@ -236,7 +245,7 @@ describe("fold wizard", () => {
 		});
 		await h.run(press(ENTER));
 		assert.deepEqual(h.folds, [["impl-start", { label: "parser-done" }]]);
-		assert.match(h.dialogs.confirm[0][1], /Focus: the agent writes it/);
+		assert.match(required(required(h.dialogs.confirm[0])[1]), /Focus: the agent writes it/);
 	});
 
 	it("treats an empty focus like the untouched template", async () => {
@@ -271,7 +280,7 @@ describe("fold wizard", () => {
 		assert.equal(h.dialogs.editor.length, 1);
 		assert.equal(h.dialogs.confirm.length, 0);
 		assert.equal(h.rendered.length, 2);
-		const selected = h.rendered[1].find((line) => line.includes("→"));
+		const selected = required(h.rendered[1]).find((line) => line.includes("→"));
 		assert.match(selected ?? "", /impl-start/);
 	});
 
@@ -281,7 +290,7 @@ describe("fold wizard", () => {
 			editors: [undefined],
 		});
 		await h.run(press(ENTER), press(ESC));
-		assert.match(h.dialogs.input[1][0], /Enter keeps 'my-label'/);
+		assert.match(required(required(h.dialogs.input[1])[0]), /Enter keeps 'my-label'/);
 		assert.deepEqual(h.folds, []);
 	});
 
@@ -293,6 +302,9 @@ describe("fold wizard", () => {
 		});
 		await h.run(press(ENTER));
 		const [symbols, duplicate, tooLong] = h.notifications.map(({ message }) => message);
+		assert.ok(symbols !== undefined);
+		assert.ok(duplicate !== undefined);
+		assert.ok(tooLong !== undefined);
 		assert.match(symbols, /^'!!!' cannot be a label: use lowercase kebab-case/);
 		assert.match(symbols, /at most 40 characters \(e\.g\. 'impl-start-folded'\)/);
 		assert.match(duplicate, /^An anchor named 'start' already exists/);
@@ -310,13 +322,13 @@ describe("fold wizard", () => {
 			confirms: [true],
 		});
 		await h.run(press(ENTER));
-		assert.equal(h.dialogs.editor[1][1], short);
+		assert.equal(required(required(h.dialogs.editor[1])[1]), short);
 		assert.match(
-			h.notifications[0].message,
+			required(h.notifications[0]).message,
 			/^That focus has 6 characters of your own words; it needs at least 20/,
 		);
 		assert.equal(h.folds.length, 1);
-		assert.equal(h.folds[0][1]?.focus, FOCUS);
+		assert.equal(required(required(h.folds[0])[1])?.focus, FOCUS);
 	});
 
 	it("returns to the focus step when the confirmation is declined and keeps the draft", async () => {
@@ -326,7 +338,7 @@ describe("fold wizard", () => {
 			confirms: [false],
 		});
 		await h.run(press(ENTER), press(ESC));
-		assert.equal(h.dialogs.editor[1][1], FOCUS);
+		assert.equal(required(required(h.dialogs.editor[1])[1]), FOCUS);
 		assert.deepEqual(h.folds, []);
 	});
 
@@ -334,7 +346,10 @@ describe("fold wizard", () => {
 		const h = harness({ inputs: [""], editors: [FOCUS], confirms: [true] });
 		h.state.idle = false;
 		await h.run(press(ENTER));
-		assert.match(h.dialogs.confirm[0][1], /queued as a follow-up and runs when it finishes/);
+		assert.match(
+			required(required(h.dialogs.confirm[0])[1]),
+			/queued as a follow-up and runs when it finishes/,
+		);
 		assert.equal(h.folds.length, 1);
 	});
 
@@ -346,7 +361,7 @@ describe("fold wizard", () => {
 		};
 		await h.run(press(ENTER), press(ESC));
 		assert.deepEqual(h.folds, []);
-		assert.match(h.notifications[0].message, /changed while confirming/);
+		assert.match(required(h.notifications[0]).message, /changed while confirming/);
 	});
 
 	it("asks for a new label when confirmation races with another anchor", async () => {
@@ -357,27 +372,30 @@ describe("fold wizard", () => {
 		});
 		h.ctx.ui.confirm = async () => {
 			h.state.anchors.push({
-				...h.state.anchors[0],
+				...required(h.state.anchors[0]),
 				name: "impl-start-folded",
 			});
 			return true;
 		};
 		await h.run(press(ENTER), press(ESC));
 		assert.deepEqual(h.folds, []);
-		assert.match(h.notifications[0].message, /taken while confirming/);
+		assert.match(required(h.notifications[0]).message, /taken while confirming/);
 	});
 
 	it("goes back to the list when the anchor shrank below the minimum during the wizard", async () => {
 		const h = harness({ inputs: [""], editors: [FOCUS] });
 		const editor = h.ctx.ui.editor;
 		h.ctx.ui.editor = (title, prefill) => {
-			h.state.anchors[1].savableTokens = 100;
+			required(h.state.anchors[1]).savableTokens = 100;
 			return editor(title, prefill);
 		};
 		await h.run(press(ENTER), press(ESC));
 		assert.deepEqual(h.dialogs.confirm, []);
 		assert.deepEqual(h.folds, []);
-		assert.match(h.notifications[0].message, /^'impl-start' would free only about 100 tok/);
+		assert.match(
+			required(h.notifications[0]).message,
+			/^'impl-start' would free only about 100 tok/,
+		);
 	});
 });
 
@@ -385,20 +403,20 @@ describe("fold wizard without anchors", () => {
 	it("shows one muted row and sets an anchor with a", async () => {
 		const h = harness({ inputs: ["impl-start"] }, []);
 		await h.run(press("a"), press(ESC));
-		const first = h.rendered[0].join("\n");
+		const first = required(h.rendered[0]).join("\n");
 		assert.match(first, /No anchors yet\. Press a to set one at the current leaf\./);
 		assert.match(first, /a set anchor/);
 		assert.deepEqual(h.created, ["impl-start"]);
 		assert.deepEqual(h.notifications, [
 			{ message: "Anchor 'impl-start' set at the current leaf.", type: "info" },
 		]);
-		assert.match(h.rendered[1].join("\n"), /impl-start\s+too little to fold/);
+		assert.match(required(h.rendered[1]).join("\n"), /impl-start\s+too little to fold/);
 	});
 
 	it("explains how to continue when Enter is pressed on the empty row", async () => {
 		const h = harness({}, []);
 		await h.run(press(ENTER), press(ESC));
-		assert.match(h.notifications[0].message, /Press a to set one/);
+		assert.match(required(h.notifications[0]).message, /Press a to set one/);
 		assert.deepEqual(h.created, []);
 	});
 

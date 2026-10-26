@@ -40,6 +40,11 @@ import {
 	type SettingsScreenDeps,
 } from "../../src/ui/settings-screen.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 const ENTER = "\r";
 const ESC = "\x1b";
 const BACKSPACE = "\x7f";
@@ -137,7 +142,7 @@ function harness(setup: Setup = {}) {
 	if (setup.runtime) writeRuntimeConfig(sessionId, setup.runtime);
 	const state = { idle: setup.idle ?? true, reloads: 0, applies: 0 };
 	const writes: string[] = [];
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const dialogs = {
 		confirm: [] as [string, string][],
 		input: [] as [string, string | undefined][],
@@ -374,18 +379,18 @@ describe("settings screen: saving", () => {
 			}),
 		);
 
-		const staged = text(h.rendered[2]);
+		const staged = text(required(h.rendered[2]));
 		assert.match(staged, /rewindHintReserveTokens\s+50k → 80k/);
 		assert.match(staged, /anchorStartAfterTurns\s+2 → 5/);
 		assert.match(staged, /2 staged · target: global/);
 
-		const [title, message] = h.dialogs.confirm[0];
+		const [title, message] = required(h.dialogs.confirm[0]);
 		assert.equal(title, "Save 2 changes to the global config?");
 		assert.ok(message.includes(h.globalPath));
 		assert.match(message, /rewindHintReserveTokens: 50k → 80k/);
 		assert.match(message, /anchorStartAfterTurns: unset → 5/);
 
-		const saved = text(h.rendered[3]);
+		const saved = text(required(h.rendered[3]));
 		assert.match(saved, /rewindHintReserveTokens\s+80k · global/);
 		assert.match(saved, /anchorStartAfterTurns\s+5 · global/);
 		assert.ok(!saved.includes("staged"));
@@ -409,9 +414,9 @@ describe("settings screen: saving", () => {
 		await h.run(press("t"), edit(ROW.hint), press("s"), press(ESC));
 		assert.equal(h.readProject(), json({ rewindHintReserveTokens: 100000 }));
 		assert.ok(!existsSync(h.globalPath));
-		assert.ok(h.dialogs.confirm[0][1].includes(h.projectPath));
-		assert.match(text(h.rendered[1]), /target: project/);
-		assert.match(text(h.rendered[3]), /rewindHintReserveTokens\s+100k · project/);
+		assert.ok(required(required(h.dialogs.confirm[0])[1]).includes(h.projectPath));
+		assert.match(text(required(h.rendered[1])), /target: project/);
+		assert.match(text(required(h.rendered[3])), /rewindHintReserveTokens\s+100k · project/);
 	});
 
 	it("saves a runtime override without writing files and takes precedence over project values", async () => {
@@ -431,7 +436,7 @@ describe("settings screen: saving", () => {
 		assert.equal(h.readProject(), project);
 		assert.deepEqual(h.writes, []);
 		assert.deepEqual(h.readRuntime(), { anchorStartAfterTurns: 7 });
-		assert.match(line(h.rendered[2], "anchorStartAfterTurns"), /7 · runtime/);
+		assert.match(line(required(h.rendered[2]), "anchorStartAfterTurns"), /7 · runtime/);
 		const { config } = await loadTreeNavigatorConfig({
 			agentDir: dirname(h.globalPath),
 			projectPath: h.projectPath,
@@ -554,8 +559,8 @@ describe("settings screen: saving", () => {
 		});
 		await h.run(at(ROW.startAnchor, "d"), at(ROW.capture, BACKSPACE), press("s"), press(ESC));
 		assert.equal(h.readGlobal(), json({ keep: 1 }));
-		assert.match(h.dialogs.confirm[0][1], /anchorStartAfterTurns: 6 → removed/);
-		assert.match(text(h.rendered[2]), /continuity\.capture\s+false → true/);
+		assert.match(required(required(h.dialogs.confirm[0])[1]), /anchorStartAfterTurns: 6 → removed/);
+		assert.match(text(required(h.rendered[2])), /continuity\.capture\s+false → true/);
 	});
 
 	it("warns when a higher layer still overrides what was saved", async () => {
@@ -567,7 +572,7 @@ describe("settings screen: saving", () => {
 			confirms: [true, false],
 		});
 		await h.run(edit(ROW.hint), press("s"), press(ESC));
-		assert.match(text(h.rendered[1]), /rewindHintReserveTokens\s+90k · project/);
+		assert.match(text(required(h.rendered[1])), /rewindHintReserveTokens\s+90k · project/);
 		assert.ok(
 			h.notifications.some(
 				({ message, type }) =>
@@ -612,7 +617,7 @@ describe("settings screen: saving", () => {
 
 		assert.equal(h.readGlobal(), json({ rewindHintReserveTokens: 80000 }));
 		assert.deepEqual(h.readRuntime(), { rewindHintReserveTokens: 90000 });
-		assert.match(line(h.rendered[2], "rewindHintReserveTokens"), /90k · runtime/);
+		assert.match(line(required(h.rendered[2]), "rewindHintReserveTokens"), /90k · runtime/);
 		assert.ok(
 			h.notifications.some(
 				({ message, type }) =>
@@ -636,7 +641,7 @@ describe("settings screen: saving", () => {
 		assert.deepEqual(h.readRuntime(), {});
 		assert.equal(h.readGlobal(), global);
 		assert.equal(h.readProject(), project);
-		assert.match(line(h.rendered[4], "anchorStartAfterTurns"), /5 · project/);
+		assert.match(line(required(h.rendered[4]), "anchorStartAfterTurns"), /5 · project/);
 		assert.deepEqual(h.writes, []);
 	});
 
@@ -656,7 +661,7 @@ describe("settings screen: saving", () => {
 					type === "error" && message.includes(h.globalPath) && message.includes("disk is full"),
 			),
 		);
-		assert.match(text(h.rendered[2]), /1 staged/);
+		assert.match(text(required(h.rendered[2])), /1 staged/);
 		assert.equal(h.dialogs.confirm.at(-1)?.[0], "Discard staged changes?");
 	});
 
@@ -681,8 +686,8 @@ describe("settings screen: saving", () => {
 			press(ESC),
 		);
 
-		assert.match(line(h.rendered[1], "rewindHintReserveTokens"), /1k → 2k/);
-		assert.match(line(h.rendered[3], "rewindHintReserveTokens"), /1k → off/);
+		assert.match(line(required(h.rendered[1]), "rewindHintReserveTokens"), /1k → 2k/);
+		assert.match(line(required(h.rendered[3]), "rewindHintReserveTokens"), /1k → off/);
 		assert.deepEqual(JSON.parse(h.readGlobal()), {
 			rewindHintReserveTokens: null,
 			anchorStartAfterTurns: 49,
@@ -777,16 +782,16 @@ describe("settings screen: refusals", () => {
 			.map(({ message }) => message);
 		assert.equal(warnings.length, 4);
 		assert.match(
-			warnings[0],
+			required(warnings[0]),
 			/"5m" is not valid for rewindHintReserveTokens\. Use 1,000-1,000,000 tokens/,
 		);
-		assert.match(warnings[1], /"0".*anchorStartAfterTurns\. Use 1-50 turns/);
+		assert.match(required(warnings[1]), /"0".*anchorStartAfterTurns\. Use 1-50 turns/);
 		assert.match(
-			warnings[2],
+			required(warnings[2]),
 			/"foo" is not valid: Proposal model must be current or provider\/model\[:thinking\]/,
 		);
 		assert.match(
-			warnings[3],
+			required(warnings[3]),
 			/"101" is not valid for auto_navigate\.check_every_turns\. Use 1-100 turns/,
 		);
 		assert.ok(!text(h.rendered.at(-1) ?? []).includes("staged"));
@@ -801,8 +806,11 @@ describe("settings screen: refusals", () => {
 		});
 		await h.run(edit(ROW.proposalModel), press(ESC));
 
-		assert.match(line(h.rendered[1], "treeProposal.model"), /invalid → offline\/model:high/);
-		assert.match(text(h.rendered[1]), /1 staged/);
+		assert.match(
+			line(required(h.rendered[1]), "treeProposal.model"),
+			/invalid → offline\/model:high/,
+		);
+		assert.match(text(required(h.rendered[1])), /1 staged/);
 	});
 
 	it("shows the current value and the valid range in the input prompt", async () => {
@@ -834,7 +842,7 @@ describe("settings screen: refusals", () => {
 			["Discard staged changes?", "1 staged change has not been saved."],
 			["Discard staged changes?", "1 staged change has not been saved."],
 		]);
-		assert.match(text(h.rendered[2]), /50k → 80k/);
+		assert.match(text(required(h.rendered[2])), /50k → 80k/);
 	});
 
 	it("writes nothing when the save confirmation is declined", async () => {
@@ -847,7 +855,7 @@ describe("settings screen: refusals", () => {
 		await h.run(edit(ROW.hint), press("s"), press(ESC));
 		assert.equal(h.readGlobal(), original);
 		assert.deepEqual(h.writes, []);
-		assert.match(text(h.rendered[2]), /1 staged/);
+		assert.match(text(required(h.rendered[2])), /1 staged/);
 	});
 
 	it("closes without a question when nothing is staged", async () => {
@@ -877,7 +885,7 @@ describe("settings screen: refusals", () => {
 			assert.ok(message.includes(h.globalPath));
 			assert.match(message, /is not valid JSON/);
 		}
-		assert.match(text(h.rendered[0]), /target: global · file invalid/);
+		assert.match(text(required(h.rendered[0])), /target: global · file invalid/);
 		assert.deepEqual(
 			h.dialogs.confirm.map(([title]) => title),
 			["Discard staged changes?"],
@@ -888,7 +896,7 @@ describe("settings screen: refusals", () => {
 		const h = harness({ global: "[1, 2]", inputs: ["3"] });
 		await h.run(edit(ROW.startAnchor), press(ESC));
 		assert.equal(readFileSync(h.globalPath, "utf8"), "[1, 2]");
-		assert.match(h.notifications[0].message, /must be a JSON object/);
+		assert.match(required(h.notifications[0]).message, /must be a JSON object/);
 		assert.deepEqual(h.dialogs.input, []);
 	});
 
@@ -907,10 +915,10 @@ describe("settings screen: refusals", () => {
 				if (key) screen.handleInput(key);
 			};
 		await h.run(atTarget("t"), atTarget("t"), atTarget("t"), atTarget(ESC));
-		assert.match(targets[0], /target: global/);
-		assert.match(targets[1], /target: project/);
-		assert.match(targets[2], /target: runtime/);
-		assert.match(targets[3], /target: global/);
+		assert.match(required(targets[0]), /target: global/);
+		assert.match(required(targets[1]), /target: project/);
+		assert.match(required(targets[2]), /target: runtime/);
+		assert.match(required(targets[3]), /target: global/);
 	});
 
 	it("does not read or edit the project file when the project is not trusted", async () => {
@@ -922,7 +930,7 @@ describe("settings screen: refusals", () => {
 			screen.handleInput(ESC);
 		});
 		assert.equal(readFileSync(h.projectPath, "utf8"), project);
-		const first = text(h.rendered[0]);
+		const first = text(required(h.rendered[0]));
 		assert.match(first, /target: global/);
 		assert.match(first, /rewindHintReserveTokens\s+off · default/);
 		assert.match(first, /parentHandoffMode\s+digest · default/);
@@ -950,7 +958,7 @@ describe("settings screen: rows", () => {
 			trusted: true,
 		});
 		await h.run(press(ESC));
-		const screen = h.rendered[0];
+		const screen = required(h.rendered[0]);
 		assert.match(line(screen, "rewindHintReserveTokens"), /50k · global/);
 		assert.match(line(screen, "anchorStartAfterTurns"), /2 · default/);
 		assert.match(line(screen, "parentHandoffMode"), /synthesized · project/);
@@ -980,7 +988,7 @@ describe("settings screen: rows", () => {
 			trusted: true,
 		});
 		await h.run(press(ESC));
-		const first = h.rendered[0];
+		const first = required(h.rendered[0]);
 		assert.match(line(first, "anchorStartAfterTurns"), /7 · global/);
 		assert.match(line(first, "rewindHintReserveTokens"), /off · project/);
 		assert.match(line(first, "↳"), /project: invalid value, treated as off/);
@@ -1002,9 +1010,9 @@ describe("settings screen: rows", () => {
 			assert.ok(!frame.at(-3)?.endsWith("…"), `cut: ${frame.at(-3)}`);
 			assert.ok(frame.at(-4)?.trim(), "description is on two rows at most");
 		}
-		assert.match(frames[0][0], /Anchor\/Settings/);
-		assert.match(frames[0][0], /target: global/);
-		assert.match(frames[0][1], /file: /);
+		assert.match(required(required(frames[0])[0]), /Anchor\/Settings/);
+		assert.match(required(required(frames[0])[0]), /target: global/);
+		assert.match(required(required(frames[0])[1]), /file: /);
 	});
 
 	it("describes effective nested map and runtime settings", async () => {
@@ -1103,7 +1111,7 @@ describe("settings screen: keyed maps", () => {
 		expected.model_overrides["*gemini*"].rewind_hint_reserve_tokens = 150000;
 		assert.equal(h.readGlobal(), json(expected));
 
-		const [, message] = h.dialogs.confirm[0];
+		const [, message] = required(h.dialogs.confirm[0]);
 		assert.match(message, /treeProposal\.tools\["bash"\]: calls-only → omit/);
 		assert.match(message, /model_overrides\["\*gemini\*"\]\.rewindHintReserveTokens: 120k → 150k/);
 
@@ -1112,7 +1120,7 @@ describe("settings screen: keyed maps", () => {
 			projectPath: h.projectPath,
 			projectTrusted: false,
 		});
-		assert.equal(config.proposal?.tools.bash, "omit");
+		assert.equal(config.proposal?.tools["bash"], "omit");
 		assert.equal(config.rewindHintModelReserveTokens.get("*gemini*"), 150000);
 		assert.equal(config.rewindHintModelReserveTokens.get("openai/gpt-6"), 70000);
 	});
@@ -1145,6 +1153,12 @@ describe("settings screen: keyed maps", () => {
 			press(ESC),
 		);
 		const [, listed, changed, removed, restored, , staged, top] = h.rendered;
+		assert.ok(listed);
+		assert.ok(changed);
+		assert.ok(removed);
+		assert.ok(restored);
+		assert.ok(staged);
+		assert.ok(top);
 		assert.match(line(listed, "read"), /read\s+calls-only · global$/);
 		assert.match(line(listed, "bash"), /bash\s+omit · global \(inherited\)$/);
 		assert.match(
@@ -1185,11 +1199,11 @@ describe("settings screen: keyed maps", () => {
 				message.includes('model_overrides["openai/gpt-6"] is staged for removal'),
 			),
 		);
-		const [title, message] = h.dialogs.confirm[0];
+		const [title, message] = required(h.dialogs.confirm[0]);
 		assert.equal(title, 'Remove model_overrides["openai/gpt-6"]?');
 		assert.match(message, /70000/);
-		assert.ok(!text(h.rendered[2]).includes("removed"));
-		assert.match(line(h.rendered[3], "openai/gpt-6"), /removed · staged/);
+		assert.ok(!text(required(h.rendered[2])).includes("removed"));
+		assert.match(line(required(h.rendered[3]), "openai/gpt-6"), /removed · staged/);
 		const expected = structuredClone(MAPS) as Partial<typeof MAPS>;
 		Reflect.deleteProperty(expected.model_overrides ?? {}, "openai/gpt-6");
 		assert.equal(h.readGlobal(), json(expected));
@@ -1215,7 +1229,7 @@ describe("settings screen: keyed maps", () => {
 			press("s"),
 			press(ESC),
 		);
-		const entry = h.rendered[2];
+		const entry = required(h.rendered[2]);
 		assert.match(line(entry, "check_every_turns"), /4 · global$/);
 		assert.match(line(entry, "auto_navigate.mode"), /anchor-and-rewind · default$/);
 		const warning = h.notifications.find(({ type }) => type === "warning");
@@ -1274,7 +1288,7 @@ describe("settings screen: keyed maps", () => {
 			projectTrusted: false,
 		});
 		assert.equal(config.rewindHintModelReserveTokens.get("openrouter/*"), 90000);
-		assert.equal(config.autoNavigateByModel?.get("openrouter/*")?.tools?.bash, "omit");
+		assert.equal(config.autoNavigateByModel?.get("openrouter/*")?.tools?.["bash"], "omit");
 	});
 
 	it("resets and unstages a whole map from the top screen", async () => {
@@ -1283,8 +1297,11 @@ describe("settings screen: keyed maps", () => {
 			confirms: [true],
 		});
 		await h.run(at(ROW.proposalTools, "d"), at(ROW.proposalTools, "u"), press(ESC));
-		assert.match(line(h.rendered[1], "treeProposal.tools"), /1 → none · default · 1 staged/);
-		assert.match(line(h.rendered[2], "treeProposal.tools"), /1 tool · global$/);
+		assert.match(
+			line(required(h.rendered[1]), "treeProposal.tools"),
+			/1 → none · default · 1 staged/,
+		);
+		assert.match(line(required(h.rendered[2]), "treeProposal.tools"), /1 tool · global$/);
 		assert.equal(h.dialogs.confirm.length, 1);
 	});
 
@@ -1313,7 +1330,7 @@ describe("settings screen: keyed maps", () => {
 			h.notifications.find(({ type }) => type === "warning")?.message ?? "",
 			/tree_proposal\.tools in the global file is not an object/,
 		);
-		assert.match(line(h.rendered[4], "treeProposal.tools"), /1 staged/);
+		assert.match(line(required(h.rendered[4]), "treeProposal.tools"), /1 staged/);
 		assert.equal(h.readGlobal(), original);
 	});
 
@@ -1324,9 +1341,9 @@ describe("settings screen: keyed maps", () => {
 			confirms: [true],
 		});
 		await h.run(edit(ROW.proposalTools), edit(0), press(ESC), press(ESC));
-		assert.match(line(h.rendered[1], "bash"), /bash\s+invalid/);
-		assert.match(line(h.rendered[1], "↳"), /Invalid treeProposal\.tools\["bash"\]/);
-		assert.match(line(h.rendered[2], "bash"), /bash\s+invalid → omit/);
+		assert.match(line(required(h.rendered[1]), "bash"), /bash\s+invalid/);
+		assert.match(line(required(h.rendered[1]), "↳"), /Invalid treeProposal\.tools\["bash"\]/);
+		assert.match(line(required(h.rendered[2]), "bash"), /bash\s+invalid → omit/);
 	});
 });
 

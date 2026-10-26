@@ -54,7 +54,7 @@ const plain = (lines: string[]) => stripVTControlCharacters(lines.join("\n"));
 
 test("real native cards expand, fit narrow/wide widths, fall back, and clean up scoped hooks", () => {
 	const prototype = BranchSummaryMessageComponent.prototype as unknown as Record<string, unknown>;
-	const original = prototype.updateDisplay;
+	const original = prototype["updateDisplay"];
 	const treePrototype = Object.getPrototypeOf(
 		new TreeSelectorComponent(
 			[],
@@ -64,7 +64,7 @@ test("real native cards expand, fit narrow/wide widths, fall back, and clean up 
 			() => {},
 		).getTreeList(),
 	) as Record<string, unknown>;
-	const originalTreeText = treePrototype.getEntryDisplayText;
+	const originalTreeText = treePrototype["getEntryDisplayText"];
 	let current: SessionEntry[] = [summary];
 	let warnings = 0;
 	const options = {
@@ -77,7 +77,7 @@ test("real native cards expand, fit narrow/wide widths, fall back, and clean up 
 	const first = installHandoffPatches(options);
 	const second = installHandoffPatches(options);
 	first();
-	assert.notEqual(prototype.updateDisplay, original);
+	assert.notEqual(prototype["updateDisplay"], original);
 	try {
 		const card = new BranchSummaryMessageComponent(message);
 		const collapsed = plain(card.render(60));
@@ -142,10 +142,10 @@ test("real native cards expand, fit narrow/wide widths, fall back, and clean up 
 	} finally {
 		second();
 	}
-	assert.equal(prototype.updateDisplay, original);
-	assert.equal(treePrototype.getEntryDisplayText, originalTreeText);
+	assert.equal(prototype["updateDisplay"], original);
+	assert.equal(treePrototype["getEntryDisplayText"], originalTreeText);
 	second();
-	assert.equal(prototype.updateDisplay, original);
+	assert.equal(prototype["updateDisplay"], original);
 });
 
 test("legacy anchored handoffs trace archived ancestry and union nested sources", () => {
@@ -215,7 +215,7 @@ test("registration probes only UI sessions and uses fresh session context after 
 		},
 	} as unknown as ExtensionAPI;
 	const prototype = BranchSummaryMessageComponent.prototype as unknown as Record<string, unknown>;
-	const original = prototype.updateDisplay;
+	const original = prototype["updateDisplay"];
 	const ctx = {
 		hasUI: false,
 		mode: "tui",
@@ -228,9 +228,9 @@ test("registration probes only UI sessions and uses fresh session context after 
 		},
 	} as unknown as ExtensionContext;
 	registerHandoffRenderer(pi);
-	assert.equal(prototype.updateDisplay, original);
+	assert.equal(prototype["updateDisplay"], original);
 	handlers.get("session_start")?.({}, ctx);
-	assert.equal(prototype.updateDisplay, original);
+	assert.equal(prototype["updateDisplay"], original);
 	try {
 		handlers.get("session_start")?.({}, { ...ctx, hasUI: true });
 		assert.match(plain(new BranchSummaryMessageComponent(message).render(60)), /Native handoff/);
@@ -243,12 +243,12 @@ test("registration probes only UI sessions and uses fresh session context after 
 	} finally {
 		handlers.get("session_shutdown")?.({}, ctx);
 	}
-	assert.equal(prototype.updateDisplay, original);
+	assert.equal(prototype["updateDisplay"], original);
 });
 
 test("incompatible native shape warns once and preserves original method", () => {
 	const prototype = BranchSummaryMessageComponent.prototype as unknown as Record<string, unknown>;
-	const original = prototype.updateDisplay;
+	const original = prototype["updateDisplay"];
 	let warnings = 0;
 	const dispose = installHandoffPatches({
 		entries: () => {
@@ -267,5 +267,5 @@ test("incompatible native shape warns once and preserves original method", () =>
 	} finally {
 		dispose();
 	}
-	assert.equal(prototype.updateDisplay, original);
+	assert.equal(prototype["updateDisplay"], original);
 });

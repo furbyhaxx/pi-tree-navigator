@@ -4,6 +4,11 @@ import { CURSOR_MARKER, type TuiMouseEvent, visibleWidth } from "@earendil-works
 import { FrameList, type FrameListOptions, type FrameRow } from "../../src/ui/frame.ts";
 import { makeRows, plain, theme } from "./frame-fixtures.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 function list(rows: readonly FrameRow[], extra: Partial<FrameListOptions> = {}) {
 	const tui = { terminal: { rows: 40, columns: 80 }, requestRender() {} };
 	const events: string[] = [];
@@ -50,8 +55,8 @@ describe("FrameList", () => {
 			frame.handleInput("keep");
 			for (let n = 0; n < 20; n++) frame.handleInput("\x1b[B");
 			const scrolled = plain(frame.render(width));
-			assert.match(scrolled[0], /↑ \d+ more/);
-			const first = Number(/keep (\d+)/.exec(scrolled[3])?.[1]);
+			assert.match(required(scrolled[0]), /↑ \d+ more/);
+			const first = Number(/keep (\d+)/.exec(required(scrolled[3]))?.[1]);
 			assert.ok(first > 0);
 			const click = (y: number) => {
 				for (const type of ["press", "release", "click"] as const) {
@@ -65,14 +70,14 @@ describe("FrameList", () => {
 			click(3);
 			assert.equal(frame.cursor, first);
 			const expanded = plain(frame.render(width));
-			assert.match(expanded[4], new RegExp(`detail ${first}$`));
-			assert.match(expanded[5], new RegExp(`keep ${first + 2}$`));
+			assert.match(required(expanded[4]), new RegExp(`detail ${first}$`));
+			assert.match(required(expanded[5]), new RegExp(`keep ${first + 2}$`));
 			click(5);
 			assert.equal(frame.cursor, first + 2);
 			assert.deepEqual(events, []);
 			assert.equal(frame.search, "keep");
 			assert.match(plain(frame.render(width)).at(-2) ?? "", /esc clear/);
-			assert.match(plain(frame.render(width))[5], /↳ detail/);
+			assert.match(required(plain(frame.render(width))[5]), /↳ detail/);
 			click(5);
 			assert.deepEqual(events, [`select:keep ${first + 2}:${first + 2}`]);
 			frame.handleInput("\x1b");
@@ -94,7 +99,7 @@ describe("FrameList", () => {
 		const result = frame.handleMouse(event({ y: 1 }));
 		assert.equal(result?.focus, true);
 		assert.equal(result?.handled, true);
-		assert.ok(frame.render(60)[1].includes(CURSOR_MARKER));
+		assert.ok(required(frame.render(60)[1]).includes(CURSOR_MARKER));
 		assert.match(plain(frame.render(60)).at(-2) ?? "", /esc clear/);
 		frame.handleInput("keep");
 		assert.equal(frame.search, "keep");
@@ -196,7 +201,7 @@ describe("FrameList", () => {
 		frame.handleInput("\x1b");
 		assert.equal(frame.search, "");
 		assert.deepEqual(events, []);
-		assert.match(plain(frame.render(80))[1], /Type to search/);
+		assert.match(required(plain(frame.render(80))[1]), /Type to search/);
 		frame.handleInput("\x1b");
 		assert.deepEqual(events, ["cancel"]);
 	});
@@ -216,7 +221,7 @@ describe("FrameList", () => {
 		const { frame } = list(makeRows(3));
 		frame.render(80);
 		for (const key of ["\t", "\x1b[C", "\x1b[D"]) frame.handleInput(key);
-		assert.match(plain(frame.render(80))[1], /Type to search/);
+		assert.match(required(plain(frame.render(80))[1]), /Type to search/);
 		assert.ok(!plain(frame.render(80)).at(-2)?.includes("to filter"));
 	});
 

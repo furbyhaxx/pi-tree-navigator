@@ -8,6 +8,11 @@ import {
 } from "../../src/ui/fold-plan-screen.ts";
 import { done, harness, tick } from "./fold-plan-screen-fixture.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 describe("foldPlanResult", () => {
 	it("summarizes every outcome status for the screen", () => {
 		const usage: never[] = [];
@@ -67,7 +72,7 @@ describe("fold without a UI", () => {
 	it("prints the plan newest first, with the recommendation and refusals, and folds nothing", async () => {
 		const h = headless();
 		await runFoldWithoutUi(h.ctx, h.deps, "");
-		const text = h.notifications[0].message;
+		const text = required(h.notifications[0]).message;
 		assert.match(text, /summary by openai\/gpt-6-luna:low/);
 		assert.ok(text.indexOf("recent") < text.indexOf("impl-start"));
 		assert.match(text, /◆ impl-start {2}−60\.0k tok · in-context · recommended/);
@@ -80,7 +85,7 @@ describe("fold without a UI", () => {
 	it("folds the recommended or a named anchor with the suggested or a given label", async () => {
 		const h = headless();
 		const first = await h.fold("recommended");
-		assert.deepEqual(h.calls.start[0].plan, {
+		assert.deepEqual(required(h.calls.start[0]).plan, {
 			anchor: "impl-start",
 			label: "impl-start-folded",
 		});
@@ -88,7 +93,7 @@ describe("fold without a UI", () => {
 		assert.equal(first?.type, "info");
 
 		await h.fold("start start-phase", done({ label: "start-phase" }));
-		assert.deepEqual(h.calls.start[1].plan, {
+		assert.deepEqual(required(h.calls.start[1]).plan, {
 			anchor: "start",
 			label: "start-phase",
 		});
@@ -99,7 +104,7 @@ describe("fold without a UI", () => {
 		await runFoldWithoutUi(h.ctx, h.deps, "impl-start");
 		assert.deepEqual(h.calls.queue, [{ anchor: "impl-start", label: "impl-start-folded" }]);
 		assert.equal(h.calls.start.length, 0);
-		assert.match(h.notifications[0].message, /queued; it runs at the next turn boundary/);
+		assert.match(required(h.notifications[0]).message, /queued; it runs at the next turn boundary/);
 	});
 
 	it("refuses unknown, unfoldable and taken targets, bad labels and extra arguments without folding", async () => {
@@ -112,13 +117,16 @@ describe("fold without a UI", () => {
 		] as const) {
 			const h = headless();
 			await runFoldWithoutUi(h.ctx, h.deps, args);
-			assert.equal(h.notifications[0].type, "warning", args);
-			assert.match(h.notifications[0].message, expected, args);
+			assert.equal(required(h.notifications[0]).type, "warning", args);
+			assert.match(required(h.notifications[0]).message, expected, args);
 			assert.equal(h.calls.start.length + h.calls.queue.length, 0, args);
 		}
 		const none = headless({ recommended: undefined });
 		await runFoldWithoutUi(none.ctx, none.deps, "recommended");
-		assert.match(none.notifications[0].message, /No anchor fits the recommendation budget/);
+		assert.match(
+			required(none.notifications[0]).message,
+			/No anchor fits the recommendation budget/,
+		);
 	});
 
 	it("reports a failed fold as a warning", async () => {

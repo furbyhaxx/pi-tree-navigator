@@ -15,6 +15,11 @@ import { parseClassifierModel } from "../../src/continuity/intent-policy.ts";
 import { parseProposalModel } from "../../src/retrospective/proposal-options.ts";
 import { pickSettingsModel } from "../../src/ui/settings-model-picker.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 const ENTER = "\r";
 const ESC = "\x1b";
 const DOWN = "\x1b[B";
@@ -91,7 +96,7 @@ interface Setup {
 
 function harness(setup: Setup = {}) {
 	const calls: string[] = [];
-	const notifications: { message: string; type?: string }[] = [];
+	const notifications: { message: string; type: string | undefined }[] = [];
 	const inputs = [...(setup.inputs ?? [])];
 	const asked: [string, string | undefined][] = [];
 	const scripts: Script[] = [];
@@ -173,7 +178,7 @@ const selectedLine = (lines: readonly string[]): string =>
 
 describe("settings model picker: results", () => {
 	it("offers chat and decision models for a policy stage without a thinking step", async () => {
-		const h = harness({ models: [plain], classifiers: [CLASSIFIERS[1]] });
+		const h = harness({ models: [plain], classifiers: [required(CLASSIFIERS[1])] });
 		const result = await h.run("stage", null, (screen) => {
 			const body = text(screen.render(80));
 			assert.match(body, /Plain Chat/);
@@ -191,7 +196,7 @@ describe("settings model picker: results", () => {
 	it("can disable a policy stage without changing other settings", async () => {
 		const h = harness();
 		assert.equal(await h.run("stage", null, press(ENTER)), null);
-		assert.match(text(h.seen[0]), /disable this stage/);
+		assert.match(text(required(h.seen[0])), /disable this stage/);
 	});
 	it("returns a parser-valid provider/model:thinking and leaves the session model alone", async () => {
 		const h = harness();
@@ -390,8 +395,8 @@ describe("settings model picker: custom string", () => {
 		assert.equal(result, undefined);
 		assert.equal(h.notifications.length, 3);
 		assert.ok(h.notifications.every((note) => note.type === "warning"));
-		assert.match(h.notifications[1].message, /Invalid proposal thinking level: turbo/);
-		assert.ok(!h.notifications[2].message.includes(ESC));
+		assert.match(required(h.notifications[1]).message, /Invalid proposal thinking level: turbo/);
+		assert.ok(!required(h.notifications[2]).message.includes(ESC));
 	});
 
 	it("validates a classifier as provider/id and does not take off or a thinking suffix as special", async () => {
@@ -414,7 +419,7 @@ describe("settings model picker: custom string", () => {
 			screen.handleInput(ENTER);
 		});
 		assert.equal(result, "lab/judge-1");
-		assert.match(h.notifications[0].message, /auth store locked/);
+		assert.match(required(h.notifications[0]).message, /auth store locked/);
 	});
 });
 
@@ -434,13 +439,13 @@ describe("settings model picker: rendering", () => {
 		for (const query of ["opus", "claude-opus-4-7", "openai", "gpt5"]) {
 			await h.run("model", "current", search(query));
 		}
-		assert.match(found[0], /Claude Opus 4\.7/);
-		assert.doesNotMatch(found[0], /GPT-5/);
-		assert.match(found[1], /Claude Opus 4\.7/);
-		assert.doesNotMatch(found[1], /Acme Reasoner/);
-		assert.match(found[2], /GPT-5/);
-		assert.doesNotMatch(found[2], /Claude Opus/);
-		assert.match(found[3], /GPT-5/);
+		assert.match(required(found[0]), /Claude Opus 4\.7/);
+		assert.doesNotMatch(required(found[0]), /GPT-5/);
+		assert.match(required(found[1]), /Claude Opus 4\.7/);
+		assert.doesNotMatch(required(found[1]), /Acme Reasoner/);
+		assert.match(required(found[2]), /GPT-5/);
+		assert.doesNotMatch(required(found[2]), /Claude Opus/);
+		assert.match(required(found[3]), /GPT-5/);
 	});
 
 	it("keeps every line within the width and strips escape sequences from names", async () => {
@@ -457,7 +462,7 @@ describe("settings model picker: rendering", () => {
 				assert.ok(lines.every((line) => visibleWidth(line) <= columns));
 				for (const hostile of ["\x1b[2J", "\x1b[31m", "\x1b]0;", "\x07"])
 					assert.ok(!text(lines).includes(hostile));
-				assert.match(lines[0], /Anchor\/Settings\/Model/);
+				assert.match(required(lines[0]), /Anchor\/Settings\/Model/);
 				assert.doesNotMatch(text(lines), /Spaced|Evil|evil/);
 				assert.match(text(lines), /Claude Opus 4\.7/);
 				assert.match(text(lines), /Badnamex/);
@@ -475,8 +480,8 @@ describe("settings model picker: rendering", () => {
 			press(...down(1), ENTER),
 			(screen) => {
 				const lines = screen.render(60);
-				assert.match(lines[0], /Anchor\/Settings\/Model\/Thinking/);
-				assert.match(lines[1], /acme\/reasoner/);
+				assert.match(required(lines[0]), /Anchor\/Settings\/Model\/Thinking/);
+				assert.match(required(lines[1]), /acme\/reasoner/);
 				assert.ok(lines.every((line) => visibleWidth(line) <= 60));
 				screen.handleInput(ESC);
 			},
@@ -488,10 +493,10 @@ describe("settings model picker: rendering", () => {
 		const h = harness({ columns: 60 });
 		const result = await h.run("model", "offline/model:high", (screen) => {
 			const lines = screen.render(60);
-			assert.match(lines[0], /Anchor\/Settings\/Model/);
+			assert.match(required(lines[0]), /Anchor\/Settings\/Model/);
 			const rows = lines.filter((line) => /current|offline/.test(line));
-			assert.match(rows[0], /current/);
-			assert.match(rows[1], /offline\/model:high/);
+			assert.match(required(rows[0]), /current/);
+			assert.match(required(rows[1]), /offline\/model:high/);
 			assert.match(selectedLine(lines), /offline\/model:high/);
 			screen.handleInput(ENTER);
 		});

@@ -63,9 +63,9 @@ test("call rows are one line at every width", () => {
 
 test("call rows read as the brief specifies", () => {
 	const row = (args: unknown) => oneLinePerWidth(renderToolCall(args, theme, false))[2];
-	assert.equal(row(calls.anchor), "anchor impl-start");
-	assert.equal(row(calls.rewind), "rewind impl-start → impl-done");
-	assert.equal(row(calls.list), "list");
+	assert.equal(row(calls["anchor"]), "anchor impl-start");
+	assert.equal(row(calls["rewind"]), "rewind impl-start → impl-done");
+	assert.equal(row(calls["list"]), "list");
 	assert.equal(
 		row({ action: "pin", kind: "rule", text: "Always answer in German" }),
 		"pin rule: Always answer in German",
@@ -106,10 +106,10 @@ test("streaming and garbage args render without throwing", () => {
 });
 
 test("expanded call wraps the full text and adds detail", () => {
-	const lines = renderToolCall(calls.pin, theme, true).render(40);
+	const lines = renderToolCall(calls["pin"], theme, true).render(40);
 	assert.ok(lines.length > 10);
 	assert.ok(lines.every((line) => visibleWidth(line) <= 40));
-	assert.match(plain(renderToolCall(calls.rewind, theme, true).render(80)), /focus:\s+x{20}/);
+	assert.match(plain(renderToolCall(calls["rewind"], theme, true).render(80)), /focus:\s+x{20}/);
 	assert.match(
 		plain(renderToolCall(calls["pin file"], theme, true).render(80)),
 		/why: entry point/,

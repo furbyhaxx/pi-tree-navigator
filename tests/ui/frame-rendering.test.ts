@@ -5,6 +5,11 @@ import { type FrameRow, renderFrame, sanitizeTerminalText } from "../../src/ui/f
 import { measureFrame } from "../../src/ui/frame-rendering.ts";
 import { CODES, makeRows, options, plain } from "./frame-fixtures.ts";
 
+function required<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "expected a value");
+	return value;
+}
+
 describe("renderFrame", () => {
 	for (const width of [60, 130]) {
 		it(`bounds every line to ${width} columns and renders exactly the measured height`, () => {
@@ -20,8 +25,8 @@ describe("renderFrame", () => {
 			for (const line of lines)
 				assert.ok(visibleWidth(line) <= width, `${visibleWidth(line)} > ${width}: ${line}`);
 			const text = plain(lines);
-			assert.match(text[0], /^─ Anchor\/List ─+ ↑ 4 more ─+ 38\.4% of 372k \(auto\) ─$/);
-			assert.equal(visibleWidth(text[0]), width);
+			assert.match(required(text[0]), /^─ Anchor\/List ─+ ↑ 4 more ─+ 38\.4% of 372k \(auto\) ─$/);
+			assert.equal(visibleWidth(required(text[0])), width);
 			assert.match(text.at(-1) ?? "", /^─+ ↓ \d+ more ─+$/);
 		});
 	}
@@ -31,10 +36,10 @@ describe("renderFrame", () => {
 		const lines = plain(renderFrame(options(rows, 60, { cursor: 1 })));
 		assert.equal(lines[1], " ❯ Type to search…");
 		assert.equal(lines[2], "");
-		assert.match(lines[3], /^ {3}row 1 {2,}value 1$/);
-		assert.match(lines[4], /^ → row 2 {2,}value 2$/);
-		assert.match(lines[5], /^ {6}↳ detail line 2$/);
-		assert.match(lines[6], /^ {3}row 3 {2,}value 3$/);
+		assert.match(required(lines[3]), /^ {3}row 1 {2,}value 1$/);
+		assert.match(required(lines[4]), /^ → row 2 {2,}value 2$/);
+		assert.match(required(lines[5]), /^ {6}↳ detail line 2$/);
+		assert.match(required(lines[6]), /^ {3}row 3 {2,}value 3$/);
 		assert.ok(lines.includes("   Description for row 2."));
 		assert.equal(lines.at(-2), " ↑↓ navigate  enter select  esc back");
 		assert.ok(!lines.some((line) => line.includes("detail line 1")));
@@ -65,9 +70,7 @@ describe("renderFrame", () => {
 		assert.equal(none.length, full.length);
 		assert.ok(plain(none).some((line) => line.includes("No matches for “zzz”")));
 		assert.ok(
-			plain(renderFrame({ ...opts, rows: [], layout: undefined })).some((line) =>
-				line.includes("Nothing to show"),
-			),
+			plain(renderFrame({ ...opts, rows: [] })).some((line) => line.includes("Nothing to show")),
 		);
 	});
 
@@ -76,10 +79,10 @@ describe("renderFrame", () => {
 		const opts = options(rows, 80);
 		const layout = measureFrame(opts);
 		const top = plain(renderFrame({ ...opts, layout }));
-		assert.ok(!top[0].includes("more"));
+		assert.ok(!required(top[0]).includes("more"));
 		assert.match(top.at(-1) ?? "", /↓ \d+ more/);
 		const scrolled = plain(renderFrame({ ...opts, layout, scrollOffset: 5, cursor: 5 }));
-		assert.match(scrolled[0], /↑ 5 more/);
+		assert.match(required(scrolled[0]), /↑ 5 more/);
 	});
 
 	it("clips the badge and breadcrumbs instead of overflowing narrow terminals", () => {
