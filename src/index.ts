@@ -64,12 +64,7 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import {
-	type AutoFoldState,
-	planAutomaticFold,
-	pressureFoldBudget,
-} from "./auto/auto-fold-planner.ts";
-import type { AutoNavigatePartial } from "./auto/auto-navigate-config.ts";
+import { planAutomaticFold, pressureFoldBudget } from "./auto/auto-fold-planner.ts";
 import { planPressureCut } from "./auto/pressure-compaction.ts";
 import { isVisible, renderBriefing } from "./continuity/continuity-briefing.ts";
 import {
@@ -104,7 +99,6 @@ import {
 import {
 	CONSOLIDATION_DEFAULTS,
 	CONTINUITY_CAPTURE_DEFAULT,
-	type ConsolidationConfig,
 	loadTreeNavigatorConfig,
 	PARENT_HANDOFF_MODE_DEFAULT,
 	resolveAutoNavigateConfig,
@@ -132,6 +126,7 @@ import {
 	legacySummaryRequestRow,
 	sanitizeLegacyText,
 } from "./core/legacy-rewind.ts";
+import { createNavigatorState } from "./core/navigator-state.ts";
 import {
 	asInternals,
 	captureSession,
@@ -239,7 +234,6 @@ import {
 	hasOpenWork,
 } from "./fold/summary-prompt.ts";
 import { recoveryCutOf } from "./recovery/recovery-cut.ts";
-import type { ProposalOptions } from "./retrospective/proposal-options.ts";
 import { registerAnchorCommand } from "./ui/anchor-command.ts";
 import { createUserOpsWriter } from "./ui/current-screen.ts";
 import {
@@ -324,20 +318,20 @@ export default function (pi: ExtensionAPI) {
 				const modelKey = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined;
 				const oldReserve = resolveRewindHintReserve(
 					{
-						rewindHintReserveTokens,
-						rewindHintModelReserveTokens: hintByModel,
+						rewindHintReserveTokens: state.config.rewindHintReserveTokens,
+						rewindHintModelReserveTokens: state.config.hintByModel,
 					},
 					modelKey,
 				);
 				const oldController = resolveAutoNavigateConfig(
 					{
-						autoNavigate: autoNavigateBase,
-						autoNavigateByModel,
-						proposal: proposalConfig,
+						autoNavigate: state.config.autoNavigateBase,
+						autoNavigateByModel: state.config.autoNavigateByModel,
+						proposal: state.config.proposalConfig,
 					},
 					modelKey,
 				);
-				const oldContinuity = continuityConfig;
+				const oldContinuity = state.config.continuity;
 				const loaded = await loadTreeNavigatorConfig({
 					agentDir: getAgentDir(),
 					projectPath: join(ctx.cwd, CONFIG_DIR_NAME, TREE_NAVIGATOR_CONFIG_FILENAME),
@@ -347,18 +341,18 @@ export default function (pi: ExtensionAPI) {
 				if (sm.getSessionId() !== sessionId) return;
 				applyNavigatorConfig(sessionId, loaded.config);
 				if (oldReserve !== resolveRewindHintReserve(loaded.config, modelKey))
-					hintTracker = new RewindHintTracker();
+					state.anchors.hintTracker = new RewindHintTracker();
 				if (
 					JSON.stringify(oldController) !==
 					JSON.stringify(resolveAutoNavigateConfig(loaded.config, modelKey))
 				)
-					autoFoldStateBySession.delete(sessionId);
+					state.automatic.autoFoldStateBySession.delete(sessionId);
 				if (
-					oldContinuity.capture !== continuityConfig.capture ||
-					oldContinuity.intentClassifier !== continuityConfig.intentClassifier
+					oldContinuity.capture !== state.config.continuity.capture ||
+					oldContinuity.intentClassifier !== state.config.continuity.intentClassifier
 				) {
-					classifierTimedOut.delete(sessionId);
-					continuityWarned.delete(sessionId);
+					state.continuity.classifierTimedOut.delete(sessionId);
+					state.continuity.continuityWarned.delete(sessionId);
 				}
 				if (hasUI) for (const warning of loaded.warnings) ui.notify(warning, "warning");
 			},
@@ -380,7 +374,11 @@ export default function (pi: ExtensionAPI) {
 		setAnchor(ctx, name) {
 			const sm = ctx.sessionManager as SessionManager;
 			const sessionId = sm.getSessionId();
-			if (!ctx.isIdle() || queuedFolds.has(sessionId) || runningFolds.has(sessionId))
+			if (
+				!ctx.isIdle() ||
+				state.folds.queuedFolds.has(sessionId) ||
+				state.folds.runningFolds.has(sessionId)
+			)
 				return {
 					ok: false,
 					reason: "Wait until the agent and any pending fold finish before setting an anchor.",
@@ -418,46 +416,17 @@ export default function (pi: ExtensionAPI) {
 			return `ctx ${formatPct1(tokens, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}`;
 		},
 		readLedger: (ctx) => readBranchLedger(ctx.sessionManager.getBranch()).ledger,
-		applyUserOps: createUserOpsWriter(pi, () => continuityConfig.capture),
+		applyUserOps: createUserOpsWriter(pi, () => state.config.continuity.capture),
 	});
 	patchAgentSessionPrototype();
 
-	const parentModes = new Map<string, HandoffMode>();
-	// Independent folds (engine host), keyed by session id. The system head of
-	// the latest request is what Strategy A replays; a queued fold (the rewind
-	// tool's) runs at the session's next `turn_end`; a session in
-	// `runningFolds` is folding now.
-	const capturedSystems = new Map<string, { modelKey: string; messages: Message[] }>();
-	const queuedFolds = new Map<string, FoldRequest>();
-	const runningFolds = new Set<string>();
-	// Hints and automatic start anchors skip turns owned by a fold or recovery.
-	const rewindTurns = new WeakSet<object>();
-	// Turns that overflowed the window (#101, D14): marked by the rewind handler,
-	// whether or not rewind-driven compaction is on, so the start anchor skips
-	// them.
-	const overflowedTurns = new WeakSet<object>();
-
-	const requestBudgetFailures = new Map<
-		string,
-		{
-			inputEstimate: number;
-			contextWindow: number;
-			receiptId: string;
-			detail?: string;
-			providerOverflow?: boolean;
-		}
-	>();
-	// Recoveries for the current request: each must start from less context than
-	// the last, up to MAX_RECOVERY_ATTEMPTS. Native overflow retry owns the next request.
-	const recoveryAttempts = new Map<string, { attempts: number; heuristicTokens: number }>();
-	const nativeRetryOwned = new Set<string>();
-	const recoveryCuts = new Map<string, string>();
-	// Receipts of recoveries that landed at a turn boundary; another handler can
-	// replace the boundary's entries, so settlement persists what went missing.
-	const recoveryReceipts = new Map<string, RewindMessageDraft[]>();
+	const state = createNavigatorState();
 	const holdRecoveryReceipt = (sessionId: string, draft: RewindMessageDraft) => {
 		draft.details.receiptId = randomUUID();
-		recoveryReceipts.set(sessionId, [...(recoveryReceipts.get(sessionId) ?? []), draft]);
+		state.recovery.recoveryReceipts.set(sessionId, [
+			...(state.recovery.recoveryReceipts.get(sessionId) ?? []),
+			draft,
+		]);
 		return draft;
 	};
 	const receiptOnBranch = (sm: SessionManager, receiptId: unknown) =>
@@ -493,14 +462,6 @@ export default function (pi: ExtensionAPI) {
 			},
 		);
 
-	// Where pi's settings are read from (#101, S4): the session's cwd, agent
-	// dir and project trust, set at `session_start`. `null` = cannot tell.
-	let piSettingsSource: {
-		cwd: string;
-		agentDir: string;
-		projectTrusted: boolean;
-	} | null = null;
-
 	/**
 	 * pi's compaction settings for `model` (#101, S3/S4/D9), or `null`. Read
 	 * from the captured session's live settings manager, the one pi decides
@@ -515,10 +476,14 @@ export default function (pi: ExtensionAPI) {
 			const session = findOwningSession(sm);
 			let settingsManager = session ? asInternals(session).settingsManager : undefined;
 			if (!settingsManager) {
-				if (!piSettingsSource) return null;
-				settingsManager = SettingsManager.create(piSettingsSource.cwd, piSettingsSource.agentDir, {
-					projectTrusted: piSettingsSource.projectTrusted,
-				});
+				if (!state.config.piSettingsSource) return null;
+				settingsManager = SettingsManager.create(
+					state.config.piSettingsSource.cwd,
+					state.config.piSettingsSource.agentDir,
+					{
+						projectTrusted: state.config.piSettingsSource.projectTrusted,
+					},
+				);
 			}
 			const settings = settingsManager.getCompactionSettings(model);
 			return {
@@ -557,15 +522,15 @@ export default function (pi: ExtensionAPI) {
 			const head = effectiveRequestMessages(sm, messages).filter(
 				(message): message is Message => message.role === "system",
 			);
-			if (!model || head.length === 0) capturedSystems.delete(sessionId);
+			if (!model || head.length === 0) state.folds.capturedSystems.delete(sessionId);
 			else {
-				capturedSystems.set(sessionId, {
+				state.folds.capturedSystems.set(sessionId, {
 					modelKey: `${model.provider}/${model.id}`,
 					messages: head,
 				});
 			}
 		} catch {
-			capturedSystems.delete(sessionId);
+			state.folds.capturedSystems.delete(sessionId);
 		}
 	}
 
@@ -577,7 +542,7 @@ export default function (pi: ExtensionAPI) {
 		if (!sessionLeaf) return { error: "no session entries yet, nothing to fold" };
 		const foldPointId =
 			request.origin === "recovery"
-				? recoveryCuts.get(request.sessionId)
+				? state.recovery.recoveryCuts.get(request.sessionId)
 				: (host.foldPointId ?? sessionLeaf);
 		if (!foldPointId) {
 			return { error: "the recovery boundary was not snapshotted" };
@@ -625,7 +590,7 @@ export default function (pi: ExtensionAPI) {
 			sm,
 			targetId,
 			foldPointId,
-			capturedSystems.get(request.sessionId),
+			state.folds.capturedSystems.get(request.sessionId),
 			host.model,
 		);
 		return {
@@ -634,7 +599,7 @@ export default function (pi: ExtensionAPI) {
 			segment: buildFoldSegment(allEntries, sessionLeaf, targetId, foldPointId),
 			inContext,
 			parent: {
-				mode: parentModes.get(request.sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
+				mode: state.folds.parentModes.get(request.sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
 				childCount: entries.filter((entry) => entry.type === "branch_summary").length,
 			},
 			continuitySection: continuityRequestSection(sm, {
@@ -704,8 +669,8 @@ export default function (pi: ExtensionAPI) {
 		options: FoldRunOptions = {},
 	): Promise<FoldResult> {
 		const { sessionId } = request;
-		if (runningFolds.has(sessionId)) return { status: "busy" };
-		runningFolds.add(sessionId);
+		if (state.folds.runningFolds.has(sessionId)) return { status: "busy" };
+		state.folds.runningFolds.add(sessionId);
 		try {
 			return await createFoldEngine<FoldLanded>({
 				prepare: (req) => prepareFold(host, req),
@@ -728,7 +693,7 @@ export default function (pi: ExtensionAPI) {
 				commit: (req, prepared, summary) => commitEngineFold(host, req, prepared, summary.text),
 			}).run(request, options);
 		} finally {
-			runningFolds.delete(sessionId);
+			state.folds.runningFolds.delete(sessionId);
 		}
 	}
 
@@ -748,7 +713,7 @@ export default function (pi: ExtensionAPI) {
 		if (signal?.aborted) return { status: "cancelled" };
 		// Factor-free, so a calibration the overflow taught does not read as growth.
 		const heuristicTokens = Math.round(estimateAdmissionTokens(sm) / tokenFactorOf(sm));
-		const prior = recoveryAttempts.get(sessionId);
+		const prior = state.recovery.recoveryAttempts.get(sessionId);
 		if (prior && prior.attempts >= MAX_RECOVERY_ATTEMPTS)
 			return {
 				status: "failed",
@@ -759,13 +724,13 @@ export default function (pi: ExtensionAPI) {
 				status: "failed",
 				detail: `the previous recovery for this request did not reduce context (~${formatWindow(prior.heuristicTokens)} -> ~${formatWindow(heuristicTokens)} heuristic tokens)`,
 			};
-		recoveryAttempts.set(sessionId, {
+		state.recovery.recoveryAttempts.set(sessionId, {
 			attempts: (prior?.attempts ?? 0) + 1,
 			heuristicTokens,
 		});
 		if (!model || contextWindow <= 0)
 			return { status: "failed", detail: "no operating window is available" };
-		const captured = capturedSystems.get(sessionId);
+		const captured = state.folds.capturedSystems.get(sessionId);
 		const systemHead = effectiveRequestMessages(
 			sm,
 			captured?.messages ?? sm.buildSessionContext().messages,
@@ -788,14 +753,14 @@ export default function (pi: ExtensionAPI) {
 			ctx.sessionManager.getSessionId() === sessionId &&
 			`${ctx.model?.provider}/${ctx.model?.id}` === modelKey &&
 			ctx.model?.contextWindow === contextWindow &&
-			capturedSystems.get(sessionId) === captured;
-		const handoffMode = parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT;
+			state.folds.capturedSystems.get(sessionId) === captured;
+		const handoffMode = state.folds.parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT;
 		const budget = foldRecommendationBudget(
 			contextWindow,
 			resolveRewindHintReserve(
 				{
-					rewindHintReserveTokens,
-					rewindHintModelReserveTokens: hintByModel,
+					rewindHintReserveTokens: state.config.rewindHintReserveTokens,
+					rewindHintModelReserveTokens: state.config.hintByModel,
 				},
 				modelKey,
 			),
@@ -813,9 +778,9 @@ export default function (pi: ExtensionAPI) {
 			if (host.isIdle?.() === false) return { status: "failed", detail: why };
 			const config = resolveAutoNavigateConfig(
 				{
-					autoNavigate: autoNavigateBase,
-					autoNavigateByModel,
-					proposal: proposalConfig,
+					autoNavigate: state.config.autoNavigateBase,
+					autoNavigateByModel: state.config.autoNavigateByModel,
+					proposal: state.config.proposalConfig,
 				},
 				modelKey,
 			);
@@ -831,7 +796,7 @@ export default function (pi: ExtensionAPI) {
 					trigger: `The next request (~${formatWindow(before)} tokens) does not fit the ${formatWindow(contextWindow)} operating window and no fold could relieve it (${toOneLine(why, 200) ?? "no target"})`,
 					origin: "recovery",
 					activeTokens: before,
-					captured: capturedSystems.get(sessionId),
+					captured: state.folds.capturedSystems.get(sessionId),
 					handoffMode,
 					signal,
 					isCurrent: () => host.isIdle?.() ?? false,
@@ -857,7 +822,7 @@ export default function (pi: ExtensionAPI) {
 			const candidates = priceFoldCandidates(sm, {
 				model,
 				handoffMode,
-				captured: capturedSystems.get(sessionId),
+				captured: state.folds.capturedSystems.get(sessionId),
 				focus,
 				suggestLabel: (name) => suggestFoldLabel(sm, name),
 				foldPointId: cut.foldPointId,
@@ -872,12 +837,12 @@ export default function (pi: ExtensionAPI) {
 				newLabel: selected.candidate.suggestedLabel,
 				focus,
 			};
-			recoveryCuts.set(sessionId, cut.foldPointId);
+			state.recovery.recoveryCuts.set(sessionId, cut.foldPointId);
 			let outcome: FoldResult;
 			try {
 				outcome = await runFold(host, request, { signal });
 			} finally {
-				recoveryCuts.delete(sessionId);
+				state.recovery.recoveryCuts.delete(sessionId);
 			}
 			if (signal?.aborted || outcome.status === "cancelled") return { status: "cancelled" };
 			if (outcome.status !== "done") {
@@ -931,13 +896,13 @@ export default function (pi: ExtensionAPI) {
 		sessionId: string,
 		request: FoldRequestInput,
 	): { ok: true } | { ok: false; reason: string } {
-		if (queuedFolds.has(sessionId) || runningFolds.has(sessionId)) {
+		if (state.folds.queuedFolds.has(sessionId) || state.folds.runningFolds.has(sessionId)) {
 			return {
 				ok: false,
 				reason: "a fold is already queued or running for this session",
 			};
 		}
-		queuedFolds.set(sessionId, { ...request, sessionId });
+		state.folds.queuedFolds.set(sessionId, { ...request, sessionId });
 		return { ok: true };
 	}
 
@@ -987,8 +952,8 @@ export default function (pi: ExtensionAPI) {
 			model?.contextWindow ?? 0,
 			resolveRewindHintReserve(
 				{
-					rewindHintReserveTokens,
-					rewindHintModelReserveTokens: hintByModel,
+					rewindHintReserveTokens: state.config.rewindHintReserveTokens,
+					rewindHintModelReserveTokens: state.config.hintByModel,
 				},
 				model ? `${model.provider}/${model.id}` : undefined,
 			),
@@ -1015,8 +980,8 @@ export default function (pi: ExtensionAPI) {
 				const sessionId = sm.getSessionId();
 				return priceFoldCandidates(sm, {
 					model: commandCtx.model,
-					handoffMode: parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
-					captured: capturedSystems.get(sessionId),
+					handoffMode: state.folds.parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT,
+					captured: state.folds.capturedSystems.get(sessionId),
 					focus: defaultFoldFocus(sm),
 					suggestLabel: (name) => suggestFoldLabel(sm, name),
 					thinking: foldHostOf(commandCtx).thinking,
@@ -1101,8 +1066,8 @@ export default function (pi: ExtensionAPI) {
 		} catch {
 			return undefined;
 		}
-		queuedFolds.delete(sessionId);
-		rewindTurns.add(message);
+		state.folds.queuedFolds.delete(sessionId);
+		state.turns.rewindTurns.add(message);
 		const deliver = (draft: RewindMessageDraft, cont: boolean) => ({
 			entries: keepValidDrafts<SessionBoundaryDraft>(sm, [...(event.entries ?? []), draft]),
 			continue: cont,
@@ -1139,18 +1104,6 @@ export default function (pi: ExtensionAPI) {
 		return deliver(foldDoneDraft(request, outcome), true);
 	}
 
-	// Continuity capture: the user's instructions on the active branch become
-	// ledger ops, persisted as one `navigate-tree-continuity-ops` entry. Config
-	// is per `session_start`, like the hint's.
-	let continuityConfig = {
-		capture: CONTINUITY_CAPTURE_DEFAULT,
-		intentClassifier: null as string | null,
-	};
-	const continuityWarned = new Map<string, Set<string>>();
-	// Sessions whose model classifier hung once: heuristics only from then on.
-	const classifierTimedOut = new Set<string>();
-	let consolidationConfig: ConsolidationConfig = CONSOLIDATION_DEFAULTS;
-
 	// Runs at a `turn_end` boundary, where the assistant and all its tool
 	// results are already on the branch, so the entry cannot land inside a tool
 	// batch (`endsInOpenToolBatch` guards the rest). A plain `appendEntry` is
@@ -1167,9 +1120,10 @@ export default function (pi: ExtensionAPI) {
 		},
 		message: { stopReason?: string },
 	): Promise<void> {
-		if (!continuityConfig.capture) return;
-		const captureConfig = continuityConfig;
-		if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
+		if (!state.config.continuity.capture) return;
+		const captureConfig = state.config.continuity;
+		if ((state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) === false)
+			return;
 		if (message.stopReason === "error" || message.stopReason === "aborted") {
 			return;
 		}
@@ -1195,10 +1149,11 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		if (parentSignal?.aborted) return;
-		const warned = continuityWarned.get(sessionId) ?? new Set<string>();
-		continuityWarned.set(sessionId, warned);
+		const warned = state.continuity.continuityWarned.get(sessionId) ?? new Set<string>();
+		state.continuity.continuityWarned.set(sessionId, warned);
 		const warn = (text: string) => {
-			if (continuityConfig !== captureConfig || parentSignal?.aborted || warned.has(text)) return;
+			if (state.config.continuity !== captureConfig || parentSignal?.aborted || warned.has(text))
+				return;
 			warned.add(text);
 			try {
 				notify?.(text);
@@ -1206,7 +1161,9 @@ export default function (pi: ExtensionAPI) {
 				// Stale ctx: nothing left to surface with.
 			}
 		};
-		const model = classifierTimedOut.has(sessionId) ? null : continuityConfig.intentClassifier;
+		const model = state.continuity.classifierTimedOut.has(sessionId)
+			? null
+			: state.config.continuity.intentClassifier;
 		const controller = new AbortController();
 		const abort = () => controller.abort();
 		parentSignal?.addEventListener("abort", abort, { once: true });
@@ -1237,10 +1194,10 @@ export default function (pi: ExtensionAPI) {
 			clearTimeout(timer);
 			parentSignal?.removeEventListener("abort", abort);
 		}
-		if (continuityConfig !== captureConfig || parentSignal?.aborted) return;
+		if (state.config.continuity !== captureConfig || parentSignal?.aborted) return;
 		if (outcome === "timeout") {
 			if (model === null) return;
-			classifierTimedOut.add(sessionId);
+			state.continuity.classifierTimedOut.add(sessionId);
 			warn(
 				`${TOOL_NAME}: continuity classifier ${model.startsWith("{") ? (resolveIntentPolicy(model)?.kind.model ?? "configured policy") : model} did not answer within ${CONTINUITY_CAPTURE_TIMEOUT_MS / 1000} s; capture uses heuristics for the rest of this session.`,
 			);
@@ -1252,7 +1209,7 @@ export default function (pi: ExtensionAPI) {
 				!outcome ||
 				parentSignal?.aborted ||
 				sm.getLeafId() !== leafId ||
-				continuityConfig !== captureConfig
+				state.config.continuity !== captureConfig
 			)
 				return;
 			const { result, usedModel } = outcome;
@@ -1270,7 +1227,6 @@ export default function (pi: ExtensionAPI) {
 
 	// Folds (by summary entry id) whose first post-fold turn was already
 	// nudged: at most one nudge per fold, even if pi dropped its draft.
-	const nudgedFolds = new Set<string>();
 
 	// The first assistant turn after a delivered fold continuation ended
 	// text-only while the fold's summary still lists open work: one steer, so
@@ -1286,13 +1242,14 @@ export default function (pi: ExtensionAPI) {
 		signal: AbortSignal | undefined,
 	): RewindMessageDraft | undefined {
 		if (event.continue || signal?.aborted) return;
-		if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
+		if ((state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) === false)
+			return;
 		if (
 			message.stopReason === "error" ||
 			message.stopReason === "aborted" ||
 			message.stopReason === "length" ||
-			rewindTurns.has(message) ||
-			overflowedTurns.has(message)
+			state.turns.rewindTurns.has(message) ||
+			state.turns.overflowedTurns.has(message)
 		) {
 			return;
 		}
@@ -1330,13 +1287,13 @@ export default function (pi: ExtensionAPI) {
 					typeof d.summaryId !== "string" ||
 					d.forced === true ||
 					Number(d.reappendedLateMessages) > 0 ||
-					nudgedFolds.has(d.summaryId)
+					state.continuity.nudgedFolds.has(d.summaryId)
 				) {
 					return;
 				}
 				const fold = sm.getEntry(d.summaryId);
 				if (fold?.type !== "branch_summary" || !hasOpenWork(fold.summary)) return;
-				nudgedFolds.add(d.summaryId);
+				state.continuity.nudgedFolds.add(d.summaryId);
 				return rewindMessageDraft(CONTINUE_NUDGE_TEXT, {
 					status: CONTINUE_NUDGE_STATUS,
 					summaryId: d.summaryId,
@@ -1384,7 +1341,7 @@ export default function (pi: ExtensionAPI) {
 			!overflowed(message, ctx.model) &&
 			!(operatingWindow > 0 && (usage?.input ?? 0) + (usage?.cacheRead ?? 0) > operatingWindow)
 		)
-			recoveryAttempts.delete(sessionId);
+			state.recovery.recoveryAttempts.delete(sessionId);
 		const messageEntryId = typeof event.messageEntryId === "string" ? event.messageEntryId : "";
 		const turnIds = messageEntryId
 			? [
@@ -1392,29 +1349,30 @@ export default function (pi: ExtensionAPI) {
 					...(event.toolResultEntryIds ?? []).filter((id): id is string => typeof id === "string"),
 				]
 			: [];
-		const budgetFailure = requestBudgetFailures.get(sessionId);
+		const budgetFailure = state.recovery.requestBudgetFailures.get(sessionId);
 		if (budgetFailure) {
 			return deliverRaw([...hideDrafts(turnIds), requestBudgetFailureDraft(budgetFailure)], false);
 		}
 		// The queued fold (E12), after this turn's tool results are committed. It
 		// waits across an error turn pi retries.
-		const queuedFold = queuedFolds.get(sessionId);
+		const queuedFold = state.folds.queuedFolds.get(sessionId);
 		if (queuedFold && message.stopReason !== "error") {
 			const folded = await runQueuedFold(sm, sessionId, queuedFold, message, event, ctx);
 			if (folded) return folded;
 		}
 		// Another extension's continuation owns this boundary.
 		if (!event.continue && messageEntryId && overflowed(message, ctx.model)) {
-			overflowedTurns.add(message);
+			state.turns.overflowedTurns.add(message);
 			if (message.stopReason === "error") return;
 			if (
 				ctx.signal?.aborted ||
-				nativeRetryOwned.has(sessionId) ||
-				(toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+				state.recovery.nativeRetryOwned.has(sessionId) ||
+				(state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) ===
+					false ||
 				piCompaction(sm, ctx.model)?.enabled !== false
 			)
 				return;
-			rewindTurns.add(message);
+			state.turns.rewindTurns.add(message);
 			// A truncated tool envelope must not enter the next request.
 			if (message.stopReason === "length") {
 				for (const id of turnIds) sm.appendContextEdit(id, null);
@@ -1432,18 +1390,18 @@ export default function (pi: ExtensionAPI) {
 					detail: outcome.detail,
 					providerOverflow: true,
 				};
-				requestBudgetFailures.set(sessionId, failure);
+				state.recovery.requestBudgetFailures.set(sessionId, failure);
 				return deliverRaw([requestBudgetFailureDraft(failure)], false);
 			}
 			refreshAgentMessages(sm);
 			return deliverRaw([holdRecoveryReceipt(sessionId, outcome.draft)], true);
 		}
-		if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
+		if (!state.turns.rewindTurns.has(message) && !state.turns.overflowedTurns.has(message)) {
 			await captureContinuity(sm, sessionId, ctx, message);
 		}
 		const auto = await maybeRunAutomaticFold(sm, sessionId, message, event, ctx);
 		if (auto) return auto;
-		if (!rewindTurns.has(message) && !overflowedTurns.has(message)) {
+		if (!state.turns.rewindTurns.has(message) && !state.turns.overflowedTurns.has(message)) {
 			const consolidated = await maybeConsolidate(sm, sessionId, message, ctx);
 			if (consolidated) return deliverRaw(consolidated, event.continue);
 		}
@@ -1488,9 +1446,10 @@ export default function (pi: ExtensionAPI) {
 				const signal = ctx.signal;
 				if (
 					signal?.aborted ||
-					(toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+					(state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) ===
+						false ||
 					piCompaction(sm, ctx.model)?.enabled !== false ||
-					nativeRetryOwned.has(sessionId)
+					state.recovery.nativeRetryOwned.has(sessionId)
 				)
 					return;
 				const host = foldHostOf(ctx);
@@ -1527,7 +1486,7 @@ export default function (pi: ExtensionAPI) {
 						detail: outcome.detail,
 						providerOverflow: true,
 					};
-					requestBudgetFailures.set(sessionId, failure);
+					state.recovery.requestBudgetFailures.set(sessionId, failure);
 					return {
 						entries: keepValidDrafts(sm, [
 							...(event.entries ?? []),
@@ -1558,19 +1517,20 @@ export default function (pi: ExtensionAPI) {
 		} catch {
 			return;
 		}
-		recoveryAttempts.delete(sessionId);
-		nativeRetryOwned.delete(sessionId);
+		state.recovery.recoveryAttempts.delete(sessionId);
+		state.recovery.nativeRetryOwned.delete(sessionId);
 		// A rewind the run never reached a boundary for would fold at an
 		// unrelated later turn, and block every rewind until then.
-		if (queuedFolds.get(sessionId)?.origin === "agent") queuedFolds.delete(sessionId);
-		for (const draft of recoveryReceipts.get(sessionId) ?? [])
+		if (state.folds.queuedFolds.get(sessionId)?.origin === "agent")
+			state.folds.queuedFolds.delete(sessionId);
+		for (const draft of state.recovery.recoveryReceipts.get(sessionId) ?? [])
 			if (!receiptOnBranch(sm, draft.details.receiptId)) appendFoldMessage(sm, draft);
-		recoveryReceipts.delete(sessionId);
-		const budgetFailure = requestBudgetFailures.get(sessionId);
+		state.recovery.recoveryReceipts.delete(sessionId);
+		const budgetFailure = state.recovery.requestBudgetFailures.get(sessionId);
 		if (budgetFailure) {
 			if (!receiptOnBranch(sm, budgetFailure.receiptId))
 				appendFoldMessage(sm, requestBudgetFailureDraft(budgetFailure));
-			requestBudgetFailures.delete(sessionId);
+			state.recovery.requestBudgetFailures.delete(sessionId);
 			return;
 		}
 	});
@@ -1579,15 +1539,15 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_shutdown", (_event, ctx) => {
 		try {
 			const sessionId = ctx.sessionManager.getSessionId();
-			requestBudgetFailures.delete(sessionId);
-			recoveryReceipts.delete(sessionId);
-			capturedSystems.delete(sessionId);
-			recoveryAttempts.delete(sessionId);
-			nativeRetryOwned.delete(sessionId);
-			recoveryCuts.delete(sessionId);
-			queuedFolds.delete(sessionId);
+			state.recovery.requestBudgetFailures.delete(sessionId);
+			state.recovery.recoveryReceipts.delete(sessionId);
+			state.folds.capturedSystems.delete(sessionId);
+			state.recovery.recoveryAttempts.delete(sessionId);
+			state.recovery.nativeRetryOwned.delete(sessionId);
+			state.recovery.recoveryCuts.delete(sessionId);
+			state.folds.queuedFolds.delete(sessionId);
 			tokenCalibration.delete(sessionId);
-			autoFoldStateBySession.delete(sessionId);
+			state.automatic.autoFoldStateBySession.delete(sessionId);
 		} catch {
 			// Fail-open: session_start clears it too.
 		}
@@ -1596,7 +1556,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_before_compact", (event, ctx) => {
 		try {
 			if (event.reason === "overflow" && event.willRetry) {
-				nativeRetryOwned.add(ctx.sessionManager.getSessionId());
+				state.recovery.nativeRetryOwned.add(ctx.sessionManager.getSessionId());
 			}
 		} catch {
 			// Stale ctx: preflight may still run on the retry.
@@ -1606,7 +1566,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_compact_failed", (event, ctx) => {
 		try {
 			if (event.reason === "overflow") {
-				nativeRetryOwned.delete(ctx.sessionManager.getSessionId());
+				state.recovery.nativeRetryOwned.delete(ctx.sessionManager.getSessionId());
 			}
 		} catch {
 			// Stale ctx: settlement clears the flag.
@@ -1615,7 +1575,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_compact", (_event, ctx) => {
 		try {
-			anchorStartSettled.delete(ctx.sessionManager.getSessionId());
+			state.anchors.anchorStartSettled.delete(ctx.sessionManager.getSessionId());
 		} catch {
 			// Stale ctx: the start anchor settles again at its next write.
 		}
@@ -1674,33 +1634,6 @@ export default function (pi: ExtensionAPI) {
 		);
 	});
 
-	// Rewind-hint closure state (#44): fresh per factory invocation and reset
-	// on every `session_start`, so `/new` / `/resume` / `/reload` sessions
-	// never inherit a spent crossing or another session's config. `toolActive`
-	// fails open until `before_agent_start` says otherwise. `hintByModel`
-	// (#86) holds the `modelOverrides` reserves; the reserve is resolved
-	// against the live `ctx.model` on every `turn_end`, so a model switch
-	// mid-session takes effect on the next turn.
-	let toolActive = true;
-	let rewindHintReserveTokens: number | null = null;
-	let hintByModel: ReadonlyMap<string, number | null> = new Map();
-	let autoNavigateBase: AutoNavigatePartial | undefined;
-	let autoNavigateByModel: ReadonlyMap<string, AutoNavigatePartial | null> = new Map();
-	let proposalConfig: ProposalOptions | undefined;
-	const autoFoldStateBySession = new Map<string, AutoFoldState>();
-	let hintTracker = new RewindHintTracker();
-
-	// Auto start-anchor closure state (#55). All of it is keyed by session id
-	// and NEVER cleared in-process: once a session has settled (write or
-	// found-existing), no later prompt / agent loop re-inserts the label.
-	// `/reload` builds a fresh closure, so a reloaded session re-settles once
-	// via the existence check (no duplicate write). The per-session maps keep
-	// two in-process sessions (e.g. the main session and a subagent) from
-	// sharing each other's config value, tool-active gate, or settle marker.
-	const anchorStartSettled = new Set<string>();
-	const anchorStartTurnsBySession = new Map<string, number>();
-	const toolActiveBySession = new Map<string, boolean>();
-
 	// Auto start anchor (#55): silent `anchor:start` write, shared by the
 	// `turn_end` trigger and the `agent_end` fallback. `completedTurns` is the
 	// number of finished turns in the current agent run
@@ -1720,18 +1653,19 @@ export default function (pi: ExtensionAPI) {
 		// Per-session tool gate (#55): a sibling session's `before_agent_start`
 		// (e.g. a subagent whose tool subset omits `navigate_tree`) must not
 		// clear this session's gate. Absent = fail-open until a gate is set.
-		if (toolActiveBySession.get(sessionId) === false) return;
-		if (anchorStartSettled.has(sessionId)) return;
+		if (state.activity.toolActiveBySession.get(sessionId) === false) return;
+		if (state.anchors.anchorStartSettled.has(sessionId)) return;
 		// Per-session threshold (#55): two sessions started with different
 		// project configs must not share one closure value.
-		const startAfterTurns = anchorStartTurnsBySession.get(sessionId) ?? START_ANCHOR_DEFAULT_TURNS;
+		const startAfterTurns =
+			state.anchors.anchorStartTurnsBySession.get(sessionId) ?? START_ANCHOR_DEFAULT_TURNS;
 		if (completedTurns < startAfterTurns) return;
 		try {
 			// The existence check is authoritative: a `start` already on the
 			// active branch (manual `/tree` label, pre-reload write, prior
 			// settle) wins and settles the session without another write.
 			if (findLabeledEntry(sm, START_ANCHOR_LABEL)) {
-				anchorStartSettled.add(sessionId);
+				state.anchors.anchorStartSettled.add(sessionId);
 				return;
 			}
 		} catch {
@@ -1746,7 +1680,7 @@ export default function (pi: ExtensionAPI) {
 		if (!leafId) return;
 		try {
 			pi.setLabel(leafId, START_ANCHOR_LABEL);
-			anchorStartSettled.add(sessionId);
+			state.anchors.anchorStartSettled.add(sessionId);
 		} catch {
 			// Loader-level setLabel can throw on a stale runtime while the
 			// captured SessionManager still writes; same fallback shape as the
@@ -1758,7 +1692,7 @@ export default function (pi: ExtensionAPI) {
 				const append = (sm as Partial<SessionManager>).appendLabelChange;
 				if (typeof append !== "function") return;
 				append.call(sm, leafId, START_ANCHOR_LABEL);
-				anchorStartSettled.add(sessionId);
+				state.anchors.anchorStartSettled.add(sessionId);
 			} catch {
 				// Fail-open: never throw into the agent loop.
 			}
@@ -1769,15 +1703,15 @@ export default function (pi: ExtensionAPI) {
 		sessionId: string,
 		config: Awaited<ReturnType<typeof loadTreeNavigatorConfig>>["config"],
 	): void {
-		rewindHintReserveTokens = config.rewindHintReserveTokens;
-		hintByModel = config.rewindHintModelReserveTokens;
-		autoNavigateBase = config.autoNavigate;
-		autoNavigateByModel = config.autoNavigateByModel ?? new Map();
-		proposalConfig = config.proposal;
-		continuityConfig = config.continuity;
-		consolidationConfig = config.consolidation;
-		anchorStartTurnsBySession.set(sessionId, config.anchorStartAfterTurns);
-		parentModes.set(sessionId, config.parentHandoffMode);
+		state.config.rewindHintReserveTokens = config.rewindHintReserveTokens;
+		state.config.hintByModel = config.rewindHintModelReserveTokens;
+		state.config.autoNavigateBase = config.autoNavigate;
+		state.config.autoNavigateByModel = config.autoNavigateByModel ?? new Map();
+		state.config.proposalConfig = config.proposal;
+		state.config.continuity = config.continuity;
+		state.config.consolidation = config.consolidation;
+		state.anchors.anchorStartTurnsBySession.set(sessionId, config.anchorStartAfterTurns);
+		state.folds.parentModes.set(sessionId, config.parentHandoffMode);
 	}
 
 	// Config (#44 hint + #55 start anchor): reload at session start and settings save. Every
@@ -1800,32 +1734,32 @@ export default function (pi: ExtensionAPI) {
 		}
 		const agentDir = getAgentDir();
 		// pi's settings as this session reads them (#101, S4).
-		piSettingsSource = { cwd, agentDir, projectTrusted };
-		requestBudgetFailures.delete(sessionId);
-		capturedSystems.delete(sessionId);
-		recoveryAttempts.delete(sessionId);
-		nativeRetryOwned.delete(sessionId);
-		recoveryCuts.delete(sessionId);
-		queuedFolds.delete(sessionId);
+		state.config.piSettingsSource = { cwd, agentDir, projectTrusted };
+		state.recovery.requestBudgetFailures.delete(sessionId);
+		state.folds.capturedSystems.delete(sessionId);
+		state.recovery.recoveryAttempts.delete(sessionId);
+		state.recovery.nativeRetryOwned.delete(sessionId);
+		state.recovery.recoveryCuts.delete(sessionId);
+		state.folds.queuedFolds.delete(sessionId);
 		tokenCalibration.delete(sessionId);
-		rewindHintReserveTokens = null;
-		hintByModel = new Map();
-		autoNavigateBase = undefined;
-		autoNavigateByModel = new Map();
-		proposalConfig = undefined;
-		autoFoldStateBySession.delete(sessionId);
-		hintTracker = new RewindHintTracker();
-		toolActive = true;
-		continuityConfig = {
+		state.config.rewindHintReserveTokens = null;
+		state.config.hintByModel = new Map();
+		state.config.autoNavigateBase = undefined;
+		state.config.autoNavigateByModel = new Map();
+		state.config.proposalConfig = undefined;
+		state.automatic.autoFoldStateBySession.delete(sessionId);
+		state.anchors.hintTracker = new RewindHintTracker();
+		state.activity.toolActive = true;
+		state.config.continuity = {
 			capture: CONTINUITY_CAPTURE_DEFAULT,
 			intentClassifier: null,
 		};
-		consolidationConfig = CONSOLIDATION_DEFAULTS;
-		continuityWarned.delete(sessionId);
-		classifierTimedOut.delete(sessionId);
+		state.config.consolidation = CONSOLIDATION_DEFAULTS;
+		state.continuity.continuityWarned.delete(sessionId);
+		state.continuity.classifierTimedOut.delete(sessionId);
 		clearRuntimeConfig(sessionId);
-		anchorStartTurnsBySession.set(sessionId, START_ANCHOR_DEFAULT_TURNS);
-		parentModes.set(sessionId, PARENT_HANDOFF_MODE_DEFAULT);
+		state.anchors.anchorStartTurnsBySession.set(sessionId, START_ANCHOR_DEFAULT_TURNS);
+		state.folds.parentModes.set(sessionId, PARENT_HANDOFF_MODE_DEFAULT);
 		let warnings: string[] = [];
 		try {
 			const loaded = await loadTreeNavigatorConfig({
@@ -1844,8 +1778,8 @@ export default function (pi: ExtensionAPI) {
 		}
 		// Fresh leg: the per-session gate re-arms on the next
 		// `before_agent_start`; absent = fail-open in the meantime.
-		toolActiveBySession.delete(sessionId);
-		if (rewindHintReserveTokens !== null || hintByModel.size > 0) {
+		state.activity.toolActiveBySession.delete(sessionId);
+		if (state.config.rewindHintReserveTokens !== null || state.config.hintByModel.size > 0) {
 			warnings.push(...reserveOrderWarnings(model));
 		}
 		if (hasUI) {
@@ -1859,16 +1793,20 @@ export default function (pi: ExtensionAPI) {
 	 * compaction is off (on, both features are off and D9 says so).
 	 */
 	function reserveOrderWarnings(model: OverflowModel | undefined): string[] {
-		if (!piSettingsSource) return [];
+		if (!state.config.piSettingsSource) return [];
 		const warnings: string[] = [];
 		try {
-			const settings = SettingsManager.create(piSettingsSource.cwd, piSettingsSource.agentDir, {
-				projectTrusted: piSettingsSource.projectTrusted,
-			});
+			const settings = SettingsManager.create(
+				state.config.piSettingsSource.cwd,
+				state.config.piSettingsSource.agentDir,
+				{
+					projectTrusted: state.config.piSettingsSource.projectTrusted,
+				},
+			);
 			if (settings.getCompactionSettings(model).enabled) return [];
 			const keys = new Set<string>();
 			if (model) keys.add(`${model.provider}/${model.id}`);
-			for (const key of hintByModel.keys()) keys.add(key);
+			for (const key of state.config.hintByModel.keys()) keys.add(key);
 			const overrides = settings.getSettings().compaction?.modelOverrides;
 			for (const key of Object.keys(overrides ?? {})) keys.add(key);
 			for (const key of keys) {
@@ -1879,8 +1817,8 @@ export default function (pi: ExtensionAPI) {
 				try {
 					const hint = resolveRewindHintReserve(
 						{
-							rewindHintReserveTokens,
-							rewindHintModelReserveTokens: hintByModel,
+							rewindHintReserveTokens: state.config.rewindHintReserveTokens,
+							rewindHintModelReserveTokens: state.config.hintByModel,
 						},
 						key,
 					);
@@ -1941,9 +1879,10 @@ export default function (pi: ExtensionAPI) {
 		if (modelKey)
 			noteOutgoingRequest(sessionId, modelKey, effectiveRequestMessages(sm, event.messages));
 		if (signal?.aborted) return;
-		if ((toolActiveBySession.get(sessionId) ?? toolActive) === false) return;
-		if (nativeRetryOwned.has(sessionId)) {
-			nativeRetryOwned.delete(sessionId);
+		if ((state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) === false)
+			return;
+		if (state.recovery.nativeRetryOwned.has(sessionId)) {
+			state.recovery.nativeRetryOwned.delete(sessionId);
 			return;
 		}
 		if (!model?.contextWindow || model.contextWindow <= 0) return;
@@ -1954,7 +1893,7 @@ export default function (pi: ExtensionAPI) {
 		const reserve = RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS;
 		if (inputEstimate + reserve <= contextWindow) return;
 		const refuse = (detail?: string) => {
-			requestBudgetFailures.set(sessionId, {
+			state.recovery.requestBudgetFailures.set(sessionId, {
 				inputEstimate,
 				contextWindow,
 				receiptId: randomUUID(),
@@ -2010,21 +1949,21 @@ export default function (pi: ExtensionAPI) {
 	// fire `turn_end` nudges the model can't act on.
 	pi.on("before_agent_start", async (event, ctx) => {
 		const selected = event.systemPromptOptions?.selectedTools;
-		toolActive = !Array.isArray(selected) || selected.includes(TOOL_NAME);
+		state.activity.toolActive = !Array.isArray(selected) || selected.includes(TOOL_NAME);
 		// Per-session copy of the gate (#55): the shared `toolActive` above
 		// drives the hint, but an in-process sibling session must not clear this
 		// session's auto-anchor gate.
 		try {
 			const sessionId = ctx.sessionManager.getSessionId();
-			requestBudgetFailures.delete(sessionId);
-			recoveryReceipts.delete(sessionId);
-			recoveryAttempts.delete(sessionId);
-			nativeRetryOwned.delete(sessionId);
-			toolActiveBySession.set(sessionId, toolActive);
+			state.recovery.requestBudgetFailures.delete(sessionId);
+			state.recovery.recoveryReceipts.delete(sessionId);
+			state.recovery.recoveryAttempts.delete(sessionId);
+			state.recovery.nativeRetryOwned.delete(sessionId);
+			state.activity.toolActiveBySession.set(sessionId, state.activity.toolActive);
 		} catch {
 			// Fail-open: the per-session gate stays absent.
 		}
-		if (!toolActive) return {};
+		if (!state.activity.toolActive) return {};
 		return { systemPrompt: `${event.systemPrompt}\n\n${ANCHOR_MANDATE}` };
 	});
 
@@ -2071,11 +2010,15 @@ export default function (pi: ExtensionAPI) {
 		// owns is skipped: a recovery reply may be hidden, and the rewind
 		// turn's leaf is the abandoned branch's.
 		const rewindOwned =
-			!!event.message && typeof event.message === "object" && rewindTurns.has(event.message);
+			!!event.message &&
+			typeof event.message === "object" &&
+			state.turns.rewindTurns.has(event.message);
 		// An overflowed turn is never anchored (#101, D14): with pi compaction on,
 		// rewind-driven compaction stands down and does not mark it owned.
 		const overflowedTurn =
-			!!event.message && typeof event.message === "object" && overflowedTurns.has(event.message);
+			!!event.message &&
+			typeof event.message === "object" &&
+			state.turns.overflowedTurns.has(event.message);
 		if (sm && !rewindOwned && !overflowedTurn) {
 			writeStartAnchorIfNeeded(sm as SessionManager, event.turnIndex + 1);
 		}
@@ -2084,21 +2027,24 @@ export default function (pi: ExtensionAPI) {
 		// `navigate_tree`) must not clear THIS session's hint. Mirrors the auto
 		// start-anchor's per-session gate; the shared `toolActive` remains the
 		// fallback for sessions with no recorded gate (fail-open).
-		let hintToolActive = toolActive;
+		let hintToolActive = state.activity.toolActive;
 		if (sm) {
 			try {
-				const gated = toolActiveBySession.get(sm.getSessionId());
+				const gated = state.activity.toolActiveBySession.get(sm.getSessionId());
 				if (gated !== undefined) hintToolActive = gated;
 			} catch {
 				// Stale ctx: keep the shared fallback.
 			}
 		}
 		// Hint off everywhere: nothing can fire or re-arm.
-		if (!hintToolActive || (rewindHintReserveTokens === null && hintByModel.size === 0)) {
+		if (
+			!hintToolActive ||
+			(state.config.rewindHintReserveTokens === null && state.config.hintByModel.size === 0)
+		) {
 			return;
 		}
 		let modelKey: string | undefined;
-		if (hintByModel.size > 0) {
+		if (state.config.hintByModel.size > 0) {
 			try {
 				const model = ctx.model;
 				if (model) modelKey = `${model.provider}/${model.id}`;
@@ -2109,15 +2055,19 @@ export default function (pi: ExtensionAPI) {
 		}
 		const reserve = resolveRewindHintReserve(
 			{
-				rewindHintReserveTokens,
-				rewindHintModelReserveTokens: hintByModel,
+				rewindHintReserveTokens: state.config.rewindHintReserveTokens,
+				rewindHintModelReserveTokens: state.config.hintByModel,
 			},
 			modelKey,
 		);
 		// During a fold or recovery a hint would be stale or push a second rewind.
 		// The crossing stays
 		// unspent for the next turn.
-		if (event.message && typeof event.message === "object" && rewindTurns.has(event.message)) {
+		if (
+			event.message &&
+			typeof event.message === "object" &&
+			state.turns.rewindTurns.has(event.message)
+		) {
 			return;
 		}
 		const usage = ctx.getContextUsage();
@@ -2141,11 +2091,11 @@ export default function (pi: ExtensionAPI) {
 		const percent = (admission / usage.contextWindow) * 100;
 		if (reserve === null || tokensLeft > reserve) {
 			// Hint off for this model, or outside the reserve: re-arm only.
-			hintTracker.observe(tokensLeft, reserve);
+			state.anchors.hintTracker.observe(tokensLeft, reserve);
 			return;
 		}
 		// Spent: skip the anchor walk below (it estimates every anchor).
-		if (hintTracker.isSpent()) return;
+		if (state.anchors.hintTracker.isSpent()) return;
 		// Collect anchors BEFORE marking the crossing spent: a throwing
 		// `getBranch` / `getLabel` / `getEntries` must leave the crossing
 		// unspent so the next turn can retry — never burn the one shot on a
@@ -2161,7 +2111,7 @@ export default function (pi: ExtensionAPI) {
 		} catch {
 			return;
 		}
-		if (!hintTracker.observe(tokensLeft, reserve)) return;
+		if (!state.anchors.hintTracker.observe(tokensLeft, reserve)) return;
 		// Either-or with pi's compaction (#101, S3/D9), read at the crossing
 		// (between crossings the hint has no effect, so no per-turn read): on,
 		// the hint and rewind-driven compaction are off, and the crossing shows
@@ -2235,13 +2185,13 @@ export default function (pi: ExtensionAPI) {
 		ctx: ExtensionContext,
 	): Promise<{ entries: SessionBoundaryDraft[]; continue: boolean } | undefined> {
 		if (
-			(toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+			(state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) === false ||
 			message.stopReason === "error" ||
 			message.stopReason === "aborted" ||
-			rewindTurns.has(message) ||
-			overflowedTurns.has(message) ||
-			queuedFolds.has(sessionId) ||
-			runningFolds.has(sessionId) ||
+			state.turns.rewindTurns.has(message) ||
+			state.turns.overflowedTurns.has(message) ||
+			state.folds.queuedFolds.has(sessionId) ||
+			state.folds.runningFolds.has(sessionId) ||
 			unrestoredFoldCursors.has(sm)
 		)
 			return;
@@ -2266,20 +2216,23 @@ export default function (pi: ExtensionAPI) {
 		const currentConfig = () =>
 			resolveAutoNavigateConfig(
 				{
-					autoNavigate: autoNavigateBase,
-					autoNavigateByModel,
-					proposal: proposalConfig,
+					autoNavigate: state.config.autoNavigateBase,
+					autoNavigateByModel: state.config.autoNavigateByModel,
+					proposal: state.config.proposalConfig,
 				},
 				modelKey,
 			);
 		const config = structuredClone(currentConfig());
 		if (!config.enabled) return;
 		const signature = JSON.stringify(config);
-		const capturedSource = capturedSystems.get(sessionId);
+		const capturedSource = state.folds.capturedSystems.get(sessionId);
 		const captured = structuredClone(capturedSource);
-		const handoffMode = parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT;
+		const handoffMode = state.folds.parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT;
 		const reserve = resolveRewindHintReserve(
-			{ rewindHintReserveTokens, rewindHintModelReserveTokens: hintByModel },
+			{
+				rewindHintReserveTokens: state.config.rewindHintReserveTokens,
+				rewindHintModelReserveTokens: state.config.hintByModel,
+			},
 			modelKey,
 		);
 		const leafId = sm.getLeafId();
@@ -2300,7 +2253,7 @@ export default function (pi: ExtensionAPI) {
 					new Map(entries.map((entry) => [entry.id, entry])),
 				)
 			: 0;
-		let expectedState = autoFoldStateBySession.get(sessionId);
+		let expectedState = state.automatic.autoFoldStateBySession.get(sessionId);
 		const isCurrent = () => {
 			try {
 				return (
@@ -2312,22 +2265,23 @@ export default function (pi: ExtensionAPI) {
 					`${ctx.model?.provider}/${ctx.model?.id}` === modelKey &&
 					JSON.stringify(ctx.model) === modelSnapshot &&
 					ctx.modelRegistry === registry &&
-					capturedSystems.get(sessionId) === capturedSource &&
+					state.folds.capturedSystems.get(sessionId) === capturedSource &&
 					JSON.stringify(capturedSource) === JSON.stringify(captured) &&
-					(parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT) === handoffMode &&
+					(state.folds.parentModes.get(sessionId) ?? PARENT_HANDOFF_MODE_DEFAULT) === handoffMode &&
 					resolveRewindHintReserve(
 						{
-							rewindHintReserveTokens,
-							rewindHintModelReserveTokens: hintByModel,
+							rewindHintReserveTokens: state.config.rewindHintReserveTokens,
+							rewindHintModelReserveTokens: state.config.hintByModel,
 						},
 						modelKey,
 					) === reserve &&
 					JSON.stringify(currentConfig()) === signature &&
 					JSON.stringify(sm.getEntries()) === snapshot &&
 					entries.every((entry) => sm.getLabel(entry.id) === labels.get(entry.id)) &&
-					autoFoldStateBySession.get(sessionId) === expectedState &&
-					(toolActiveBySession.get(sessionId) ?? toolActive) !== false &&
-					!queuedFolds.has(sessionId) &&
+					state.automatic.autoFoldStateBySession.get(sessionId) === expectedState &&
+					(state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) !==
+						false &&
+					!state.folds.queuedFolds.has(sessionId) &&
 					!unrestoredFoldCursors.has(sm)
 				);
 			} catch {
@@ -2353,11 +2307,11 @@ export default function (pi: ExtensionAPI) {
 			getLabel: (id) => labels.get(id),
 			registry,
 			signal,
-			isCurrent: () => isCurrent() && !runningFolds.has(sessionId),
+			isCurrent: () => isCurrent() && !state.folds.runningFolds.has(sessionId),
 		});
-		if (!isCurrent() || runningFolds.has(sessionId)) return;
+		if (!isCurrent() || state.folds.runningFolds.has(sessionId)) return;
 		expectedState = plan.state;
-		autoFoldStateBySession.set(sessionId, plan.state);
+		state.automatic.autoFoldStateBySession.set(sessionId, plan.state);
 		const warnings = plan.warnings
 			.slice(0, 3)
 			.map((text) => toOneLine(text, 500) ?? "Automatic fold check unavailable.");
@@ -2383,7 +2337,7 @@ export default function (pi: ExtensionAPI) {
 		const anchor = (entryId: string, name: string) => {
 			if (
 				!isCurrent() ||
-				runningFolds.has(sessionId) ||
+				state.folds.runningFolds.has(sessionId) ||
 				!sm.getBranch().some((entry) => entry.id === entryId) ||
 				sm.getLabel(entryId) !== undefined
 			)
@@ -2463,7 +2417,7 @@ export default function (pi: ExtensionAPI) {
 			const budget = pressureFoldBudget(config.rewindAtTokens);
 			const selected = selectFoldTarget(candidates, budget);
 			if (!selected.ok) return skipped(selected.reasons.join("; "));
-			if (!isCurrent() || runningFolds.has(sessionId)) return;
+			if (!isCurrent() || state.folds.runningFolds.has(sessionId)) return;
 			const request: FoldRequest = {
 				sessionId,
 				origin: "auto",
@@ -2473,7 +2427,7 @@ export default function (pi: ExtensionAPI) {
 			};
 			host.isIdle = isCurrent;
 			host.foldPointId = cut.foldPointId;
-			rewindTurns.add(message);
+			state.turns.rewindTurns.add(message);
 			let outcome: FoldResult;
 			try {
 				outcome = await runFold(host, request, { signal });
@@ -2678,7 +2632,7 @@ export default function (pi: ExtensionAPI) {
 			admissionAfter,
 			receiptText,
 		} = plan;
-		runningFolds.add(sessionId);
+		state.folds.runningFolds.add(sessionId);
 		try {
 			const summary = await summarizeFold({
 				runner: createFoldSummaryRunner({
@@ -2758,7 +2712,7 @@ export default function (pi: ExtensionAPI) {
 				reason: error instanceof Error ? error.message : String(error),
 			};
 		} finally {
-			runningFolds.delete(sessionId);
+			state.folds.runningFolds.delete(sessionId);
 		}
 	}
 
@@ -2775,14 +2729,14 @@ export default function (pi: ExtensionAPI) {
 		message: { stopReason?: string },
 		ctx: ExtensionContext,
 	): Promise<SessionBoundaryDraft[] | undefined> {
-		const config = consolidationConfig;
+		const config = state.config.consolidation;
 		if (
 			!config.enabled ||
-			(toolActiveBySession.get(sessionId) ?? toolActive) === false ||
+			(state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) === false ||
 			message.stopReason === "error" ||
 			message.stopReason === "aborted" ||
-			queuedFolds.has(sessionId) ||
-			runningFolds.has(sessionId) ||
+			state.folds.queuedFolds.has(sessionId) ||
+			state.folds.runningFolds.has(sessionId) ||
 			unrestoredFoldCursors.has(sm)
 		)
 			return;
@@ -2865,14 +2819,14 @@ export default function (pi: ExtensionAPI) {
 					ctx.sessionManager === sm &&
 					sm.getSessionId() === sessionId &&
 					sm.getLeafId() === leafId &&
-					!queuedFolds.has(sessionId) &&
+					!state.folds.queuedFolds.has(sessionId) &&
 					!unrestoredFoldCursors.has(sm)
 				);
 			} catch {
 				return false;
 			}
 		};
-		runningFolds.add(sessionId);
+		state.folds.runningFolds.add(sessionId);
 		try {
 			const summary = await summarizeFold({
 				runner: createFoldSummaryRunner({
@@ -2954,7 +2908,7 @@ export default function (pi: ExtensionAPI) {
 		} catch (error) {
 			return warn(error instanceof Error ? error.message : String(error));
 		} finally {
-			runningFolds.delete(sessionId);
+			state.folds.runningFolds.delete(sessionId);
 		}
 	}
 
@@ -3166,7 +3120,7 @@ Operations (set \`action\`):
 			// limits; only the agent-allowed kinds and the params of each kind are
 			// checked here. A pin is not a rewind: no solo-call guard.
 			if (p.action === "pin") {
-				if (!continuityConfig.capture) {
+				if (!state.config.continuity.capture) {
 					return toolError("continuity ledger is disabled by config");
 				}
 				if (!isPinKind(p.kind)) {
