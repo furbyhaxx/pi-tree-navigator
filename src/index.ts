@@ -43,11 +43,12 @@
  * reflection.
  */
 
-import type { ExtensionAPI, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { createAutomaticFoldController } from "./auto/automatic-fold.ts";
 import { createContinuityRuntime } from "./continuity/continuity-runtime.ts";
 import { findLabelHint } from "./core/anchors.ts";
 import { createHintController } from "./core/hint-and-start-anchor.ts";
+import { createLabelWriter } from "./core/label-writer.ts";
 import { createNavigatorState } from "./core/navigator-state.ts";
 import { createPiCompactionController } from "./core/pi-compaction.ts";
 import {
@@ -61,11 +62,9 @@ import {
 } from "./core/pi-internals.ts";
 import { buildContextMessages, findLabeledEntry } from "./core/projection.ts";
 import { createSessionLifecycle } from "./core/session-lifecycle.ts";
-import { trySessionWrite } from "./core/session-write.ts";
 import { createConsolidationController } from "./fold/consolidation-runtime.ts";
 import { createFoldAdaptersController } from "./fold/fold-adapters.ts";
 import type { FoldApi } from "./fold/fold-api.ts";
-import { unrestoredFoldCursors } from "./fold/fold-commit.ts";
 import { createFoldRuntime } from "./fold/fold-runtime.ts";
 import { installHandoffProjection } from "./fold/handoff-projection.ts";
 import { createIndependentRecoveryController } from "./recovery/independent-recovery.ts";
@@ -105,15 +104,7 @@ export default function (pi: ExtensionAPI) {
 	const { piCompaction } = createPiCompactionController({ state });
 	const hint = createHintController({ pi, state, piCompaction });
 
-	/** Best-effort label write: `pi.setLabel`, else the captured manager. */
-	function writeLabel(sm: SessionManager, entryId: string, label: string | undefined): boolean {
-		if (unrestoredFoldCursors.has(sm)) return false;
-		const primary = trySessionWrite(sm, () => pi.setLabel(entryId, label));
-		if (primary.ok) return true;
-		if (!primary.cursorRestored) return false;
-		return trySessionWrite(sm, () => sm.appendLabelChange(entryId, label)).ok;
-	}
-
+	const writeLabel = createLabelWriter(pi);
 	// ---------------------------------------------------------------------------
 	// Independent folds (engine host): a fold summarized by side calls through
 	// `createFoldEngine`, never by a main-agent turn, so it works for a session
