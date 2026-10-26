@@ -38,8 +38,8 @@ import {
 
 /** Explicit opt-in to remote analysis; tool rules apply to this proposal only. */
 export interface ProposalArguments {
-	readonly source?: string;
-	readonly output?: string;
+	readonly source?: string | undefined;
+	readonly output?: string | undefined;
 	readonly llm: boolean;
 	readonly input: Partial<ProposalOptions>;
 }
@@ -51,6 +51,8 @@ function words(raw: string): string[] {
 	let started = false;
 	for (let index = 0; index < raw.length; index++) {
 		const character = raw[index];
+		if (character === undefined) continue;
+		const next = raw[index + 1];
 		if (character === quote) {
 			quote = undefined;
 			continue;
@@ -66,14 +68,10 @@ function words(raw: string): string[] {
 			started = false;
 			continue;
 		}
-		if (
-			character === "\\" &&
-			quote !== "'" &&
-			index + 1 < raw.length &&
-			/[\s"'\\]/.test(raw[index + 1])
-		)
-			word += raw[++index];
-		else word += character;
+		if (character === "\\" && quote !== "'" && next !== undefined && /[\s"'\\]/.test(next)) {
+			word += next;
+			index++;
+		} else word += character;
 		started = true;
 	}
 	if (quote) throw new Error("Path quotes must match");
@@ -92,6 +90,7 @@ export function parseProposalArguments(raw: string | readonly string[]): Proposa
 	const tools: Record<string, ProposalToolMode> = {};
 	for (let index = 0; index < args.length; index++) {
 		const arg = args[index];
+		if (arg === undefined) continue;
 		if (arg === "--" && !positional) {
 			positional = true;
 			continue;

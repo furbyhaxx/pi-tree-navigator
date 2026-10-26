@@ -16,11 +16,11 @@ export interface RetrospectiveGroup {
 	readonly firstEntryId: string;
 	readonly lastEntryId: string;
 	readonly summary: string;
-	readonly title?: string;
-	readonly goal?: string;
-	readonly outcome?: string;
+	readonly title?: string | undefined;
+	readonly goal?: string | undefined;
+	readonly outcome?: string | undefined;
 	readonly state: "folded" | "open";
-	readonly mode?: HandoffMode;
+	readonly mode?: HandoffMode | undefined;
 	readonly children: readonly RetrospectiveGroup[];
 }
 
@@ -97,8 +97,8 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
 		],
 		"plan",
 	);
-	if (plan.version !== 1) throw new Error("Plan version must be 1");
-	const hash = string(plan.sourceSha256, "sourceSha256");
+	if (plan["version"] !== 1) throw new Error("Plan version must be 1");
+	const hash = string(plan["sourceSha256"], "sourceSha256");
 	if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error("sourceSha256 must be a SHA-256 hex digest");
 	const mode = (value: unknown): HandoffMode => {
 		if (value !== "full" && value !== "synthesized" && value !== "digest")
@@ -127,61 +127,61 @@ export function parseRetrospectivePlan(value: unknown): RetrospectivePlan {
 				],
 				"group",
 			);
-			const name = string(group.name, "Group name");
+			const name = string(group["name"], "Group name");
 			if (!isValidName(name) || names.has(name)) {
 				throw new Error(`Group name must be unique kebab-case (at most 40 characters): ${name}`);
 			}
 			names.add(name);
-			const state = group.state ?? "folded";
+			const state = group["state"] ?? "folded";
 			if (state !== "folded" && state !== "open")
 				throw new Error(`${name}.state must be folded or open`);
 			const optionalText = (key: string) =>
 				group[key] === undefined ? undefined : string(group[key], `${name}.${key}`);
-			const children = groups(group.children ?? [], depth + 1);
+			const children = groups(group["children"] ?? [], depth + 1);
 			if (state === "folded" && children.some((child) => child.state === "open"))
 				throw new Error(`${name}: an open child cannot be folded into its parent`);
 			return {
 				name,
-				firstEntryId: string(group.firstEntryId, `${name}.firstEntryId`),
-				lastEntryId: string(group.lastEntryId, `${name}.lastEntryId`),
+				firstEntryId: string(group["firstEntryId"], `${name}.firstEntryId`),
+				lastEntryId: string(group["lastEntryId"], `${name}.lastEntryId`),
 				summary:
-					state === "open" && group.summary === undefined
+					state === "open" && group["summary"] === undefined
 						? ""
-						: string(group.summary, `${name}.summary`).trim(),
+						: string(group["summary"], `${name}.summary`).trim(),
 				title: optionalText("title"),
 				goal: optionalText("goal"),
 				outcome: optionalText("outcome"),
 				state,
-				mode: group.mode === undefined ? undefined : mode(group.mode),
+				mode: group["mode"] === undefined ? undefined : mode(group["mode"]),
 				children,
 			};
 		});
 	}
-	const parsedGroups = groups(plan.groups, 0);
+	const parsedGroups = groups(plan["groups"], 0);
 	if (!parsedGroups.length) throw new Error("Plan must contain at least one group");
-	const nameSuffix = string(plan.nameSuffix ?? " (restructured)", "nameSuffix");
+	const nameSuffix = string(plan["nameSuffix"] ?? " (restructured)", "nameSuffix");
 	if ([...nameSuffix].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127))
 		throw new Error("nameSuffix must be a single printable line");
 	return {
 		version: 1,
-		source: string(plan.source, "source"),
+		source: string(plan["source"], "source"),
 		sourceSha256: hash,
 		nameSuffix,
-		parentHandoffMode: mode(plan.parentHandoffMode ?? "full"),
+		parentHandoffMode: mode(plan["parentHandoffMode"] ?? "full"),
 		recurse:
-			plan.recurse === undefined
+			plan["recurse"] === undefined
 				? false
 				: (() => {
-						if (typeof plan.recurse !== "boolean") throw new Error("recurse must be a boolean");
-						return plan.recurse;
+						if (typeof plan["recurse"] !== "boolean") throw new Error("recurse must be a boolean");
+						return plan["recurse"];
 					})(),
 		descendantPlans:
-			plan.descendantPlans === undefined
+			plan["descendantPlans"] === undefined
 				? []
 				: (() => {
-						if (!Array.isArray(plan.descendantPlans))
+						if (!Array.isArray(plan["descendantPlans"]))
 							throw new Error("descendantPlans must be an array of plan paths");
-						return plan.descendantPlans.map((path) => string(path, "descendant plan path"));
+						return plan["descendantPlans"].map((path) => string(path, "descendant plan path"));
 					})(),
 		groups: parsedGroups,
 	};
@@ -200,13 +200,13 @@ export async function readRetrospectivePlan(path: string): Promise<Retrospective
 
 function validateRecord(value: unknown, line: number): void {
 	const entry = object(value, `Line ${line}`);
-	string(entry.type, `Line ${line} type`);
-	string(entry.id, `Line ${line} id`);
-	string(entry.timestamp, `Line ${line} timestamp`);
-	if (entry.type === "session") {
-		if (line !== 1 || entry.version !== 3)
+	string(entry["type"], `Line ${line} type`);
+	string(entry["id"], `Line ${line} id`);
+	string(entry["timestamp"], `Line ${line} timestamp`);
+	if (entry["type"] === "session") {
+		if (line !== 1 || entry["version"] !== 3)
 			throw new Error("Expected one version-3 session header on line 1");
-		string(entry.cwd, "Session cwd");
+		string(entry["cwd"], "Session cwd");
 		return;
 	}
 	if (line === 1) throw new Error("Line 1 must be a session header");
@@ -223,13 +223,13 @@ function validateRecord(value: unknown, line: number): void {
 			"custom_message",
 			"label",
 			"session_info",
-		].includes(String(entry.type))
+		].includes(String(entry["type"]))
 	)
-		throw new Error(`Line ${line}: unsupported entry type ${entry.type}`);
-	if (entry.parentId !== null) string(entry.parentId, `Line ${line} parentId`);
-	if (entry.type === "message") {
-		const message = object(entry.message, `Line ${line} message`);
-		string(message.role, `Line ${line} message role`);
+		throw new Error(`Line ${line}: unsupported entry type ${entry["type"]}`);
+	if (entry["parentId"] !== null) string(entry["parentId"], `Line ${line} parentId`);
+	if (entry["type"] === "message") {
+		const message = object(entry["message"], `Line ${line} message`);
+		string(message["role"], `Line ${line} message role`);
 		if (
 			![
 				"user",
@@ -240,69 +240,69 @@ function validateRecord(value: unknown, line: number): void {
 				"bashExecution",
 				"branchSummary",
 				"compactionSummary",
-			].includes(String(message.role))
+			].includes(String(message["role"]))
 		)
-			throw new Error(`Line ${line}: unsupported message role ${message.role}`);
-		if (typeof message.timestamp !== "number" || !Number.isFinite(message.timestamp))
+			throw new Error(`Line ${line}: unsupported message role ${message["role"]}`);
+		if (typeof message["timestamp"] !== "number" || !Number.isFinite(message["timestamp"]))
 			throw new Error(`Line ${line}: invalid message timestamp`);
-		if (message.role === "bashExecution") {
+		if (message["role"] === "bashExecution") {
 			if (
-				typeof message.command !== "string" ||
-				typeof message.output !== "string" ||
-				typeof message.cancelled !== "boolean" ||
-				typeof message.truncated !== "boolean"
+				typeof message["command"] !== "string" ||
+				typeof message["output"] !== "string" ||
+				typeof message["cancelled"] !== "boolean" ||
+				typeof message["truncated"] !== "boolean"
 			)
 				throw new Error(`Line ${line}: invalid shell execution message`);
 		}
-		if (message.role === "branchSummary" || message.role === "compactionSummary")
-			string(message.summary, `Line ${line} summary`);
-		if (message.role === "assistant") {
-			string(message.provider, `Line ${line} provider`);
-			string(message.model, `Line ${line} model`);
-			string(message.api, `Line ${line} api`);
-			string(message.stopReason, `Line ${line} stopReason`);
-			object(message.usage, `Line ${line} usage`);
+		if (message["role"] === "branchSummary" || message["role"] === "compactionSummary")
+			string(message["summary"], `Line ${line} summary`);
+		if (message["role"] === "assistant") {
+			string(message["provider"], `Line ${line} provider`);
+			string(message["model"], `Line ${line} model`);
+			string(message["api"], `Line ${line} api`);
+			string(message["stopReason"], `Line ${line} stopReason`);
+			object(message["usage"], `Line ${line} usage`);
 		}
 		if (
-			["user", "assistant", "toolResult", "system", "custom"].includes(String(message.role)) &&
-			typeof message.content !== "string" &&
-			!Array.isArray(message.content)
+			["user", "assistant", "toolResult", "system", "custom"].includes(String(message["role"])) &&
+			typeof message["content"] !== "string" &&
+			!Array.isArray(message["content"])
 		) {
 			throw new Error(`Line ${line}: message content must be text or an array`);
 		}
-		if (message.role === "assistant" && !Array.isArray(message.content)) {
+		if (message["role"] === "assistant" && !Array.isArray(message["content"])) {
 			throw new Error(`Line ${line}: assistant content must be an array`);
 		}
-		if (Array.isArray(message.content)) {
-			for (const raw of message.content) {
+		if (Array.isArray(message["content"])) {
+			for (const raw of message["content"]) {
 				const block = object(raw, `Line ${line} content block`);
-				string(block.type, `Line ${line} content type`);
-				if (block.type === "toolCall") {
-					if (message.role !== "assistant")
+				string(block["type"], `Line ${line} content type`);
+				if (block["type"] === "toolCall") {
+					if (message["role"] !== "assistant")
 						throw new Error(`Line ${line}: tool calls require an assistant message`);
-					string(block.id, `Line ${line} tool call id`);
-					string(block.name, `Line ${line} tool name`);
-					object(block.arguments, `Line ${line} tool arguments`);
+					string(block["id"], `Line ${line} tool call id`);
+					string(block["name"], `Line ${line} tool name`);
+					object(block["arguments"], `Line ${line} tool arguments`);
 				}
 			}
 		}
-		if (message.role === "toolResult") {
-			string(message.toolCallId, `Line ${line} toolCallId`);
-			string(message.toolName, `Line ${line} toolName`);
-			if (typeof message.isError !== "boolean")
+		if (message["role"] === "toolResult") {
+			string(message["toolCallId"], `Line ${line} toolCallId`);
+			string(message["toolName"], `Line ${line} toolName`);
+			if (typeof message["isError"] !== "boolean")
 				throw new Error(`Line ${line}: tool result requires isError`);
 		}
 	}
-	if (entry.type === "compaction") {
-		string(entry.firstKeptEntryId, `Line ${line} firstKeptEntryId`);
-		string(entry.summary, `Line ${line} summary`);
+	if (entry["type"] === "compaction") {
+		string(entry["firstKeptEntryId"], `Line ${line} firstKeptEntryId`);
+		string(entry["summary"], `Line ${line} summary`);
 	}
-	if (entry.type === "context_edit" || entry.type === "label") {
-		string(entry.targetId, `Line ${line} targetId`);
+	if (entry["type"] === "context_edit" || entry["type"] === "label") {
+		string(entry["targetId"], `Line ${line} targetId`);
 	}
-	if (entry.type === "context_edit" && entry.replacement !== null) {
-		const replacement = object(entry.replacement, `Line ${line} replacement`);
-		if (typeof replacement.content !== "string" && !Array.isArray(replacement.content)) {
+	if (entry["type"] === "context_edit" && entry["replacement"] !== null) {
+		const replacement = object(entry["replacement"], `Line ${line} replacement`);
+		if (typeof replacement["content"] !== "string" && !Array.isArray(replacement["content"])) {
 			throw new Error(`Line ${line}: invalid context edit replacement`);
 		}
 	}

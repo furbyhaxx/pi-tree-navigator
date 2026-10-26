@@ -34,6 +34,7 @@ export function buildHeuristicPlan(
 	};
 	const titleAt = (index: number): string => {
 		const entry = entries[index];
+		if (entry === undefined) throw new Error(`Missing entry at index ${index}`);
 		if (entry.type === "label" && entry.label) return entry.label.replace(/^(anchor|branch):/, "");
 		if (entry.type === "branch_summary")
 			return (
@@ -59,7 +60,7 @@ export function buildHeuristicPlan(
 		first: number;
 		last: number;
 		title: string;
-		report?: string;
+		report?: string | undefined;
 		children: Interval[];
 	}
 	const intervals: Interval[] = [];
@@ -74,7 +75,13 @@ export function buildHeuristicPlan(
 		while (cursor !== entry.parentId && cursor !== null && !seen.has(cursor)) {
 			seen.add(cursor);
 			const index = positions.get(cursor);
-			cursor = index === undefined ? null : entries[index].parentId;
+			if (index === undefined) {
+				cursor = null;
+				continue;
+			}
+			const ancestor = entries[index];
+			if (ancestor === undefined) throw new Error(`Missing entry at index ${index}`);
+			cursor = ancestor.parentId;
 		}
 		if (cursor !== entry.parentId) continue;
 		intervals.push({
@@ -94,8 +101,8 @@ export function buildHeuristicPlan(
 	};
 	const stack = [root];
 	for (const interval of intervals) {
-		while (stack.length > 1 && interval.first > stack[stack.length - 1].last) stack.pop();
-		const parent = stack[stack.length - 1];
+		while (stack.length > 1 && interval.first > (stack.at(-1) ?? root).last) stack.pop();
+		const parent = stack.at(-1) ?? root;
 		if (
 			interval.last > parent.last ||
 			(interval.first === parent.first && interval.last === parent.last)
@@ -120,13 +127,17 @@ export function buildHeuristicPlan(
 				continue;
 			}
 			const entry = entries[index];
+			if (entry === undefined) throw new Error(`Missing entry at index ${index}`);
 			if (entry.type === "label" || (entry.type === "message" && entry.message.role === "user"))
 				starts.push(index);
 		}
 		childIndex = 0;
-		for (let n = 0; n < starts.length; n++) {
-			const first = starts[n];
-			while (occupied[childIndex] && occupied[childIndex].first <= first) childIndex++;
+		for (const [n, first] of starts.entries()) {
+			while (true) {
+				const child = occupied[childIndex];
+				if (child === undefined || child.first > first) break;
+				childIndex++;
+			}
 			const boundary = Math.min(
 				starts[n + 1] ?? interval.last + 1,
 				occupied[childIndex]?.first ?? interval.last + 1,
@@ -140,11 +151,15 @@ export function buildHeuristicPlan(
 			children.length = 0;
 		}
 		children.sort((a, b) => a.first - b.first);
+		const firstEntry = entries[interval.first];
+		const lastEntry = entries[interval.last];
+		if (firstEntry === undefined || lastEntry === undefined)
+			throw new Error("Missing heuristic interval endpoint");
 		return {
 			name: nameFor(interval.title),
 			title: interval.title,
-			firstEntryId: entries[interval.first].id,
-			lastEntryId: entries[interval.last].id,
+			firstEntryId: firstEntry.id,
+			lastEntryId: lastEntry.id,
 			state: "open",
 			summary: interval.report ?? "Open phase; completion is not established.",
 			children: children.map((child) => expand(child, depth + 1)),
@@ -176,7 +191,8 @@ export function buildProposalRecords(
 	warnings: readonly string[];
 } {
 	const byId = new Map(snapshot.entries.map((entry) => [entry.id, entry]));
-	const modeFor = (name: string) => (Object.hasOwn(input.tools, name) ? input.tools[name] : "full");
+	const modeFor = (name: string) =>
+		Object.hasOwn(input.tools, name) ? (input.tools[name] ?? "full") : "full";
 	const resultModes = new Map<string, "full" | "calls-only" | "omit">();
 	for (const entry of snapshot.entries) {
 		if (entry.type !== "message" || entry.message.role !== "toolResult") continue;
@@ -218,16 +234,16 @@ export function buildProposalRecords(
 		}
 		const object = value as Record<string, unknown>;
 		if (
-			object.type === "toolCall" &&
-			typeof object.name === "string" &&
+			object["type"] === "toolCall" &&
+			typeof object["name"] === "string" &&
 			"arguments" in object &&
-			modeFor(object.name) === "omit"
+			modeFor(object["name"]) === "omit"
 		) {
 			omitted++;
 			return {
-				type: object.type,
-				id: object.id,
-				name: object.name,
+				type: object["type"],
+				id: object["id"],
+				name: object["name"],
 				omitted: "tool arguments withheld",
 			};
 		}
@@ -241,12 +257,12 @@ export function buildProposalRecords(
 				"redactedThinking",
 				"Buffer",
 				"base64",
-			].includes(String(object.type)) ||
-			(typeof object.mimeType === "string" &&
-				/^(?:image\/|audio\/|video\/|application\/(?:pdf|octet-stream)$)/.test(object.mimeType))
+			].includes(String(object["type"])) ||
+			(typeof object["mimeType"] === "string" &&
+				/^(?:image\/|audio\/|video\/|application\/(?:pdf|octet-stream)$)/.test(object["mimeType"]))
 		) {
 			binary++;
-			return { type: object.type, omitted: "non-text payload" };
+			return { type: object["type"], omitted: "non-text payload" };
 		}
 		const result: Record<string, unknown> = {};
 		for (const [key, item] of Object.entries(object)) {

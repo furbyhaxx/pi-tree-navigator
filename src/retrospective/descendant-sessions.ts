@@ -23,26 +23,26 @@ function record(value: unknown): value is Record<string, unknown> {
 function header(value: unknown, path: string): SessionHeader {
 	if (
 		!record(value) ||
-		value.type !== "session" ||
-		value.version !== 3 ||
-		typeof value.id !== "string" ||
-		!value.id.trim() ||
-		typeof value.timestamp !== "string" ||
-		!Number.isFinite(Date.parse(value.timestamp)) ||
-		typeof value.cwd !== "string" ||
-		!value.cwd.trim() ||
-		(value.parentSession !== undefined &&
-			(typeof value.parentSession !== "string" || !value.parentSession.trim()))
+		value["type"] !== "session" ||
+		value["version"] !== 3 ||
+		typeof value["id"] !== "string" ||
+		!value["id"].trim() ||
+		typeof value["timestamp"] !== "string" ||
+		!Number.isFinite(Date.parse(value["timestamp"])) ||
+		typeof value["cwd"] !== "string" ||
+		!value["cwd"].trim() ||
+		(value["parentSession"] !== undefined &&
+			(typeof value["parentSession"] !== "string" || !value["parentSession"].trim()))
 	)
 		throw new Error(`Invalid session header/version: ${path}`);
 	return {
 		...value,
 		type: "session",
-		version: value.version,
-		id: value.id,
-		timestamp: value.timestamp,
-		cwd: value.cwd,
-		parentSession: value.parentSession,
+		version: value["version"],
+		id: value["id"],
+		timestamp: value["timestamp"],
+		cwd: value["cwd"],
+		...(value["parentSession"] === undefined ? {} : { parentSession: value["parentSession"] }),
 	};
 }
 
@@ -85,7 +85,7 @@ export async function discoverDescendantSessions(
 	for (const entry of await readdir(scope, { withFileTypes: true })) {
 		if (entry.isDirectory() && encoded(entry.name)) directories.push(join(scope, entry.name));
 	}
-	const candidates = new Map<string, { raw: unknown; parent?: string }>();
+	const candidates = new Map<string, { raw: unknown; parent?: string | undefined }>();
 	for (const directory of new Set(directories)) {
 		for (const entry of await readdir(directory, { withFileTypes: true })) {
 			if ((!entry.isFile() && !entry.isSymbolicLink()) || !entry.name.endsWith(".jsonl")) continue;
@@ -94,9 +94,9 @@ export async function discoverDescendantSessions(
 				if (candidates.has(path)) continue;
 				const raw = await firstLine(path);
 				let parent: string | undefined;
-				if (record(raw) && typeof raw.parentSession === "string") {
+				if (record(raw) && typeof raw["parentSession"] === "string") {
 					try {
-						parent = parentPath(path, raw.parentSession);
+						parent = parentPath(path, raw["parentSession"]);
 					} catch {
 						/* Orphan links cannot select a descendant. */
 					}

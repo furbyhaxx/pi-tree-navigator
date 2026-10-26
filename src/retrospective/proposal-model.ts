@@ -8,7 +8,7 @@ export function resolveProposalModel(options: {
 	registry: Pick<ModelRegistry, "find" | "hasConfiguredAuth">;
 	currentModel: Model<Api> | undefined;
 	currentThinking: ReturnType<ExtensionAPI["getThinkingLevel"]>;
-	selector?: string;
+	selector?: string | undefined;
 }) {
 	const selection = parseProposalModel(options.selector ?? "current");
 	const model = selection
@@ -57,8 +57,8 @@ export function createProposalModelRunner(options: {
 						],
 					},
 					{
-						signal: request.signal,
-						reasoning: thinking === "off" ? undefined : thinking,
+						...(request.signal === undefined ? {} : { signal: request.signal }),
+						...(thinking === "off" ? {} : { reasoning: thinking }),
 						maxTokens: maxOutputTokens,
 						toolChoice: "none",
 					},
