@@ -58,7 +58,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { createAutomaticFoldController } from "./auto/automatic-fold.ts";
 import { createContinuityRuntime } from "./continuity/continuity-runtime.ts";
-import { CONTINUITY_OPS_CUSTOM_TYPE } from "./continuity/continuity-store.ts";
 import { findLabelHint } from "./core/anchors.ts";
 import {
 	CONSOLIDATION_DEFAULTS,
@@ -69,15 +68,7 @@ import {
 	START_ANCHOR_DEFAULT_TURNS,
 	TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./core/config.ts";
-import { extractTextContent } from "./core/helpers.ts";
 import { createHintController } from "./core/hint-and-start-anchor.ts";
-import {
-	LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
-	LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
-	legacyRewindOutcomeRow,
-	legacySummaryRequestRow,
-	sanitizeLegacyText,
-} from "./core/legacy-rewind.ts";
 import { createNavigatorState } from "./core/navigator-state.ts";
 import { createPiCompactionController } from "./core/pi-compaction.ts";
 import {
@@ -110,13 +101,7 @@ import { createFoldAdaptersController } from "./fold/fold-adapters.ts";
 import type { FoldApi } from "./fold/fold-api.ts";
 import { unrestoredFoldCursors } from "./fold/fold-commit.ts";
 import { RECOVERY_HEADROOM_TOKENS, RECOVERY_MIN_OUTPUT_TOKENS } from "./fold/fold-policy.ts";
-import {
-	CONTINUE_NUDGE_STATUS,
-	hideDrafts,
-	keepValidDrafts,
-	REWIND_CUSTOM_TYPE,
-	StyledLines,
-} from "./fold/fold-receipts.ts";
+import { hideDrafts, keepValidDrafts } from "./fold/fold-receipts.ts";
 import { createFoldRuntime } from "./fold/fold-runtime.ts";
 import { installHandoffProjection } from "./fold/handoff-projection.ts";
 import { createIndependentRecoveryController } from "./recovery/independent-recovery.ts";
@@ -127,7 +112,7 @@ import { registerAnchorCommand } from "./ui/anchor-command.ts";
 import { createAnchorCommandDeps } from "./ui/anchor-command-deps.ts";
 import { registerHandoffRenderer } from "./ui/handoff-renderer.ts";
 import { registerHistoryOutline } from "./ui/history-outline.ts";
-import { renderContinuityOps } from "./ui/tool-renderer.ts";
+import { registerNavigatorRenderers } from "./ui/navigator-renderers.ts";
 // Floor on the *apparent* token savings (`beforeTokens − tokensAtTarget`) a
 // `rewind` must clear to execute. Absolute threshold, deliberately NOT
 // window-relative: % semantics drift with window size, so a fixed token bar
@@ -514,58 +499,7 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
-	// TUI rows: local components styled through `theme`.
-	pi.registerEntryRenderer(CONTINUITY_OPS_CUSTOM_TYPE, renderContinuityOps);
-	pi.registerMessageRenderer(LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE, (message, options, theme) => {
-		const lines = [legacySummaryRequestRow(message.details)];
-		if (options.expanded) {
-			lines.push("", ...sanitizeLegacyText(extractTextContent(message.content)).split("\n"));
-		}
-		return new StyledLines(
-			lines,
-			(line) => theme.fg("customMessageText", line),
-			options.outputPad ?? 1,
-			options.expanded,
-		);
-	});
-	pi.registerEntryRenderer(LEGACY_REWIND_OUTCOME_CUSTOM_TYPE, (entry, _options, theme) => {
-		const row = legacyRewindOutcomeRow(entry.data);
-		if (!row) return undefined;
-		const status = (entry.data as { status?: unknown } | undefined)?.status;
-		const failed = status === "failed";
-		return new StyledLines(
-			[`${failed ? "✗" : "⚠"} ${row}`],
-			(line) => theme.fg(failed ? "error" : "warning", line),
-			1,
-			false,
-		);
-	});
-	// The final error of rewind-driven compaction (#101, D8): one
-	// error-styled row, full text, nothing to expand. The continue nudge is
-	// one line, expandable. Every other rewind message (the continuation, the
-	// forced-rewind message) keeps pi's default rendering.
-	pi.registerMessageRenderer(REWIND_CUSTOM_TYPE, (message, options, theme) => {
-		const status = (message.details as { status?: unknown } | undefined)?.status;
-		if (status === CONTINUE_NUDGE_STATUS) {
-			const lines = [
-				"[navigate_tree] turn ended right after a rewind \u00b7 nudged once to continue",
-			];
-			if (options.expanded) {
-				lines.push("", ...extractTextContent(message.content).split("\n"));
-			}
-			return new StyledLines(
-				lines,
-				(line) => theme.fg("customMessageText", line),
-				options.outputPad ?? 1,
-			);
-		}
-		if (status !== "failed") return undefined;
-		return new StyledLines(
-			extractTextContent(message.content).split("\n"),
-			(line) => theme.fg("error", line),
-			options.outputPad ?? 1,
-		);
-	});
+	registerNavigatorRenderers(pi);
 
 	function applyNavigatorConfig(
 		sessionId: string,
