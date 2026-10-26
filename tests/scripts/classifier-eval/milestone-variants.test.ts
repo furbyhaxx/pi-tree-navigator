@@ -160,13 +160,14 @@ describe("base variant", () => {
 		assert.equal(cases.length, 3);
 		for (const fixture of cases) {
 			const old = earlier.find(
-				(o) => o.model === candidate.label && o.caseId === fixture.id && o.repetition === 0,
+				(o) =>
+					o["model"] === candidate.label && o["caseId"] === fixture.id && o["repetition"] === 0,
 			);
-			assert.ok(old?.requestSha256, `no earlier observation for ${fixture.id}`);
+			assert.ok(old?.["requestSha256"], `no earlier observation for ${fixture.id}`);
 			const plan = planVariant(prepareCase(fixture), candidate, parseVariant("base"), new Map());
 			const result = await plan.run(options(async () => new Response("{}", { status: 400 })));
 			assert.equal(result.observation.model, `${candidate.label}#base`);
-			assert.equal(result.observation.requestSha256, old.requestSha256);
+			assert.equal(result.observation.requestSha256, old["requestSha256"]);
 		}
 	});
 });
@@ -284,10 +285,13 @@ describe("variant requests", () => {
 		const sent = variantCase(fixture, parseVariant("instructions"));
 		assert.deepEqual(Object.keys(sent.questions), ["status", "boundary"]);
 		assert.deepEqual(
-			Object.keys(sent.questions.boundary?.choices ?? {}),
-			Object.keys(fixture.questions.boundary?.choices ?? {}),
+			Object.keys(sent.questions["boundary"]?.choices ?? {}),
+			Object.keys(fixture.questions["boundary"]?.choices ?? {}),
 		);
-		assert.notEqual(sent.questions.status?.instructions, fixture.questions.status?.instructions);
+		assert.notEqual(
+			sent.questions["status"]?.instructions,
+			fixture.questions["status"]?.instructions,
+		);
 		assert.deepEqual(sent.context.state, fixture.context.state);
 	});
 
@@ -322,7 +326,7 @@ describe("variant requests", () => {
 			buildMilestoneClassifierContext({
 				records: RECORDS,
 				structure: STRUCTURE,
-			}).context.state.structure,
+			}).context.state["structure"],
 		);
 	});
 });
@@ -351,7 +355,7 @@ describe("granular combination", () => {
 								return given ? [[signal, given]] : [];
 							}),
 						);
-						const status = combineGranular(RECORDS, answers).status;
+						const status = combineGranular(RECORDS, answers)["status"];
 						const clear =
 							a?.choice === "no" && b?.choice === "no" && c?.choice === "no" && d?.choice === "yes";
 						assert.equal(status?.choice === "milestone", clear);
@@ -369,23 +373,23 @@ describe("granular combination", () => {
 			blocked: no(0.9),
 			"open-work": no(0.6),
 			finished: yes(0.99),
-		}).status;
+		})["status"];
 		assert.deepEqual(status, { choice: "milestone", confidence: 0.6 });
 	});
 
 	it("decides a non-milestone status from one answer even when the others are missing", () => {
-		assert.deepEqual(combineGranular(RECORDS, { "open-work": yes(0.8) }).status, {
+		assert.deepEqual(combineGranular(RECORDS, { "open-work": yes(0.8) })["status"], {
 			choice: "continue",
 			confidence: 0.8,
 		});
-		assert.equal(combineGranular(RECORDS, { finished: yes() }).status, undefined);
+		assert.equal(combineGranular(RECORDS, { finished: yes() })["status"], undefined);
 		assert.deepEqual(
 			combineGranular(RECORDS, {
 				"asks-user": no(),
 				blocked: no(),
 				"open-work": no(),
 				finished: no(0.7),
-			}).status,
+			})["status"],
 			{ choice: "continue", confidence: 0.7 },
 		);
 	});
@@ -396,7 +400,7 @@ describe("granular combination", () => {
 				"report:a1": no(),
 				"report:a2": yes(0.85),
 				"report:a3": no(0.7),
-			}).boundary,
+			})["boundary"],
 			{ choice: "a2", confidence: 0.7 },
 		);
 		assert.deepEqual(
@@ -404,14 +408,14 @@ describe("granular combination", () => {
 				"report:a1": no(0.8),
 				"report:a2": no(0.9),
 				"report:a3": no(0.95),
-			}).boundary,
+			})["boundary"],
 			{ choice: "none", confidence: 0.8 },
 		);
 	});
 
 	it("leaves the boundary out when a record at or after the report is unanswered", () => {
 		assert.equal(
-			combineGranular(RECORDS, { "report:a1": yes(), "report:a2": yes() }).boundary,
+			combineGranular(RECORDS, { "report:a1": yes(), "report:a2": yes() })["boundary"],
 			undefined,
 		);
 		assert.equal(
@@ -419,7 +423,7 @@ describe("granular combination", () => {
 				"report:a1": yes(),
 				"report:a2": { choice: "yes", confidence: 7 },
 				"report:a3": no(),
-			}).boundary,
+			})["boundary"],
 			undefined,
 		);
 	});

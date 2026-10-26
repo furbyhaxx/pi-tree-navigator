@@ -150,7 +150,7 @@ function environment(world: World = {}) {
 			const count = ++requests.systemone;
 			return (world.systemone ?? (({ body }) => decisionResponse(body, count)))({
 				body,
-				signal: init?.signal,
+				...(init?.signal === undefined ? {} : { signal: init.signal }),
 				count,
 			});
 		}
@@ -158,7 +158,7 @@ function environment(world: World = {}) {
 			const count = ++requests.chat;
 			return (world.chat ?? (() => new Response("", { status: 500 })))({
 				body,
-				signal: init?.signal,
+				...(init?.signal === undefined ? {} : { signal: init.signal }),
 				count,
 			});
 		}
@@ -237,13 +237,13 @@ describe("budget control", () => {
 		assert.equal(code, 0, world.err.join(""));
 		const atDispatch = seen[0] ?? [];
 		assert.deepEqual(
-			atDispatch.map((event) => event.event),
+			atDispatch.map((event) => event["event"]),
 			["cap", "reserve"],
 		);
-		assert.match(String(atDispatch[1]?.id), /\/decisions:typesafe\/jev-1\.14\/rule-1\/0$/u);
+		assert.match(String(atDispatch[1]?.["id"]), /\/decisions:typesafe\/jev-1\.14\/rule-1\/0$/u);
 		const events = ledgerEvents();
-		const settle = events.find((event) => event.event === "settle");
-		assert.equal(settle?.actualNanoUsd, 30_000);
+		const settle = events.find((event) => event["event"] === "settle");
+		assert.equal(settle?.["actualNanoUsd"], 30_000);
 		const [observation] = observations();
 		assert.equal(observation?.costUsd, 0.00003);
 		assert.equal(observation?.costSource, "generation");
@@ -329,7 +329,7 @@ describe("budget control", () => {
 		assert.equal(world.requests.systemone, 1);
 		assert.equal(observations().length, 1);
 		assert.match(world.out.join(""), /STOPPED: cap_exceeded/u);
-		assert.equal(ledgerEvents().filter((event) => event.event === "reserve").length, 1);
+		assert.equal(ledgerEvents().filter((event) => event["event"] === "reserve").length, 1);
 	});
 
 	it("settles an interrupted call as unknown and dispatches nothing more", async () => {
@@ -362,9 +362,9 @@ describe("budget control", () => {
 		assert.equal(world.requests.systemone, 1);
 		assert.deepEqual(observations(), []);
 		assert.match(world.out.join(""), /1 interrupted call\(s\) unrecorded/u);
-		const settles = ledgerEvents().filter((event) => event.event === "settle");
+		const settles = ledgerEvents().filter((event) => event["event"] === "settle");
 		assert.deepEqual(
-			settles.map((event) => event.actualNanoUsd),
+			settles.map((event) => event["actualNanoUsd"]),
 			[null],
 		);
 		const meta = JSON.parse(readFileSync(join(runDir(), "run.json"), "utf8"));
@@ -786,20 +786,20 @@ describe("milestone variants", () => {
 		assert.equal(world.requests.chat, 1);
 		assert.equal(world.requests.systemone, 2);
 		const [structure] = structureLines();
-		assert.equal(structure?.model, "chat:openai/gpt-6-luna#structure");
-		assert.equal(structure?.status, "ok");
-		assert.equal(structure?.costUsd, 0.00003);
+		assert.equal(structure?.["model"], "chat:openai/gpt-6-luna#structure");
+		assert.equal(structure?.["status"], "ok");
+		assert.equal(structure?.["costUsd"], 0.00003);
 		for (const body of bodies)
 			assert.equal(JSON.parse(body).state.structure.objective, "Add the export command");
 		for (const observation of observations()) {
 			assert.equal(observation.costUsd, 0.00006);
 			assert.equal(observation.costSource, "generation");
-			assert.ok(observation.durationMs >= Number(structure?.durationMs));
-			assert.ok(observation.costBoundUsd > Number(structure?.costBoundUsd));
+			assert.ok(observation.durationMs >= Number(structure?.["durationMs"]));
+			assert.ok(observation.costBoundUsd > Number(structure?.["costBoundUsd"]));
 		}
 		const reservations = ledgerEvents()
-			.filter((event) => event.event === "reserve")
-			.map((event) => String(event.id));
+			.filter((event) => event["event"] === "reserve")
+			.map((event) => String(event["id"]));
 		assert.equal(reservations.length, 3);
 		assert.match(reservations[0] ?? "", /\/chat:openai\/gpt-6-luna#structure\/milestone-1\/0$/u);
 
@@ -835,7 +835,7 @@ describe("milestone variants", () => {
 		);
 		assert.equal(code, 0, world.err.join(""));
 		assert.equal(world.requests.systemone, 0);
-		assert.equal(structureLines()[0]?.status, "error");
+		assert.equal(structureLines()[0]?.["status"], "error");
 		const [observation] = observations();
 		assert.equal(observation?.status, "error");
 		assert.match(observation?.error ?? "", /structure generation failed/u);

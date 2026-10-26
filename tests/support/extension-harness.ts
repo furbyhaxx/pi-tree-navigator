@@ -262,6 +262,7 @@ export function setup(opts: { contextWindow?: number; noModel?: boolean } = {}):
 	navigateTree(pi.pi);
 	assert.equal(pi.registered.length, 1);
 	const tool = pi.registered[0];
+	assert.ok(tool, "factory must register a tool");
 	const ctx = makeCtx(sm, opts);
 	return { sm, pi, ctx, tool };
 }

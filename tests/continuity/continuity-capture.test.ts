@@ -231,7 +231,9 @@ describe("ask_user capture", () => {
 			heuristicClassifier,
 		);
 		assert.equal(result.ops.length, 1);
-		const [{ op }] = result.ops;
+		const first = result.ops[0];
+		assert.ok(first);
+		const { op } = first;
 		assert.equal(op.op === "add" && op.quote, CUSTOM_TEXT);
 		assert.ok(op.op === "add" && op.text?.endsWith(`→ A: ${CUSTOM_TEXT}`));
 	});
@@ -251,7 +253,9 @@ describe("ask_user capture", () => {
 			createLedger(),
 			heuristicClassifier,
 		);
-		const [{ op }] = result.ops;
+		const first = result.ops[0];
+		assert.ok(first);
+		const { op } = first;
 		assert.ok(op.op === "add" && op.text === "Q: Which targets? → A: Linux, macOS");
 	});
 
@@ -266,7 +270,9 @@ describe("ask_user capture", () => {
 			createLedger(),
 			heuristicClassifier,
 		);
-		const [{ op }] = result.ops;
+		const first = result.ops[0];
+		assert.ok(first);
+		const { op } = first;
 		assert.ok(op.op === "add" && op.text !== undefined);
 		assert.ok(op.text.length <= MAX_ITEM_TEXT_CHARS);
 		assert.ok(op.text.endsWith("→ A: gemini-3.1-flash-image"));
@@ -451,7 +457,9 @@ describe("repeated ask_user answers", () => {
 			second.ops.map(({ op }) => op.op),
 			["supersede"],
 		);
-		const [{ op, ctx }] = second.ops;
+		const captured = second.ops[0];
+		assert.ok(captured);
+		const { op, ctx } = captured;
 		assert.ok(op.op === "supersede");
 		assert.deepEqual(op.ids, ["D1"]);
 		assert.equal(op.citedEntryId, "t2");
@@ -693,7 +701,9 @@ describe("long message capture", () => {
 	it("restores the original curly apostrophe in the quote", async () => {
 		const sentence = "Let\u2019s go with option B for the config layout.";
 		const result = await capture(longMessage(sentence));
-		const [{ op }] = result.ops;
+		const first = result.ops[0];
+		assert.ok(first);
+		const { op } = first;
 		assert.ok(op.op === "add" && op.kind === "decision" && op.quote === sentence);
 	});
 
@@ -898,7 +908,9 @@ describe("supersession and objectives", () => {
 			scripted({ [spaces]: verdict("rule", ["R1"]) }),
 		);
 		assert.equal(result.ops.length, 1);
-		const [{ op, ctx }] = result.ops;
+		const first = result.ops[0];
+		assert.ok(first);
+		const { op, ctx } = first;
 		assert.deepEqual(op, {
 			op: "supersede",
 			ids: ["R1"],
@@ -915,11 +927,8 @@ describe("supersession and objectives", () => {
 			],
 		);
 
-		const ownSource = applyOps(
-			seeded,
-			[{ ...(op as object), citedEntryId: "u1" } as typeof op],
-			ctx,
-		);
+		assert.equal(op.op, "supersede");
+		const ownSource = applyOps(seeded, [{ ...op, citedEntryId: "u1" }], ctx);
 		assert.deepEqual(
 			ownSource.rejected.map((r) => r.reason.code),
 			["invalid_citation"],
@@ -1076,7 +1085,10 @@ describe("createModelClassifier", () => {
 				context: ClassifierContext,
 				options?: { signal?: AbortSignal },
 			) => {
-				calls.push({ context, signal: options?.signal });
+				calls.push({
+					context,
+					...(options?.signal === undefined ? {} : { signal: options.signal }),
+				});
 				const out = respond(context);
 				if (out instanceof Error) throw out;
 				return {
@@ -1120,14 +1132,16 @@ describe("createModelClassifier", () => {
 			supersedes: ["R1"],
 			by: "classifier",
 		});
-		const [{ context }] = calls;
+		const first = calls[0];
+		assert.ok(first);
+		const { context } = first;
 		assert.deepEqual(Object.keys(context.questions), ["kind", "contradicts"]);
-		const kind = context.questions.kind;
+		const kind = context.questions["kind"];
 		assert.equal(kind?.type, "choice");
 		assert.deepEqual(kind && Object.keys(kind.criteria as Record<string, string>), [
 			...INTENT_KINDS,
 		]);
-		assert.deepEqual(context.questions.contradicts?.criteria, {
+		assert.deepEqual(context.questions["contradicts"]?.criteria, {
 			R1: "Use tabs",
 			none: "The message changes none of the items",
 		});
@@ -1506,7 +1520,7 @@ describe("createModelClassifier: intent policy", () => {
 	const confirmed =
 		(base: Answers | ((id: string, context: ClassifierContext) => Answers)) =>
 		(id: string, context: ClassifierContext): Answers => {
-			if (context.questions.retires) return { retires: choice("yes") };
+			if (context.questions["retires"]) return { retires: choice("yes") };
 			return typeof base === "function" ? base(id, context) : base;
 		};
 
@@ -1566,15 +1580,15 @@ describe("createModelClassifier: intent policy", () => {
 				"- none: The message changes none of the items",
 			]);
 			assert.match(call?.systemPrompt ?? "", /judge only the state provided/);
-			assert.equal(call?.options.toolChoice, "none");
-			assert.equal(call?.options.maxTokens, CHAT_MAX_OUTPUT_TOKENS);
+			assert.equal(call?.options["toolChoice"], "none");
+			assert.equal(call?.options["maxTokens"], CHAT_MAX_OUTPUT_TOKENS);
 			assert.ok(call);
-			const payload = (call.options.onPayload as (p: unknown) => Record<string, unknown>)({
+			const payload = (call.options["onPayload"] as (p: unknown) => Record<string, unknown>)({
 				model: CHAT_ID,
 				tool_choice: "none",
 			});
 			assert.equal("tool_choice" in payload, false);
-			assert.ok(JSON.stringify(payload.response_format).includes('"enum":["D2","R1","none"]'));
+			assert.ok(JSON.stringify(payload["response_format"]).includes('"enum":["D2","R1","none"]'));
 		});
 
 		it("treats a doubtful, wrong-typed or not offered decisions answer as an abstention", async () => {
@@ -1855,7 +1869,7 @@ describe("createModelClassifier: intent policy", () => {
 			const { kind, contradicts } = classifyCalls[0]?.context.questions ?? {};
 			assert.equal(kind?.instructions, "KIND WORDING");
 			assert.equal(contradicts?.instructions, "FIRST WORDING");
-			assert.deepEqual(contradicts?.criteria, production.questions.contradicts?.criteria);
+			assert.deepEqual(contradicts?.criteria, production.questions["contradicts"]?.criteria);
 			assert.match(chatCalls[0]?.prompt ?? "", /## contradicts\nSECOND WORDING\nChoices:/);
 			assert.doesNotMatch(chatCalls[0]?.prompt ?? "", /FIRST WORDING|KIND WORDING/);
 
@@ -1867,7 +1881,7 @@ describe("createModelClassifier: intent policy", () => {
 			assert.deepEqual(plain.classifyCalls[0]?.context, production);
 			assert.ok(
 				plain.chatCalls[0]?.prompt.includes(
-					`## contradicts\n${production.questions.contradicts?.instructions}\n`,
+					`## contradicts\n${production.questions["contradicts"]?.instructions}\n`,
 				),
 			);
 		});
@@ -1942,13 +1956,13 @@ describe("createModelClassifier: intent policy", () => {
 		const text = "From now on use spaces, not tabs.";
 		const message = () => input({ text, activeItems: items });
 		const retirementCalls = <T extends { context: ClassifierContext }>(calls: T[]) =>
-			calls.filter((call) => call.context.questions.retires);
+			calls.filter((call) => call.context.questions["retires"]);
 
 		it("does not ask the verifier for a primary retirement or an explicit none", async () => {
 			for (const contradicts of [choice("R1"), choice("none")]) {
 				const { classify, classifyCalls, chatCalls } = await make("recommended", {
 					classify: (_id, context) => {
-						if (context.questions.retires) {
+						if (context.questions["retires"]) {
 							throw new Error("verifier must not run");
 						}
 						return { kind: choice("rule"), contradicts };
@@ -1967,7 +1981,7 @@ describe("createModelClassifier: intent policy", () => {
 		it("does not ask the verifier when escalation says none", async () => {
 			const { classify, classifyCalls, chatCalls } = await make("recommended", {
 				classify: (_id, context) => {
-					if (context.questions.retires) throw new Error("verifier must not run");
+					if (context.questions["retires"]) throw new Error("verifier must not run");
 					return doubtful();
 				},
 				chat: reply("none"),
@@ -2003,7 +2017,7 @@ describe("createModelClassifier: intent policy", () => {
 
 			const no = await make("recommended", {
 				classify: (_id, context) =>
-					context.questions.retires ? { retires: choice("no") } : doubtful(),
+					context.questions["retires"] ? { retires: choice("no") } : doubtful(),
 				chat: reply("R1"),
 			});
 			assert.deepEqual(await no.classify?.(message()), {
@@ -2052,7 +2066,7 @@ describe("createModelClassifier: intent policy", () => {
 		it("a verifier error keeps the item, warns once and does not ask again", async () => {
 			const { classify, classifyCalls } = await make("recommended", {
 				classify: (_id, context) => {
-					if (context.questions.retires) throw new Error("verifier down");
+					if (context.questions["retires"]) throw new Error("verifier down");
 					return doubtful();
 				},
 				chat: reply("R1"),
@@ -2066,14 +2080,14 @@ describe("createModelClassifier: intent policy", () => {
 			assert.equal(second?.kind, "rule");
 			assert.equal(second?.supersedes, undefined);
 			assert.equal(retirementCalls(classifyCalls).length, 1);
-			assert.equal(classifyCalls.filter((call) => call.context.questions.kind).length, 2);
+			assert.equal(classifyCalls.filter((call) => call.context.questions["kind"]).length, 2);
 		});
 
 		it("a cancelled verifier keeps the captured intent and does not warn", async () => {
 			const controller = new AbortController();
 			const { classify } = await make("recommended", {
 				classify: (_id, context) => {
-					if (context.questions.retires) {
+					if (context.questions["retires"]) {
 						controller.abort();
 						throw new Error("aborted");
 					}
@@ -2095,7 +2109,7 @@ describe("createModelClassifier: intent policy", () => {
 				},
 				{
 					classify: (_id, context) => {
-						if (context.questions.retires) {
+						if (context.questions["retires"]) {
 							throw new Error("verifier must not run");
 						}
 						return doubtful();
@@ -2119,7 +2133,7 @@ describe("createModelClassifier: intent policy", () => {
 				},
 				{
 					classify: (id, context) => {
-						if (!context.questions.retires) return doubtful();
+						if (!context.questions["retires"]) return doubtful();
 						return id === "acme/judge"
 							? { retires: choice("yes", 0.7) }
 							: { retires: choice("no") };
@@ -2134,13 +2148,13 @@ describe("createModelClassifier: intent policy", () => {
 			});
 			const call = retirementCalls(swapped.classifyCalls)[0];
 			assert.equal(call?.id, "acme/judge");
-			assert.equal(call?.context.questions.retires?.instructions, "RETIRE WORDING");
+			assert.equal(call?.context.questions["retires"]?.instructions, "RETIRE WORDING");
 			assert.deepEqual(
-				call?.context.questions.retires?.criteria,
+				call?.context.questions["retires"]?.criteria,
 				buildRetirementCheckContext({
 					message: input().text,
 					item: { id: "R1", kind: "rule", text: "Use tabs" },
-				}).context.questions.retires?.criteria,
+				}).context.questions["retires"]?.criteria,
 			);
 
 			const warnings: string[] = [];
@@ -2163,7 +2177,7 @@ describe("createModelClassifier: intent policy", () => {
 				{ preset: "recommended", minConfidence: 0.5 },
 				{
 					classify: (_id, context) =>
-						context.questions.retires ? { retires: choice("yes", 0.6) } : doubtful(),
+						context.questions["retires"] ? { retires: choice("yes", 0.6) } : doubtful(),
 					chat: reply("R1"),
 				},
 			);

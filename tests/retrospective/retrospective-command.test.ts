@@ -139,7 +139,7 @@ function setup(options: TestContextOptions) {
 		},
 		ui: {
 			notify(message: string, type?: string) {
-				notifications.push({ message, type });
+				notifications.push({ message, ...(type === undefined ? {} : { type }) });
 			},
 			async editor(title: string, text: string) {
 				editors.push({ title, text });
@@ -150,7 +150,7 @@ function setup(options: TestContextOptions) {
 				return options.confirmResult ?? false;
 			},
 			async input(title: string, placeholder?: string) {
-				inputs.push({ title, placeholder });
+				inputs.push({ title, ...(placeholder === undefined ? {} : { placeholder }) });
 				return options.inputResult;
 			},
 			custom(
@@ -206,6 +206,12 @@ function setup(options: TestContextOptions) {
 	};
 }
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 describe("retrospective clone command", () => {
 	it("names /anchor clone and every propose flag in its usage and errors", async () => {
 		for (const flag of [
@@ -249,6 +255,8 @@ describe("retrospective clone command", () => {
 			assert.ok(frame.every((line) => visibleWidth(line) <= 80));
 		}
 		const [inspect, preview] = command.frames.map((frame) => frame.join("\n"));
+		assert.ok(inspect !== undefined);
+		assert.ok(preview !== undefined);
 		assert.match(inspect, /Anchor\/Clone\/Inspect/);
 		assert.match(inspect, /Session\s+Original/);
 		assert.match(inspect, /source session\.jsonl/);
@@ -298,13 +306,13 @@ describe("retrospective clone command", () => {
 		await command.run('preview "plan with spaces.json"');
 
 		assert.equal(command.frames.length, 4);
-		assert.match(command.frames[0].join("\n"), /j raw JSON/);
+		assert.match(at(command.frames, 0).join("\n"), /j raw JSON/);
 		assert.equal(command.editors.length, 2);
-		assert.match(command.editors[0].title, /read-only/);
-		assert.match(command.editors[0].text, /"sourceSha256"/);
-		assert.match(command.editors[0].text, /source session\.jsonl/);
-		assert.match(command.editors[1].text, /"previewToken"/);
-		assert.match(command.editors[1].text, /The phase is complete\./);
+		assert.match(at(command.editors, 0).title, /read-only/);
+		assert.match(at(command.editors, 0).text, /"sourceSha256"/);
+		assert.match(at(command.editors, 0).text, /source session\.jsonl/);
+		assert.match(at(command.editors, 1).text, /"previewToken"/);
+		assert.match(at(command.editors, 1).text, /The phase is complete\./);
 	});
 
 	it("prompts for a missing preview path when UI is available", async () => {
@@ -318,7 +326,7 @@ describe("retrospective clone command", () => {
 		await command.run("preview");
 
 		assert.equal(command.inputs.length, 1);
-		assert.match(command.inputs[0].title, /preview/);
+		assert.match(at(command.inputs, 0).title, /preview/);
 		assert.equal(command.editors.length, 0);
 		assert.match(command.notifications.at(-1)?.message ?? "", /Preview for/);
 		assert.deepEqual((await readdir(files.directory)).sort(), [
@@ -340,9 +348,9 @@ describe("retrospective clone command", () => {
 
 		assert.equal(command.editors.length, 0);
 		assert.equal(command.confirmations.length, 1);
-		assert.match(command.confirmations[0].title, /Original \(clone\)/);
-		assert.match(command.confirmations[0].message, /original session will remain untouched/);
-		assert.doesNotMatch(command.confirmations[0].message, /[{}]|previewToken/);
+		assert.match(at(command.confirmations, 0).title, /Original \(clone\)/);
+		assert.match(at(command.confirmations, 0).message, /original session will remain untouched/);
+		assert.doesNotMatch(at(command.confirmations, 0).message, /[{}]|previewToken/);
 		assert.match(command.notifications.at(-1)?.message ?? "", /cancelled; no files were written/);
 		assert.deepEqual(await readFile(files.sourcePath), before);
 		assert.deepEqual((await readdir(files.directory)).sort(), [

@@ -36,6 +36,12 @@ import {
 
 installHarnessHooks();
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 describe("rewind: continuity ledger", () => {
 	const userMessage = (text: string) =>
 		({ role: "user", content: [{ type: "text", text }] }) as never;
@@ -120,7 +126,7 @@ describe("rewind: continuity ledger", () => {
 	const foldedEntry = (sm: SessionManager, pi: FakePi) => {
 		const done = rewindMessages(pi).at(-1);
 		assert.ok(done, "a continuation was delivered");
-		const entry = sm.getEntry(done.message.details.summaryId as string);
+		const entry = sm.getEntry(done.message.details["summaryId"] as string);
 		assert.ok(entry && entry.type === "branch_summary");
 		return { done: done.message, entry };
 	};
@@ -167,7 +173,7 @@ describe("rewind: continuity ledger", () => {
 		);
 		assert.ok(entry.summary.includes("R1 Never edit the lockfile"));
 		assert.ok(!entry.summary.includes("Look at the parser first"));
-		assert.deepEqual(done.details.continuity, {
+		assert.deepEqual(done.details["continuity"], {
 			rev: snapshot.rev,
 			applied: 1,
 			rejected: [],
@@ -179,10 +185,10 @@ describe("rewind: continuity ledger", () => {
 				{
 					rewindTo: "start",
 					newLabel: "end",
-					beforeTokens: done.details.contextBefore as number,
+					beforeTokens: done.details["contextBefore"] as number,
 					contextWindow: 1_000_000,
 				},
-				done.details.contextAfter as number,
+				done.details["contextAfter"] as number,
 			)}\n\n${__testHooks.REFLECTION_BOOTSTRAP_WARNING_REWIND}`,
 			"nothing to report: the continuation copy is unchanged",
 		);
@@ -205,7 +211,7 @@ describe("rewind: continuity ledger", () => {
 				deltaBlock({ ratified: [{ kind: "decision", text: "Use sqlite" }] }),
 		});
 		const { done, entry } = foldedEntry(f.sm, f.pi);
-		assert.equal(done.details.status, "done");
+		assert.equal(done.details["status"], "done");
 		const snapshot = parseLedger((entry.details as Record<string, unknown>)[LEDGER_DETAILS_KEY]);
 		assert.equal(snapshot.items.find((i) => i.text === "Use sqlite")?.status, "active");
 		assert.ok(!entry.summary.includes("continuity-delta"));
@@ -230,13 +236,13 @@ describe("rewind: continuity ledger", () => {
 		assert.equal(snapshot.items.find((i) => i.text === "Use sqlite")?.status, "active");
 		assert.ok(!entry.summary.includes("continuity-delta"));
 		assert.ok(entry.summary.includes("Use sqlite"), "in the briefing");
-		const report = done.details.continuity as {
+		const report = done.details["continuity"] as {
 			applied: number;
 			rejected: Array<{ id?: string; reason: string }>;
 		};
 		assert.equal(report.applied, 2);
 		assert.equal(report.rejected.length, 1);
-		assert.equal(report.rejected[0].id, "R1");
+		assert.equal(at(report.rejected, 0).id, "R1");
 		const lines = done.content.split("\n\n");
 		const notice = lines.find((line) => line.startsWith("Continuity: "));
 		assert.ok(notice, "the model is told its attempt was refused");
@@ -258,11 +264,14 @@ describe("rewind: continuity ledger", () => {
 		const f = ledgerSetup();
 		await foldWith(f, delta(f.a1));
 		const refused = foldedEntry(f.sm, f.pi);
-		assert.equal((refused.done.details.continuity as { rejected: unknown[] }).rejected.length, 1);
+		assert.equal(
+			(refused.done.details["continuity"] as { rejected: unknown[] }).rejected.length,
+			1,
+		);
 		const g = ledgerSetup();
 		await foldWith(g, delta(g.t3.userId));
 		const accepted = foldedEntry(g.sm, g.pi);
-		assert.deepEqual((accepted.done.details.continuity as { rejected: unknown[] }).rejected, []);
+		assert.deepEqual((accepted.done.details["continuity"] as { rejected: unknown[] }).rejected, []);
 		const { ledger } = readBranchLedger(g.sm.getBranch());
 		assert.equal(ledger.items.find((i) => i.id === "R1")?.status, "superseded");
 		assert.equal(
@@ -277,9 +286,9 @@ describe("rewind: continuity ledger", () => {
 			summary: `${SUMMARY_TEXT}\n\n<continuity-delta>\n{ nope\n</continuity-delta>`,
 		});
 		const { done, entry } = foldedEntry(f.sm, f.pi);
-		assert.equal(done.details.status, "done");
+		assert.equal(done.details["status"], "done");
 		assert.ok(!entry.summary.includes("continuity-delta"));
-		const report = done.details.continuity as {
+		const report = done.details["continuity"] as {
 			applied: number;
 			deltaError?: string;
 		};
@@ -297,7 +306,7 @@ describe("rewind: continuity ledger", () => {
 		const f = await ledgerFixture({ summary: stray });
 		const { done, entry } = foldedEntry(f.sm, f.pi);
 		assert.ok(entry.summary.includes("The tag <continuity-delta> is mentioned here."));
-		assert.equal((done.details.continuity as { deltaError?: string }).deltaError, undefined);
+		assert.equal((done.details["continuity"] as { deltaError?: string }).deltaError, undefined);
 		assert.ok(!done.content.includes("Continuity:"));
 	});
 
@@ -341,7 +350,7 @@ describe("rewind: continuity ledger", () => {
 			f,
 			`no goal heading${deltaBlock({ ratified: [{ kind: "decision", text: "Hidden" }] })}`,
 		);
-		assert.equal(boundary.entries[0].details.status, "failed");
+		assert.equal(at(boundary.entries, 0).details["status"], "failed");
 		assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
 		assert.deepEqual(readBranchLedger(f.sm.getBranch()).ledger, f.before.ledger);
 	});
@@ -380,10 +389,10 @@ describe("rewind: continuity ledger", () => {
 		);
 		const big = await run(12);
 		assert.ok(!big.f.sm.getEntries().some((e) => e.type === "branch_summary"));
-		assert.equal(big.boundary.entries[0].details.status, "failed");
-		assert.equal(big.boundary.entries[0].details.stage, "commit");
+		assert.equal(at(big.boundary.entries, 0).details["status"], "failed");
+		assert.equal(at(big.boundary.entries, 0).details["stage"], "commit");
 		assert.match(
-			String(big.boundary.entries[0].details.detail),
+			String(at(big.boundary.entries, 0).details["detail"]),
 			/does not reduce projected context/,
 		);
 		assert.deepEqual(readBranchLedger(big.f.sm.getBranch()), big.before);
@@ -536,11 +545,12 @@ describe("continuity capture", () => {
 		const branch = f.sm.getBranch();
 		assert.deepEqual(
 			branch.slice(-3).map((e) => e.id),
-			[userId, assistantId, opsEntries(f.sm)[0].id],
+			[userId, assistantId, at(opsEntries(f.sm), 0).id],
 			"the entry follows the completed turn",
 		);
 		assert.equal(opsEntries(f.sm).length, 1);
 		const [rule, ...rest] = rulesOf(f.sm);
+		assert.ok(rule);
 		assert.equal(rest.length, 0);
 		assert.equal(rule.source.origin, "user");
 		assert.equal(rule.source.entryId, userId);
@@ -582,6 +592,7 @@ describe("continuity capture", () => {
 		const resultB = appendToolResult(f.sm, "tc-b", "bash", "done");
 		await fireTurnEndAll(f.pi, f.ctx, call.message);
 		const [entry] = opsEntries(f.sm);
+		assert.ok(entry);
 		assert.deepEqual(
 			f.sm
 				.getBranch()
@@ -618,7 +629,7 @@ describe("continuity capture", () => {
 			await requestRewind(f);
 			const done = rewindMessages(f.pi).at(-1);
 			assert.ok(done, "a continuation was delivered");
-			const entry = f.sm.getEntry(done.message.details.summaryId as string);
+			const entry = f.sm.getEntry(done.message.details["summaryId"] as string);
 			assert.ok(entry && entry.type === "branch_summary");
 			return { ...f, entry, t3 };
 		}
@@ -631,9 +642,9 @@ describe("continuity capture", () => {
 				);
 				const rules = snapshot.items.filter((i) => i.kind === "rule");
 				assert.equal(rules.length, 1);
-				assert.equal(rules[0].status, "active");
-				assert.equal(rules[0].source.origin, "user");
-				assert.equal(rules[0].quote, RULE);
+				assert.equal(at(rules, 0).status, "active");
+				assert.equal(at(rules, 0).source.origin, "user");
+				assert.equal(at(rules, 0).quote, RULE);
 				const briefing = renderBriefing(snapshot, { maxTokens: 2500 }).text;
 				assert.ok(f.entry.summary.endsWith(`## Continuity ledger\n\n${briefing}`));
 				assert.ok(briefing.includes(RULE));
@@ -696,8 +707,8 @@ describe("continuity capture", () => {
 				assert.deepEqual(calls, []);
 				assert.equal(rulesOf(f.sm).length, 2, "heuristics still capture");
 				assert.equal(f.ctx.notifyCalls.length, 1);
-				assert.equal(f.ctx.notifyCalls[0][1], "warning");
-				assert.match(f.ctx.notifyCalls[0][0], /typesafe\/jev-latest/);
+				assert.equal(at(f.ctx.notifyCalls, 0)[1], "warning");
+				assert.match(at(f.ctx.notifyCalls, 0)[0], /typesafe\/jev-latest/);
 			});
 		});
 
@@ -787,10 +798,10 @@ describe("continuity capture", () => {
 					assert.equal(rulesOf(f.sm).length, 1, "the heuristic pass caught it");
 					assert.equal(f.ctx.notifyCalls.length, 1);
 					assert.match(
-						f.ctx.notifyCalls[0][0],
+						at(f.ctx.notifyCalls, 0)[0],
 						/classifier typesafe\/jev-latest did not answer within 15 s/,
 					);
-					assert.ok(!f.ctx.notifyCalls[0][0].includes("{"));
+					assert.ok(!at(f.ctx.notifyCalls, 0)[0].includes("{"));
 					await turn(f, "Never touch the generated files");
 					assert.equal(calls.length, 1, "the model is not asked again");
 					assert.equal(rulesOf(f.sm).length, 2);

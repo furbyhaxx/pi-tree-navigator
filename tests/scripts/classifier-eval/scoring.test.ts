@@ -39,11 +39,17 @@ const observation = (overrides: Partial<EvalObservation> = {}): EvalObservation 
 	...overrides,
 });
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 test("separates raw correctness, abstention and unsafe accepted decisions", () => {
 	const low = scoreObservation(fixture, observation(), 0.7);
 	assert.equal(low.exact, true);
 	assert.equal(low.acceptedExact, false);
-	assert.equal(low.answers[0].accepted, false);
+	assert.equal(at(low.answers, 0).accepted, false);
 	const dangerous = scoreObservation(
 		fixture,
 		observation({ answers: { action: { choice: "fold", confidence: 0.9 } } }),
@@ -67,7 +73,7 @@ test("missing or invalid answers cannot become successful abstentions", () => {
 	for (const answers of invalid) {
 		const score = scoreObservation(fixture, observation({ answers }));
 		assert.equal(score.exact, false);
-		assert.equal(score.answers[0].valid, false);
+		assert.equal(at(score.answers, 0).valid, false);
 		assert.equal(score.acceptedExact, false);
 	}
 });

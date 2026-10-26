@@ -157,7 +157,9 @@ test("edited excluded tool calls cannot reappear as replacement prose", () => {
 	});
 	const result = evidence(sm, { read: "omit" });
 	assert.ok(!JSON.stringify(result).includes("SECRET"));
-	assert.match(result.input.records[0].text, /withheld/);
+	const record = result.input.records[0];
+	assert.ok(record);
+	assert.match(record.text, /withheld/);
 });
 
 test("newest bounded phase retains objective, active goals, anchors and prior fold facts", () => {

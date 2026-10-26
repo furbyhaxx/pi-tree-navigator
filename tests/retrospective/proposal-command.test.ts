@@ -86,7 +86,7 @@ function reviewUi(
 		},
 		ui: {
 			notify(message: string, type?: string) {
-				state.notifications.push({ message, type });
+				state.notifications.push({ message, ...(type === undefined ? {} : { type }) });
 			},
 			async editor(_title: string, text: string) {
 				state.editors.push(text);
@@ -132,6 +132,12 @@ function reviewUi(
 		editors: state.editors,
 		notifications: state.notifications,
 	};
+}
+
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
 }
 
 describe("tree proposal command", () => {
@@ -256,7 +262,7 @@ describe("tree proposal command", () => {
 		const f = await fixture();
 		const ui = reviewUi(f, [["s"]]);
 		await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
-		const text = ui.frames[0].join("\n");
+		const text = at(ui.frames, 0).join("\n");
 		assert.doesNotMatch(text, /[{}]|sourceSha256/);
 		assert.match(text, /Anchor\/Clone\/Propose/);
 		assert.match(text, /Method\s+heuristic/);
@@ -276,8 +282,8 @@ describe("tree proposal command", () => {
 		const f = await fixture();
 		const ui = reviewUi(f, [[ESC]], { columns: 60 });
 		await handleTreeProposal("", ui.ctx, {} as ExtensionAPI);
-		assert.ok(ui.frames[0].every((line) => visibleWidth(line) <= 60));
-		assert.ok(ui.frames[0].join("\n").includes("[open]"));
+		assert.ok(at(ui.frames, 0).every((line) => visibleWidth(line) <= 60));
+		assert.ok(at(ui.frames, 0).join("\n").includes("[open]"));
 	});
 
 	it("e opens the raw JSON plan; an invalid edit is refused and the outline stays", async () => {
@@ -285,10 +291,10 @@ describe("tree proposal command", () => {
 		const ui = reviewUi(f, [["e"], ["s"]], { editors: [() => "{ not json"] });
 		await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
 		assert.equal(ui.editors.length, 1);
-		assert.match(ui.editors[0], /"sourceSha256"/);
+		assert.match(at(ui.editors, 0), /"sourceSha256"/);
 		assert.equal(ui.frames.length, 2);
-		assert.match(ui.notifications[0].message, /edited plan was not applied/);
-		assert.equal(ui.notifications[0].type, "warning");
+		assert.match(at(ui.notifications, 0).message, /edited plan was not applied/);
+		assert.equal(at(ui.notifications, 0).type, "warning");
 		const saved = JSON.parse(await readFile(join(f.dir, "saved.json"), "utf8"));
 		assert.equal(
 			saved.nameSuffix,
@@ -305,7 +311,7 @@ describe("tree proposal command", () => {
 			],
 		});
 		await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
-		assert.match(ui.notifications[0].message, /retain the inspected source path and hash/);
+		assert.match(at(ui.notifications, 0).message, /retain the inspected source path and hash/);
 		const saved = JSON.parse(await readFile(join(f.dir, "saved.json"), "utf8"));
 		assert.equal(saved.nameSuffix, " (reviewed)");
 		assert.equal(saved.sourceSha256, f.snapshot.sha256);

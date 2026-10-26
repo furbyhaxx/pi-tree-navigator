@@ -95,7 +95,9 @@ test("derivation is deterministic", () => {
 test("positives are the replaced items, negatives every other item", () => {
 	for (const parent of parents) {
 		const own = CASES.filter((c) => parentOf(c) === parent);
-		const { choices, unsafeChoices } = parent.expected.contradicts;
+		const answer = parent.expected["contradicts"];
+		assert.ok(answer, `${parent.id} needs a contradicts reference`);
+		const { choices, unsafeChoices } = answer;
 		const ambiguous = choices.includes("none");
 		const replaced = choices.filter((id) => id !== "none");
 		assert.equal(count(own, "positive"), ambiguous ? 0 : replaced.length, parent.id);

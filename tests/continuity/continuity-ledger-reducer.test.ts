@@ -258,6 +258,7 @@ describe("retention at the item cap", () => {
 			USER,
 		);
 		const first = withDecision.items[0];
+		assert.ok(first);
 		const filled = build(
 			withDecision,
 			Array.from({ length: MAX_LEDGER_ITEMS - 2 }, (_, n) => ({
@@ -296,7 +297,9 @@ describe("retention at the item cap", () => {
 			AGENT,
 		);
 		assert.equal(result.rejected.length, 1);
-		assert.ok(rejectedWith("ledger_full")(result.rejected[0].reason));
+		const rejected = result.rejected[0];
+		assert.ok(rejected);
+		assert.ok(rejectedWith("ledger_full")(rejected.reason));
 		assert.deepEqual(result.evicted, []);
 	});
 });
