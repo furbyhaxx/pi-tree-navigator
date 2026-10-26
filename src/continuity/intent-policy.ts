@@ -1,16 +1,4 @@
-/**
- * Policy of the intent classifier: which models judge a user message for the
- * continuity ledger, how a second model settles a doubtful supersession, and
- * how a retirement named by that escalation is confirmed before it applies.
- *
- * `continuity.intentClassifier` is a `provider/id` model (one model, both
- * questions, no verification), the `"recommended"` preset, or an object that
- * overrides the preset field by field (see `IntentPolicySetting`). An object
- * is validated here and carried through the effective config as its canonical
- * JSON text, so a changed policy compares unequal as a plain string.
- *
- * No I/O of its own: requests go through the Pi model registry.
- */
+/** Intent classifier presets, policy validation, and Pi registry stage adapters. */
 
 import type {
 	Api,
@@ -20,6 +8,22 @@ import type {
 	Model,
 } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import {
+	answerSchema,
+	CHAT_SYSTEM_PROMPT,
+	chatPrompt,
+	choiceKeys,
+	parseChatAnswers,
+} from "./intent-policy-chat.ts";
+import {
+	applySetting,
+	checkKeys,
+	type IntentPolicy,
+	type IntentPolicySetting,
+	type IntentStageSetting,
+	isRecord,
+	type Problems,
+} from "./intent-policy-settings.ts";
 
 /** Config value that selects the benchmarked preset. */
 export const RECOMMENDED_INTENT_CLASSIFIER = "recommended";
@@ -101,48 +105,6 @@ export const RECOMMENDED_POLICY_PROVENANCE = {
 	},
 } as const;
 
-/** One stage of the object form; `model: null` switches the stage off. */
-export interface IntentStageSetting {
-	/** `provider/id` of a classifier or chat model in the Pi catalog, or null. */
-	model?: string | null;
-	/** Replaces the question wording the production builder sends. */
-	instructions?: string;
-}
-
-/** The object form of `continuity.intentClassifier`; fields override the preset. */
-export interface IntentPolicySetting {
-	preset?: typeof RECOMMENDED_INTENT_CLASSIFIER;
-	/** Heuristic classifier as kind source (when `kind.model` is null) and fallback. Default true. */
-	heuristics?: boolean;
-	/** A stage answer needs at least this confidence (0-1, exclusive of 0). Default 0.7. */
-	minConfidence?: number;
-	/** The intent kind. Never escalated. */
-	kind?: IntentStageSetting;
-	/** Which active item the message replaces. */
-	supersession?: IntentStageSetting & {
-		/** Asked only when `supersession` abstains (or is off). */
-		escalation?: IntentStageSetting;
-		/** Confirms a retirement named by escalation. `model: null` skips the check. */
-		verification?: IntentStageSetting;
-	};
-}
-
-interface StagePolicy {
-	model: string | null;
-	instructions?: string;
-}
-
-/** A policy with every default and preset value applied. */
-export interface IntentPolicy {
-	heuristics: boolean;
-	minConfidence?: number;
-	kind: StagePolicy;
-	supersession: StagePolicy;
-	escalation: StagePolicy;
-	/** Asked only about a retirement the escalation stage named. */
-	verification: StagePolicy;
-}
-
 const NO_MODELS: IntentPolicy = {
 	heuristics: true,
 	kind: { model: null },
@@ -168,22 +130,6 @@ export function parseClassifierModel(value: string): { provider: string; id: str
 		return undefined;
 	}
 	return { provider: value.slice(0, slash), id: value.slice(slash + 1) };
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-	typeof value === "object" && value !== null && !Array.isArray(value);
-
-type Problems = string[];
-
-function checkKeys(
-	where: string,
-	value: Record<string, unknown>,
-	allowed: readonly string[],
-	problems: Problems,
-): void {
-	for (const key of Object.keys(value)) {
-		if (!allowed.includes(key)) problems.push(`${where}.${key} is not a field`);
-	}
 }
 
 function stageOf(
@@ -239,29 +185,6 @@ function nestedStages(
 		if (stage) out[key] = stage;
 	}
 	return out;
-}
-
-/** Overrides applied to `base`; absent fields keep the base value. */
-function overlay(base: StagePolicy, over: IntentStageSetting | undefined) {
-	return {
-		model: over?.model !== undefined ? over.model : base.model,
-		...((over?.instructions ?? base.instructions) !== undefined && {
-			instructions: over?.instructions ?? base.instructions,
-		}),
-	} as StagePolicy;
-}
-
-function applySetting(setting: IntentPolicySetting, preset: IntentPolicy): IntentPolicy {
-	return {
-		heuristics: setting.heuristics ?? preset.heuristics,
-		...((setting.minConfidence ?? preset.minConfidence) !== undefined && {
-			minConfidence: setting.minConfidence ?? preset.minConfidence,
-		}),
-		kind: overlay(preset.kind, setting.kind),
-		supersession: overlay(preset.supersession, setting.supersession),
-		escalation: overlay(preset.escalation, setting.supersession?.escalation),
-		verification: overlay(preset.verification, setting.supersession?.verification),
-	};
 }
 
 /**
@@ -410,92 +333,6 @@ export function classifierAsk(
 
 /** Output cap of a chat stage; the answer is one short JSON object. */
 export const CHAT_MAX_OUTPUT_TOKENS = 1_024;
-
-// The message sits inside the JSON state and the model is told to judge only
-// that state, so the user's words are data to it, not instructions.
-const CHAT_SYSTEM_PROMPT =
-	"You classify structured state. For every question, choose exactly one choice key from its list and judge only the state provided. " +
-	'Reply with a single JSON object and nothing else, shaped {"answers": {"<question id>": {"choice": "<choice key>", "confidence": <number from 0 to 1, your probability that the choice is correct>}}}. Answer every question.';
-
-/** Offered choice keys by question id. */
-type ChoiceKeys = Record<string, string[]>;
-
-function choiceKeys(context: ClassifierContext): ChoiceKeys {
-	return Object.fromEntries(
-		Object.entries(context.questions).flatMap(([id, question]) =>
-			question.type === "choice" ? [[id, Object.keys(question.criteria)]] : [],
-		),
-	);
-}
-
-function chatPrompt(context: ClassifierContext): string {
-	const questions = Object.entries(context.questions).flatMap(([id, q]) =>
-		q.type === "choice"
-			? [
-					`## ${id}\n${q.instructions}\nChoices:\n${Object.entries(q.criteria)
-						.map(([key, description]) => `- ${key}: ${description}`)
-						.join("\n")}`,
-				]
-			: [],
-	);
-	return `State:\n${JSON.stringify(context.state)}\n\nQuestions:\n\n${questions.join("\n\n")}`;
-}
-
-/** Strict JSON schema of the chat answer; `choice` is limited to each question's keys. */
-function answerSchema(questions: ChoiceKeys) {
-	return {
-		type: "object",
-		properties: {
-			answers: {
-				type: "object",
-				properties: Object.fromEntries(
-					Object.entries(questions).map(([id, keys]) => [
-						id,
-						{
-							type: "object",
-							properties: {
-								choice: { type: "string", enum: keys },
-								confidence: { type: "number" },
-							},
-							required: ["choice", "confidence"],
-							additionalProperties: false,
-						},
-					]),
-				),
-				required: Object.keys(questions),
-				additionalProperties: false,
-			},
-		},
-		required: ["answers"],
-		additionalProperties: false,
-	};
-}
-
-function parseChatAnswers(text: string, questions: ChoiceKeys): Record<string, StageAnswer> {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(text.trim());
-	} catch {
-		return {};
-	}
-	const raw = isRecord(parsed) ? parsed.answers : undefined;
-	const answers: Record<string, StageAnswer> = {};
-	if (!isRecord(raw)) return answers;
-	for (const [id, keys] of Object.entries(questions)) {
-		const entry = raw[id];
-		if (
-			isRecord(entry) &&
-			typeof entry.choice === "string" &&
-			keys.includes(entry.choice) &&
-			typeof entry.confidence === "number" &&
-			entry.confidence >= 0 &&
-			entry.confidence <= 1
-		) {
-			answers[id] = { choice: entry.choice, confidence: entry.confidence };
-		}
-	}
-	return answers;
-}
 
 /**
  * Asks a registry chat model. Output that is not JSON, or a choice that was
