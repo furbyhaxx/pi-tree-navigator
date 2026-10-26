@@ -1,8 +1,15 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented in this file.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+### Changed
+
+- **Toolchain**: Bun 1.4, TypeScript 7, Biome 2.5 (tabs, 100 columns) and a Justfile (`just check`, `just probe`, `just rpc-verify`) replace pnpm, `node --test` and npm scripts.
+- **Layout**: the package is `@furbyhaxx/pi-tree-navigator`; sources live in `src/<area>/` with tests mirrored under `tests/`. The Pi entry point is `src/index.ts`.
+- **Docs**: the README keeps install, usage and configuration basics; the reference sections moved to `docs/configuration.md` and `docs/how-it-works.md`, and the changelog uses Keep a Changelog headings.
 
 ### Removed
 
@@ -10,16 +17,14 @@ All notable changes to this project will be documented in this file.
 
 ## [0.3.0] - 2026-10-15
 
-<!-- USER-EDITABLE SECTION START -->
 - **In-band rewind summaries** ([#80](https://github.com/cad0p/pi-tree-navigator/issues/80)): the live model writes the summary as its next turn, so it comes from the prompt cache on every provider, pi-claude-bridge included. This replaces 0.2.0's separate summary request, and the tree moves once the summary turn ends. After a rewind, `session_tree` is emitted so history-mirroring providers rebuild from the rewound chain ([#79](https://github.com/cad0p/pi-tree-navigator/issues/79)).
 - **Rewind hint** ([#44](https://github.com/cad0p/pi-tree-navigator/issues/44), [#84](https://github.com/cad0p/pi-tree-navigator/issues/84)): an opt-in nudge to persist work and rewind once `rewindHintReserveTokens` tokens are left in the window. The reserve is an absolute budget, like pi's `compaction.reserveTokens`, so it means the same on a 100k and a 1M window. The nudge names every active anchor with its context %. It stays off unless configured.
 - **Per-model reserve** ([#86](https://github.com/cad0p/pi-tree-navigator/issues/86)): `modelOverrides["<provider>/<modelId>"].rewindHintReserveTokens`, keyed like pi's `compaction.modelOverrides`. An entry can set `"off"` to disable the hint for that model only.
 - **Automatic `anchor:start`** ([#55](https://github.com/cad0p/pi-tree-navigator/issues/55)): every session leg gets a low-floor fallback rewind target (`anchorStartAfterTurns`, default 2).
 - **Breaking:** the rewind params `labelStart`/`labelEnd` are now `rewindTo`/`newLabel` ([#43](https://github.com/cad0p/pi-tree-navigator/issues/43)). The prerelease-only `rewindHintAtPercent` key from `@next` builds is ignored with a warning; migrate to `rewindHintReserveTokens` (e.g. `"90"` on a 1M window → `100000`).
 - **pi 1.x compatibility** ([#61](https://github.com/cad0p/pi-tree-navigator/issues/61), [#65](https://github.com/cad0p/pi-tree-navigator/issues/65), [#25](https://github.com/cad0p/pi-tree-navigator/issues/25)).
-<!-- USER-EDITABLE SECTION END -->
 
-### 🚀 Features
+### Added
 
 - *(rewind)* Rename params labelStart/labelEnd to rewindTo/newLabel (closes #43)
 - *(rewind)* Context-pressure rewind hint (config-gated, default off) (closes #44) (closes #42)
@@ -28,7 +33,12 @@ All notable changes to this project will be documented in this file.
 - *(hint)* Absolute rewindHintReserveTokens + name the anchors in the hint (closes #84)
 - *(hint)* Per-model rewindHintReserveTokens via modelOverrides (closes #86)
 
-### 🐛 Bug Fixes
+### Changed
+
+- AGENTS.md — pinned base text (drop Goldmine variant) (closes #53) ([#54](https://github.com/cad0p/pi-tree-navigator/pull/54))
+- *(ci)* Drop macos-latest from the PR test matrix (closes #57)
+
+### Fixed
 
 - *(hint)* Guard the rewind-hint fallback + hoist LABEL_PREFIX + TUI-proof docs rule (closes #48)
 - *(guidance)* Rewind to the oldest appropriate anchor (closes #51)
@@ -41,59 +51,43 @@ All notable changes to this project will be documented in this file.
 - *(rewind)* Do not re-answer retained user messages (closes #76)
 - *(rewind)* Capture the final transformed live request for summaries (closes #75)
 
-### 📚 Documentation
-
-- AGENTS.md — pinned base text (drop Goldmine variant) (closes #53) ([#54](https://github.com/cad0p/pi-tree-navigator/pull/54))
-
-### ⚙️ Miscellaneous Tasks
-
-- *(ci)* Drop macos-latest from the PR test matrix (closes #57)
-
-
 ## [0.2.0] - 2026-09-15
 
-<!-- USER-EDITABLE SECTION START -->
 - **Cache-hit rewind summaries** ([#33](https://github.com/cad0p/pi-tree-navigator/issues/33)) — summary requests now mirror the live prompt prefix and ride the same prompt cache: ~98–99% cache-served (~20–24k tokens read, a few hundred fresh) instead of a cold re-bill (~77k tokens / $0.0075 → ~$0.0004 warm). No fork or patched host needed.
 - **Correctness first** — evidence-losing segments (compaction-crossing, dropped branch evidence) still re-bill cold; `PI_NAVIGATE_TREE_SUMMARY_CACHE=0` opts out; misses ≥20k tokens / ≥$0.10 show a gated TUI notice (hits silent); numbers always in `details.summaryCache`.
 - **Batched rewinds refused** ([#37](https://github.com/cad0p/pi-tree-navigator/issues/37)) — `rewind` sharing an assistant batch with sibling tool calls is refused before any mutation; re-issue it solo.
 - **Refusals render as failures** ([#40](https://github.com/cad0p/pi-tree-navigator/issues/40)) — red error row + `isError: true` in the transcript (the returned flag was ignored; promoted via the public `tool_result` event).
-<!-- USER-EDITABLE SECTION END -->
 
-### 🚀 Features
+### Added
 
 - *(navigate-tree)* Preserve prompt-cache prefix on rewind summaries (closes #33)
 
-### 🐛 Bug Fixes
+### Fixed
 
 - *(rewind)* Refuse sibling-batched rewinds — rewind must be the only tool call in its batch (closes #37)
 - *(rewind)* Surface refusals as failed tool calls (closes #40)
 
-
 ## [0.1.3] - 2026-09-14
 
-<!-- USER-EDITABLE SECTION START -->
 Last version before adopting the branch summarization cache hit mechanism to save everyone money -> https://github.com/earendil-works/pi/issues/9411
-<!-- USER-EDITABLE SECTION END -->
 
-### 🚀 Features
+### Added
 
 - *(ci)* Daily pi-upstream reflection probe (closes #17)
 - *(guidelines)* Steer agents to anchor early at context-gathered (closes #29)
 - Mandate anchoring via before_agent_start system prompt (closes #31)
 
-### 🐛 Bug Fixes
+### Changed
+
+- *(tooldef)* Trim navigate_tree tool definition (~848 → ~470 tok/request) (closes #22)
+
+### Fixed
 
 - *(rewind)* Reject degenerate rewinds below a min-savings floor (closes #21, closes #20)
 - *(rewind)* Inject opencode session headers for summarization (closes #26)
 
-### ⚙️ Miscellaneous Tasks
-
-- *(tooldef)* Trim navigate_tree tool definition (~848 → ~470 tok/request) (closes #22)
-
-
 ## [0.1.2] - 2026-08-20
 
-<!-- USER-EDITABLE SECTION START -->
 Patch release: fixes rewind summarization for custom-api providers and eliminates 3 of the 5 reflection points via public APIs.
 
 **Rewind summarization for custom providers (#13):** `rewind` failed with `No API provider registered for api: <custom-id>` for any provider registered via `pi.registerProvider(name, { api: <custom-id>, streamSimple })` (e.g. pi-commandcode-provider 0.5.x with `api: "commandcode-custom"`). The summarizer now routes through the composed provider's `streamSimple`, obtained via the public `ctx.modelRegistry.getProvider(providerId)` API (pi ≥0.81.0) — the same routing pi's own `branchWithSummary` uses. Peer floor bumped to `>=0.81.0`; `null` header-deletion markers stripped (pi 0.84+ `ProviderHeaders`).
@@ -101,25 +95,19 @@ Patch release: fixes rewind summarization for custom-api providers and eliminate
 **Reflection surface five → two (#14):** the per-turn in-loop context refresh no longer reads `agent.state.systemPrompt` / `agent.state.tools` or wraps `agent.prepareNextTurnWithContext` / `agent.prepareNextTurn`. Instead a `pi.on("context")` handler (the public `context` extension event, fired via `Agent.transformContext` before every LLM call) returns the session-tree projection `sessionManager.buildContextEntries().flatMap(sessionEntryToContextMessages)`. Pi's own `_installAgentNextTurnRefresh` keeps systemPrompt/tools/model/thinkingLevel fresh per turn. Remaining reflection points: `AgentSession.prototype.prompt` (session capture) and `agent.state.messages` (post-rewind refresh so the next prompt snapshots the rewound chain) — neither is eliminable via public APIs.
 
 Verified live on pi 0.84.2 (tmux TUI, commandcode provider): a 580KB file read (22.6% of 400k) rewound mid-loop to 1.0% of 400k with the very next LLM call at the rewound cache prefix (cacheRead 90,368 → 2,944). 125 tests pass; CI green.
-<!-- USER-EDITABLE SECTION END -->
 
-### 🐛 Bug Fixes
-
-- *(rewind)* Route summarization through provider streamSimple (public API) (closes #13)
-
-### 🚜 Refactor
+### Changed
 
 - Eliminate 3 of 5 reflection points via public context event (closes #14)
-
-### 📚 Documentation
-
 - Update reflection field count/versions and dev commands for v0.1.1 reality ([#9](https://github.com/cad0p/pi-tree-navigator/pull/9))
 - Port AGENTS.md bootstrap instructions from pi-napkin ([#11](https://github.com/cad0p/pi-tree-navigator/pull/11))
 
+### Fixed
+
+- *(rewind)* Route summarization through provider streamSimple (public API) (closes #13)
 
 ## [0.1.1] - 2026-07-31
 
-<!-- USER-EDITABLE SECTION START -->
 Patch release: restores the mid-loop context refresh on pi ≥0.80.3. No behavior change on pi ≤0.80.2.
 
 **The bug (pi ≥0.80.3):** pi 0.80.3 added `AgentSession._installAgentNextTurnRefresh()`, which installs pi's own `agent.prepareNextTurnWithContext` in the constructor, and pi-agent-core's `Agent.createLoopConfig` now prefers that field over `agent.prepareNextTurn`. Since this extension only wrapped `prepareNextTurn`, its mid-loop context replacement was dead code: after a `rewind`, the branch summary landed correctly, but every remaining turn of the same loop still sent the full pre-rewind context to the API, and the footer's context-% re-anchored on that stale usage (jumping back up right after the rewind). Rewinds only actually saved context on the *next* user prompt.
@@ -127,34 +115,25 @@ Patch release: restores the mid-loop context refresh on pi ≥0.80.3. No behavio
 **The fix:** `installPrepareNextTurn` now wraps both hook fields with the same marker/`__prior` chaining discipline. On pi ≥0.80.3 the `prepareNextTurnWithContext` wrapper chains pi's own (keeping its per-turn `systemPrompt`/`tools`/`model`/`thinkingLevel` refreshes) and overrides only `messages`; on pi ≤0.80.2 the new field is never read and `prepareNextTurn` does the work as before.
 
 Verified live on pi 0.83.0 (persisted session): after a rewind at 31.5% context, the footer stays at ~1.6% for the rest of the loop (previously bounced back to ~33.5%), and the post-rewind API call goes out with ~3.7k tokens instead of ~80.5k.
-<!-- USER-EDITABLE SECTION END -->
 
-### 🚀 Features
+### Added
 
 - Discriminated-union schema makes summaryFocus required at the wire level ([#1](https://github.com/cad0p/pi-tree-navigator/pull/1))
 
-### 🐛 Bug Fixes
+### Changed
+
+- Nest extension under extensions/navigate-tree/ per pi-napkin convention
+- Promote npm install and publishing ([#4](https://github.com/cad0p/pi-tree-navigator/pull/4))
+- Release-grade cleanup for v0.1.0 ([#3](https://github.com/cad0p/pi-tree-navigator/pull/3))
+- Switch from bun to node + pnpm for local dev and CI ([#6](https://github.com/cad0p/pi-tree-navigator/pull/6))
+
+### Fixed
 
 - Revert discriminated-union parameters — Kiro rejects non-object root schemas ([#2](https://github.com/cad0p/pi-tree-navigator/pull/2))
 - Wrap prepareNextTurnWithContext — in-loop context refresh dead since pi 0.80.3 ([#8](https://github.com/cad0p/pi-tree-navigator/pull/8))
 
-### 🚜 Refactor
-
-- Nest extension under extensions/navigate-tree/ per pi-napkin convention
-
-### 📚 Documentation
-
-- Promote npm install and publishing ([#4](https://github.com/cad0p/pi-tree-navigator/pull/4))
-
-### ⚙️ Miscellaneous Tasks
-
-- Release-grade cleanup for v0.1.0 ([#3](https://github.com/cad0p/pi-tree-navigator/pull/3))
-- Switch from bun to node + pnpm for local dev and CI ([#6](https://github.com/cad0p/pi-tree-navigator/pull/6))
-
-
 ## [0.1.0] - 2026-05-25
 
-<!-- USER-EDITABLE SECTION START -->
 
 Initial release.
 
@@ -172,5 +151,3 @@ User-visible specifics worth knowing on day one:
 - `rewind` requires a `summaryFocus` of ≥20 chars after trim; the rejection message lists what the focus should preserve so the agent can self-correct without user intervention.
 - The `branch_summary` boilerplate strip in `list` hints is sentinel-anchored — a user-authored doc whose first H2 happens to be `## Goal` is preserved untouched.
 - If the `AgentSession.prototype` patch isn't installed (typically only after a pi internals shape change), `list` and `rewind` surface a `⚠ reflection bootstrap missing` warning. The hint suggests `/reload` first (lighter — re-runs the prototype patch on the current process) and `Restart pi` as the heavier-handed alternative.
-
-<!-- USER-EDITABLE SECTION END -->
