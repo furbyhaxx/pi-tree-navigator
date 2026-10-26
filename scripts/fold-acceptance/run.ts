@@ -20,9 +20,9 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { RECOMMENDED_MILESTONE_POLICY } from "../../src/auto/milestone-policy.ts";
 import { parseClassifierModel } from "../../src/continuity/intent-policy.ts";
+import { estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
 import navigateTree, {
 	__testHooks,
-	estimateAdmissionTokens,
 	PRESSURE_COMPACTION_CUSTOM_TYPE,
 	REWIND_CUSTOM_TYPE,
 } from "../../src/index.ts";
