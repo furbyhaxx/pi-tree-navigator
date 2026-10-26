@@ -16,6 +16,7 @@ import { estimateTokens } from "@earendil-works/pi-coding-agent";
 import {
   estimateContextTokens,
   estimateRequestTokens,
+  fixedOverheadNote,
 } from "./context-tokens.ts";
 
 // -----------------------------------------------------------------------------
@@ -246,5 +247,70 @@ describe("estimateRequestTokens", () => {
       assistant(400, { totalTokens: 9_000, stopReason: "aborted" }),
     ];
     assert.equal(estimateRequestTokens(chain), Math.ceil((200 * 8) / 7));
+  });
+});
+
+describe("fixedOverheadNote", () => {
+  const schema = (name: string, chars: number) => ({
+    name,
+    description: "d".repeat(chars),
+    parameters: { type: "object", properties: {} },
+  });
+  const system = (tools: ReturnType<typeof schema>[]) =>
+    ({
+      role: "system",
+      content: "p".repeat(40_000),
+      toolsAdded: tools,
+      timestamp: 0,
+    }) as unknown as AgentMessage;
+  const ask = {
+    role: "user",
+    content: "continue",
+    timestamp: 1,
+  } as unknown as AgentMessage;
+
+  it("names the tool schemas and the largest MCP server when they alone exceed the limit", () => {
+    const messages = [
+      system([
+        schema("read", 2_000),
+        ...Array.from({ length: 200 }, (_, i) =>
+          schema(`mcp__rea__t${i}`, 4_000),
+        ),
+        ...Array.from({ length: 5 }, (_, i) =>
+          schema(`mcp__small__t${i}`, 1_000),
+        ),
+      ]),
+      ask,
+    ];
+    const activeTokens = estimateRequestTokens(messages, 1);
+    const note = fixedOverheadNote({
+      messages,
+      activeTokens,
+      limit: 150_000,
+      factor: 1,
+    });
+    assert.ok(note, "a tool-bound context is diagnosed");
+    assert.match(
+      note,
+      /^~2\d\dk of ~2\d\dk is fixed overhead \(system prompt ~1\dk; 206 tool schemas ~2\d\dk, largest mcp__rea: 200 tools ~2\d\dk\)/,
+    );
+    assert.match(note, /no fold can bring context under 150k/);
+    assert.match(note, /"exposure": "codemode" or "deferred"/);
+  });
+
+  it("stays silent while the conversation holds enough to fold", () => {
+    const messages = [
+      system([schema("read", 2_000)]),
+      {
+        role: "user",
+        content: "x".repeat(800_000),
+        timestamp: 1,
+      } as unknown as AgentMessage,
+    ];
+    const activeTokens = estimateRequestTokens(messages, 1);
+    assert.equal(
+      fixedOverheadNote({ messages, activeTokens, limit: 150_000, factor: 1 }),
+      undefined,
+    );
   });
 });

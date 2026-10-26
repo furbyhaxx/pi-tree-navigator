@@ -5,6 +5,7 @@ import {
   convertToLlm,
   estimateTokens,
 } from "@earendil-works/pi-coding-agent";
+import { formatWindow } from "./helpers.ts";
 
 type Usage = Parameters<typeof calculateContextTokens>[0];
 
@@ -128,4 +129,63 @@ const MAX_TOKEN_FACTOR = 8;
 export function estimateContextTokens(messages: AgentMessage[]): number {
   const { baseline, tail } = splitContextEstimate(messages);
   return baseline + tail;
+}
+
+/**
+ * Why folding cannot relieve this context: the request's fixed part (system
+ * prompt and tool schemas) alone reaches `limit`. Names the tool share and the
+ * largest MCP server, since tool exposure is the usual culprit. Undefined while
+ * the conversation still holds enough to fold.
+ */
+export function fixedOverheadNote(input: {
+  messages: AgentMessage[];
+  activeTokens: number;
+  limit: number;
+  factor?: number;
+}): string | undefined {
+  const { messages, activeTokens, limit } = input;
+  const factor = input.factor ?? DEFAULT_TOKEN_FACTOR;
+  const conversation = Math.ceil(
+    messages.reduce(
+      (sum, message) =>
+        sum + (message.role === "system" ? 0 : estimateTokens(message)),
+      0,
+    ) * factor,
+  );
+  const overhead = activeTokens - conversation;
+  if (overhead < limit) return undefined;
+  // Shares of the system message, scaled to the measured overhead: tool JSON
+  // tokenizes denser than four chars per token, so absolute estimates misplace it.
+  const system = getCurrentSystemMessage(messages);
+  const tools = system?.toolsAdded ?? [];
+  const systemChars = system ? estimateTokens(system) * 4 : 0;
+  const tokensOf = (value: unknown) =>
+    systemChars > 0
+      ? Math.round(
+          (Math.min(JSON.stringify(value).length, systemChars) / systemChars) *
+            overhead,
+        )
+      : 0;
+  const toolTokens = tools.length ? tokensOf(tools) : 0;
+  const servers = new Map<string, typeof tools>();
+  for (const tool of tools) {
+    const server = /^mcp__(.+?)__/.exec(tool.name)?.[1];
+    if (server) servers.set(server, [...(servers.get(server) ?? []), tool]);
+  }
+  const largest = [...servers]
+    .map(([name, group]) => ({
+      name,
+      count: group.length,
+      tokens: tokensOf(group),
+    }))
+    .sort((a, b) => b.tokens - a.tokens)[0];
+  const breakdown = [
+    `system prompt ~${formatWindow(Math.max(overhead - toolTokens, 0)) || "0k"}`,
+    ...(tools.length
+      ? [
+          `${tools.length} tool schemas ~${formatWindow(toolTokens) || "0k"}${largest ? `, largest mcp__${largest.name}: ${largest.count} tools ~${formatWindow(largest.tokens) || "0k"}` : ""}`,
+        ]
+      : []),
+  ].join("; ");
+  return `~${formatWindow(overhead)} of ~${formatWindow(activeTokens)} is fixed overhead (${breakdown}) against a ~${formatWindow(conversation) || "0k"} conversation, so no fold can bring context under ${formatWindow(limit)}. Reduce tool exposure (MCP "exposure": "codemode" or "deferred", then /reload) or raise rewind_at_tokens.`;
 }

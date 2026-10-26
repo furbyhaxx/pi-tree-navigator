@@ -107,6 +107,7 @@ import {
   estimateContentTokens,
   estimateRawRequestTokens,
   estimateRequestTokens,
+  fixedOverheadNote,
   measuredTokenFactor,
 } from "./context-tokens.ts";
 import {
@@ -1140,11 +1141,16 @@ function accountRequest(
  * state `requestAccounting` uses.
  */
 export function estimateAdmissionTokens(sm: SessionManager): number {
+  return accountRequest(admissionMessages(sm), tokenFactorOf(sm)).tokens;
+}
+
+/** The next request on the active branch under the effective system state. */
+function admissionMessages(sm: SessionManager): AgentMessage[] {
   const system = getCurrentSystemMessage(sm.buildSessionContext().messages);
-  return requestAccounting(sm, [
+  return effectiveRequestMessages(sm, [
     ...(system ? [system] : []),
     ...buildContextMessages(sm),
-  ]).tokens;
+  ]);
 }
 
 /** `context_edit` drafts hiding `ids` (a failed attempt). */
@@ -4874,7 +4880,18 @@ export default function (pi: ExtensionAPI) {
       // A fold that lands high still relieves pressure; the retry runway keeps
       // it from repeating every few turns.
       const skipped = (reason: string) => {
-        const text = `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}, but no fold ran: ${toOneLine(reason, 400) ?? "no target"}`;
+        let overhead: string | undefined;
+        try {
+          overhead = fixedOverheadNote({
+            messages: admissionMessages(sm),
+            activeTokens,
+            limit: config.rewindAtTokens,
+            factor: tokenFactorOf(sm),
+          });
+        } catch {
+          /* The diagnosis is advisory; the warning still lands. */
+        }
+        const text = `[${TOOL_NAME} auto_navigate] Context ~${formatWindow(activeTokens)} crossed rewind_at_tokens ${formatWindow(config.rewindAtTokens)}, but no fold ran: ${toOneLine(reason, 400) ?? "no target"}${overhead ? `. ${overhead}` : ""}`;
         try {
           notify?.(text);
         } catch {
