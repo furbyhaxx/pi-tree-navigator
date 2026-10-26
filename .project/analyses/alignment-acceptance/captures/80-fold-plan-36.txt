@@ -1,0 +1,30 @@
+[48;2;58;48;85m [38;2;157;165;169mwrap-up while an authorized
+[39m [38;2;157;165;169minstruction or plan item is still
+[39m [38;2;157;165;169mopen, do that work first and
+[39m [38;2;157;165;169mreport once, at the end of the
+[39m [38;2;157;165;169mauthorized scope. Retained user
+[39m [38;2;157;165;169mmessages already answered above
+[39m [38;2;157;165;169mare historical — do not re-answer
+[39m [38;2;157;165;169mthem; their standing instructions
+[39m [38;2;157;165;169mstill apply.[39m
+
+
+[38;2;160;142;213m[49m─ [38;2;157;165;169mAnchor[39m/[1mFold[0m [38;2;160;142;213m────[39m [38;2;157;165;169m0 of 4 foldable[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mPress / to search anchors and pr[0m…
+   [38;2;205;154;34m✗ cannot fold to qa-milestone-fo[39m…
+
+
+
+
+ [38;2;167;152;215m→[39m ◆ qa-milestone-…  [38;2;157;165;169mnot foldable[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mafter: “summary: # Work han[39m…
+   ◆ qa-milestone-…  [38;2;157;165;169mnot foldable[39m
+   ◆ qa-milestone    [38;2;157;165;169mnot foldable[39m
+   ◆ start [38;2;126;136;142m(auto)[39m    [38;2;157;165;169mnot foldable[39m
+
+[38;2;126;136;142m   the materialized handoff does not
+   reduce projected context…[39m
+ [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/work...
+↑24 ↓352 R20k W51k CH8.6% $0.007 [39m...

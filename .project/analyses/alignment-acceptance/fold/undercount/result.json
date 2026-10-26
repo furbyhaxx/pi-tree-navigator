@@ -1,0 +1,121 @@
+{
+  "passed": true,
+  "scenario": "undercount",
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/undercount/sessions/2026-10-26T16-58-23-591Z_01a17926-1de6-748b-9a90-a3d1fc8e820a.jsonl",
+  "initialTokens": 21612,
+  "afterTokens": 2134,
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 24,
+      "startedAt": "2026-10-26T16:58:23.603Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-26T16:58:27.093Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-26T16:58:34.726Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-26T16:58:44.805Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 4,
+      "startedAt": "2026-10-26T16:58:56.168Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 8,
+      "startedAt": "2026-10-26T16:59:03.011Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 10,
+      "startedAt": "2026-10-26T16:59:05.469Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 12,
+      "startedAt": "2026-10-26T16:59:10.077Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 14,
+      "startedAt": "2026-10-26T16:59:12.548Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-26T16:59:17.293Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 2,
+      "startedAt": "2026-10-26T16:59:38.711Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 5,
+      "startedAt": "2026-10-26T16:59:44.844Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 7,
+      "startedAt": "2026-10-26T16:59:47.210Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 9,
+      "startedAt": "2026-10-26T16:59:49.979Z"
+    }
+  ],
+  "scratch": "/tmp/independent-fold-acceptance-umqsEZ",
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "completedAt": "2026-10-26T16:59:54.049Z"
+}

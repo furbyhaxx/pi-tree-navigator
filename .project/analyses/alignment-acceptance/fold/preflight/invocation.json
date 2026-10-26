@@ -1,0 +1,12 @@
+{
+  "scenario": "preflight",
+  "model": "openai/gpt-6-luna",
+  "window": 96000,
+  "blocks": 24,
+  "out": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/preflight",
+  "ledger": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+  "dryRun": false,
+  "startedAt": "2026-10-26T16:53:27.558Z",
+  "sourceCommit": "2d8d1350c971a5be8eed293c1fa8cccf8bea4017",
+  "dirtyPaths": []
+}

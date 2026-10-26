@@ -1,0 +1,36 @@
+[48;2;58;48;85m
+ [38;2;157;165;169mA branch_summary marks a milestone, not the end of the
+[39m [38;2;157;165;169mtask. Your authority, highest first: the user's
+[39m [38;2;157;165;169mstanding instruction retained above (including any
+[39m [38;2;157;165;169mauthorization to work autonomously until the task is
+[39m [38;2;157;165;169mcomplete or a real blocker appears), the authorized
+[39m [38;2;157;165;169mplan or todo list, then this summary's open items. If
+[39m [38;2;157;165;169mthe summary's only open item is a report, hand-off or
+[39m [38;2;157;165;169mwrap-up while an authorized instruction or plan item is
+[39m [38;2;157;165;169mstill open, do that work first and report once, at the
+[39m [38;2;157;165;169mend of the authorized scope. Retained user messages
+[39m [38;2;157;165;169malready answered above are historical — do not
+[39m [38;2;157;165;169mre-answer them; their standing instructions still
+[39m [38;2;157;165;169mapply.[39m
+
+
+[49m [38;2;126;136;142mAnchor 'start' after “DONE”: 0.3% of the window (2.8k
+[39m [38;2;126;136;142mtok); folding to it would free about 1.6k tok.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mTree[0m [38;2;160;142;213m──────[39m [38;2;157;165;169m2 folds · 2 anchors · ctx 0.4% of[39m… [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mSearch the outline · showing all rows[0m
+
+   › [38;2;126;136;142mCall navigate_tree with action list, then reply DON[39m…
+   ◆ start [38;2;126;136;142m(auto)[39m             [38;2;222;224;225m0.3%[39m
+   › [38;2;126;136;142mCall navigate_tree with action anchor and name qa-m[39m…
+   ◆ qa-milestone             [38;2;222;224;225m0.3%[39m
+   ▣ qa milestone folded      [38;2;157;165;169mfolded · 30.1k tok · 6 msg[39m
+     ↳ [38;2;126;136;142marchived: qa-milestone-folded[39m
+   ▣ qa milestone folded fo…  [38;2;157;165;169mfolded · 32.7k tok · 2 msg[39m
+     ↳ [38;2;126;136;142marchived: qa-milestone-folded-folded[39m
+ [38;2;167;152;215m→[39m ● [current] [38;2;126;136;142mcustom message[39m
+
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142mview[39m  [1mg[0m [38;2;126;136;142mgo[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m─────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑24 ↓352 R20k W51k CH8.6% $0.007 0.4%/1.0M  ~anthropic/cl

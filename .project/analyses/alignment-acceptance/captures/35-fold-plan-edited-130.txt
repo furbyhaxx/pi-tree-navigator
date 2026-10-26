@@ -1,0 +1,45 @@
+[48;2;33;59;73m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0608
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0609
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0610
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0611
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0612
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0613
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0614
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0615
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0616
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0617
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0618
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0619
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0620
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0621
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0622
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0623
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0624
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0625
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0626
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0627
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0628
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0629
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0630
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures;[39m
+
+
+[49m [3m[38;2;150;160;164mThe user just wants the single word ACK-ONE in response, nothing more elaborate needed here.[0m
+
+ ACK-ONE
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mFold[0m [38;2;160;142;213m──────────────────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169m2 of 2 foldable[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mPress / to search anchors and previews…[0m
+   [38;2;157;165;169mrewind to [1m[39mqa-milestone[0m[38;2;126;136;142m · [38;2;157;165;169mlabel [39mqa-fold-label[38;2;126;136;142m · [39m~24.0k → ~12.5k tok of 1.0M (1.3%)
+   in-context [38;2;157;165;169mvia[39m openrouter/~anthropic/claude-haiku-latest:low
+   [38;2;157;165;169mfocus: [39m“QA fold focus: preserve the rule and the fold test material.”
+
+
+
+ [38;2;167;152;215m→[39m ◆ qa-milestone  [38;2;167;152;215m−11.5k tok · recommended[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mafter: “Call navigate_tree with action anchor and name qa…”[39m
+   ◆ start [38;2;126;136;142m(auto)[39m  [38;2;222;224;225m−11.6k tok[39m
+ [1m↑↓[0m [38;2;126;136;142mchoose anchor[39m  [1menter[0m [38;2;126;136;142mfold[39m  [1me[0m [38;2;126;136;142medit label/focus[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m
+[38;2;160;142;213m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑20 ↓185 R17k W21k CH12.8% $0.003 2.4%/1.0M                                      (openrouter) ~anthropic/claude-haiku-latest • low

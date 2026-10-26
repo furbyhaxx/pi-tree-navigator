@@ -1,0 +1,4 @@
+{
+  "error": "automatic acceptance requires an actual Decisions classifier call; host auto-engine wiring may be missing",
+  "at": "2026-10-26T16:55:10.286Z"
+}

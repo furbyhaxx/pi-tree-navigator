@@ -1,0 +1,45 @@
+[48;2;58;48;85m [38;2;157;165;169mearlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '###
+[39m [38;2;157;165;169mIn Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without
+[39m [38;2;157;165;169mre-confirming with the user.[39m
+
+ [38;2;157;165;169mA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction
+[39m [38;2;157;165;169mretained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the
+[39m [38;2;157;165;169mauthorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up
+[39m [38;2;157;165;169mwhile an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized
+[39m [38;2;157;165;169mscope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still
+[39m [38;2;157;165;169mapply.[39m
+
+
+[49m [38;2;126;136;142mqa milestone folded (folded)
+[39m [38;2;126;136;142mGoal: Run a navigate_tree QA sequence on this branch: list anchors, create the `qa-milestone` anchor, and record the user's
+[39m [38;2;126;136;142mreplies (DONE, DONE2, PLAN-READY, ACK-ONE) in order.
+[39m [38;2;126;136;142mOutcome: Listed anchors on the active branch: no labels existed. - [x] Created anchor `qa-milestone` (set at 0.3% of 1.0M
+[39m [38;2;126;136;142mcontext). - [x] Replied DONE2, PLAN-READY, and ACK-ONE as requested. - [x] Acknowledged the fold-test material (the 0000–0630
+[39m [38;2;126;136;142mhandoff lines) with ACK-ONE only. No handoff logic was tested or implemented.
+[39m [38;2;126;136;142m6 messages · 0 tool calls · tokens in 10 / out 52 / cache read 9.1k / write 20.9k · recorded inclusive $0.0027
+[39m [38;2;126;136;142mThe full work is archived as 'qa-milestone-folded': press g on its row to open it.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mSettings[0m [38;2;160;142;213m────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169m1 staged · target: global[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter settings · file: /tmp/ptn-alignment-qa-WYm47e/agent/tree-navigator.json[0m
+
+ [38;2;167;152;215m→[39m rewindHintReserveTokens                [38;2;167;152;215moff → 1k[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mglobal unset · project unset · runtime unset[39m
+   anchorStartAfterTurns                  [38;2;157;165;169m2 · default[39m
+   parentHandoffMode                      [38;2;157;165;169mdigest · default[39m
+   continuity.capture                     [38;2;157;165;169mtrue · default[39m
+   continuity.intentClassifier            [38;2;157;165;169moff · default[39m
+   treeProposal.model                     [38;2;157;165;169mcurrent · default[39m
+   treeProposal.tools                     [38;2;157;165;169mnone · default[39m
+   auto_navigate.enabled                  [38;2;157;165;169mfalse · default[39m
+   auto_navigate.mode                     [38;2;157;165;169manchor-and-rewind · default[39m
+   auto_navigate.milestone                [38;2;157;165;169mrecommended · default[39m
+   auto_navigate.check_every_turns        [38;2;157;165;169m6 · default[39m
+   auto_navigate.min_tokens_since_anchor  [38;2;157;165;169m25k · default[39m
+   auto_navigate.rewind_at_tokens         [38;2;157;165;169m120k · default[39m
+   auto_navigate.pressure                 [38;2;157;165;169mcompact · default[39m
+
+[38;2;126;136;142m   Nudge the agent to rewind when this many tokens are left in the window. 1,000-1,000,000, or off (default).[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142medit[39m  [1mt[0m [38;2;126;136;142mto project[39m  [1mleft[0m [38;2;126;136;142mdecrease[39m  [1mright[0m [38;2;126;136;142mincrease[39m  [1mu[0m [38;2;126;136;142munstage[39m  [1ms[0m [38;2;126;136;142msave[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m
+[38;2;160;142;213m────────────────────────────────────────────────────────────[38;2;126;136;142m ↓ 7 more [38;2;160;142;213m────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑20 ↓185 R17k W21k CH12.8% $0.003 0.4%/1.0M                                      (openrouter) ~anthropic/claude-haiku-latest • low

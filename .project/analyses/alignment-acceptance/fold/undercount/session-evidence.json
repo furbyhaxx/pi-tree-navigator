@@ -1,0 +1,230 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~137k tokens) does not fit the 32k operating window and no fold could relieve it (audit-start: the materialized handoff leaves insufficient request headroom; original history was kept; audit-mid: the materialized handoff leaves insufficient request headroom; original history was k…): older work was compacted, context ~137k -> ~24k tokens, above the ~24k target (the system prompt, tools, kept work and summary leave no smaller result). The newest ~2k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "12c12bcf",
+        "anchor": "compacted",
+        "before": 137082,
+        "after": 24320,
+        "target": 24000,
+        "aboveTarget": true,
+        "keptTokens": 2022,
+        "strategy": "chunked",
+        "calls": 4,
+        "openUserRequests": 0
+      },
+      "id": "e3dbed01",
+      "parentId": "af718e77",
+      "timestamp": "2026-10-26T16:59:03.010Z"
+    },
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[rewind to 'audit-start' · collapsed as 'handoff'] · context 50.2% → 13.1% of 32k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.\n\nThis rewind is completed; do not repeat it. Fulfill the remaining request(s) in the quoted archived user input below.\n\nQuoted archived user request (source entry ID: c9755661):\n<archived-user-request>\nUNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files.\n</archived-user-request>",
+      "display": true,
+      "details": {
+        "status": "done",
+        "rewindTo": "audit-start",
+        "newLabel": "handoff",
+        "targetId": "689940b0",
+        "summaryId": "d79ab02f",
+        "collapsedEntries": 40,
+        "contextBefore": 16069,
+        "contextAfter": 4187,
+        "contextWindow": 32000,
+        "origin": "agent",
+        "summaryStrategy": "chunked",
+        "summaryCalls": 2,
+        "foldEstimateBefore": 4262,
+        "foldEstimateAfter": 903,
+        "agentMessagesRefreshed": true,
+        "historyRewriteNotified": true,
+        "readFiles": [],
+        "modifiedFiles": [],
+        "reappendedLateMessages": 0,
+        "openUserRequests": [
+          {
+            "sourceEntryId": "c9755661",
+            "text": "UNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files."
+          }
+        ],
+        "continuity": {
+          "rev": 1,
+          "applied": 0,
+          "rejected": [],
+          "evicted": []
+        }
+      },
+      "id": "9cc8413b",
+      "parentId": "c4caeb7b",
+      "timestamp": "2026-10-26T16:59:44.843Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "d8ff4b54",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 136397,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 136422,
+        "cost": {
+          "input": 0.013639700000000001,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.013652200000000001
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "efc14043",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 14943,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 14961,
+        "cost": {
+          "input": 0.0014943,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0015033
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "4d48b15e",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 335,
+        "output": 94,
+        "cacheRead": 14848,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 15277,
+        "cost": {
+          "input": 0.0000335,
+          "output": 0.000047,
+          "cacheRead": 0.00014848000000000001,
+          "cacheWrite": 0,
+          "total": 0.00022898000000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "f501348e",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 287,
+        "output": 18,
+        "cacheRead": 15104,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 15409,
+        "cost": {
+          "input": 0.000028700000000000003,
+          "output": 0.000009,
+          "cacheRead": 0.00015104,
+          "cacheWrite": 0,
+          "total": 0.00018873999999999999
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "4cf0d1ae",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 15657,
+        "output": 130,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 15787,
+        "cost": {
+          "input": 0.0015657000000000002,
+          "output": 0.000065,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0016307000000000001
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "3be1f787",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 1491,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1509,
+        "cost": {
+          "input": 0.00014910000000000002,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00015810000000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "39690cfd",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 1667,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1692,
+        "cost": {
+          "input": 0.0001667,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00017920000000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "b3deb6d6",
+      "stopReason": "stop",
+      "usage": {
+        "input": 1799,
+        "output": 61,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1860,
+        "cost": {
+          "input": 0.0001799,
+          "output": 0.0000305,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00021040000000000002
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work: compare the archived audit with the next supplied change when it becomes available. No identifiable change is currently available, so that comparison is blocked. Do not deploy, delete service data, or change files; keep existing public response codes unchanged."
+    }
+  ]
+}

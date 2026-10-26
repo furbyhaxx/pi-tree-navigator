@@ -1,0 +1,45 @@
+[48;2;33;59;73m
+
+[49m [38;2;126;136;142mSteering: 0312 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0313 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0314 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0315 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0316 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0317 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0318 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0319 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0320 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0321 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0322 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0323 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0324 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0325 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0326 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0327 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0328 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0329 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0330 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0331 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0332 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0333 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0334 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0335 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0336 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0337 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0338 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0339 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0340 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0341 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0342 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0343 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0344 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0345 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0346 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0347 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0348 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0349 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+ [38;2;126;136;142mSteering: 0350 The navigator keeps every folded branch as a handoff, never deleting entries, and reports exact token figures.[39m
+[38;2;84;137;164m── ⠼[39m [38;2;84;137;164mWorking ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[7m[39m [0m
+[38;2;84;137;164m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa[39m

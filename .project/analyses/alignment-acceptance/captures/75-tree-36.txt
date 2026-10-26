@@ -1,0 +1,30 @@
+[48;2;58;48;85m [38;2;157;165;169mopen items. If the summary's only
+[39m [38;2;157;165;169mopen item is a report, hand-off or
+[39m [38;2;157;165;169mwrap-up while an authorized
+[39m [38;2;157;165;169minstruction or plan item is still
+[39m [38;2;157;165;169mopen, do that work first and
+[39m [38;2;157;165;169mreport once, at the end of the
+[39m [38;2;157;165;169mauthorized scope. Retained user
+[39m [38;2;157;165;169mmessages already answered above
+[39m [38;2;157;165;169mare historical — do not re-answer
+[39m [38;2;157;165;169mthem; their standing instructions
+[39m [38;2;157;165;169mstill apply.[39m
+
+
+[38;2;160;142;213m[49m─ [38;2;157;165;169m…hor[39m/[1mTree[0m  [38;2;157;165;169m2 folds · 2 anchors [39m… [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mSearch the outline · showing all[0m…
+
+   › [38;2;126;136;142mCall navigate_tree with action[39m…
+   ◆ start [38;2;126;136;142m(auto)[39m    [38;2;222;224;225m0.3%[39m
+   › [38;2;126;136;142mCall navigate_tree with action[39m…
+   ◆ qa-milestone    [38;2;222;224;225m0.3%[39m
+   ▣ qa milestone …  [38;2;157;165;169mfolded · 30.1k[39m…
+     ↳ [38;2;126;136;142marchived: qa-milestone-folded
+[39m   ▣ qa milestone …  [38;2;157;165;169mfolded · 32.7k[39m…
+     ↳ [38;2;126;136;142marchived: qa-milestone-folde[39m…
+ [38;2;167;152;215m→[39m ● [current] [38;2;126;136;142mcustom message[39m
+
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/work...
+↑24 ↓352 R20k W51k CH8.6% $0.007 [39m...

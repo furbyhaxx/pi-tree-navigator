@@ -1,0 +1,19 @@
+{
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 20,
+      "startedAt": "2026-10-26T16:56:55.087Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 22,
+      "startedAt": "2026-10-26T16:56:59.227Z"
+    }
+  ],
+  "receipts": []
+}

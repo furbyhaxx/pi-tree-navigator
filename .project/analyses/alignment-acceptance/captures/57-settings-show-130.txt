@@ -1,0 +1,45 @@
+[48;2;58;48;85m [1m[38;2;167;152;215m[navigate-tree-rewind][0m[48;2;58;48;85m
+
+ [38;2;157;165;169m[rewind to 'qa-milestone' · collapsed as 'qa-milestone-folded'] · context 2.4% → 0.3% of 1.0M[39m
+
+ [38;2;157;165;169mA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state;
+[39m [38;2;157;165;169mearlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '###
+[39m [38;2;157;165;169mIn Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without
+[39m [38;2;157;165;169mre-confirming with the user.[39m
+
+ [38;2;157;165;169mA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction
+[39m [38;2;157;165;169mretained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the
+[39m [38;2;157;165;169mauthorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up
+[39m [38;2;157;165;169mwhile an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized
+[39m [38;2;157;165;169mscope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still
+[39m [38;2;157;165;169mapply.[39m
+
+
+[49m [38;2;126;136;142mAnchor settings
+[39m [38;2;126;136;142mrewindHintReserveTokens: off (default)
+[39m [38;2;126;136;142manchorStartAfterTurns: 2 (default)
+[39m [38;2;126;136;142mparentHandoffMode: digest (default)
+[39m [38;2;126;136;142mcontinuity.capture: true (default)
+[39m [38;2;126;136;142mcontinuity.intentClassifier: off (default)
+[39m [38;2;126;136;142mtreeProposal.model: current (default)
+[39m [38;2;126;136;142mauto_navigate.enabled: false (default)
+[39m [38;2;126;136;142mauto_navigate.mode: anchor-and-rewind (default)
+[39m [38;2;126;136;142mauto_navigate.milestone: recommended (default)
+[39m [38;2;126;136;142mauto_navigate.check_every_turns: 6 (default)
+[39m [38;2;126;136;142mauto_navigate.min_tokens_since_anchor: 25k (default)
+[39m [38;2;126;136;142mauto_navigate.rewind_at_tokens: 120k (default)
+[39m [38;2;126;136;142mauto_navigate.pressure: compact (default)
+[39m [38;2;126;136;142mauto_navigate.keep_recent_share: 0.25 (default)
+[39m [38;2;126;136;142mconsolidation.enabled: true (default)
+[39m [38;2;126;136;142mconsolidation.max_handoffs: 4 (default)
+[39m [38;2;126;136;142mconsolidation.max_window_share: 0.1 (default)
+[39m [38;2;126;136;142mconsolidation.keep_newest: 2 (default)
+[39m [38;2;126;136;142mGlobal: /tmp/ptn-alignment-qa-WYm47e/agent/tree-navigator.json
+[39m [38;2;126;136;142mProject: /tmp/ptn-alignment-qa-WYm47e/workspace/.pi/tree-navigator.json
+[39m [38;2;126;136;142mRuntime: session memory (cleared on reload or session switch)[39m
+
+[38;2;84;137;164m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[7m[39m [0m
+[38;2;84;137;164m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑20 ↓185 R17k W21k CH12.8% $0.003 0.4%/1.0M                                      (openrouter) ~anthropic/claude-haiku-latest • low

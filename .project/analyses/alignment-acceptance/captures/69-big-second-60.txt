@@ -1,0 +1,40 @@
+[48;2;33;59;73m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0670
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0671
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0672
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0673
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0674
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0675
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0676
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0677
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0678
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0679
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0680
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first; 0681
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-
+[39m [38;2;222;224;225msecondary-metrics-first;[39m
+
+
+[49m [3m[38;2;150;160;164mThis is just a fold-test asking for an exact ACK-TWO
+[0m [3m[38;2;150;160;164mreply, so I'll comply simply without overanalyzing the
+[0m [3m[38;2;150;160;164mearlier anchor discrepancy — the user's instruction is
+[0m [3m[38;2;150;160;164mclear and that's what matters here.[0m
+
+ ACK-TWO
+
+[38;2;84;137;164m────────────────────────────────────────────────────────────
+[7m[39m [0m
+[38;2;84;137;164m────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑24 ↓352 R20k W51k CH8.6% $0.007 3.3%/1.0M  ~anthropic/claud

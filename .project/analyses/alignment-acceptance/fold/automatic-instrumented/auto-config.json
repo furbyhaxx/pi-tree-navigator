@@ -1,0 +1,10 @@
+{
+  "auto_navigate": {
+    "enabled": true,
+    "mode": "anchor-and-rewind",
+    "milestone": "recommended",
+    "check_every_turns": 1,
+    "min_tokens_since_anchor": 1000,
+    "rewind_at_tokens": 60000
+  }
+}

@@ -1,0 +1,372 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[rewind to 'audit-mid' · collapsed as 'audit-mid-folded'] · context 192.0% → 41.5% of 96k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.\n\nThis rewind is completed; do not repeat it. Fulfill the remaining request(s) in the quoted archived user input below.\n\nQuoted archived user request (source entry ID: e160d689):\n<archived-user-request>\nUNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files.\n</archived-user-request>\n\nContinuity: delta ignored (delta.ratified[2].kind: expected one of objective, sub-goal, rule, decision, steering, fact, file).",
+      "display": true,
+      "details": {
+        "status": "done",
+        "rewindTo": "audit-mid",
+        "newLabel": "audit-mid-folded",
+        "targetId": "6b55718b",
+        "summaryId": "df6ec149",
+        "collapsedEntries": 35,
+        "contextBefore": 184302,
+        "contextAfter": 39797,
+        "contextWindow": 96000,
+        "origin": "recovery",
+        "summaryStrategy": "chunked",
+        "summaryCalls": 2,
+        "foldEstimateBefore": 74928,
+        "foldEstimateAfter": 16515,
+        "agentMessagesRefreshed": true,
+        "historyRewriteNotified": true,
+        "readFiles": [],
+        "modifiedFiles": [],
+        "reappendedLateMessages": 0,
+        "openUserRequests": [
+          {
+            "sourceEntryId": "e160d689",
+            "text": "UNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files."
+          }
+        ],
+        "continuity": {
+          "rev": 1,
+          "applied": 0,
+          "rejected": [],
+          "evicted": [],
+          "deltaError": "delta.ratified[2].kind: expected one of objective, sub-goal, rule, decision, steering, fact, file"
+        }
+      },
+      "id": "b6a768db",
+      "parentId": "c4908c97",
+      "timestamp": "2026-10-26T17:20:18.408Z"
+    },
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~117k tokens) does not fit the 96k operating window and no fold could relieve it (the fold to 'audit-start' failed: provider-error: OpenAI Responses stream ended before a terminal response event): older work was compacted, context ~117k -> ~38k tokens. The newest ~5k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "dc0b498e",
+        "anchor": "compacted",
+        "before": 117395,
+        "after": 37631,
+        "target": 72000,
+        "aboveTarget": false,
+        "keptTokens": 4873,
+        "strategy": "chunked",
+        "calls": 2,
+        "openUserRequests": 0,
+        "receiptId": "e37038cf-1994-44cd-9016-c94d3749e2c3"
+      },
+      "id": "6348320e",
+      "parentId": "a63bf25a",
+      "timestamp": "2026-10-26T17:35:39.074Z"
+    },
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[rewind to 'audit-start' · collapsed as 'recovery-ready'] · context 34.1% → 5.5% of 96k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.",
+      "display": true,
+      "details": {
+        "status": "done",
+        "rewindTo": "audit-start",
+        "newLabel": "recovery-ready",
+        "targetId": "939bef1d",
+        "summaryId": "c7fd7da6",
+        "collapsedEntries": 31,
+        "contextBefore": 32732,
+        "contextAfter": 5241,
+        "contextWindow": 96000,
+        "origin": "agent",
+        "summaryStrategy": "in-context",
+        "summaryCalls": 1,
+        "foldEstimateBefore": 7699,
+        "foldEstimateAfter": 985,
+        "agentMessagesRefreshed": true,
+        "historyRewriteNotified": true,
+        "readFiles": [],
+        "modifiedFiles": [],
+        "reappendedLateMessages": 0,
+        "openUserRequests": [],
+        "continuity": {
+          "rev": 1,
+          "applied": 0,
+          "rejected": [],
+          "evicted": []
+        }
+      },
+      "id": "dee5c187",
+      "parentId": "86c2b4e2",
+      "timestamp": "2026-10-26T17:36:16.822Z"
+    },
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~117k tokens) does not fit the 96k operating window and no fold could relieve it (the fold to 'audit-start' failed: provider-error: OpenAI Responses stream ended before a terminal response event): older work was compacted, context ~117k -> ~38k tokens. The newest ~5k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "dc0b498e",
+        "anchor": "compacted",
+        "before": 117395,
+        "after": 37631,
+        "target": 72000,
+        "aboveTarget": false,
+        "keptTokens": 4873,
+        "strategy": "chunked",
+        "calls": 2,
+        "openUserRequests": 0,
+        "receiptId": "e37038cf-1994-44cd-9016-c94d3749e2c3"
+      },
+      "id": "5b52d597",
+      "parentId": "1aa0dd2a",
+      "timestamp": "2026-10-26T17:36:29.295Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "9d5b1c75",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 184040,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 184065,
+        "cost": {
+          "input": 0.018404,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0184165
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "28dbcfaf",
+      "stopReason": "stop",
+      "usage": {
+        "input": 117291,
+        "output": 104,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 117395,
+        "cost": {
+          "input": 0.011729100000000001,
+          "output": 0.000052,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.011781100000000001
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining audit work:\n- Obtain the archived audit and next supplied change, then compare them; neither is present in the records.\n- Verify that retry exhaustion leaves each corresponding `audit-N` namespace unchanged; the records say these checks are needed but do not show they were run.\n\nThe audit remains synthetic. Do not deploy or delete service data, change files, or alter the existing public response codes (invalid input 422, unavailable 503, duplicate 409)."
+    },
+    {
+      "id": "131eceba",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 30976,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 30994,
+        "cost": {
+          "input": 0.0030976000000000003,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0031066
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "054b052d",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 360,
+        "output": 25,
+        "cacheRead": 30848,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 31233,
+        "cost": {
+          "input": 0.000036,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0.00030848000000000003,
+          "cacheWrite": 0,
+          "total": 0.00035698
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "01c033b4",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 232,
+        "output": 18,
+        "cacheRead": 31104,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 31354,
+        "cost": {
+          "input": 0.0000232,
+          "output": 0.000009,
+          "cacheRead": 0.00031104,
+          "cacheWrite": 0,
+          "total": 0.00034324000000000003
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "f1c03879",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 391,
+        "output": 179,
+        "cacheRead": 31232,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 31802,
+        "cost": {
+          "input": 0.0000391,
+          "output": 0.0000895,
+          "cacheRead": 0.00031232,
+          "cacheWrite": 0,
+          "total": 0.00044092
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "bcebb2b3",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 440,
+        "output": 196,
+        "cacheRead": 31488,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 32124,
+        "cost": {
+          "input": 0.000044000000000000006,
+          "output": 0.000098,
+          "cacheRead": 0.00031488,
+          "cacheWrite": 0,
+          "total": 0.00045688
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "a7ab4a72",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 507,
+        "output": 198,
+        "cacheRead": 31744,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 32449,
+        "cost": {
+          "input": 0.000050700000000000006,
+          "output": 0.000099,
+          "cacheRead": 0.00031744,
+          "cacheWrite": 0,
+          "total": 0.00046714
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "d82ada0f",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 1545,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1570,
+        "cost": {
+          "input": 0.00015450000000000001,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00016700000000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "ba6a7df8",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 268,
+        "output": 18,
+        "cacheRead": 1408,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1694,
+        "cost": {
+          "input": 0.0000268,
+          "output": 0.000009,
+          "cacheRead": 0.00001408,
+          "cacheWrite": 0,
+          "total": 0.000049880000000000004
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "74a4a4e3",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 1882,
+        "output": 98,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1980,
+        "cost": {
+          "input": 0.00018820000000000002,
+          "output": 0.000049,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00023720000000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "1aa0dd2a",
+      "stopReason": "stop",
+      "usage": {
+        "input": 541,
+        "output": 105,
+        "cacheRead": 1536,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2182,
+        "cost": {
+          "input": 0.00005410000000000001,
+          "output": 0.000052499999999999995,
+          "cacheRead": 0.000015360000000000002,
+          "cacheWrite": 0,
+          "total": 0.00012196
+        }
+      },
+      "text": "The audit remains blocked: the archived audit and next supplied change are not present in the available records, so I can’t compare them. The retry-exhaustion checks for the `audit-N` namespaces are also unverified.\n\nPlease provide the archived audit and next change, along with any results or access needed for those checks. I’ll keep the audit synthetic, make no file changes, deploy nothing, delete no service data, and preserve the existing response codes (422, 503, and 409)."
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+[48;2;58;48;85m [38;2;157;165;169mtodo list, then this summary's
+[39m [38;2;157;165;169mopen items. If the summary's only
+[39m [38;2;157;165;169mopen item is a report, hand-off or
+[39m [38;2;157;165;169mwrap-up while an authorized
+[39m [38;2;157;165;169minstruction or plan item is still
+[39m [38;2;157;165;169mopen, do that work first and
+[39m [38;2;157;165;169mreport once, at the end of the
+[39m [38;2;157;165;169mauthorized scope. Retained user
+[39m [38;2;157;165;169mmessages already answered above
+[39m [38;2;157;165;169mare historical — do not re-answer
+[39m [38;2;157;165;169mthem; their standing instructions
+[39m [38;2;157;165;169mstill apply.[39m
+
+
+[38;2;160;142;213m[49m─ [1m[39mAnchor[0m [38;2;160;142;213m────────[39m [38;2;157;165;169mctx 0.4% of 1.0M[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mType to search views or actions…[0m
+
+ [38;2;167;152;215m→[39m Session tree & …  [38;2;222;224;225m2 folds · 2 an[39m…
+   Active anchors …  [38;2;222;224;225mlatest: qa-mil[39m…
+   Current briefin…  [38;2;222;224;225m1 rule · rev 1[39m
+   Fold current wo…  [38;2;222;224;225manchor · label[39m…
+   Retrospective c…  [38;2;222;224;225minspect · prop[39m…
+   Settings          [38;2;222;224;225mglobal · proje[39m…
+
+[38;2;126;136;142m   Browse the chronological outline[39m
+[38;2;126;136;142m   of phases, anchors and folded…[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mclose[39m  [38;2;126;136;142m…
+[38;2;160;142;213m────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/work...
+↑24 ↓352 R20k W51k CH8.6% $0.007 [39m...

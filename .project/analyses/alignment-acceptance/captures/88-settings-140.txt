@@ -1,0 +1,45 @@
+
+ ACK-TWO
+
+[48;2;58;48;85m
+ [1m[38;2;167;152;215m[navigate-tree-rewind][0m[48;2;58;48;85m
+
+ [38;2;157;165;169m[rewind to 'qa-milestone-folded' · collapsed as 'qa-milestone-folded-folded'] · context 3.3% → 0.4% of 1.0M[39m
+
+ [38;2;157;165;169mA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier
+[39m [38;2;157;165;169mbranch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress',
+[39m [38;2;157;165;169m'### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.[39m
+
+ [38;2;157;165;169mA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above
+[39m [38;2;157;165;169m(including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list,
+[39m [38;2;157;165;169mthen this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan
+[39m [38;2;157;165;169mitem is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above
+[39m [38;2;157;165;169mare historical — do not re-answer them; their standing instructions still apply.[39m
+
+
+[49m [38;2;126;136;142mAnchor 'start' after “DONE”: 0.3% of the window (2.8k tok); folding to it would free about 1.6k tok.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mSettings[0m [38;2;160;142;213m─────────────────────────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169mtarget: global[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter settings · file: /tmp/ptn-alignment-qa-WYm47e/agent/tree-navigator.json[0m
+
+ [38;2;167;152;215m→[39m rewindHintReserveTokens                [38;2;157;165;169moff · default[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mglobal unset · project unset · runtime unset[39m
+   anchorStartAfterTurns                  [38;2;157;165;169m2 · default[39m
+   parentHandoffMode                      [38;2;157;165;169mdigest · default[39m
+   continuity.capture                     [38;2;157;165;169mtrue · default[39m
+   continuity.intentClassifier            [38;2;157;165;169moff · default[39m
+   treeProposal.model                     [38;2;157;165;169mcurrent · default[39m
+   treeProposal.tools                     [38;2;157;165;169mnone · default[39m
+   auto_navigate.enabled                  [38;2;157;165;169mfalse · default[39m
+   auto_navigate.mode                     [38;2;157;165;169manchor-and-rewind · default[39m
+   auto_navigate.milestone                [38;2;157;165;169mrecommended · default[39m
+   auto_navigate.check_every_turns        [38;2;157;165;169m6 · default[39m
+   auto_navigate.min_tokens_since_anchor  [38;2;157;165;169m25k · default[39m
+   auto_navigate.rewind_at_tokens         [38;2;157;165;169m120k · default[39m
+   auto_navigate.pressure                 [38;2;157;165;169mcompact · default[39m
+
+[38;2;126;136;142m   Nudge the agent to rewind when this many tokens are left in the window. 1,000-1,000,000, or off (default).[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142medit[39m  [1mt[0m [38;2;126;136;142mto project[39m  [1mleft[0m [38;2;126;136;142mdecrease[39m  [1mright[0m [38;2;126;136;142mincrease[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m
+[38;2;160;142;213m─────────────────────────────────────────────────────────────────[38;2;126;136;142m ↓ 7 more [38;2;160;142;213m─────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑24 ↓352 R20k W51k CH8.6% $0.007 0.4%/1.0M                                                 (openrouter) ~anthropic/claude-haiku-latest • low

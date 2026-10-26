@@ -1,0 +1,45 @@
+[48;2;33;59;73m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0616
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0617
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0618
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0619
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0620
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0621
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0622
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0623
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0624
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0625
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0626
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0627
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0628
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0629
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures; 0630
+[39m [38;2;222;224;225mhandoff-preserves-every-folded-branch-and-reports-exact-token-figures;[39m
+
+
+[49m [3m[38;2;150;160;164mThe user just wants the single word ACK-ONE in response, nothing more elaborate needed here.[0m
+
+ ACK-ONE
+
+[48;2;58;48;85m
+ [1m[38;2;167;152;215m[navigate-tree-rewind][0m[48;2;58;48;85m
+
+ [38;2;157;165;169m[rewind to 'qa-milestone' · collapsed as 'qa-milestone-folded'] · context 2.4% → 0.3% of 1.0M[39m
+
+ [38;2;157;165;169mA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state;
+[39m [38;2;157;165;169mearlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '###
+[39m [38;2;157;165;169mIn Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without
+[39m [38;2;157;165;169mre-confirming with the user.[39m
+
+ [38;2;157;165;169mA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction
+[39m [38;2;157;165;169mretained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the
+[39m [38;2;157;165;169mauthorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up
+[39m [38;2;157;165;169mwhile an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized
+[39m [38;2;157;165;169mscope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still
+[39m [38;2;157;165;169mapply.[39m
+
+
+[38;2;84;137;164m[49m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[7m[39m [0m
+[38;2;84;137;164m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑20 ↓185 R17k W21k CH12.8% $0.003 0.4%/1.0M                                      (openrouter) ~anthropic/claude-haiku-latest • low

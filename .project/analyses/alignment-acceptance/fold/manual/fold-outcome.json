@@ -1,0 +1,73 @@
+{
+  "status": "done",
+  "text": "## Goal\nFinish the synthetic service audit, not a production rollout.\n\n## Constraints & Preferences\n- “Acceptance objective: finish the synthetic service audit, not a production rollout.”\n- “Never deploy or delete service data during this audit.”\n- “Keep the existing public response codes unchanged.”\n- “Completed: audited service configuration and retry boundaries.”\n- “Remaining: compare the archived audit with the next supplied change.”\n\n## Progress\n### Done\n- [x] Audited service configuration and retry boundaries for synthetic service fixtures covering services 0–575. The evidence does not provide individual verification results.\n\n### In Progress\n- [ ] Compare the archived audit with the next supplied change; no comparison or verification result is recorded.\n\n### Blocked\n- No blockers established.\n\n## Key Decisions\n- **Keep the audit synthetic; do not roll out to production**: The stated acceptance objective excludes a production rollout.\n- **Preserve public response codes and service data**: Keep existing response codes unchanged and do not deploy or delete service data during the audit.\n\n## Next Steps\n1. Compare the archived audit with the next supplied change, preserving the stated constraints.\n\n## Standing authorization\n“Acceptance objective: finish the synthetic service audit, not a production rollout.” Scope is not complete: comparison with the next supplied change remains open.",
+  "strategy": "chunked",
+  "calls": 3,
+  "chunks": 2,
+  "usage": [
+    {
+      "input": 82324,
+      "output": 479,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 82803,
+      "cost": {
+        "input": 0.0082324,
+        "output": 0.0002395,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 0.008471900000000001
+      }
+    },
+    {
+      "input": 34082,
+      "output": 274,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 34356,
+      "cost": {
+        "input": 0.0034082,
+        "output": 0.000137,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 0.0035452
+      }
+    },
+    {
+      "input": 2599,
+      "output": 268,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "reasoning": 0,
+      "totalTokens": 2867,
+      "cost": {
+        "input": 0.00025990000000000003,
+        "output": 0.000134,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "total": 0.00039390000000000003
+      }
+    }
+  ],
+  "commit": {
+    "ok": true,
+    "summaryId": "9b151033",
+    "oldLeafId": "25ff3057",
+    "collapsedEntries": 49,
+    "afterTokens": 560,
+    "foldEstimateBefore": 100123,
+    "foldEstimateAfter": 773,
+    "reappended": 0,
+    "refreshed": true,
+    "historyRewriteNotified": true,
+    "readFiles": [],
+    "modifiedFiles": [],
+    "openUserRequests": [],
+    "continuation": "[rewind to 'audit-start' · collapsed as 'audit-folded'] · context 119.2% → 0.6% of 96k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.",
+    "targetId": "2726c41f",
+    "contextBefore": 114473,
+    "contextWindow": 96000
+  }
+}

@@ -1,0 +1,34 @@
+[48;2;37;65;49m [1m[38;2;222;224;225mlist[0m[48;2;37;65;49m
+ [38;2;157;165;169m0 labels · ctx 0.3% of 1.0M[39m
+
+
+[49m DONE
+
+[48;2;33;59;73m
+ [38;2;222;224;225mCall navigate_tree with action anchor and name
+[39m [38;2;222;224;225mmain-anchor, then reply DONE2.[39m
+
+
+[48;2;37;65;49m
+ [1m[38;2;222;224;225manchor[0m[48;2;37;65;49m [38;2;167;152;215mmain-anchor[39m
+ [38;2;157;165;169mset at 0.3% of 1.0M[39m
+
+
+[49m DONE2
+
+ [38;2;126;136;142mAnchor 'qa-milestone-folded': 0.3% of the window.
+[39m [38;2;126;136;142mat: assistant: DONE2[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mTree[0m [38;2;160;142;213m───────[39m [38;2;157;165;169m0 folds · 3 anchors · ctx 0.3% of 1[39m… [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mSearch the outline · showing all rows[0m
+
+   › [38;2;126;136;142mCall navigate_tree with action list, then reply DONE.[39m
+   ◆ start [38;2;126;136;142m(auto)[39m               [38;2;222;224;225m0.3%[39m
+   › [38;2;126;136;142mCall navigate_tree with action anchor and name main-an[39m…
+   ◆ main-anchor                [38;2;222;224;225m0.3%[39m
+ [38;2;167;152;215m→[39m ◆ [current] qa-milestone-f…  [38;2;222;224;225m0.3%[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mat: assistant: DONE2[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142mview[39m  [1mg[0m [38;2;126;136;142mgo[39m  [1mf[0m [38;2;126;136;142mfilter[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback
+[38;2;160;142;213m────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • main-qa[39m
+[38;2;126;136;142m↑12 ↓138 R11k W275 CH92.1% $0.000 0.3%/1.0M  ~anthropic/clau

@@ -1,0 +1,168 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~184k tokens) does not fit the 96k operating window and no fold could relieve it (the fold to 'audit-mid' failed: provider-error: OpenAI Responses stream ended before a terminal response event): older work was compacted, context ~184k -> ~25k tokens. The newest ~8k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "03bbf694",
+        "anchor": "compacted",
+        "before": 184302,
+        "after": 25065,
+        "target": 72000,
+        "aboveTarget": false,
+        "keptTokens": 8494,
+        "strategy": "chunked",
+        "calls": 3,
+        "openUserRequests": 0
+      },
+      "id": "221e1938",
+      "parentId": "cdc6b426",
+      "timestamp": "2026-10-26T17:17:08.947Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "5b7abb1c",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 184040,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 184065,
+        "cost": {
+          "input": 0.018404,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0184165
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "30e7cefc",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 11173,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 11191,
+        "cost": {
+          "input": 0.0011173,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0011263
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "3c9631ae",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 11413,
+        "output": 81,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 11494,
+        "cost": {
+          "input": 0.0011413,
+          "output": 0.000040499999999999995,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0011818
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "7419b935",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 602,
+        "output": 18,
+        "cacheRead": 11008,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 11628,
+        "cost": {
+          "input": 0.000060200000000000006,
+          "output": 0.000009,
+          "cacheRead": 0.00011008,
+          "cacheWrite": 0,
+          "total": 0.00017928
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "8f48cb33",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 612,
+        "output": 123,
+        "cacheRead": 11264,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 11999,
+        "cost": {
+          "input": 0.00006120000000000001,
+          "output": 0.00006149999999999999,
+          "cacheRead": 0.00011264,
+          "cacheWrite": 0,
+          "total": 0.00023534
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "03e10589",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 611,
+        "output": 153,
+        "cacheRead": 11520,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 12284,
+        "cost": {
+          "input": 0.00006110000000000001,
+          "output": 0.0000765,
+          "cacheRead": 0.00011520000000000001,
+          "cacheWrite": 0,
+          "total": 0.0002528
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "38bde89a",
+      "stopReason": "stop",
+      "usage": {
+        "input": 620,
+        "output": 116,
+        "cacheRead": 11776,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 12512,
+        "cost": {
+          "input": 0.000062,
+          "output": 0.000058,
+          "cacheRead": 0.00011776,
+          "cacheWrite": 0,
+          "total": 0.00023776
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\n**Remaining work:** Compare the archived audit with the next supplied change. This is blocked because neither the archived audit’s contents nor the next change has been provided. Also, retry-exhaustion tests are named in the synthetic records, but no execution results establish that they passed or that the corresponding `audit-N` namespaces remain unchanged.\n\nKeep response codes `422` (invalid input), `503` (unavailable), and `409` (duplicate) unchanged. Do not deploy, delete service data, or change files."
+    }
+  ]
+}

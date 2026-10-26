@@ -1,0 +1,59 @@
+{
+  "passed": true,
+  "scenario": "agent",
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/agent/sessions/2026-10-26T16-54-15-632Z_01a17922-554f-73a6-98ae-d762f57896fa.jsonl",
+  "initialTokens": 71525,
+  "afterTokens": 1944,
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 34,
+      "startedAt": "2026-10-26T16:54:15.644Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 37,
+      "startedAt": "2026-10-26T16:54:18.713Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 5,
+      "startedAt": "2026-10-26T16:54:25.484Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 7,
+      "startedAt": "2026-10-26T16:54:33.325Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 9,
+      "startedAt": "2026-10-26T16:54:44.138Z"
+    }
+  ],
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10027835,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633643747
+  },
+  "completedAt": "2026-10-26T16:54:52.770Z",
+  "scratch": "/tmp/independent-fold-acceptance-bGN36a",
+  "isolatedAgentDir": "/tmp/independent-fold-acceptance-bGN36a/agent"
+}

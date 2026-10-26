@@ -1,0 +1,45 @@
+[48;2;33;59;73m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-secondary-metrics-first; 0678
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-secondary-metrics-first; 0679
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-secondary-metrics-first; 0680
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-secondary-metrics-first; 0681
+[39m [38;2;222;224;225mnarrow-terminal-layouts-keep-anchor-identity-and-truncate-secondary-metrics-first;[39m
+
+
+[49m [3m[38;2;150;160;164mThis is just a fold-test asking for an exact ACK-TWO reply, so I'll comply simply without overanalyzing the earlier anchor discrepancy —
+[0m [3m[38;2;150;160;164mthe user's instruction is clear and that's what matters here.[0m
+
+ ACK-TWO
+
+[48;2;58;48;85m
+ [1m[38;2;167;152;215m[navigate-tree-rewind][0m[48;2;58;48;85m
+
+ [38;2;157;165;169m[rewind to 'qa-milestone-folded' · collapsed as 'qa-milestone-folded-folded'] · context 3.3% → 0.4% of 1.0M[39m
+
+ [38;2;157;165;169mA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier
+[39m [38;2;157;165;169mbranch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress',
+[39m [38;2;157;165;169m'### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.[39m
+
+ [38;2;157;165;169mA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above
+[39m [38;2;157;165;169m(including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list,
+[39m [38;2;157;165;169mthen this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan
+[39m [38;2;157;165;169mitem is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above
+[39m [38;2;157;165;169mare historical — do not re-answer them; their standing instructions still apply.[39m
+
+
+[49m [38;2;126;136;142mAnchor 'start' after “DONE”: 0.3% of the window (2.8k tok); folding to it would free about 1.6k tok.[39m
+
+[38;2;160;142;213m─ [1m[39mAnchor[0m [38;2;160;142;213m────────────────────────────────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169mctx 0.4% of 1.0M[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mType to search views or actions…
+
+[0m [38;2;167;152;215m→[39m Session tree & phases                 [38;2;222;224;225m2 folds · 2 anchors[39m
+   Active anchors [38;2;126;136;142m(4 on branch)[39m          [38;2;222;224;225mlatest: qa-milestone-folded-folded[39m
+   Current briefing & continuity ledger  [38;2;222;224;225m1 rule · rev 1[39m
+   Fold current work now…                [38;2;222;224;225manchor · label · focus[39m
+   Retrospective clone & restructure     [38;2;222;224;225minspect · propose · preview · create[39m
+   Settings                              [38;2;222;224;225mglobal · project · runtime[39m
+
+[38;2;126;136;142m   Browse the chronological outline of phases, anchors and folded handoffs.[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142mopen[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mclose[39m
+[38;2;160;142;213m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑24 ↓352 R20k W51k CH8.6% $0.007 0.4%/1.0M                                                 (openrouter) ~anthropic/claude-haiku-latest • low

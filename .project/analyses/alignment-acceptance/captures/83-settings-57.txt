@@ -1,0 +1,36 @@
+[48;2;58;48;85m [38;2;157;165;169mstanding instruction retained above (including any
+[39m [38;2;157;165;169mauthorization to work autonomously until the task is
+[39m [38;2;157;165;169mcomplete or a real blocker appears), the authorized
+[39m [38;2;157;165;169mplan or todo list, then this summary's open items. If
+[39m [38;2;157;165;169mthe summary's only open item is a report, hand-off or
+[39m [38;2;157;165;169mwrap-up while an authorized instruction or plan item is
+[39m [38;2;157;165;169mstill open, do that work first and report once, at the
+[39m [38;2;157;165;169mend of the authorized scope. Retained user messages
+[39m [38;2;157;165;169malready answered above are historical — do not
+[39m [38;2;157;165;169mre-answer them; their standing instructions still
+[39m [38;2;157;165;169mapply.[39m
+
+
+[49m [38;2;126;136;142mAnchor 'start' after “DONE”: 0.3% of the window (2.8k
+[39m [38;2;126;136;142mtok); folding to it would free about 1.6k tok.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mSettings[0m [38;2;160;142;213m──────────────────────[39m [38;2;157;165;169mtarget: global[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter settings · file: /tmp/ptn-alignment-qa-WYm47e/[0m…
+
+ [38;2;167;152;215m→[39m rewindHintReserveTokens    [38;2;157;165;169moff · default[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mglobal unset · project unset · runtime unset[39m
+   anchorStartAfterTurns      [38;2;157;165;169m2 · default[39m
+   parentHandoffMode          [38;2;157;165;169mdigest · default[39m
+   continuity.capture         [38;2;157;165;169mtrue · default[39m
+   continuity.intentClassif…  [38;2;157;165;169moff · default[39m
+   treeProposal.model         [38;2;157;165;169mcurrent · default[39m
+   treeProposal.tools         [38;2;157;165;169mnone · default[39m
+   auto_navigate.enabled      [38;2;157;165;169mfalse · default[39m
+   auto_navigate.mode         [38;2;157;165;169manchor-and-rewind · default
+
+[38;2;126;136;142m   Nudge the agent to rewind when this many tokens are[39m
+[38;2;126;136;142m   left in the window. 1,000-1,000,000, or off (default).
+[39m [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142medit[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m───────────────────────[38;2;126;136;142m ↓ 12 more [38;2;160;142;213m───────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑24 ↓352 R20k W51k CH8.6% $0.007 0.4%/1.0M  ~anthropic/cl

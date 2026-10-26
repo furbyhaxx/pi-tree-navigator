@@ -1,0 +1,45 @@
+
+ [38;2;205;154;34mWarning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[48;2;33;59;73m
+ [38;2;222;224;225mCall navigate_tree with action list, then reply DONE.[39m
+
+
+[48;2;37;65;49m
+ [1m[38;2;222;224;225mlist[0m[48;2;37;65;49m
+ [38;2;157;165;169m0 labels · ctx 0.3% of 1.0M[39m
+
+
+[49m DONE
+
+[48;2;33;59;73m
+ [38;2;222;224;225mCall navigate_tree with action anchor and name qa-milestone, then reply DONE2.[39m
+
+
+[48;2;37;65;49m
+ [1m[38;2;222;224;225manchor[0m[48;2;37;65;49m [38;2;167;152;215mqa-milestone[39m
+ [38;2;157;165;169mset at 0.3% of 1.0M[39m
+
+
+[49m DONE2
+
+ [38;2;126;136;142mAnchor 'qa-milestone': 0.3% of the window.
+[39m [38;2;126;136;142mat: assistant (tool calls)[39m
+
+
+
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mList[0m [38;2;160;142;213m─────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169m2 anchors · ctx 0.3% of 1.0M[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m n[7m [0m
+
+ [38;2;167;152;215m→[39m + Set new anchor at current leaf…
+   ◆ qa-milestone                     [38;2;222;224;225m0.3% · 2.9k · −167 savable[39m
+   ◆ start [38;2;126;136;142m(auto)[39m                     [38;2;222;224;225m0.3% · 2.8k · −279 savable[39m
+
+
+[38;2;126;136;142m   Label the current leaf as a milestone anchor (kebab-case, at most 40 characters).[39m
+ [1mtype[0m [38;2;126;136;142mto filter[39m  [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142mselect[39m  [1mesc[0m [38;2;126;136;142mclear[39m
+[38;2;160;142;213m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa[39m
+[38;2;126;136;142m↑12 ↓139 R8.2k W3.0k CH92.0% $0.001 0.3%/1.0M                                    (openrouter) ~anthropic/claude-haiku-latest • low

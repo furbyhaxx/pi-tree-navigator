@@ -1,0 +1,30 @@
+
+[48;2;33;59;73m
+ [38;2;222;224;225mCall navigate_tree with action
+[39m [38;2;222;224;225manchor and name main-anchor, then
+[39m [38;2;222;224;225mreply DONE2.[39m
+
+
+[48;2;37;65;49m
+ [1m[38;2;222;224;225manchor[0m[48;2;37;65;49m [38;2;167;152;215mmain-anchor[39m
+ [38;2;157;165;169mset at 0.3% of 1.0M[39m
+
+
+[49m DONE2
+
+[38;2;160;142;213m─ [1m[39mAnchor[0m [38;2;160;142;213m────────[39m [38;2;157;165;169mctx 0.3% of 1.0M[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mType to search views or actions…[0m
+
+ [38;2;167;152;215m→[39m Session tree & …  [38;2;222;224;225m0 folds · 2 an[39m…
+   Active anchors …  [38;2;222;224;225mlatest: main-a[39m…
+   Current briefin…  [38;2;222;224;225mempty · rev 0[39m
+   Fold current wo…  [38;2;222;224;225manchor · label[39m…
+   Retrospective c…  [38;2;222;224;225minspect · prop[39m…
+   Settings          [38;2;222;224;225mglobal · proje[39m…
+
+[38;2;126;136;142m   Browse the chronological outline[39m
+[38;2;126;136;142m   of phases, anchors and folded…[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mclose[39m  [38;2;126;136;142m…
+[38;2;160;142;213m────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/work...
+↑12 ↓138 R11k W275 CH92.1% $0.000[39m...

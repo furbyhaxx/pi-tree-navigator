@@ -1,0 +1,128 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree recovery] The next request (~116k tokens) does not fit the 96k operating window and no fold could relieve it (no anchors on the active branch): older work was compacted, context ~116k -> ~21k tokens. The newest ~17k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "recovery",
+        "compactionId": "836d62a2",
+        "anchor": "compacted",
+        "before": 115539,
+        "after": 20878,
+        "target": 72000,
+        "aboveTarget": false,
+        "keptTokens": 16734,
+        "strategy": "chunked",
+        "calls": 3,
+        "openUserRequests": 0
+      },
+      "id": "fd5fab39",
+      "parentId": "4a021cca",
+      "timestamp": "2026-10-26T16:58:04.385Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "3c2c1296",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 20548,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 20566,
+        "cost": {
+          "input": 0.0020548000000000003,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0020638
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "cd0480ae",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 289,
+        "output": 25,
+        "cacheRead": 20352,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 20666,
+        "cost": {
+          "input": 0.0000289,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0.00020352,
+          "cacheWrite": 0,
+          "total": 0.00024492000000000003
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "7eaff0a2",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 289,
+        "output": 18,
+        "cacheRead": 20480,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 20787,
+        "cost": {
+          "input": 0.0000289,
+          "output": 0.000009,
+          "cacheRead": 0.0002048,
+          "cacheWrite": 0,
+          "total": 0.0002427
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "d08622af",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 375,
+        "output": 98,
+        "cacheRead": 20608,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 21081,
+        "cost": {
+          "input": 0.000037500000000000003,
+          "output": 0.000049,
+          "cacheRead": 0.00020608,
+          "cacheWrite": 0,
+          "total": 0.00029258
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "3f8ec725",
+      "stopReason": "stop",
+      "usage": {
+        "input": 311,
+        "output": 74,
+        "cacheRead": 20864,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 21249,
+        "cost": {
+          "input": 0.000031100000000000004,
+          "output": 0.000037,
+          "cacheRead": 0.00020864,
+          "cacheWrite": 0,
+          "total": 0.00027674000000000004
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work: obtain the archived audit and the next supplied change, then compare them. Verify and record whether retry exhaustion leaves each relevant audit namespace unchanged. Keep the audit synthetic, do not deploy or delete service data, preserve response codes 422, 503, and 409, and do not change files."
+    }
+  ]
+}

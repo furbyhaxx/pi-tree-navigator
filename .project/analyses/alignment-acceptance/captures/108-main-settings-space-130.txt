@@ -1,0 +1,45 @@
+[48;2;37;65;49m
+ [1m[38;2;222;224;225mlist[0m[48;2;37;65;49m
+ [38;2;157;165;169m0 labels · ctx 0.3% of 1.0M[39m
+
+
+[49m DONE
+
+[48;2;33;59;73m
+ [38;2;222;224;225mCall navigate_tree with action anchor and name main-anchor, then reply DONE2.[39m
+
+
+[48;2;37;65;49m
+ [1m[38;2;222;224;225manchor[0m[48;2;37;65;49m [38;2;167;152;215mmain-anchor[39m
+ [38;2;157;165;169mset at 0.3% of 1.0M[39m
+
+
+[49m DONE2
+
+ [38;2;126;136;142mAnchor 'qa-milestone-folded': 0.3% of the window.
+[39m [38;2;126;136;142mat: assistant: DONE2[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mSettings[0m [38;2;160;142;213m───────────────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169mtarget: global[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m  [7m [0m
+
+ [38;2;167;152;215m→[39m rewindHintReserveTokens                [38;2;157;165;169moff · default[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mglobal unset · project unset · runtime unset[39m
+   anchorStartAfterTurns                  [38;2;157;165;169m2 · default[39m
+   parentHandoffMode                      [38;2;157;165;169mdigest · default[39m
+   continuity.capture                     [38;2;157;165;169mtrue · default[39m
+   continuity.intentClassifier            [38;2;157;165;169moff · default[39m
+   treeProposal.model                     [38;2;157;165;169mcurrent · default[39m
+   treeProposal.tools                     [38;2;157;165;169mnone · default[39m
+   auto_navigate.enabled                  [38;2;157;165;169mfalse · default[39m
+   auto_navigate.mode                     [38;2;157;165;169manchor-and-rewind · default[39m
+   auto_navigate.milestone                [38;2;157;165;169mrecommended · default[39m
+   auto_navigate.check_every_turns        [38;2;157;165;169m6 · default[39m
+   auto_navigate.min_tokens_since_anchor  [38;2;157;165;169m25k · default[39m
+   auto_navigate.rewind_at_tokens         [38;2;157;165;169m120k · default[39m
+   auto_navigate.pressure                 [38;2;157;165;169mcompact · default[39m
+
+[38;2;126;136;142m   Nudge the agent to rewind when this many tokens are left in the window. 1,000-1,000,000, or off (default).[39m
+ [1mtype[0m [38;2;126;136;142mto filter[39m  [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142medit[39m  [1mesc[0m [38;2;126;136;142mclear[39m
+[38;2;160;142;213m────────────────────────────────────────────────────────────[38;2;126;136;142m ↓ 7 more [38;2;160;142;213m────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • main-qa[39m
+[38;2;126;136;142m↑12 ↓138 R11k W275 CH92.1% $0.000 0.3%/1.0M                                      (openrouter) ~anthropic/claude-haiku-latest • low

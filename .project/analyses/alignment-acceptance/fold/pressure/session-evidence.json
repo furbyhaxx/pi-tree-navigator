@@ -1,0 +1,68 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-pressure-compaction",
+      "content": "[navigate_tree auto_navigate] Context ~78k crossed rewind_at_tokens 64k: older work was compacted, context ~78k -> ~21k tokens. The newest ~17k tokens of work stay verbatim. Anchor 'compacted' marks the compaction. The original entries remain in the session file.",
+      "display": true,
+      "details": {
+        "origin": "pressure",
+        "compactionId": "4d584533",
+        "anchor": "compacted",
+        "before": 78045,
+        "after": 21096,
+        "target": 32000,
+        "aboveTarget": false,
+        "keptTokens": 16819,
+        "strategy": "in-context",
+        "calls": 1,
+        "openUserRequests": 0
+      },
+      "id": "99f66d55",
+      "parentId": "66ec0728",
+      "timestamp": "2026-10-26T16:57:24.786Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "84f99937",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 77985,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 78003,
+        "cost": {
+          "input": 0.007798500000000001,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.007807500000000001
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "83e922c0",
+      "stopReason": "stop",
+      "usage": {
+        "input": 20629,
+        "output": 94,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 20723,
+        "cost": {
+          "input": 0.0020629000000000003,
+          "output": 0.000047,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0021099000000000005
+        }
+      },
+      "text": "**Synthetic audit status:** Configuration and retry boundaries are audited. The public response-code contract remains **422** for invalid input, **503** for unavailable, and **409** for duplicate. **Do not deploy or delete service data**; this remains a synthetic audit, not a production rollout.\n\nThe remaining work is to compare the archived audit with the next supplied change, which has not yet been provided.\n\n**ACCEPTANCE-CONTINUED**"
+    }
+  ]
+}

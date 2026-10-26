@@ -1,0 +1,45 @@
+
+ [38;2;205;154;34mWarning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[48;2;33;59;73m
+ [38;2;222;224;225mCall navigate_tree with action list, then reply DONE.[39m
+
+
+[48;2;37;65;49m
+ [1m[38;2;222;224;225mlist[0m[48;2;37;65;49m
+ [38;2;157;165;169m0 labels · ctx 0.3% of 1.0M[39m
+
+
+[49m DONE
+
+[48;2;33;59;73m
+ [38;2;222;224;225mCall navigate_tree with action anchor and name qa-milestone, then reply DONE2.[39m
+
+
+[48;2;37;65;49m
+ [1m[38;2;222;224;225manchor[0m[48;2;37;65;49m [38;2;167;152;215mqa-milestone[39m
+ [38;2;157;165;169mset at 0.3% of 1.0M[39m
+
+
+[49m DONE2
+
+
+
+
+
+[38;2;160;142;213m─ [1m[39mAnchor[0m [38;2;160;142;213m──────────────────────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169mctx 0.3% of 1.0M[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mType to search views or actions…[0m
+
+ [38;2;167;152;215m→[39m Session tree & phases                 [38;2;222;224;225m0 folds · 2 anchors[39m
+   Active anchors [38;2;126;136;142m(2 on branch)[39m          [38;2;222;224;225mlatest: qa-milestone[39m
+   Current briefing & continuity ledger  [38;2;222;224;225mempty · rev 0[39m
+   Fold current work now…                [38;2;222;224;225manchor · label · focus[39m
+   Retrospective clone & restructure     [38;2;222;224;225minspect · propose · preview · create[39m
+   Settings                              [38;2;222;224;225mglobal · project · runtime[39m
+
+[38;2;126;136;142m   Browse the chronological outline of phases, anchors and folded handoffs.[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142mopen[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mclose[39m
+[38;2;160;142;213m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa[39m
+[38;2;126;136;142m↑12 ↓139 R8.2k W3.0k CH92.0% $0.001 0.3%/1.0M                                    (openrouter) ~anthropic/claude-haiku-latest • low

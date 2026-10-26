@@ -1,0 +1,40 @@
+[48;2;58;48;85m [38;2;157;165;169mre-confirming with the user.[39m
+
+ [38;2;157;165;169mA branch_summary marks a milestone, not the end of the
+[39m [38;2;157;165;169mtask. Your authority, highest first: the user's standing
+[39m [38;2;157;165;169minstruction retained above (including any authorization to
+[39m [38;2;157;165;169mwork autonomously until the task is complete or a real
+[39m [38;2;157;165;169mblocker appears), the authorized plan or todo list, then
+[39m [38;2;157;165;169mthis summary's open items. If the summary's only open item
+[39m [38;2;157;165;169mis a report, hand-off or wrap-up while an authorized
+[39m [38;2;157;165;169minstruction or plan item is still open, do that work first
+[39m [38;2;157;165;169mand report once, at the end of the authorized scope.
+[39m [38;2;157;165;169mRetained user messages already answered above are
+[39m [38;2;157;165;169mhistorical — do not re-answer them; their standing
+[39m [38;2;157;165;169minstructions still apply.[39m
+
+
+[49m [38;2;126;136;142mInspected "alignment-qa": 123 entries and 40 user turns.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor/Settings[39m/[1mIntent[0m [38;2;160;142;213m───────────────────────────────────
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter policy fields…[0m
+
+ [38;2;167;152;215m→[39m mode                 [38;2;222;224;225moff[39m
+   gate                 [38;2;157;165;169m0.7[39m
+   heuristics           [38;2;104;183;141mon[39m
+   kind model           [38;2;157;165;169moff[39m
+   kind prompt          [38;2;157;165;169mdefault[39m
+   supersession model   [38;2;157;165;169moff[39m
+   supersession prompt  [38;2;157;165;169mdefault[39m
+   escalation model     [38;2;157;165;169moff[39m
+   escalation prompt    [38;2;157;165;169mdefault[39m
+   verification model   [38;2;157;165;169moff[39m
+   verification prompt  [38;2;157;165;169mdefault[39m
+   apply                [38;2;222;224;225muse this policy[39m
+
+[38;2;126;136;142m   recommended keeps the preset. off disables the policy.[39m
+[38;2;126;136;142m   custom edits stages without turning the others off.[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142medit[39m  [1ma[0m [38;2;126;136;142mapply[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mcancel[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-alignment-qa-WYm47e/workspace • alignment-qa2[39m
+[38;2;126;136;142m↑20 ↓185 R17k W21k CH12.8% $0.003 0.4%/1.0M  ~anthropic/clau
