@@ -106,7 +106,7 @@ function manifestFrom(entries: readonly SessionEntry[]): HistoryManifest | undef
 			return validate(g.children, g.sourceIds);
 		});
 	};
-	if (validate(m.groups, m.sourceOrder)) return m;
+	return validate(m.groups, m.sourceOrder) ? m : undefined;
 }
 
 function entryText(e: SessionEntry): string {

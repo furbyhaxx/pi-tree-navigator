@@ -3619,6 +3619,7 @@ export default function (pi: ExtensionAPI) {
 				};
 			}
 		}
+		return undefined;
 	});
 
 	pi.on("agent_settled", (_event, ctx) => {
@@ -4070,6 +4071,7 @@ export default function (pi: ExtensionAPI) {
 				`independent recovery failed: ${error instanceof Error ? error.message : String(error)}`,
 			);
 		}
+		return undefined;
 	});
 
 	// Anchor mandate (#31): a before_agent_start append lands at the END of
