@@ -44,26 +44,14 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { readFile, stat } from "node:fs/promises";
-import { join, normalize, resolve } from "node:path";
+import { join, normalize } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import type { Api, AssistantMessage, Message, Model, ThinkingLevel } from "@earendil-works/pi-ai";
 import {
-	type Api,
-	type AssistantMessage,
-	getCurrentSystemMessage,
-	getSystemMessageText,
-	isContextOverflow,
-	isRecoverableLength,
-	type Message,
-	type Model,
-	type ThinkingLevel,
-} from "@earendil-works/pi-ai";
-import {
-	AgentSession,
+	type AgentSession,
 	buildSessionProjection,
 	CONFIG_DIR_NAME,
 	type CompactionEntry,
-	calculateContextTokens,
 	collectEntriesForBranchSummary,
 	type ExtensionAPI,
 	type ExtensionCommandContext,
@@ -121,6 +109,17 @@ import {
 	renderOpenUserRequests,
 } from "./continuity/open-user-requests.ts";
 import {
+	activeAnchorNames,
+	buildMinSavingsRejection,
+	collectActiveAnchors,
+	findLabelHint,
+	formatActiveAnchors,
+	hashPinnedFile,
+	isFilled,
+	resolveAnchorTarget,
+	suggestFoldLabel,
+} from "./core/anchors.ts";
+import {
 	CONSOLIDATION_DEFAULTS,
 	CONTINUITY_CAPTURE_DEFAULT,
 	type ConsolidationConfig,
@@ -134,10 +133,7 @@ import {
 import {
 	DEFAULT_TOKEN_FACTOR,
 	estimateContentTokens,
-	estimateRawRequestTokens,
-	estimateRequestTokens,
 	fixedOverheadNote,
-	measuredTokenFactor,
 } from "./core/context-tokens.ts";
 import {
 	type AnchorTableRow,
@@ -150,19 +146,54 @@ import {
 	isValidName,
 	LABEL_PREFIX,
 	MAX_NAME_LENGTH,
-	stripBranchSummaryBoilerplate,
 	TOOL_NAME,
 	toOneLine,
 } from "./core/helpers.ts";
 import {
-	collectLegacyRewindOutcomes,
 	LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
 	LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
 	legacyRewindOutcomeRow,
 	legacySummaryRequestRow,
 	sanitizeLegacyText,
-	withLegacyOutcome,
 } from "./core/legacy-rewind.ts";
+import {
+	asInternals,
+	captureSession,
+	emitSessionCompact,
+	emitSessionTree,
+	findOwningSession,
+	patchAgentSessionPrototype,
+	REFLECTION_BOOTSTRAP_WARNING_LIST,
+	REFLECTION_BOOTSTRAP_WARNING_REWIND,
+	refreshAgentMessages,
+	resetPrototype,
+	sessionRefCount,
+} from "./core/pi-internals.ts";
+import {
+	admissionMessages,
+	buildContextMessages,
+	carriedCompaction,
+	carriedDetails,
+	compactionCopy,
+	effectiveRequestMessages,
+	findLabeledEntry,
+	precedesLatestCompaction,
+	projectAtEntry,
+	systemCheckpoint,
+} from "./core/projection.ts";
+import {
+	ANCHOR_MANDATE,
+	accountRequest,
+	estimateAdmissionTokens,
+	estimateAtEntry,
+	noteOutgoingRequest,
+	noteRequestUsage,
+	type OverflowModel,
+	overflowed,
+	requestAccounting,
+	tokenCalibration,
+	tokenFactorOf,
+} from "./core/request-accounting.ts";
 import {
 	buildNoAnchorText,
 	buildReserveGuardWarning,
@@ -199,18 +230,8 @@ import {
 	type SummarizeFoldOptions,
 	summarizeFold,
 } from "./fold/fold-summarizer.ts";
-import {
-	getHandoff,
-	type HandoffMode,
-	handoffContext,
-	makeHandoff,
-	materializeHandoff,
-} from "./fold/handoff.ts";
-import {
-	installHandoffProjection,
-	invalidateStaleUsage,
-	projectHandoffs,
-} from "./fold/handoff-projection.ts";
+import { getHandoff, type HandoffMode, makeHandoff, materializeHandoff } from "./fold/handoff.ts";
+import { installHandoffProjection, projectHandoffs } from "./fold/handoff-projection.ts";
 import {
 	appendContinuityBriefing,
 	buildConsolidationRequestText,
@@ -221,7 +242,6 @@ import {
 	stripContinuityBriefing,
 } from "./fold/summary-prompt.ts";
 import type { ProposalOptions } from "./retrospective/proposal-options.ts";
-import { sha256 } from "./retrospective/retrospective-plan.ts";
 import { registerAnchorCommand } from "./ui/anchor-command.ts";
 import { createUserOpsWriter } from "./ui/current-screen.ts";
 import {
@@ -238,24 +258,14 @@ import { createSettingsScreenDeps } from "./ui/settings-screen.ts";
 import { renderContinuityOps, renderToolCall, renderToolResult } from "./ui/tool-renderer.ts";
 
 /**
- * Always-on anchor mandate appended to the system prompt on every agent
- * start (gated on the tool being active). Same lever as pi-napkin's vault
- * mandate: `promptGuidelines` bullets land mid-prompt; this append lands
- * at the very end of the system prompt, after <project_context> and
- * skills, and is re-applied on every prompt (never compacted). Byte-stable
- * (module constant, no per-session interpolation) for provider caching.
- */
-export const ANCHOR_MANDATE = `${TOOL_NAME}: gather all context, then anchor \`context-gathered\`; list anchors and rewind after every milestone or rabbit hole / dead end to keep context low.`;
-
-/**
  * Label written by the automatic start anchor (#55). Exported for the test
  * suite; production callers should rely on the registered tool surface.
  */
 export const START_ANCHOR_LABEL = `${LABEL_PREFIX}start`;
 
 // ---------------------------------------------------------------------------
-// Exported boundary constants below (MAX_SESSION_REFS, MAX_HINT_WALK_DEPTH,
-// MIN_SUMMARY_FOCUS_LENGTH, MIN_REWIND_SAVINGS_TOKENS).
+// Exported boundary constants below (MIN_SUMMARY_FOCUS_LENGTH,
+// MIN_REWIND_SAVINGS_TOKENS).
 //
 // Stability: these are internal tunables. Exported only so the test suite
 // can pin boundary cases by constant rather than literal. Re-tuning is
@@ -264,16 +274,6 @@ export const START_ANCHOR_LABEL = `${LABEL_PREFIX}start`;
 // these constants directly. The `__testHooks` JSDoc carries the same
 // caveat for module-internal helpers.
 // ---------------------------------------------------------------------------
-// Cap on captured AgentSession refs across /new + /resume + /reload cycles.
-// Worst case is ~one ref per long-lived session before reaping dead WeakRefs;
-// 16 leaves headroom for the deepest session-fanout pattern observed (a few
-// /resume cycles on top of a couple of /new cycles) without prematurely
-// reaping a still-live session. Bump if the reaper fires while a session
-// is still live.
-export const MAX_SESSION_REFS = 16;
-// Cap on parentId chain walks in `findLabelHint` (UX preview only;
-// no need to walk to the root for a 50-char snippet).
-export const MAX_HINT_WALK_DEPTH = 50;
 // Floor on `summaryFocus` length (after trim) for `rewind`. The user's most
 // recent instruction lives on the chain about to be collapsed; if the focus
 // is shorter than this, it almost always elides that instruction (a terse
@@ -308,10 +308,6 @@ const RECOVERY_MIN_OUTPUT_TOKENS = 1_024;
 const RECOVERY_HEADROOM_TOKENS = 4_096;
 /** Recoveries one request may get; each must start from less context than the last. */
 const MAX_RECOVERY_ATTEMPTS = 3;
-// Hint length cap for the per-row hint shown in `list` output. 50 chars
-// fits one terminal column without wrapping in typical 80-column TUIs.
-const LIST_HINT_MAX_LENGTH = 50;
-
 /** Token budget of the ledger briefing appended to `list`. */
 const LIST_BRIEFING_MAX_TOKENS = 500;
 
@@ -320,583 +316,14 @@ const PIN_KINDS = ["sub-goal", "decision", "fact", "file", "steering"] as const;
 type PinKind = (typeof PIN_KINDS)[number];
 const isPinKind = (kind: unknown): kind is PinKind => PIN_KINDS.includes(kind as PinKind);
 
-/** Larger files are pinned without a hash rather than read whole. */
-const PIN_HASH_MAX_BYTES = 2 * 1024 * 1024;
-
 // Hint length cap for the hint shown in the `anchor` response. The anchor
 // response is a single block of prose (not a column-aligned table) so it
 // can afford a longer hint than `list`'s per-row preview.
 const ANCHOR_HINT_MAX_LENGTH = 60;
-const ORIG_PROMPT_KEY = Symbol.for("navigate-tree.orig-prompt");
-
-// Two warnings: list-site (read-only path; warns about the next turn's
-// context view) and rewind-site (wrote to disk; leads with that). Both
-// suggest /reload first, then restart pi, in that order.
-const REFLECTION_BOOTSTRAP_WARNING_LIST =
-	"⚠ reflection bootstrap missing — anchors and rewinds still work, but the next assistant turn may snapshot pre-bootstrap context. Run `/reload` (or restart pi) to recover.";
-const REFLECTION_BOOTSTRAP_WARNING_REWIND =
-	"⚠ reflection bootstrap missing — the rewind landed on disk but the next assistant turn may still see the pre-rewind context. Run `/reload` (or restart pi) to recover.";
-
-// ---------------------------------------------------------------------------
-// Typed views over pi internals.
-//
-// pi-coding-agent doesn't expose `agent`, `state`, `prepareNextTurn`, or
-// `sessionManager` on `AgentSession` in its public types, but they are plain
-// (non-`#`-private) fields on the class. Each cast point is a fragility
-// surface for pi version bumps; grouping them here makes the dependency
-// surface explicit.
-// ---------------------------------------------------------------------------
-
-interface PiInternals {
-	agent: {
-		state: {
-			messages: unknown[];
-		};
-	};
-	/**
-	 * Plain field on `AgentSession` (#79). Used only to emit `session_tree`
-	 * after a rewind, mirroring pi's own `navigateTree`, so extensions that
-	 * mirror the conversation (pi-claude-bridge's Claude Code session) rebuild
-	 * from the rewound chain instead of continuing on their stale copy.
-	 */
-	_extensionRunner?: {
-		emit?: (event: unknown) => Promise<unknown> | unknown;
-	};
-	sessionManager: SessionManager;
-	/**
-	 * Plain field on `AgentSession` in pi 1.3.0 (#101, S3): the live settings
-	 * pi decides compaction from. Optional: older pi versions may lack it.
-	 */
-	settingsManager?: SettingsManager;
-	// Pi applies a forced prompt after extension context transforms.
-	_runSystemPromptOptions?: { forceSystemPrompt?: string };
-}
-
-function asInternals(session: AgentSession): PiInternals {
-	return session as unknown as PiInternals;
-}
-
-// =============================================================================
-// Reflection bootstrap & in-loop refresh
-// =============================================================================
-
-const sessionInstances: WeakRef<AgentSession>[] = [];
-let seenSessions = new WeakSet<AgentSession>();
-
-function captureSession(session: AgentSession): void {
-	if (seenSessions.has(session)) return;
-	seenSessions.add(session);
-	sessionInstances.push(new WeakRef(session));
-	// Reap dead WeakRefs occasionally so the array doesn't grow unbounded
-	// across /new and /resume cycles.
-	if (sessionInstances.length > MAX_SESSION_REFS) {
-		for (let i = sessionInstances.length - 1; i >= 0; i--) {
-			if (!sessionInstances[i].deref()) sessionInstances.splice(i, 1);
-		}
-	}
-}
-
-function patchAgentSessionPrototype(): void {
-	const proto = AgentSession.prototype as unknown as Record<PropertyKey, unknown>;
-	// Stash the truly-original prompt the FIRST time we patch. On subsequent
-	// /reloads the value is already there — we don't overwrite, we just read it
-	// back so the new wrapper still calls the original (not a previous wrapper).
-	if (!proto[ORIG_PROMPT_KEY]) {
-		proto[ORIG_PROMPT_KEY] = proto.prompt;
-	}
-	const orig = proto[ORIG_PROMPT_KEY] as (...args: unknown[]) => unknown;
-
-	// Always replace the wrapper, even if a previous load already patched. On
-	// /reload the previous wrapper closes over the previous module's
-	// `sessionInstances` — if we don't replace, captures land in the dead
-	// module and reflection finds nothing.
-	const patched = function (this: AgentSession, ...args: unknown[]) {
-		captureSession(this);
-		return orig.apply(this, args);
-	};
-	proto.prompt = patched;
-}
-
-function findOwningSession(sm: SessionManager): AgentSession | null {
-	for (const ref of sessionInstances) {
-		const s = ref.deref();
-		if (s && asInternals(s).sessionManager === sm) {
-			return s;
-		}
-	}
-	return null;
-}
-
-/**
- * Project the session tree's active branch into the messages the next LLM
- * call should see — the public-API replacement for the deleted
- * `prepareNextTurn` double-wrap (which rebuilt `messages` from
- * `sessionManager.buildSessionContext()` between every turn).
- *
- * Registered as a `context` extension handler: pi fires the `context` event
- * inside `streamAssistantResponse` before EVERY LLM call (wired through
- * `Agent.transformContext` → `runner.emitContext`), so this projection is
- * applied at the wire boundary itself rather than at a turn-boundary
- * snapshot. The loop's own `currentContext.messages` is never mutated — the
- * handler only replaces the clone that `convertToLlm` consumes.
- *
- * Prefers the canonical `buildSessionProjection().messages` (>= 0.87.0): that
- * is exactly what pi itself treats as the model context, applying
- * `context_edit` omissions/replacements written by pi's own overflow recovery
- * and by extensions such as the fallback provider. Returning the raw
- * `buildContextEntries()` view would reintroduce edited-away messages into the
- * request. The entry walk remains only as a defensive fallback for structural
- * test doubles.
- *
- * The result is CONVERSATION-ONLY: the `context` event contract is "transform
- * conversation messages without prompt and tool system messages; Pi restores
- * that state afterward" (pi docs, `context` section), and `runner.emitContext`
- * hands handlers `currentMessages.filter(role !== "system")` and re-attaches
- * the current head via `restoreSystemMessages`. Returning the projection's
- * system entries would make that re-attach prepend the head to a list still
- * carrying the persisted system entry — a duplicated head on runs where
- * `forceSystemPrompt` is unset.
- *
- * We always replace (no leaf-gating): every `appendMessage` advances the
- * session leaf, so a "leaf changed since last turn" heuristic would fire on
- * essentially every call anyway — and always-replace is byte-for-byte the
- * behavior of the old wrapper (per-turn rebuild from the tree).
- *
- * The parameter is typed structurally because `ReadonlySessionManager` is
- * NOT re-exported from the package barrel (only `SessionManager` and
- * `sessionEntryToContextMessages` are public); `ctx.sessionManager` at the
- * event site is `ReadonlySessionManager`.
- */
-export function buildContextMessages(
-	sm: {
-		buildContextEntries(): SessionEntry[];
-		getBranch?(): SessionEntry[];
-		getEntries?(): SessionEntry[];
-		buildSessionProjection?(): {
-			entries?: Array<{ sourceEntry: SessionEntry; messages: AgentMessage[] }>;
-			messages: AgentMessage[];
-			model?: { provider: string; modelId: string } | null;
-		};
-		getLabel?(id: string): string | undefined;
-	},
-	throughId?: string,
-): ReturnType<typeof sessionEntryToContextMessages> {
-	let entries: Array<{ sourceEntry: SessionEntry | null; messages: AgentMessage[] }> | undefined;
-	let model: { provider: string; modelId: string } | null | undefined;
-	try {
-		if (throughId && typeof sm.getEntries === "function") {
-			const projection = buildSessionProjection(sm.getEntries(), throughId);
-			model = projection.model;
-			entries = Array.isArray(projection.entries)
-				? projection.entries
-				: [{ sourceEntry: null, messages: projection.messages }];
-		} else if (typeof sm.buildSessionProjection === "function") {
-			const projection = sm.buildSessionProjection();
-			model = projection.model;
-			entries = Array.isArray(projection.entries)
-				? projection.entries
-				: [{ sourceEntry: null, messages: projection.messages }];
-		}
-	} catch {
-		// Fall through to the raw entry projection — pi rewrites the context
-		// handlers' output at the wire boundary anyway.
-	}
-	entries ??= sm.buildContextEntries().map((entry) => ({
-		sourceEntry: entry,
-		messages: sessionEntryToContextMessages(entry),
-	}));
-	let legacyOutcomes = new Map<string, string>();
-	try {
-		if (sm.getBranch) {
-			legacyOutcomes = collectLegacyRewindOutcomes(sm.getBranch());
-		}
-	} catch {
-		// Projection-only callers may not expose an active branch.
-	}
-	// Withholding can append edits after the entries a stale usage covers.
-	entries = invalidateStaleUsage(entries, model);
-	// Sessions written before the independent engine carry summary
-	// instructions of the in-band turn; none is ever written now, and a stale
-	// one must not reach the model.
-	const messages = entries
-		.filter(
-			(e) =>
-				!(
-					e.sourceEntry?.type === "custom_message" &&
-					e.sourceEntry.customType === LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE
-				),
-		)
-		.flatMap((e) => {
-			const legacyOwned =
-				e.sourceEntry?.type === "branch_summary" &&
-				e.sourceEntry.fromHook === true &&
-				sm.getLabel?.(e.sourceEntry.id)?.startsWith(LABEL_PREFIX) === true;
-			const messages = withLegacyOutcome(e.messages, legacyOutcomes.get(e.sourceEntry?.id ?? ""));
-			return handoffContext(e.sourceEntry, messages, legacyOwned);
-		});
-	return messages.filter((message) => message.role !== "system");
-}
-
-function refreshAgentMessages(sm: SessionManager): boolean {
-	// Manually replicate the agent-state refresh that pi's
-	// commandCtx.navigateTree does after branchWithSummary. Returns true on
-	// success, false if reflection couldn't find the owning AgentSession (in
-	// which case the rewind is structurally complete on disk, but the next LLM
-	// call will still see stale messages).
-	const session = findOwningSession(sm);
-	if (!session) return false;
-	try {
-		const sessionContext = sm.buildSessionContext();
-		const agent = asInternals(session).agent;
-		if (!agent?.state) return false;
-		agent.state.messages = sessionContext.messages;
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-async function emitSessionTree(
-	sm: SessionManager,
-	oldLeafId: string | null,
-	summaryId: string,
-): Promise<boolean> {
-	// Replicate the `session_tree` emit that pi's own `navigateTree` does after
-	// `branchWithSummary` (#79). A tool-driven rewind skips it, so extensions
-	// that mirror the conversation never learn the history was rewritten:
-	// pi-claude-bridge keeps resuming its Claude Code session with the full
-	// pre-rewind context. Returns false when the runner is unreachable or a
-	// handler throws; the rewind itself is already complete either way.
-	const session = findOwningSession(sm);
-	const runner = session ? asInternals(session)._extensionRunner : undefined;
-	if (typeof runner?.emit !== "function") return false;
-	try {
-		await runner.emit({
-			type: "session_tree",
-			newLeafId: sm.getLeafId(),
-			oldLeafId,
-			summaryEntry: sm.getEntry(summaryId),
-			fromExtension: true,
-		});
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-/**
- * Emit `session_compact` for a compaction the extension appended, as pi does
- * after its own. History-mirroring providers rebuild from it. False when the
- * runner is unreachable or a handler throws; the compaction is written either way.
- */
-async function emitSessionCompact(sm: SessionManager, compactionId: string): Promise<boolean> {
-	const session = findOwningSession(sm);
-	const runner = session ? asInternals(session)._extensionRunner : undefined;
-	if (typeof runner?.emit !== "function") return false;
-	try {
-		await runner.emit({
-			type: "session_compact",
-			compactionEntry: sm.getEntry(compactionId),
-			fromExtension: true,
-			reason: "manual",
-			willRetry: false,
-		});
-		return true;
-	} catch {
-		return false;
-	}
-}
 
 // =============================================================================
 // Helpers (extension-internal; pure helpers in ./helpers.ts)
 // =============================================================================
-
-function findLabeledEntry(sm: SessionManager, fullLabel: string): string | null {
-	const path = sm.getBranch();
-	for (let i = path.length - 1; i >= 0; i--) {
-		if (sm.getLabel(path[i].id) === fullLabel) return path[i].id;
-	}
-	return null;
-}
-
-/**
- * The latest compaction on `branch` that a fold to `targetId` carries
- * forward: the target lies inside its kept range (at or after
- * `firstKeptEntryId`, before the compaction). Branching there drops the
- * compaction from the ancestry, so the fold re-appends a copy.
- */
-function carriedCompaction(
-	branch: readonly SessionEntry[],
-	targetId: string,
-): CompactionEntry | undefined {
-	const at = branch.findIndex((entry) => entry.id === targetId);
-	const compactionAt = branch.findLastIndex((e) => e.type === "compaction");
-	if (at < 0 || compactionAt <= at) return undefined;
-	const compaction = branch[compactionAt] as CompactionEntry;
-	const keptAt = branch.findIndex((entry) => entry.id === compaction.firstKeptEntryId);
-	return keptAt >= 0 && keptAt <= at ? compaction : undefined;
-}
-
-/**
- * The system checkpoint `appendCompaction` stores on a compaction: projection
- * restarts at a compaction, so a preview without it prices no system prompt.
- */
-function systemCheckpoint(sm: SessionManager): {
-	systemMessage?: CompactionEntry["systemMessage"];
-} {
-	const systemMessage = getCurrentSystemMessage(sm.buildSessionProjection().messages);
-	return systemMessage ? { systemMessage } : {};
-}
-
-/** An unsaved copy of `compaction` under `parentId`, as `commitFold` appends it. */
-function compactionCopy(
-	compaction: CompactionEntry,
-	parentId: string,
-	taken: ReadonlyMap<string, unknown>,
-): CompactionEntry {
-	let id = "tree-navigator-carried-compaction";
-	while (taken.has(id)) id += "-";
-	return {
-		...compaction,
-		id,
-		parentId,
-		details: carriedDetails(compaction),
-	};
-}
-
-function carriedDetails(compaction: CompactionEntry): unknown {
-	const base =
-		compaction.details && typeof compaction.details === "object"
-			? (compaction.details as Record<string, unknown>)
-			: {};
-	return { ...base, carriedFrom: compaction.id };
-}
-
-/**
- * The messages a branch rooted at `entryId` would carry: what a fold to that
- * entry leaves behind before its handoff is added. `commitFold` projects
- * its preview the same way: a compaction whose kept range holds `entryId` is
- * carried forward, an earlier one only counts when `entryId` lies after it.
- */
-function projectAtEntry(
-	entries: SessionEntry[],
-	entryId: string,
-	byId: Map<string, SessionEntry>,
-	carry?: CompactionEntry,
-): AgentMessage[] {
-	if (!carry) {
-		return projectHandoffs(buildSessionProjection(entries, entryId, byId), entries).messages;
-	}
-	const copy = compactionCopy(carry, entryId, byId);
-	const withCopy = [...entries, copy];
-	return projectHandoffs(buildSessionProjection(withCopy, copy.id), withCopy).messages;
-}
-
-/** The admission estimate (see `estimateAdmissionTokens`) for the branch a fold to `entryId` leaves. */
-function estimateAtEntry(
-	sm: SessionManager,
-	entries: SessionEntry[],
-	entryId: string,
-	byId: Map<string, SessionEntry>,
-): number {
-	const carry = carriedCompaction(sm.getBranch(), entryId);
-	return requestAccounting(sm, projectAtEntry(entries, entryId, byId, carry)).tokens;
-}
-
-/**
- * Whether `targetId` precedes the latest compaction's kept range on `branch`.
- * A fold there parents its summary before every entry the compaction kept,
- * so the copy cannot be carried and the summarized history would return.
- */
-function precedesLatestCompaction(branch: readonly SessionEntry[], targetId: string): boolean {
-	const at = branch.findIndex((entry) => entry.id === targetId);
-	return (
-		at >= 0 &&
-		at < branch.findLastIndex((e) => e.type === "compaction") &&
-		!carriedCompaction(branch, targetId)
-	);
-}
-
-/** The anchors on the active branch, root → leaf, with the context footprint at each. */
-function collectActiveAnchors(sm: SessionManager): {
-	name: string;
-	tokens: number;
-	beforeCompaction: boolean;
-	hint: string | null;
-}[] {
-	const path = sm.getBranch();
-	const allEntries = sm.getEntries();
-	const byId = new Map<string, SessionEntry>();
-	for (const e of allEntries) byId.set(e.id, e);
-	const anchors: ReturnType<typeof collectActiveAnchors> = [];
-	for (const e of path) {
-		const lbl = sm.getLabel(e.id);
-		if (!lbl?.startsWith(LABEL_PREFIX)) continue;
-		anchors.push({
-			name: lbl.slice(LABEL_PREFIX.length),
-			tokens: estimateAtEntry(sm, allEntries, e.id, byId),
-			beforeCompaction: precedesLatestCompaction(path, e.id),
-			hint: findLabelHint(sm, e.id, LIST_HINT_MAX_LENGTH),
-		});
-	}
-	return anchors;
-}
-
-/** Anchor names on the active branch, root → leaf, as `list` shows them. */
-function activeAnchorNames(sm: SessionManager): string[] {
-	const names: string[] = [];
-	for (const e of sm.getBranch()) {
-		const lbl = sm.getLabel(e.id);
-		if (!lbl?.startsWith(LABEL_PREFIX)) continue;
-		const name = lbl.slice(LABEL_PREFIX.length);
-		if (isValidName(name)) names.push(name);
-	}
-	return names;
-}
-
-const isFilled = (value: unknown): value is string =>
-	typeof value === "string" && value.trim().length > 0;
-
-/** sha256 of a pinned file; undefined when it is unreadable or too large. */
-async function hashPinnedFile(cwd: string, path: string): Promise<string | undefined> {
-	try {
-		const file = resolve(cwd, path);
-		if ((await stat(file)).size > PIN_HASH_MAX_BYTES) return undefined;
-		return sha256(await readFile(file));
-	} catch {
-		return undefined;
-	}
-}
-
-/** What stops a new anchor: shared by the tool's `anchor` action and `/anchor`. */
-type AnchorTarget =
-	| { ok: true; leafId: string; fullLabel: string }
-	| { ok: false; problem: "invalid-name" | "no-leaf" | "duplicate" };
-
-function resolveAnchorTarget(sm: SessionManager, name: unknown): AnchorTarget {
-	if (!isValidName(name)) return { ok: false, problem: "invalid-name" };
-	const leafId = sm.getLeafId();
-	if (!leafId) return { ok: false, problem: "no-leaf" };
-	// Labels are unique on the active branch (issue #55, C8): an
-	// existing label is never moved or overwritten, and the caller
-	// must pick a fresh name. Manual `/tree` duplicates are the only
-	// duplicate path; move-on-collision is retired for both writers.
-	const fullLabel = LABEL_PREFIX + name;
-	if (findLabeledEntry(sm, fullLabel)) return { ok: false, problem: "duplicate" };
-	return { ok: true, leafId, fullLabel };
-}
-
-/** A fresh `newLabel` suggestion for folding to `anchorName`. */
-function suggestFoldLabel(sm: SessionManager, anchorName: string): string {
-	for (let n = 1; ; n++) {
-		const suffix = n === 1 ? "-folded" : `-folded-${n}`;
-		const base = anchorName.slice(0, MAX_NAME_LENGTH - suffix.length);
-		const candidate = base.replace(/-+$/, "") + suffix;
-		if (!findLabeledEntry(sm, LABEL_PREFIX + candidate)) return candidate;
-	}
-}
-
-/**
- * Every active anchor — chronological root→leaf, same walk order as `list`
- * — with its cumulative context percentage, rendered as the shared anchor
- * table (#101, D19). Shared by min-savings rejections and rewind hints.
- * A manual
- * `/tree` label `anchor:x` CAN put the same name on two entries —
- * duplicates print twice, exactly as `list` prints them. Names `rewindTo`
- * would reject (e.g. an empty `anchor:` label) are skipped: both callers
- * point the model at rewind targets.
- */
-function formatActiveAnchors(
-	sm: SessionManager,
-	cw: number,
-	allEntries: SessionEntry[],
-	byId: Map<string, SessionEntry>,
-): { names: string[]; text: string } {
-	const names: string[] = [];
-	const rows: AnchorTableRow[] = [];
-	const branch = sm.getBranch();
-	for (const e of branch) {
-		const lbl = sm.getLabel(e.id);
-		if (!lbl?.startsWith(LABEL_PREFIX)) continue;
-		const name = lbl.slice(LABEL_PREFIX.length);
-		if (!isValidName(name)) continue;
-		names.push(name);
-		rows.push({
-			pct: formatPct1(estimateAtEntry(sm, allEntries, e.id, byId), cw),
-			name,
-		});
-	}
-	// cw=0 → percents fall back to formatPct1's k-format and the header
-	// drops the window, mirroring `list`.
-	return { names, text: formatAnchorTable(rows, cw) };
-}
-
-/**
- * Rejection copy for the rewind min-savings floor (#21). Reports the
- * apparent savings plus every active anchor (including rewindTo itself)
- * with its cumulative context percentage, so the agent can pick a
- * genuinely earlier anchor or keep working.
- *
- * Deliberately does NOT print the floor value anywhere: an agent-visible
- * numeric bar invites grinding up to it instead of doing real work.
- */
-function buildMinSavingsRejection(
-	rewindTo: string,
-	newLabel: string,
-	apparentSavings: number,
-	sm: SessionManager,
-	cw: number,
-	allEntries: SessionEntry[],
-	byId: Map<string, SessionEntry>,
-	beforeCompaction: boolean,
-): string {
-	const anchors = formatActiveAnchors(sm, cw, allEntries, byId);
-	if (beforeCompaction) {
-		const outcome =
-			apparentSavings > 0
-				? `free only ~${formatPct1(apparentSavings, 0)} tokens`
-				: "not free any context";
-		return `Rewinding to '${rewindTo}' (as '${newLabel}') would ${outcome}: '${rewindTo}' lies before the latest compaction, so a fold there restores the compacted history. Rewind to an anchor created after the compaction, or keep working.\n${anchors.text}`;
-	}
-	const guidance =
-		anchors.names[0] === rewindTo
-			? "No earlier anchors — keep working and rewind later once more has accumulated above it."
-			: "Rewind further back to actually free context, or keep working.";
-	return `Rewinding to '${rewindTo}' (as '${newLabel}') would free only ~${formatPct1(apparentSavings, 0)} tokens. ${guidance}\n${anchors.text}`;
-}
-
-/**
- * Walk parentId chain back from `fromId` and return a one-line preview of
- * the first entry that has meaningful text content. Branch summaries are
- * prefixed with `summary:` so the source is clear; user/assistant text is
- * shown as-is.
- */
-function findLabelHint(sm: SessionManager, fromId: string, maxLen: number): string | null {
-	let cur: string | null | undefined = fromId;
-	let depth = 0;
-	while (cur && depth < MAX_HINT_WALK_DEPTH) {
-		const e = sm.getEntry(cur);
-		if (!e) break;
-		let text = "";
-		let prefix = "";
-		if (e.type === "branch_summary" && e.summary) {
-			text = stripBranchSummaryBoilerplate(e.summary);
-			prefix = "summary: ";
-		} else if (e.type === "message") {
-			const role = e.message.role;
-			if (role === "user" || role === "assistant") {
-				text = extractTextContent(e.message.content);
-			}
-		} else if (e.type === "custom_message") {
-			text = extractTextContent(e.content);
-		}
-		const oneLine = toOneLine(text, maxLen - prefix.length);
-		if (oneLine) return prefix + oneLine;
-		cur = e.parentId;
-		depth++;
-	}
-	return null;
-}
 
 // =============================================================================
 // Extension
@@ -942,136 +369,6 @@ function rewindMessageDraft(content: string, details: Record<string, unknown>): 
 		display: true,
 		details,
 	};
-}
-
-/** The model fields rewind-driven compaction reads (#101). */
-interface OverflowModel {
-	api?: string;
-	provider: string;
-	id: string;
-	contextWindow?: number;
-	maxTokens?: number;
-}
-
-/**
- * True when `message` is a context overflow by pi's own checks (#101, D1):
- * an explicit overflow error, a silent overflow, or a reply squeezed by the
- * context (`isRecoverableLength`). Same model only (pi's `sameModel`): a
- * reply from another model says nothing about this window.
- */
-function overflowed(message: unknown, model: OverflowModel | undefined): boolean {
-	const m = message as Partial<AssistantMessage> | undefined;
-	if (m?.role !== "assistant" || !model) return false;
-	if (m.provider !== model.provider || m.model !== model.id) return false;
-	try {
-		return (
-			isContextOverflow(m as AssistantMessage, model.contextWindow) ||
-			isRecoverableLength(m as AssistantMessage, model.maxTokens ?? 0)
-		);
-	} catch {
-		return false;
-	}
-}
-
-/** The request `messages` as pi will send them: a forced system prompt replaces the head. */
-function effectiveRequestMessages(sm: SessionManager, messages: AgentMessage[]): AgentMessage[] {
-	const session = findOwningSession(sm);
-	const forcedPrompt = session
-		? asInternals(session)._runSystemPromptOptions?.forceSystemPrompt
-		: undefined;
-	if (forcedPrompt === undefined) return messages;
-	const currentSystem = getCurrentSystemMessage(messages);
-	return [
-		{
-			role: "system",
-			content: forcedPrompt,
-			...(currentSystem?.toolsAdded ? { toolsAdded: currentSystem.toolsAdded } : {}),
-			timestamp: currentSystem?.timestamp ?? 0,
-		},
-		...messages.filter((message) => message.role !== "system"),
-	];
-}
-
-function requestAccounting(sm: SessionManager, messages: AgentMessage[]) {
-	return accountRequest(effectiveRequestMessages(sm, messages), tokenFactorOf(sm));
-}
-
-/**
- * Per session, for the model that served its latest request: estimated tokens
- * per heuristic token that model reported, and the heuristic of the request
- * still awaiting its usage. A model switch drops the measurement, because
- * tokenizers differ.
- */
-const tokenCalibration = new Map<string, { modelKey: string; factor?: number; pending?: number }>();
-
-function tokenFactorOf(sm: { getSessionId(): string }): number {
-	try {
-		return tokenCalibration.get(sm.getSessionId())?.factor ?? DEFAULT_TOKEN_FACTOR;
-	} catch {
-		return DEFAULT_TOKEN_FACTOR;
-	}
-}
-
-/** Remember the heuristic of the request about to go to `modelKey`. */
-function noteOutgoingRequest(sessionId: string, modelKey: string, effective: AgentMessage[]): void {
-	const current = tokenCalibration.get(sessionId);
-	tokenCalibration.set(sessionId, {
-		modelKey,
-		...(current?.modelKey === modelKey && { factor: current.factor }),
-		pending: estimateRawRequestTokens(effective),
-	});
-}
-
-/** Calibrate from the usage the model reported for the noted request. */
-function noteRequestUsage(sessionId: string, message: unknown, contextWindow = 0): void {
-	const current = tokenCalibration.get(sessionId);
-	const m = message as Partial<AssistantMessage> | undefined;
-	if (
-		current?.pending === undefined ||
-		m?.role !== "assistant" ||
-		`${m.provider}/${m.model}` !== current.modelKey ||
-		m.stopReason === "error" ||
-		m.stopReason === "aborted" ||
-		!m.usage
-	)
-		return;
-	const factor = measuredTokenFactor(
-		calculateContextTokens(m.usage) - (m.usage.output ?? 0),
-		current.pending,
-		contextWindow,
-	);
-	tokenCalibration.set(sessionId, {
-		modelKey: current.modelKey,
-		factor: factor ?? current.factor,
-	});
-}
-
-/** The admission estimate of a complete request whose system state is already effective. */
-function accountRequest(effective: AgentMessage[], factor = DEFAULT_TOKEN_FACTOR) {
-	const system = getCurrentSystemMessage(effective);
-	const mandated = system !== undefined && getSystemMessageText(system).includes(ANCHOR_MANDATE);
-	return {
-		messages: effective,
-		tokens:
-			estimateRequestTokens(effective, factor) +
-			(mandated ? 0 : Math.ceil((ANCHOR_MANDATE.length / 4) * factor)),
-	};
-}
-
-/**
- * The one number the extension gates and reports context on: what the next
- * request on the active branch would cost, as the request guard estimates it.
- * The branch is projected as `context` sends it, under the effective system
- * state `requestAccounting` uses.
- */
-export function estimateAdmissionTokens(sm: SessionManager): number {
-	return accountRequest(admissionMessages(sm), tokenFactorOf(sm)).tokens;
-}
-
-/** The next request on the active branch under the effective system state. */
-function admissionMessages(sm: SessionManager): AgentMessage[] {
-	const system = getCurrentSystemMessage(sm.buildSessionContext().messages);
-	return effectiveRequestMessages(sm, [...(system ? [system] : []), ...buildContextMessages(sm)]);
 }
 
 /** `context_edit` drafts hiding `ids` (a failed attempt). */
@@ -5509,19 +4806,7 @@ export const __testHooks = {
 	 * drain the captured-session refs. Idempotent: a no-op if the patch was
 	 * never installed or has already been reset.
 	 */
-	resetPrototype(): void {
-		const proto = AgentSession.prototype as unknown as Record<PropertyKey, unknown>;
-		const orig = proto[ORIG_PROMPT_KEY];
-		if (typeof orig === "function") {
-			proto.prompt = orig;
-			delete proto[ORIG_PROMPT_KEY];
-		}
-		sessionInstances.length = 0;
-		// WeakSet has no .clear(); rebind to a fresh instance so a test that
-		// re-captures the SAME session identity post-reset isn't deduped by
-		// stale state from the previous test's capture.
-		seenSessions = new WeakSet();
-	},
+	resetPrototype,
 	/** Module-internal helpers exposed for hermetic unit tests. */
 	findLabelHint,
 	findLabeledEntry,
@@ -5533,9 +4818,7 @@ export const __testHooks = {
 		return foldApis.get(pi);
 	},
 	/** Read-only view of captured-session ref count for reaping assertions. */
-	sessionRefCount(): number {
-		return sessionInstances.length;
-	},
+	sessionRefCount,
 	/**
 	 * The reflection-bootstrap-missing warning strings, split per site.
 	 * Exported so tests can pin the per-site verbatim wording (the `list`

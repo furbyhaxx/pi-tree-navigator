@@ -23,10 +23,8 @@ import {
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import navigateTree, {
-	estimateAdmissionTokens,
-	PRESSURE_COMPACTION_CUSTOM_TYPE,
-} from "../../src/index.ts";
+import { estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
+import navigateTree, { PRESSURE_COMPACTION_CUSTOM_TYPE } from "../../src/index.ts";
 
 const WINDOW = 32_000;
 const RESERVE = 1_024 + 4_096;

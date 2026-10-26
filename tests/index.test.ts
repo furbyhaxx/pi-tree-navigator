@@ -64,6 +64,7 @@ import {
 	readBranchLedger,
 	type StoredOp,
 } from "../src/continuity/continuity-store.ts";
+import { MAX_HINT_WALK_DEPTH } from "../src/core/anchors.ts";
 import {
 	START_ANCHOR_DEFAULT_TURNS,
 	START_ANCHOR_MAX_TURNS,
@@ -80,6 +81,8 @@ import {
 	LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
 	LEGACY_SUMMARY_REQUEST_CUSTOM_TYPE,
 } from "../src/core/legacy-rewind.ts";
+import { MAX_SESSION_REFS } from "../src/core/pi-internals.ts";
+import { ANCHOR_MANDATE, estimateAdmissionTokens } from "../src/core/request-accounting.ts";
 import {
 	buildNoAnchorText,
 	buildReserveGuardWarning,
@@ -93,21 +96,17 @@ import { getHandoff, materializeHandoff } from "../src/fold/handoff.ts";
 import { extractSummaryText } from "../src/fold/summary-prompt.ts";
 import navigateTree, {
 	__testHooks,
-	ANCHOR_MANDATE,
 	buildLateEntriesNote,
 	buildRewindAcceptedText,
 	buildRewindDoneText,
 	CONSOLIDATION_CUSTOM_TYPE,
 	CONTINUE_NUDGE_TEXT,
 	commitFold,
-	estimateAdmissionTokens,
 	type FoldCommitInput,
 	type FoldPreviewInput,
 	foldPlaceholderSummary,
 	foldRecommendationBudget,
 	foldSummaryPlaceholderTokens,
-	MAX_HINT_WALK_DEPTH,
-	MAX_SESSION_REFS,
 	MIN_REWIND_SAVINGS_TOKENS,
 	MIN_SUMMARY_FOCUS_LENGTH,
 	PRESSURE_COMPACTION_CUSTOM_TYPE,

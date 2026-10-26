@@ -27,7 +27,7 @@ import {
 	type ModelPricingTable,
 	type TransportRecord,
 } from "../../../scripts/fold-acceptance/transport.ts";
-import { estimateAdmissionTokens } from "../../../src/index.ts";
+import { estimateAdmissionTokens } from "../../../src/core/request-accounting.ts";
 
 it("automatic continuation need not repeat an already fulfilled finalization request", () => {
 	const sm = SessionManager.inMemory();
