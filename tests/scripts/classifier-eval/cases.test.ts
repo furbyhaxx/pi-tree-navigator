@@ -5,6 +5,12 @@ import { prepareCase } from "../../../scripts/classifier-eval/prepare.ts";
 import type { EvalCase, EvalTask } from "../../../scripts/classifier-eval/types.ts";
 import { heuristicClassifier } from "../../../src/continuity/continuity-capture.ts";
 
+function expectedAnswer(c: EvalCase, question: string) {
+	const answer = c.expected[question];
+	assert.ok(answer, `${c.id} needs a ${question} reference`);
+	return answer;
+}
+
 const TASKS: EvalTask[] = ["intent", "supersession", "milestone-status", "milestone-boundary"];
 const SPLITS: EvalCase["split"][] = ["development", "holdout"];
 const KINDS = ["objective", "sub-goal", "rule", "decision", "steering", "ephemeral"];
@@ -63,6 +69,12 @@ function milestoneInput(c: EvalCase) {
 function intentInput(c: EvalCase) {
 	assert.equal(c.input.type, "intent");
 	return c.input;
+}
+
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
 }
 
 test("case ids are unique and every task uses its own input type", () => {
@@ -129,7 +141,7 @@ test("inputs stay inside the limits where truncation would change a reference", 
 			assert.equal(new Set(idsOf(c)).size, records.length, c.id);
 			for (const r of records)
 				assert.ok(r.text.length > 0 && r.text.length <= MAX_RECORD_CHARS, c.id);
-			assert.equal(records[0].role, "user", c.id);
+			assert.equal(at(records, 0).role, "user", c.id);
 		}
 	}
 });
@@ -146,18 +158,18 @@ test("prepared requests carry every reference and keep the text unchanged", () =
 				hasItems ? ["contradicts", "kind"] : ["kind"],
 				c.id,
 			);
-			assert.equal(state.message, c.input.message, c.id);
+			assert.equal(state["message"], c.input.message, c.id);
 			const byId = (x: { id: string }, y: { id: string }) => x.id.localeCompare(y.id);
 			assert.deepEqual(
-				[...(state.activeItems as { id: string }[])].sort(byId),
+				[...(state["activeItems"] as { id: string }[])].sort(byId),
 				[...c.input.activeItems].sort(byId),
 				c.id,
 			);
 		} else if (c.input.type === "milestone") {
-			assert.ok(state.structure, `${c.id} sends no structure`);
+			assert.ok(state["structure"], `${c.id} sends no structure`);
 			assert.deepEqual(Object.keys(prepared.questions).sort(), ["boundary", "status"], c.id);
 			assert.deepEqual(
-				state.records,
+				state["records"],
 				c.input.records.map(({ id, role, text }) => ({ id, role, text })),
 				c.id,
 			);
@@ -205,8 +217,8 @@ test("structure describes earlier phases and never marks the judged records", ()
 	for (const c of milestoneCases) {
 		const { records, structure, lastAnchor } = milestoneInput(c);
 		const ids = new Set(records.map((r) => r.id));
-		const last = records[records.length - 1].id;
-		const marked = new Set([...c.expected.boundary.choices, last]);
+		const last = at(records, records.length - 1).id;
+		const marked = new Set([...expectedAnswer(c, "boundary").choices, last]);
 		const recordTexts = records.map((r) => r.text.toLowerCase());
 		const { folds = [], anchors = [] } = structure ?? {};
 		const named = { ...structure, anchors: anchors.map((a) => a.name) };
@@ -244,7 +256,7 @@ test("every reference has a short rationale", () => {
 
 test("kind references mark lost protection and spurious protection as unsafe", () => {
 	for (const c of userCases) {
-		const { choices, unsafeChoices } = c.expected.kind;
+		const { choices, unsafeChoices } = expectedAnswer(c, "kind");
 		assert.ok(choices.length >= 1 && choices.length <= 3, c.id);
 		for (const choice of choices) assert.ok(KINDS.includes(choice), c.id);
 		const expectedUnsafe = choices.some((k) => PROTECTED.has(k))
@@ -257,7 +269,7 @@ test("kind references mark lost protection and spurious protection as unsafe", (
 test("contradicts references mark false supersession as unsafe", () => {
 	for (const c of userCases) {
 		const items = intentInput(c).activeItems;
-		const answer = c.expected.contradicts;
+		const answer = c.expected["contradicts"];
 		if (items.length === 0) {
 			assert.equal(answer, undefined, c.id);
 			continue;
@@ -280,9 +292,9 @@ test("contradicts references mark false supersession as unsafe", () => {
 
 test("status references mark premature folds as unsafe", () => {
 	for (const c of CASES.filter((x) => x.input.type === "milestone")) {
-		const { choices, unsafeChoices } = c.expected.status;
+		const { choices, unsafeChoices } = expectedAnswer(c, "status");
 		assert.equal(choices.length, 1, c.id);
-		assert.ok(STATUSES.includes(choices[0]), c.id);
+		assert.ok(STATUSES.includes(at(choices, 0)), c.id);
 		assert.deepEqual(
 			unsafeChoices,
 			choices[0] === "continue" || choices[0] === "await-user" ? ["milestone"] : [],
@@ -295,17 +307,17 @@ test("boundary references mark folding unfinished work as unsafe", () => {
 	for (const c of CASES.filter((x) => x.input.type === "milestone")) {
 		const { records } = milestoneInput(c);
 		const ids = records.map((r) => r.id);
-		const { choices, unsafeChoices } = c.expected.boundary;
+		const { choices, unsafeChoices } = expectedAnswer(c, "boundary");
 		if (choices.length === 1 && choices[0] === "none") {
 			assert.deepEqual(unsafeChoices, ids, c.id);
-			assert.notEqual(c.expected.status.choices[0], "milestone", c.id);
+			assert.notEqual(expectedAnswer(c, "status").choices[0], "milestone", c.id);
 			continue;
 		}
 		const positions = choices.map((id) => ids.indexOf(id));
 		assert.ok(!positions.includes(-1), `${c.id}: unknown boundary record`);
 		assert.ok(!choices.includes("none"), c.id);
 		for (const p of positions)
-			assert.notEqual(records[p].role, "user", `${c.id}: phase ends on a user`);
+			assert.notEqual(at(records, p).role, "user", `${c.id}: phase ends on a user`);
 		assert.deepEqual(unsafeChoices, ids.slice(Math.max(...positions) + 1), c.id);
 	}
 });
@@ -313,18 +325,20 @@ test("boundary references mark folding unfinished work as unsafe", () => {
 test("every split covers each kind, status, boundary form and language", () => {
 	for (const split of SPLITS) {
 		const inSplit = (task: EvalTask) => CASES.filter((c) => c.task === task && c.split === split);
-		const kinds = new Set(inSplit("intent").flatMap((c) => c.expected.kind.choices));
+		const kinds = new Set(inSplit("intent").flatMap((c) => expectedAnswer(c, "kind").choices));
 		for (const kind of KINDS) assert.ok(kinds.has(kind), `${split} kind ${kind}`);
 		const contradicts = new Set(
-			inSplit("supersession").flatMap((c) => c.expected.contradicts.choices),
+			inSplit("supersession").flatMap((c) => expectedAnswer(c, "contradicts").choices),
 		);
 		assert.ok(contradicts.has("none"), `${split} none`);
 		assert.ok(contradicts.size > 1, `${split} item reversal`);
 		for (const task of ["milestone-status", "milestone-boundary"] as const) {
-			const statuses = new Set(inSplit(task).flatMap((c) => c.expected.status.choices));
+			const statuses = new Set(inSplit(task).flatMap((c) => expectedAnswer(c, "status").choices));
 			for (const status of STATUSES)
 				assert.ok(statuses.has(status), `${split} ${task} status ${status}`);
-			const boundaries = inSplit(task).map((c) => c.expected.boundary.choices[0] === "none");
+			const boundaries = inSplit(task).map(
+				(c) => expectedAnswer(c, "boundary").choices[0] === "none",
+			);
 			assert.ok(boundaries.includes(true) && boundaries.includes(false), task);
 		}
 		const languages = new Set(
@@ -339,14 +353,14 @@ test("holdout has several cases for every reference class", () => {
 	const holdout = (task: EvalTask) => CASES.filter((c) => c.task === task && c.split === "holdout");
 	for (const kind of KINDS)
 		assert.ok(
-			holdout("intent").filter((c) => c.expected.kind.choices.includes(kind)).length >=
+			holdout("intent").filter((c) => expectedAnswer(c, "kind").choices.includes(kind)).length >=
 				MIN_HOLDOUT_PER_CLASS,
 			`intent ${kind}`,
 		);
 	for (const task of ["milestone-status", "milestone-boundary"] as const)
 		for (const status of STATUSES)
 			assert.ok(
-				holdout(task).filter((c) => c.expected.status.choices[0] === status).length >=
+				holdout(task).filter((c) => expectedAnswer(c, "status").choices[0] === status).length >=
 					MIN_HOLDOUT_PER_CLASS,
 				`${task} ${status}`,
 			);
@@ -362,7 +376,7 @@ test("intent cases separate marker words from marker-free instructions", async (
 			text: input.message,
 			activeItems: input.activeItems,
 		});
-		const protectedReference = c.expected.kind.choices.some((k) => PROTECTED.has(k));
+		const protectedReference = expectedAnswer(c, "kind").choices.some((k) => PROTECTED.has(k));
 		if (!protectedReference && (PROTECTED.has(verdict.kind) || verdict.excerpts !== undefined))
 			spuriousCapture += 1;
 		if (protectedReference && verdict.kind === "ephemeral" && !verdict.excerpts)

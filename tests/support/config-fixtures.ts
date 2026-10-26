@@ -98,14 +98,14 @@ export async function runSessionStart(
 	const handlers = pi.onCalls.get("session_start");
 	assert.ok(handlers, "factory must register a session_start handler");
 	assert.equal(handlers.length, 3);
-	const prevAgentDir = process.env.PI_CODING_AGENT_DIR;
-	process.env.PI_CODING_AGENT_DIR = fixture.agentDir;
+	const prevAgentDir = process.env["PI_CODING_AGENT_DIR"];
+	process.env["PI_CODING_AGENT_DIR"] = fixture.agentDir;
 	try {
 		for (const handler of handlers)
 			await handler({ type: "session_start", reason } as never, ctx as never);
 	} finally {
-		if (prevAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = prevAgentDir;
+		if (prevAgentDir === undefined) delete process.env["PI_CODING_AGENT_DIR"];
+		else process.env["PI_CODING_AGENT_DIR"] = prevAgentDir;
 	}
 }
 
@@ -120,7 +120,9 @@ export function fireTurnEnd(pi: FakePi, ctx: FakeCtx, turnIndex = 0): void {
 	const handlers = pi.onCalls.get("turn_end");
 	assert.ok(handlers, "factory must register a turn_end handler");
 	assert.equal(handlers.length, 2);
-	handlers[1]({ type: "turn_end", turnIndex } as never, ctx as never);
+	const handler = handlers[1];
+	assert.ok(handler, "factory must register the turn_end handler");
+	handler({ type: "turn_end", turnIndex } as never, ctx as never);
 }
 
 /** Drive the `before_agent_start` handler to (re)compute the tool gate. */
@@ -132,7 +134,9 @@ export async function fireBeforeAgentStart(
 	const handlers = pi.onCalls.get("before_agent_start");
 	assert.ok(handlers, "factory must register a before_agent_start handler");
 	assert.equal(handlers.length, 1);
-	await handlers[0](
+	const handler = handlers[0];
+	assert.ok(handler, "factory must register a before_agent_start handler");
+	await handler(
 		{
 			type: "before_agent_start",
 			prompt: "p",

@@ -164,7 +164,7 @@ function fakeRegistry(
 ): PolicyRegistry {
 	const wait = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 	const record = (model: string, context: { questions: object }) => {
-		const status = (context.questions as Record<string, { instructions: string }>).status;
+		const status = (context.questions as Record<string, { instructions: string }>)["status"];
 		sent.push({
 			model,
 			questions: Object.keys(context.questions),

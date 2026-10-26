@@ -82,7 +82,9 @@ export function resolveTurnEntries(
 		toolResults.push(entry.message);
 		toolResultEntryIds.push(entry.id);
 	}
-	return { messageEntryId: branch[index].id, toolResults, toolResultEntryIds };
+	const messageEntry = branch[index];
+	assert.ok(messageEntry, "turn message must exist on the branch");
+	return { messageEntryId: messageEntry.id, toolResults, toolResultEntryIds };
 }
 
 /**
@@ -193,7 +195,9 @@ export function fireContext(pi: FakePi, ctx: FakeCtx): Array<Record<string, unkn
 	const handlers = pi.onCalls.get("context");
 	assert.ok(handlers, "factory must register a context handler");
 	assert.equal(handlers.length, 1);
-	const result = handlers[0]({ type: "context", messages: [] } as never, ctx as never) as {
+	const handler = handlers[0];
+	assert.ok(handler, "factory must register a context handler");
+	const result = handler({ type: "context", messages: [] } as never, ctx as never) as {
 		messages: Array<Record<string, unknown>>;
 	};
 	return result.messages;

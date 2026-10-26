@@ -63,6 +63,12 @@ function runner(source: SessionSnapshot, requests: string[], final?: string): Pr
 	};
 }
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 it("refuses unfinished source batches before making a paid model request", async () => {
 	const source = { ...snapshot(), pendingToolCalls: ["pending-call"] };
 	let calls = 0;
@@ -95,17 +101,18 @@ it("refines a fitting full history in one request without an intermediate summar
 	const result = await proposeTree(source, { model: runner(source, requests) });
 	assert.equal(result.method, "model");
 	assert.equal(result.calls, 1);
-	for (let index = 0; index < 3; index++) assert.match(requests[0], new RegExp(`RECORD_${index}_`));
+	for (let index = 0; index < 3; index++)
+		assert.match(at(requests, 0), new RegExp(`RECORD_${index}_`));
 });
 
 it("supplies branch-parent-safe fold starts and a self-contained report contract", async () => {
 	const source = { ...snapshot(4), safeCuts: new Set([-1, 0, 2]) };
-	source.entries[3].parentId = "id-0";
+	at(source.entries, 3).parentId = "id-0";
 	const requests: string[] = [];
 	await proposeTree(source, { model: runner(source, requests) });
-	assert.match(requests[0], /"safeFoldStartIds":\["id-0","id-1","id-3"\]/);
-	assert.match(requests[0], /Only summary becomes model-facing handoff text/);
-	assert.match(requests[0], /goal and outcome are display metadata/);
+	assert.match(at(requests, 0), /"safeFoldStartIds":\["id-0","id-1","id-3"\]/);
+	assert.match(at(requests, 0), /Only summary becomes model-facing handoff text/);
+	assert.match(at(requests, 0), /goal and outcome are display metadata/);
 });
 
 it("covers every large record across bounded extraction calls before refinement", async () => {
@@ -124,6 +131,7 @@ it("splits one huge record without losing textual fragments", async () => {
 	const source = snapshot(1, 0);
 	const original = Array.from({ length: 800 }, (_, i) => `UNIQUE_${i};`).join("");
 	const entry = source.entries[0];
+	assert.ok(entry);
 	if (entry.type === "message" && entry.message.role === "user") entry.message.content = original;
 	const requests: string[] = [];
 	const model = runner(source, requests);

@@ -130,6 +130,12 @@ const row = (rows: readonly RankRow[], id: string): RankRow => {
 	return found;
 };
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 test("chain consults the second model only on abstention, invalid output or error, and adds cost and latency", async () => {
 	const cases = [
 		intentCase("d1", "development"),
@@ -353,7 +359,7 @@ test("the gate chosen on development is not re-tuned on holdout", async () => {
 	assert.equal(sweep.selected.holdout?.unsafeAccepted, 1, "holdout is read, not tuned");
 	assert.equal(sweep.points.find((p) => p.threshold === 0.95)?.holdout?.unsafeAccepted, 0);
 	assert.equal(sweep.points.length, 10);
-	assert.equal(sweep.points[0].threshold, 0.5);
+	assert.equal(at(sweep.points, 0).threshold, 0.5);
 
 	const withoutUnsafe = await run(cases, [
 		...development,
@@ -371,7 +377,7 @@ test("the gate chosen on development is not re-tuned on holdout", async () => {
 		obs(A, "h1", "rule", 0.9),
 		obs(A, "h2", "rule", 0.95),
 	]);
-	const unreachable = never.tasks.intent?.sweeps[0].selected;
+	const unreachable = never.tasks.intent && at(never.tasks.intent.sweeps, 0).selected;
 	assert.equal(unreachable?.threshold, null);
 	assert.match(unreachable?.reason ?? "", /no threshold/);
 });
@@ -388,7 +394,9 @@ test("ranking is lexicographic: unsafe accepted, accepted-exact rate, cost, p95"
 		over: Partial<EvalObservation> = {},
 	) => [
 		obs(name, "d1", "rule", 0.9, over),
-		...answers.map(([choice, confidence], i) => obs(name, holdout[i], choice, confidence, over)),
+		...answers.map(([choice, confidence], i) =>
+			obs(name, at(holdout, i), choice, confidence, over),
+		),
 	];
 	const X = "decisions:t/x";
 	const Y = "decisions:t/y";
@@ -418,7 +426,7 @@ test("ranking is lexicographic: unsafe accepted, accepted-exact rate, cost, p95"
 		[V, W, Y, X].map((m) => `single(${m})`),
 	);
 	assert.equal(row(singles, `single(${X})`).holdout?.acceptedExactRate, 0.75);
-	assert.equal(singles[0].holdout?.unsafeAccepted, 0);
+	assert.equal(at(singles, 0).holdout?.unsafeAccepted, 0);
 	assert.deepEqual(
 		singles.map((r) => r.rank),
 		[1, 2, 3, 4],
@@ -448,10 +456,10 @@ test("results under the minimum case count are insufficient and rank below suffi
 			[`single(${B})`, true],
 		],
 	);
-	assert.match(singles[1].insufficientReason ?? "", /n=2 < 3/);
-	assert.equal(singles[1].holdout?.missingCases, 1);
+	assert.match(at(singles, 1).insufficientReason ?? "", /n=2 < 3/);
+	assert.equal(at(singles, 1).holdout?.missingCases, 1);
 	assert.equal(
-		singles[1].holdout?.acceptedExactRate,
+		at(singles, 1).holdout?.acceptedExactRate,
 		2 / 3,
 		"a missing case counts as a failed decision",
 	);
@@ -494,7 +502,7 @@ test("unsupported and failing models stay visible in rankings and exclusions", a
 	);
 	const task = report.tasks.intent;
 	const singles = task?.ranking.singles ?? [];
-	assert.equal(singles[0].id, `single(${A})`);
+	assert.equal(at(singles, 0).id, `single(${A})`);
 	const unsupported = row(singles, `single(${U})`).holdout;
 	const erroring = row(singles, `single(${E})`).holdout;
 	assert.equal(unsupported?.unsupported, 2);
@@ -530,12 +538,13 @@ test("per-question counts, abstention and repetition consistency are reported", 
 		obs(A, "h3", "rule", 0.4),
 		obs(A, "h3", "bogus", 0.9, { repetition: 1 }),
 	]);
-	const detail = report.tasks.intent?.models[0].holdout;
+	const detail = report.tasks.intent && at(report.tasks.intent.models, 0).holdout;
 	assert.ok(detail);
 	assert.equal(detail.consistency.casesWithRepeats, 3);
 	assert.equal(detail.consistency.fullyAgreeingCases, 1);
 	assert.ok(Math.abs((detail.consistency.agreementRate ?? 0) - 1 / 3) < 1e-12);
-	const kind = detail.perQuestion.kind;
+	const kind = detail.perQuestion["kind"];
+	assert.ok(kind);
 	assert.equal(kind.questions, 6);
 	assert.equal(kind.unsafeAccepted, 1);
 	assert.equal(kind.abstained, 1);

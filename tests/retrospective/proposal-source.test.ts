@@ -32,6 +32,12 @@ function user(id: string, parentId: string | null, content: string): SessionEntr
 	};
 }
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 it("infers nested rewind intervals from parent/fromId and preserves an honest current tail", () => {
 	const source = snapshot([
 		user("a", null, "Start task"),
@@ -71,6 +77,7 @@ it("infers nested rewind intervals from parent/fromId and preserves an honest cu
 	);
 	assert.equal(plan.sourceSha256, source.sha256);
 	const root = plan.groups[0];
+	assert.ok(root);
 	assert.equal(root.lastEntryId, "h");
 	assert.equal(root.state, "open");
 	const outer = root.children.find(
@@ -104,8 +111,8 @@ it("serializes every branch without truncation, preserving thinking and textual 
 	]);
 	const records = buildProposalRecords(source, { tools: {} });
 	assert.equal(records.records.length, 3);
-	assert.ok(records.records[1].text.includes("x".repeat(120000)));
-	assert.equal(JSON.parse(records.records[2].text).parentId, "root");
+	assert.ok(at(records.records, 1).text.includes("x".repeat(120000)));
+	assert.equal(JSON.parse(at(records.records, 2).text).parentId, "root");
 });
 
 it("redacts linked context replacements and resolves reused call IDs on their own ancestry", () => {
@@ -351,7 +358,7 @@ it("keeps deep existing history inside valid 32-level annotations with an explic
 	const plan = buildHeuristicPlan(source, (warning) => warnings.push(warning));
 	assert.doesNotThrow(() => parseRetrospectivePlan(plan));
 	assert.match(warnings.join(" "), /32 levels/);
-	assert.equal(plan.groups[0].firstEntryId, "u0");
-	assert.equal(plan.groups[0].lastEntryId, "tail");
+	assert.equal(at(plan.groups, 0).firstEntryId, "u0");
+	assert.equal(at(plan.groups, 0).lastEntryId, "tail");
 	assert.equal(JSON.stringify(source.entries), before);
 });

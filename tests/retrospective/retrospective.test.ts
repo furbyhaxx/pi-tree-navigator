@@ -119,6 +119,12 @@ function systemState(context: ReturnType<typeof buildSessionContext>) {
 	};
 }
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 describe("retrospective clone", () => {
 	it("preserves source bytes and messages, nests summaries, and resumes on the tail", async () => {
 		const f = await fixture();
@@ -194,7 +200,7 @@ describe("retrospective clone", () => {
 				.filter((entry) => entry.type === "custom" && entry.customType === "tree-phase").length,
 			2,
 		);
-		f.plan.groups[0].children[0].mode = "digest";
+		at(at(f.plan.groups, 0).children, 0).mode = "digest";
 		await writeFile(f.planPath, JSON.stringify(f.plan));
 		const digestPreview = await previewRetrospectiveSession(f.planPath);
 		const digestClone = await cloneRetrospectiveSession(f.planPath, digestPreview.previewToken);
@@ -203,7 +209,7 @@ describe("retrospective clone", () => {
 		);
 		assert.match(digestText, /Earlier handoffs in this span/);
 		assert.doesNotMatch(digestText, /CHILD_FACT/);
-		f.plan.groups[0].children[0].mode = "synthesized";
+		at(at(f.plan.groups, 0).children, 0).mode = "synthesized";
 		await writeFile(f.planPath, JSON.stringify(f.plan));
 		const synthesized = await previewRetrospectiveSession(f.planPath);
 		const other = await cloneRetrospectiveSession(f.planPath, synthesized.previewToken);
@@ -251,7 +257,7 @@ describe("retrospective clone", () => {
 	it("refuses a changed source or changed plan after preview without publishing a clone", async () => {
 		const f = await fixture();
 		const preview = await previewRetrospectiveSession(f.planPath);
-		f.plan.groups[0].summary = "Different summary.";
+		at(f.plan.groups, 0).summary = "Different summary.";
 		await writeFile(f.planPath, JSON.stringify(f.plan));
 		await assert.rejects(cloneRetrospectiveSession(f.planPath, preview.previewToken), /preview/i);
 		await writeFile(f.source, `${await readFile(f.source, "utf8")} `);
@@ -261,7 +267,7 @@ describe("retrospective clone", () => {
 
 	it("refuses overlapping siblings and malformed source records", async () => {
 		const f = await fixture();
-		f.plan.groups[0].children[1].firstEntryId = "one";
+		at(at(f.plan.groups, 0).children, 1).firstEntryId = "one";
 		await writeFile(f.planPath, JSON.stringify(f.plan));
 		await assert.rejects(previewRetrospectiveSession(f.planPath), /overlap|ordered/i);
 		await writeFile(f.source, `${await readFile(f.source, "utf8")}not json\n`);
@@ -292,7 +298,7 @@ describe("retrospective clone", () => {
 			/Compaction compact retains target/,
 		);
 
-		f.plan.groups[0].lastEntryId = "before";
+		at(f.plan.groups, 0).lastEntryId = "before";
 		await writeFile(f.planPath, JSON.stringify(f.plan));
 		const preview = await previewRetrospectiveSession(f.planPath);
 		const result = await cloneRetrospectiveSession(f.planPath, preview.previewToken);
@@ -316,7 +322,7 @@ describe("retrospective clone", () => {
 		for (const [name, firstEntryId, lastEntryId] of [
 			["edit included, target excluded", "inside", "edit"],
 			["target included, edit excluded", "target", "inside"],
-		]) {
+		] satisfies [string, string, string][]) {
 			const f = await fixture({
 				entries: [
 					{ type: "session_info", id: "name", name: "Original" },
@@ -405,7 +411,10 @@ describe("retrospective clone", () => {
 			user("tail", "Continue"),
 		];
 		const siblingResults = await fixture({
-			entries: [...entries.slice(0, 4), { ...entries[3], id: "sibling-result", parentId: "call" }],
+			entries: [
+				...entries.slice(0, 4),
+				{ ...at(entries, 3), id: "sibling-result", parentId: "call" },
+			],
 			groups: [group("batch", "call", "sibling-result")],
 		});
 		await previewRetrospectiveSession(siblingResults.planPath);
@@ -476,7 +485,7 @@ describe("retrospective clone", () => {
 		const reused = await fixture({
 			entries: [
 				...entries.slice(0, 4),
-				{ ...entries[2], id: "new-call" },
+				{ ...at(entries, 2), id: "new-call" },
 				user("waiting", "Wait for this new call"),
 			],
 			groups: [{ ...group("annotation", "new-call", "waiting"), state: "open" }],
@@ -854,12 +863,12 @@ describe("retrospective clone", () => {
 		assert.equal(preview.descendants.length, 1);
 		const copied = await cloneRetrospectiveSession(f.planPath, preview.previewToken);
 		assert.equal(copied.descendants.length, 1);
-		const childClone = await readFile(copied.descendants[0].path, "utf8");
+		const childClone = await readFile(at(copied.descendants, 0).path, "utf8");
 		assert.equal(
 			childClone.slice(childClone.indexOf("\n") + 1),
 			childBytes.slice(childBytes.indexOf("\n") + 1),
 		);
-		assert.equal(JSON.parse(childClone.split("\n")[0]).parentSession, copied.path);
+		assert.equal(JSON.parse(at(childClone.split("\n"), 0)).parentSession, copied.path);
 		assert.equal(await readFile(childPath, "utf8"), childBytes);
 		const recursivePlan = {
 			...f.plan,
@@ -885,7 +894,7 @@ describe("retrospective clone", () => {
 		await writeFile(f.planPath, JSON.stringify(recursivePlan));
 		const recursePreview = await previewRetrospectiveSession(f.planPath);
 		const restructured = await cloneRetrospectiveSession(f.planPath, recursePreview.previewToken);
-		const childSession = SessionManager.open(restructured.descendants[0].path);
+		const childSession = SessionManager.open(at(restructured.descendants, 0).path);
 		assert.equal(childSession.getHeader()?.parentSession, restructured.path);
 		assert.match(JSON.stringify(childSession.buildSessionContext().messages), /CHILD_HANDOFF/);
 		assert.equal(await readFile(childPath, "utf8"), childBytes);

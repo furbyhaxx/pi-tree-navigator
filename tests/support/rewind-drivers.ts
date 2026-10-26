@@ -37,7 +37,9 @@ export async function requestRewind(
 		totalTokens,
 	);
 	const result = await f.tool.execute(toolCallId, args, undefined, undefined, f.ctx);
-	appendToolResult(f.sm, toolCallId, TOOL_NAME, result.content[0].text, result.details);
+	const content = result.content[0];
+	assert.ok(content, "tool must return content");
+	appendToolResult(f.sm, toolCallId, TOOL_NAME, content.text, result.details);
 	const leafBeforeFold = f.sm.getLeafId() as string;
 	const boundary = await fireTurnEndAll(f.pi, f.ctx, call.message, turn);
 	return { result, callId: call.id, boundary, leafBeforeFold };

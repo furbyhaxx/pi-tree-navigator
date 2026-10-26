@@ -21,7 +21,7 @@ function analyze(
 		mkdirSync(base);
 		const entries: Record<string, unknown>[] = [];
 		const append = (entry: Record<string, unknown>) =>
-			entries.push({ parentId: entries.at(-1)?.id ?? null, ...entry });
+			entries.push({ parentId: entries.at(-1)?.["id"] ?? null, ...entry });
 		for (let i = 0; i < 4; i++) {
 			const request = {
 				type: "custom_message",

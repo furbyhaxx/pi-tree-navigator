@@ -74,6 +74,12 @@ const item = (ledger: Ledger, id: string) => {
 	return found;
 };
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 describe("userEntryIndexOf", () => {
 	it("resolves user message positions on the branch, nothing else", () => {
 		const sm = SessionManager.inMemory("/tmp");
@@ -192,7 +198,7 @@ describe("readBranchLedger", () => {
 		appendOpsEntry(pi(sm), [addRule("Added later", u1)]);
 		const result = readBranchLedger(sm.getBranch());
 		assert.equal(result.warnings.length, 1);
-		assert.match(result.warnings[0], new RegExp(summaryId));
+		assert.match(at(result.warnings, 0), new RegExp(summaryId));
 		assert.deepEqual(
 			result.ledger.items.map((i) => i.text),
 			["Survives", "Added later"],
@@ -318,8 +324,8 @@ describe("spanUserEntryRefs", () => {
 			refs.map((ref) => ref.id),
 			[u2, u3],
 		);
-		assert.equal(refs[0].preview, "line one line two");
-		assert.ok(refs[1].preview.length <= 400);
+		assert.equal(at(refs, 0).preview, "line one line two");
+		assert.ok(at(refs, 1).preview.length <= 400);
 	});
 
 	it("is empty when the anchor is not on the branch", () => {
@@ -399,7 +405,7 @@ describe("reconcileFoldContinuity", () => {
 			result.report?.rejected.map((r) => r.id),
 			["R1"],
 		);
-		assert.match(result.report?.rejected[0].reason ?? "", /protected/);
+		assert.match(result.report ? at(result.report.rejected, 0).reason : "", /protected/);
 		assert.match(result.notice ?? "", /^Continuity: 1 delta op rejected \(R1 .*protected.*\)\.$/);
 		assert.ok(!result.notice?.includes("\n"));
 	});

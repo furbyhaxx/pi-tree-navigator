@@ -48,8 +48,10 @@ describe("milestone classifier context", () => {
 		).structure;
 		assert.equal(structure.objective, "Ship the parser");
 		assert.equal(structure.folds.length, MAX_STRUCTURE_ITEMS);
-		assert.equal(structure.folds[0].label, "phase-3");
-		assert.ok(structure.folds[0].outcome.length <= 300);
+		const firstFold = structure.folds[0];
+		assert.ok(firstFold);
+		assert.equal(firstFold.label, "phase-3");
+		assert.ok(firstFold.outcome.length <= 300);
 		assert.deepEqual(structure.anchors, [{ name: "parser-start", afterRecordId: "r1" }]);
 	});
 });
@@ -83,7 +85,7 @@ describe("milestone question wording", () => {
 		assert.equal(wording.status.instructions, "Custom status question");
 		assert.deepEqual(wording.status.criteria, INSTRUCTED_WORDING.status.criteria);
 		assert.equal(wording.boundary.instructions, INSTRUCTED_WORDING.boundary.instructions);
-		const boundary = sent(wording).questions.boundary;
+		const boundary = sent(wording).questions["boundary"];
 		assert.ok(boundary?.type === "choice");
 		assert.equal(boundary.criteria[NO_BOUNDARY], INSTRUCTED_WORDING.boundary.none);
 	});

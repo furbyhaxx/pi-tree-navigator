@@ -41,6 +41,12 @@ async function fixture() {
 	return { directory, a, b, body, put, root };
 }
 
+function at<T>(values: readonly T[], index: number): T {
+	const value = values[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 test("discovers a two-level path-linked family and plans immutable body copies", async () => {
 	const f = await fixture();
 	const alias = join(f.a, "alias.jsonl");
@@ -66,7 +72,7 @@ test("discovers a two-level path-linked family and plans immutable body copies",
 		const end = plan.bytes.indexOf(10);
 		const header = JSON.parse(plan.bytes.subarray(0, end).toString());
 		assert.deepEqual(plan.bytes.subarray(end + 1), f.body);
-		assert.equal(header.parentSession, index === 0 ? clone : plans[0].path);
+		assert.equal(header.parentSession, index === 0 ? clone : at(plans, 0).path);
 		assert.notEqual(header.id, plan.source.header.id);
 		assert.equal(header.id, plan.sessionId);
 		assert.equal(header.custom, "kept");
@@ -80,7 +86,7 @@ test("discovers a two-level path-linked family and plans immutable body copies",
 	}
 	await f.put(child, "changed", f.root);
 	assert.notEqual(
-		snapshots[0].sha256,
+		at(snapshots, 0).sha256,
 		createHash("sha256")
 			.update(await readFile(child))
 			.digest("hex"),

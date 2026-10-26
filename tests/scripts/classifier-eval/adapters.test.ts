@@ -333,7 +333,7 @@ describe("chat adapter", () => {
 		assert.deepEqual(
 			body.response_format.json_schema.schema.properties.answers.properties.kind.properties.choice
 				.enum,
-			Object.keys(intent.questions.kind?.choices ?? {}),
+			Object.keys(intent.questions["kind"]?.choices ?? {}),
 		);
 		assert.equal(body.max_completion_tokens, 1_024);
 		assert.deepEqual(body.provider, {

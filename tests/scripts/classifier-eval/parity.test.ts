@@ -122,7 +122,7 @@ describe("metering registry", () => {
 		await meter.settled();
 		assert.equal(result.stopReason, "stop");
 		assert.ok(seen[0] && seen[0].held > 0, "held before the request was sent");
-		assert.equal(seen[0]?.options.maxRetries, 0);
+		assert.equal(seen[0]?.options["maxRetries"], 0);
 		assert.deepEqual(seen[0]?.wire, {
 			model: "m",
 			state: {},
