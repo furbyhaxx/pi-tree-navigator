@@ -12,6 +12,11 @@ import { rewindFixture } from "../support/rewind-fixtures.ts";
 import { makeFakeSession } from "../support/session-fakes.ts";
 import { appendTurn } from "../support/session-messages.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 installHarnessHooks();
 
 describe("schema shape \u2014 Kiro compatibility", () => {
@@ -63,7 +68,7 @@ describe("schema shape \u2014 Kiro compatibility", () => {
 				properties: Record<string, { anyOf?: Array<{ const: string }> }>;
 			}
 		).properties;
-		const literals = (key: string) => props[key].anyOf?.map((l) => l.const);
+		const literals = (key: string) => defined(props[key]).anyOf?.map((l) => l.const);
 		assert.deepEqual(literals("action"), ["anchor", "rewind", "list", "pin"]);
 		assert.deepEqual(literals("kind"), ["sub-goal", "decision", "fact", "file", "steering"]);
 	});
@@ -105,13 +110,13 @@ describe("schema shape \u2014 Kiro compatibility", () => {
 				properties: Record<string, { description?: string }>;
 			}
 		).properties;
-		assert.match(props.name.description ?? "", /Required when action='anchor'/);
-		assert.match(props.rewindTo.description ?? "", /Required when action='rewind'/);
-		assert.match(props.newLabel.description ?? "", /Required when action='rewind'/);
-		assert.match(props.summaryFocus.description ?? "", /Required when action='rewind'/);
+		assert.match(defined(props["name"]).description ?? "", /Required when action='anchor'/);
+		assert.match(defined(props["rewindTo"]).description ?? "", /Required when action='rewind'/);
+		assert.match(defined(props["newLabel"]).description ?? "", /Required when action='rewind'/);
+		assert.match(defined(props["summaryFocus"]).description ?? "", /Required when action='rewind'/);
 		for (const key of ["kind", "text", "path", "why"]) {
 			assert.match(
-				props[key].description ?? "",
+				defined(props[key]).description ?? "",
 				/Required when action='pin'/,
 				`${key} states when it is required`,
 			);
@@ -123,12 +128,15 @@ describe("schema shape \u2014 Kiro compatibility", () => {
 		// the same anti-drift pin. A regression that hardcodes "max 40" or
 		// "≥20" (instead of interpolating) silently desyncs when the
 		// constants are re-tuned.
-		assert.match(props.name.description ?? "", new RegExp(`max ${MAX_NAME_LENGTH}`));
+		assert.match(defined(props["name"]).description ?? "", new RegExp(`max ${MAX_NAME_LENGTH}`));
 		assert.match(
-			props.summaryFocus.description ?? "",
+			defined(props["summaryFocus"]).description ?? "",
 			new RegExp(`\u2265${MIN_SUMMARY_FOCUS_LENGTH}`),
 		);
-		assert.match(props.text.description ?? "", new RegExp(`max ${MAX_ITEM_TEXT_CHARS}`));
+		assert.match(
+			defined(props["text"]).description ?? "",
+			new RegExp(`max ${MAX_ITEM_TEXT_CHARS}`),
+		);
 	});
 });
 
@@ -167,39 +175,42 @@ Operations (set \`action\`):
 				properties: Record<string, { description?: string }>;
 			}
 		).properties;
-		assert.equal(props.action.description, "Which operation to perform.");
+		assert.equal(defined(props["action"]).description, "Which operation to perform.");
 		assert.equal(
-			props.name.description,
+			defined(props["name"]).description,
 			`Required when action='anchor'. Kebab-case milestone label, max ${MAX_NAME_LENGTH} chars.`,
 		);
 		assert.equal(
-			props.rewindTo.description,
+			defined(props["rewindTo"]).description,
 			`Required when action='rewind'. Kebab-case name of an existing anchor on the active branch to rewind to.`,
 		);
 		assert.equal(
-			props.newLabel.description,
+			defined(props["newLabel"]).description,
 			`Required when action='rewind'. Kebab-case label for the resulting branch_summary entry; reusable as a future rewindTo.`,
 		);
 		assert.equal(
-			props.summaryFocus.description,
+			defined(props["summaryFocus"]).description,
 			`Required when action='rewind'; ≥${MIN_SUMMARY_FOCUS_LENGTH} chars after trim. Encode: (1) the user's most recent instruction verbatim, (2) what's done in the collapsed segment, (3) what's left to do as a next action; if the user authorized continuing, name the next work item, not a report or wrap-up.`,
 		);
 		assert.equal(
-			props.kind.description,
+			defined(props["kind"]).description,
 			`Required when action='pin'. Your sub-goal, a decision you made, a key fact, a file pointer, or steering that lapses when its anchor is folded.`,
 		);
 		assert.equal(
-			props.text.description,
+			defined(props["text"]).description,
 			`Required when action='pin' unless kind='file'. What to remember, max ${MAX_ITEM_TEXT_CHARS} chars.`,
 		);
-		assert.equal(props.path.description, `Required when action='pin' and kind='file'. File path.`);
-		assert.equal(props.lines.description, `Optional with kind='file': N or N-M.`);
 		assert.equal(
-			props.why.description,
+			defined(props["path"]).description,
+			`Required when action='pin' and kind='file'. File path.`,
+		);
+		assert.equal(defined(props["lines"]).description, `Optional with kind='file': N or N-M.`);
+		assert.equal(
+			defined(props["why"]).description,
 			`Required when action='pin' and kind='file'. Why the file matters.`,
 		);
 		assert.equal(
-			props.scopeAnchor.description,
+			defined(props["scopeAnchor"]).description,
 			`Anchor name for kind='steering' (default: newest anchor); optional for 'sub-goal'.`,
 		);
 	});
@@ -220,17 +231,17 @@ Operations (set \`action\`):
 		).properties;
 		const all = [
 			tool.description,
-			props.action.description ?? "",
-			props.name.description ?? "",
-			props.rewindTo.description ?? "",
-			props.newLabel.description ?? "",
-			props.summaryFocus.description ?? "",
-			props.kind.description ?? "",
-			props.text.description ?? "",
-			props.path.description ?? "",
-			props.lines.description ?? "",
-			props.why.description ?? "",
-			props.scopeAnchor.description ?? "",
+			defined(props["action"]).description ?? "",
+			defined(props["name"]).description ?? "",
+			defined(props["rewindTo"]).description ?? "",
+			defined(props["newLabel"]).description ?? "",
+			defined(props["summaryFocus"]).description ?? "",
+			defined(props["kind"]).description ?? "",
+			defined(props["text"]).description ?? "",
+			defined(props["path"]).description ?? "",
+			defined(props["lines"]).description ?? "",
+			defined(props["why"]).description ?? "",
+			defined(props["scopeAnchor"]).description ?? "",
 		].join("");
 		assert.ok(
 			all.length / 4 <= 600,
@@ -248,8 +259,8 @@ describe("dispatch: list action", () => {
 		const { tool, ctx } = setup();
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
 		assert.equal(result.isError, undefined);
-		assert.match(result.content[0].text, /No labels on the active branch\./);
-		assert.equal(result.details.count, 0);
+		assert.match(defined(result.content[0]).text, /No labels on the active branch\./);
+		assert.equal(result.details["count"], 0);
 	});
 
 	it("renders anchored labels in chronological order", async () => {
@@ -261,8 +272,8 @@ describe("dispatch: list action", () => {
 
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
 		assert.equal(result.isError, undefined);
-		assert.equal(result.details.count, 2);
-		const text = result.content[0].text;
+		assert.equal(result.details["count"], 2);
+		const text = defined(result.content[0]).text;
 		// Chronological order: 'first' appears before 'second' in the text.
 		const firstIdx = text.indexOf("first");
 		const secondIdx = text.indexOf("second");
@@ -280,7 +291,7 @@ describe("dispatch: list action", () => {
 		const t1 = appendTurn(sm, "u1", "a1", 100);
 		pi.pi.setLabel(t1.assistantId, "anchor:short");
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
-		const text = result.content[0].text;
+		const text = defined(result.content[0]).text;
 		assert.match(text, /^\s+\d+\.\d+%\s+\S+/m);
 	});
 
@@ -292,7 +303,7 @@ describe("dispatch: list action", () => {
 		const t2 = appendTurn(sm, "u2", "second reply", 200);
 		pi.pi.setLabel(t2.assistantId, `anchor:${long}`);
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
-		const body = result.content[0].text.split("\n\n")[1];
+		const body = defined(result.content[0]).text.split("\n\n")[1];
 		assert.equal(
 			body,
 			[
@@ -308,7 +319,8 @@ describe("dispatch: list action", () => {
 		appendTurn(sm, "u", "a");
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
 		// Header includes context as 'Nk' fallback but no ' of 1.0M' tail.
-		const header = result.content[0].text.split("\n")[0];
+		const header = defined(result.content[0]).text.split("\n")[0];
+		assert.ok(header !== undefined);
 		assert.ok(!header.includes(" of "), `header had ' of ': ${header}`);
 	});
 
@@ -316,8 +328,8 @@ describe("dispatch: list action", () => {
 		// No __testHooks.captureSession() called \u2014 reflection finds nothing.
 		const { tool, ctx } = setup();
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
-		assert.match(result.content[0].text, /reflection bootstrap missing/);
-		assert.equal(result.details.reflectionOk, false);
+		assert.match(defined(result.content[0]).text, /reflection bootstrap missing/);
+		assert.equal(result.details["reflectionOk"], false);
 	});
 
 	it("clears the reflection warning when the owning session is captured", async () => {
@@ -325,8 +337,8 @@ describe("dispatch: list action", () => {
 		const fake = makeFakeSession(sm);
 		__testHooks.captureSession(fake as unknown as AgentSession);
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
-		assert.doesNotMatch(result.content[0].text, /reflection bootstrap missing/);
-		assert.equal(result.details.reflectionOk, true);
+		assert.doesNotMatch(defined(result.content[0]).text, /reflection bootstrap missing/);
+		assert.equal(result.details["reflectionOk"], true);
 	});
 
 	it("list and rewind warnings cite their site-specific REFLECTION_BOOTSTRAP_WARNING constants verbatim", async () => {
@@ -368,11 +380,11 @@ describe("dispatch: list action", () => {
 			const { tool, ctx } = setup();
 			const result = await tool.execute("tc-list", { action: "list" }, undefined, undefined, ctx);
 			assert.ok(
-				result.content[0].text.includes(listSentinel),
+				defined(result.content[0]).text.includes(listSentinel),
 				"list output must include REFLECTION_BOOTSTRAP_WARNING_LIST verbatim",
 			);
 			assert.ok(
-				!result.content[0].text.includes(rewindSentinel),
+				!defined(result.content[0]).text.includes(rewindSentinel),
 				"list output must NOT include the rewind-specific phrasing",
 			);
 		}
@@ -382,6 +394,7 @@ describe("dispatch: list action", () => {
 		// contain the rewind-specific constant verbatim, NOT the list one.
 		{
 			const { done } = await rewindFixture({ capture: false });
+			assert.ok(done);
 			assert.ok(
 				done.message.content.includes(rewindSentinel),
 				"rewind continuation must include REFLECTION_BOOTSTRAP_WARNING_REWIND verbatim",
@@ -418,7 +431,7 @@ describe("dispatch: anchor action", () => {
 				ctx,
 			);
 			assert.equal(result.isError, true);
-			assert.match(result.content[0].text, /kebab-case/);
+			assert.match(defined(result.content[0]).text, /kebab-case/);
 		});
 	}
 
@@ -433,7 +446,7 @@ describe("dispatch: anchor action", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.match(result.content[0].text, /No session entries yet/);
+		assert.match(defined(result.content[0]).text, /No session entries yet/);
 	});
 
 	it("happy path: setLabel called with the prefixed label and details surface entryId", async () => {
@@ -451,8 +464,8 @@ describe("dispatch: anchor action", () => {
 		const labelCall = pi.setLabelCalls.find(([, lbl]) => lbl === "anchor:impl-start");
 		assert.ok(labelCall, "setLabel was not called with anchor:impl-start");
 		assert.equal(labelCall?.[0], t.assistantId);
-		assert.equal(result.details.label, "impl-start");
-		assert.equal(result.details.entryId, t.assistantId);
+		assert.equal(result.details["label"], "impl-start");
+		assert.equal(result.details["entryId"], t.assistantId);
 		// Pin the anchor follow-up hint prose. This is the load-bearing
 		// nudge that gets the agent to chain `anchor → rewind` correctly
 		// with a populated `summaryFocus`. A future copy-edit that drops
@@ -532,11 +545,11 @@ describe("dispatch: anchor action", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.match(result.content[0].text, /already exists on the active branch/);
-		assert.match(result.content[0].text, /labels are unique/);
-		assert.match(result.content[0].text, /action='list'/);
-		assert.match(result.content[0].text, /fresh name/);
-		assert.equal(result.details.refusal, true);
+		assert.match(defined(result.content[0]).text, /already exists on the active branch/);
+		assert.match(defined(result.content[0]).text, /labels are unique/);
+		assert.match(defined(result.content[0]).text, /action='list'/);
+		assert.match(defined(result.content[0]).text, /fresh name/);
+		assert.equal(result.details["refusal"], true);
 		// No write at all: no set, no clear, and the prior label and the new
 		// leaf are untouched.
 		assert.equal(
@@ -546,7 +559,7 @@ describe("dispatch: anchor action", () => {
 		);
 		assert.equal(sm.getLabel(t1.assistantId), "anchor:iter-start");
 		assert.equal(sm.getLabel(t2.assistantId), undefined);
-		assert.equal(result.details.movedFromPriorEntry, undefined);
+		assert.equal(result.details["movedFromPriorEntry"], undefined);
 	});
 
 	it("refusal copy names the colliding name and points at list + a fresh name", async () => {
@@ -562,7 +575,7 @@ describe("dispatch: anchor action", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		const text = result.content[0].text;
+		const text = defined(result.content[0]).text;
 		// Byte-exact copy pin (same string the source builds).
 		assert.equal(
 			text,
@@ -682,8 +695,8 @@ describe("dispatch: refusal results surface as failed tool calls", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.equal(result.details.refusal, true);
-		assert.match(result.content[0].text, /summaryFocus/);
+		assert.equal(result.details["refusal"], true);
+		assert.match(defined(result.content[0]).text, /summaryFocus/);
 	});
 });
 
@@ -716,7 +729,7 @@ describe("dispatch: adversarial inputs", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.match(result.content[0].text, /No label 'missing'/);
+		assert.match(defined(result.content[0]).text, /No label 'missing'/);
 	});
 
 	it("newLabel === rewindTo passes name validation; surfaces as a 'no such label' error if not pre-anchored", async () => {
@@ -738,7 +751,7 @@ describe("dispatch: adversarial inputs", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.match(result.content[0].text, /No label 'same'/);
+		assert.match(defined(result.content[0]).text, /No label 'same'/);
 	});
 });
 

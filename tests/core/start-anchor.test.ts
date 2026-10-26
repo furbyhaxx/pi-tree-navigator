@@ -30,6 +30,11 @@ import {
 import { installHarnessHooks } from "../support/harness-hooks.ts";
 import { appendTurn } from "../support/session-messages.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 installHarnessHooks();
 
 /** Fire the captured `agent_end` handler (run-end fallback). */
@@ -37,7 +42,7 @@ function fireAgentEnd(pi: FakePi, ctx: FakeCtx): void {
 	const handlers = pi.onCalls.get("agent_end");
 	assert.ok(handlers, "factory must register an agent_end handler");
 	assert.equal(handlers.length, 1);
-	handlers[0]({ type: "agent_end", messages: [] } as never, ctx as never);
+	defined(handlers[0])({ type: "agent_end", messages: [] } as never, ctx as never);
 }
 
 describe("automatic start anchor (#55)", () => {
@@ -624,7 +629,10 @@ describe("automatic start anchor (#55)", () => {
 				ctx,
 			);
 			assert.equal(result.isError, true);
-			assert.match(result.content[0].text, /A label 'start' already exists on the active branch/);
+			assert.match(
+				defined(result.content[0]).text,
+				/A label 'start' already exists on the active branch/,
+			);
 		} finally {
 			cleanupConfigFixture(fixture);
 		}

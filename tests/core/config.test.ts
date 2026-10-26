@@ -47,6 +47,11 @@ import {
 } from "../../src/core/runtime-config.ts";
 import type { HandoffMode } from "../../src/fold/handoff.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 const AGENT_DIR = "/agent";
 const GLOBAL_PATH = `/agent/${TREE_NAVIGATOR_CONFIG_FILENAME}`;
 const PROJECT_PATH = `/project/.pi/${TREE_NAVIGATOR_CONFIG_FILENAME}`;
@@ -78,7 +83,8 @@ function readerFor(files: Record<string, string>): {
 		paths,
 		async readFile(path: string) {
 			paths.push(path);
-			if (path in files) return files[path];
+			const content = files[path];
+			if (content !== undefined) return content;
 			const err = new Error(
 				`ENOENT: no such file or directory, open '${path}'`,
 			) as NodeJS.ErrnoException;
@@ -369,7 +375,7 @@ describe("consolidation config", () => {
 				[GLOBAL_PATH]: JSON.stringify(global),
 				[PROJECT_PATH]: JSON.stringify(project),
 			}).readFile,
-			runtime,
+			...(runtime !== undefined && { runtime }),
 		});
 
 	it("defaults when absent and merges partial layers per key", async () => {
@@ -428,7 +434,7 @@ describe("consolidation config", () => {
 		assert.equal(out.warnings.length, 5);
 		for (const key of ["enabled", "max_handoffs", "max_window_share", "keep_newest"])
 			assert.ok(out.warnings.some((warning) => warning.includes(`invalid consolidation.${key}`)));
-		assert.ok(out.warnings[4].includes("runtime config"));
+		assert.ok(defined(out.warnings[4]).includes("runtime config"));
 	});
 
 	for (const block of [null, [], false, 3, "on"]) {
@@ -436,7 +442,7 @@ describe("consolidation config", () => {
 			const out = await load({ consolidation: { enabled: false } }, { consolidation: block });
 			assert.equal(out.config.consolidation.enabled, false);
 			assert.equal(out.warnings.length, 1);
-			assert.match(out.warnings[0], /consolidation .*must be an object — ignored/);
+			assert.match(defined(out.warnings[0]), /consolidation .*must be an object — ignored/);
 		});
 	}
 });
