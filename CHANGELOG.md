@@ -8,7 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Toolchain**: Bun 1.4, TypeScript 7, Biome 2.5 (tabs, 100 columns) and a Justfile (`just check`, `just probe`, `just rpc-verify`) replace pnpm, `node --test` and npm scripts.
-- **Layout**: the package is `@furbyhaxx/pi-tree-navigator`; sources live in `src/<area>/` with tests mirrored under `tests/`. The Pi entry point is `src/index.ts`.
+- **Layout**: the package is `@furbyhaxx/pi-tree-navigator`; sources live in `src/<area>/` with tests mirrored under `tests/`. The Pi entry point is `src/index.ts`, which now only builds the shared `NavigatorState`, constructs controllers (fold runtime and adapters, recovery, request guard, automatic folding, consolidation, continuity, hints, lifecycle) and registers them in the original order; the `navigate_tree` tool lives in `src/tool/`. No behavior change.
 - **Docs**: the README keeps install, usage and configuration basics; the reference sections moved to `docs/configuration.md` and `docs/how-it-works.md`, and the changelog uses Keep a Changelog headings.
 
 ### Removed

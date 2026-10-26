@@ -2,91 +2,147 @@
 
 ## Code overview
 
-`src/index.ts` registers the `navigate_tree` definition from `src/tool/navigate-tree-tool.ts` and owns
-the shared independent fold host: manual and queued operations, overflow recovery,
-branch creation, agent-context refresh and history-rewrite notifications.
+`src/index.ts` only wires the extension: it allocates one `NavigatorState`
+(`core/navigator-state.ts`), builds the controllers below with narrow dependencies,
+and registers every event handler, the tool, the command and the renderers in a fixed
+order. Controllers are side-effect-free factories (`createXController(deps)`); they read
+replaceable configuration from the state at call time and never import `index.ts`.
 
-- `helpers.ts`: label conventions, validation and formatting.
-- `config.ts`: layered global/trusted-project/runtime configuration.
-- `runtime-config.ts`: session-ID-scoped in-memory overrides, cleared at session
-  start/reload; shared by settings, live navigation and clone proposals.
-- `context-tokens.ts`, `rewind-hint.ts`: the single admission estimate (newest
-  valid usage plus the scaled tail, else the whole request) shared by the request
-  guard, hints, anchor rows and controller; rewind hints and recovery diagnostics.
+### `core/`
+
+- `navigator-state.ts`: grouped per-factory state (config, activity, folds, recovery,
+  continuity, automatic, anchors, turns).
+- `session-lifecycle.ts`: explicit, asymmetric session start/shutdown cleanup and
+  config application.
+- `hint-and-start-anchor.ts`: rewind hints and the automatic start anchor.
+- `helpers.ts`, `anchors.ts`, `label-writer.ts`: label conventions, validation,
+  anchor listing and label writes.
+- `config.ts` (+ `config-fields`, `-layers`, `-merge`): layered global/trusted-project/
+  runtime configuration. `runtime-config.ts`: session-ID-scoped in-memory overrides,
+  cleared at session start/reload.
+- `context-tokens.ts`, `request-accounting.ts`, `rewind-hint.ts`: the single admission
+  estimate (newest valid usage plus the scaled tail, else the whole request) shared by
+  the request guard, hints, anchor rows and controllers; token calibration.
+- `pi-internals.ts`, `projection.ts`, `pi-compaction.ts`: Pi reflection and session
+  capture, wire projection, compaction carry-over and Pi compaction settings.
+- `legacy-rewind.ts`: read-only projection and rendering of historical in-band
+  instructions and failed outcomes; no legacy execution.
+
+### `fold/`
+
 - `fold-engine.ts`: per-session serialization, snapshot/summary/commit orchestration
   and deterministic target selection.
+- `fold-runtime.ts`: prepares engine inputs and commits engine folds for the host.
+- `fold-adapters.ts`: manual and queued fold entry points (`queueFold`, `runFoldNow`).
+- `fold-preview.ts`, `fold-commit.ts`: materialization preview and branch commit.
+- `fold-pricing.ts`, `fold-policy.ts`: admission, candidate pricing and recommendation.
+- `fold-receipts.ts`, `fold-api.ts`: receipt drafts and the fold host contract.
 - `fold-inputs.ts`: current projected evidence restricted to the folded ancestry;
   Strategy A request construction, Strategy B evidence records and the projected
   records a consolidation merges.
-- `consolidation-planner.ts`: pure trigger and cut for background handoff
-  consolidation (handoff count or window share, newest handoffs kept, minimum saving).
-- `fold-summarizer.ts`: independent registry calls, cache-prefix strategy and bounded
-  map-reduce strategy, explicit evidence coverage and call limits; reasoning
-  allowance on top of answer caps and one reasoning-off retry after a `length` stop.
-- `auto-fold-planner.ts`: turn-boundary decisions for opt-in automatic folding:
-  deterministic pressure relief at `rewind_at_tokens` (no classifier), milestone
-  anchors from the classifier policy below it, cadence and stale-state gates.
+- `fold-summarizer.ts` (+ `-evidence`): independent registry calls, cache-prefix
+  strategy and bounded map-reduce strategy, explicit evidence coverage and call
+  limits; reasoning allowance on top of answer caps and one reasoning-off retry
+  after a `length` stop.
+- `consolidation-planner.ts`, `consolidation-runtime.ts`: pure trigger and cut for
+  background handoff consolidation (handoff count or window share, newest handoffs
+  kept, minimum saving) and its controller.
+- `summary-prompt.ts`: byte-pinned r5d instruction, stored-summary shape and file lists.
+- `handoff.ts`: report metadata, full/synthesized/digest materialization (digest
+  by default), unique recorded statistics and honest model-facing work context.
+- `handoff-projection.ts`: shared native projection patch; stale assistant usage
+  is invalidated for budgeting without changing historical accounting. Context
+  edits (including edits to the baseline itself), compactions and runtime-state
+  changes cannot reuse measurements of a superseded prefix.
+
+### `auto/`
+
+- `auto-fold-planner.ts`, `automatic-fold.ts`: turn-boundary decisions for opt-in
+  automatic folding (deterministic pressure relief at `rewind_at_tokens`, milestone
+  anchors from the classifier policy below it, cadence and stale-state gates) and
+  their controller.
 - `pressure-compaction.ts`: pure cut for tail-keeping pressure compaction: the
   newest safe message boundary that keeps a token budget verbatim without
-  separating a tool call from its result. The host writes a native compaction
-  with quoted open requests and the briefing, and anchors it.
-- `summary-prompt.ts`: byte-pinned r5d instruction, stored-summary shape and file lists.
-- `legacy-rewind.ts`: read-only projection and rendering of historical in-band
-  instructions and failed outcomes; no legacy execution.
-- `retrospective-plan.ts`: strict graph snapshots, branch-local tool accounting,
-  inspection and nested-plan parsing.
-- `retrospective.ts`: range validation, clone construction, state checks and publication.
-- `anchor-command.ts`, `frame.ts`: the unified `/anchor` command and the shared
-  editor-replacing `FrameList` panel (breadcrumb rule, fuzzy search, frozen height).
-- `tree-screen.ts`: real-entry navigation.
-- `fold-plan-screen.ts`: one-screen recommended fold plan, advanced label/focus,
-  fuzzy search, progress and cancellation; the engine executes confirmed plans.
-- `current-screen.ts`: branch-local ledger inspection and user-authorized edits.
-- `settings-screen.ts`, `settings-model-picker.ts`: staged scope-aware settings
-  with parser validation, model/thinking selection and editable tool policies.
-- `clone-screen.ts`, `clone-views.ts`: readable clone/proposal review with explicit
-  raw-JSON escape hatches; no implicit provider requests or session switches.
-- `retrospective-command.ts`: `/anchor clone` inspection, proposal dispatch, preview
-  and confirmation.
-- `continuity-ledger.ts`, `continuity-briefing.ts`: pure session continuity ledger
-  (goals, rules, decisions, steering, file pointers) with user-authority invariants,
-  fold reconciliation and model-facing briefing.
+  separating a tool call from its result.
+- `auto-navigate-config.ts`: wildcard per-model settings and milestone policies.
+- `auto-milestone.ts`: projected, disclosure-filtered milestone evidence and stable
+  entry mapping.
+- `milestone-classifier.ts`: milestone status/boundary request builders with optional
+  session-structure context; shared by the auto controller and the benchmark.
+- `milestone-policy.ts`: tunable, benchmarked parallel confirmation of phase status
+  and boundary; failures and disagreement abstain. Decisions place anchors only.
+
+### `recovery/`
+
+- `request-guard.ts`: `context`/`context_with_system` projection, request accounting
+  and preflight recovery, the anchor mandate, refusal results.
+- `turn-boundary.ts`: fold/recovery ownership at `turn_end`, `agent_before_settle`
+  and `agent_settled`.
+- `independent-recovery.ts`: decreasing-context recovery attempts and receipts.
+- `pressure-compaction.ts`: writes the native tail-keeping compaction with quoted
+  open requests and the briefing, and anchors it.
+- `recovery-cut.ts`: late entries and the recovery cut.
+
+### `continuity/`
+
+- `continuity-ledger.ts` (+ `-model`, `-parser`, `-reducer`, `-validation`),
+  `continuity-briefing.ts`: pure session continuity ledger (goals, rules, decisions,
+  steering, file pointers) with user-authority invariants, fold reconciliation and
+  model-facing briefing.
 - `continuity-store.ts`: branch-local persistence. Ledger state is the replay of
   `navigate-tree-continuity-ops` entries on the active branch, replaced by the
   snapshot in `branch_summary.details.continuity` at each fold. The fold embeds the
   briefing in the stored handoff and reports rejected agent ops.
-- `continuity-capture.ts`: deterministic capture of user intent (rules, decisions,
-  objective, steering, `ask_user` answers) with a heuristic classifier and an
-  optional model classifier. User words are stored verbatim.
-- `intent-policy.ts`: validated `continuity.intentClassifier` policies (single model,
-  `recommended` preset, per-stage object overrides), Decisions/chat stage adapters
-  and supersession escalation on abstention only.
-- `milestone-classifier.ts`: milestone status/boundary request builders with optional
-  session-structure context; shared by the opt-in auto controller and the benchmark.
+- `continuity-capture.ts` (+ `-heuristics`, `-model`, `-scan`): deterministic capture
+  of user intent (rules, decisions, objective, steering, `ask_user` answers) with a
+  heuristic classifier and an optional model classifier. User words are stored verbatim.
+- `continuity-runtime.ts`: capture at turn boundaries and the one-time continue nudge.
+- `intent-policy.ts` (+ `-settings`, `-chat`): validated `continuity.intentClassifier`
+  policies (single model, `recommended` preset, per-stage object overrides),
+  Decisions/chat stage adapters and supersession escalation on abstention only.
+- `open-user-requests.ts`, `retirement-check.ts`: open-request quoting and
+  retirement safety.
+
+### `retrospective/`
+
+- `retrospective-plan.ts`: strict graph snapshots, branch-local tool accounting,
+  inspection and nested-plan parsing.
+- `retrospective.ts`, `retrospective-clone.ts`: range validation, clone construction,
+  state checks and publication.
+- `retrospective-command.ts`: `/anchor clone` inspection, proposal dispatch, preview
+  and confirmation.
 - `proposal-options.ts`: exact model/thinking selectors and tool disclosure rules.
 - `proposal-source.ts`: deterministic outlines and filtered full-text source records.
 - `proposal-engine.ts`: optional bounded model analysis and explicit heuristic fallback.
 - `proposal-model.ts`: registry-authenticated, provider-neutral side calls.
 - `proposal-command.ts`: disclosure confirmation, cancellable generation, readable
   plan review, optional advanced editing and exclusive private-plan saving.
-- `auto-navigate-config.ts`: wildcard per-model settings and milestone policies.
-- `auto-milestone.ts`: projected, disclosure-filtered milestone evidence and stable
-  entry mapping.
-- `milestone-policy.ts`: tunable, benchmarked parallel confirmation of phase status
-  and boundary; failures and disagreement abstain. Decisions place anchors only.
-- `handoff.ts`: report metadata, full/synthesized/digest materialization (digest
-  by default), unique recorded statistics and honest model-facing work context.
-- `handoff-renderer.ts`: guarded native summary-card and tree-row patches.
-- `handoff-projection.ts`: shared native projection patch; stale assistant usage
-  is invalidated for budgeting without changing historical accounting. Context
-  edits (including edits to the baseline itself), compactions and runtime-state
-  changes cannot reuse measurements of a superseded prefix.
-- `history-outline.ts`: manifest-gated chronological containment in `/tree`, with
-  a raw native graph escape and navigation through real entry IDs.
 - `descendant-sessions.ts`: bounded family discovery and immutable-body copy plans.
 - `scripts/restructure-session.mjs`: offline JSON CLI for the same clone engine.
 
-Tests live beside the extension modules and use Node's test runner. The clone
+### `tool/` and `ui/`
+
+- `tool/navigate-tree-tool.ts`, `tool/navigate-tree-parameters.ts`: the
+  `navigate_tree` definition, schema and action dispatch.
+- `ui/anchor-command.ts`, `ui/anchor-command-deps.ts`, `ui/frame.ts` (+ `-rendering`,
+  `-text`): the unified `/anchor` command and the shared editor-replacing `FrameList`
+  panel (breadcrumb rule, fuzzy search, frozen height).
+- `ui/tree-screen.ts`: real-entry navigation.
+- `ui/fold-plan-screen.ts` (+ `-panel`, `-state`), `ui/fold-screen.ts`: one-screen
+  recommended fold plan, advanced label/focus, fuzzy search, progress and
+  cancellation; the engine executes confirmed plans.
+- `ui/current-screen.ts`: branch-local ledger inspection and user-authorized edits.
+- `ui/settings-screen*.ts`, `ui/settings-model-picker.ts`, `ui/policy-settings*.ts`:
+  staged scope-aware settings with parser validation, model/thinking selection and
+  editable tool policies.
+- `ui/clone-screen.ts`, `ui/clone-views.ts`: readable clone/proposal review with
+  explicit raw-JSON escape hatches; no implicit provider requests or session switches.
+- `ui/tool-renderer.ts`, `ui/navigator-renderers.ts`, `ui/handoff-renderer.ts`: tool
+  rows, receipt messages, and guarded native summary-card and tree-row patches.
+- `ui/history-outline.ts`: manifest-gated chronological containment in `/tree`, with
+  a raw native graph escape and navigation through real entry IDs.
+
+Tests live in `tests/`, mirroring `src/`, and run with `bun test`. The clone
 integration tests reopen generated files through the real Pi `SessionManager`;
 no model calls are needed. See [verification.md](verification.md) for gates and
 live rewind verification, and [retrospective-cloning.md](retrospective-cloning.md)

@@ -68,11 +68,13 @@ against the installed Pi.
 
 ```text
 src/
-  index.ts            Pi entrypoint: registration and event wiring only
-  core/               config layers, runtime overrides, helpers, token estimates, session writes
+  index.ts            Pi entrypoint: NavigatorState, controller construction, registration
+  core/               state, lifecycle, config layers, runtime overrides, helpers, token
+                      estimates, Pi internals, session writes, hints and start anchor
   fold/               fold engine, inputs, summarizer, prompts, handoffs, consolidation
   auto/               auto-fold planner, milestone classifier and policies, pressure compaction
-  recovery/           preflight and provider overflow recovery
+  recovery/           request guard, turn boundary, overflow recovery, pressure compaction
+  tool/               navigate_tree definition, schema and action dispatch
   continuity/         ledger, capture, store, briefing, open requests, retirement check
   retrospective/      proposals, plans, snapshots, cloning, descendant sessions
   ui/                 /anchor command, frame, screens, settings, tool and handoff renderers
