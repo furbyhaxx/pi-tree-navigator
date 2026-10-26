@@ -18,20 +18,18 @@ import {
 	renderBriefing,
 	type UserEntryRef,
 } from "./continuity-briefing.ts";
+import { reconcileFold } from "./continuity-ledger.ts";
 import {
-	applyOps,
 	type ContinuityDelta,
 	capText,
-	createLedger,
 	ITEM_ORIGINS,
 	type ItemOrigin,
 	LEDGER_DETAILS_KEY,
 	type Ledger,
 	type LedgerOp,
-	parseLedger,
-	reconcileFold,
-	serializeLedger,
-} from "./continuity-ledger.ts";
+} from "./continuity-ledger-model.ts";
+import { parseLedger, serializeLedger } from "./continuity-ledger-parser.ts";
+import { applyOps, createLedger } from "./continuity-ledger-reducer.ts";
 
 export const CONTINUITY_OPS_CUSTOM_TYPE = "navigate-tree-continuity-ops";
 

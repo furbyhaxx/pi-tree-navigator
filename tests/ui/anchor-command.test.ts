@@ -9,7 +9,8 @@ import {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { applyOps, createLedger, type Ledger } from "../../src/continuity/continuity-ledger.ts";
+import type { Ledger } from "../../src/continuity/continuity-ledger-model.ts";
+import { applyOps, createLedger } from "../../src/continuity/continuity-ledger-reducer.ts";
 import { CLONE_USAGE } from "../../src/retrospective/retrospective-command.ts";
 import {
 	type AnchorCommandDeps,

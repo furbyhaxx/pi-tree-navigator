@@ -15,13 +15,12 @@ import {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import {
-	applyOps,
-	createLedger,
 	LEDGER_DETAILS_KEY,
 	type Ledger,
 	type LedgerOp,
-	serializeLedger,
-} from "../../src/continuity/continuity-ledger.ts";
+} from "../../src/continuity/continuity-ledger-model.ts";
+import { serializeLedger } from "../../src/continuity/continuity-ledger-parser.ts";
+import { applyOps, createLedger } from "../../src/continuity/continuity-ledger-reducer.ts";
 import {
 	appendOpsEntry,
 	CONTINUITY_OPS_CUSTOM_TYPE,

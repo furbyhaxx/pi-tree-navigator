@@ -8,7 +8,7 @@ import type {
 	IntentRegistry,
 	IntentVerdict,
 } from "./continuity-capture.ts";
-import { capText } from "./continuity-ledger.ts";
+import { capText } from "./continuity-ledger-model.ts";
 import {
 	classifierAsk,
 	parseClassifierModel,

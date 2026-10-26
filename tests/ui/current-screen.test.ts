@@ -15,12 +15,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
-	applyOps,
 	ContinuityError,
-	createLedger,
 	type Ledger,
 	type LedgerOp,
-} from "../../src/continuity/continuity-ledger.ts";
+} from "../../src/continuity/continuity-ledger-model.ts";
+import { applyOps, createLedger } from "../../src/continuity/continuity-ledger-reducer.ts";
 import {
 	CONTINUITY_OPS_CUSTOM_TYPE,
 	readBranchLedger,

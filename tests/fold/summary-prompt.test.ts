@@ -18,7 +18,7 @@ import {
 	extractContinuityDelta,
 	renderBriefing,
 } from "../../src/continuity/continuity-briefing.ts";
-import { applyOps, createLedger } from "../../src/continuity/continuity-ledger.ts";
+import { applyOps, createLedger } from "../../src/continuity/continuity-ledger-reducer.ts";
 import {
 	appendContinuityBriefing,
 	BRANCH_SUMMARY_PREAMBLE,

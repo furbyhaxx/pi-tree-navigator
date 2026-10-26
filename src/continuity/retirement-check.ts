@@ -9,7 +9,7 @@
  */
 
 import type { ClassifierContext } from "@earendil-works/pi-ai";
-import { capText } from "./continuity-ledger.ts";
+import { capText } from "./continuity-ledger-model.ts";
 import type { StageAnswer } from "./intent-policy.ts";
 
 /** Id of the one question; its answer is `yes` or `no`. */

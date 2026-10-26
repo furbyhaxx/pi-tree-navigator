@@ -56,8 +56,8 @@ import { renderBriefing } from "../src/continuity/continuity-briefing.ts";
 import {
 	LEDGER_DETAILS_KEY,
 	MAX_ITEM_TEXT_CHARS,
-	parseLedger,
-} from "../src/continuity/continuity-ledger.ts";
+} from "../src/continuity/continuity-ledger-model.ts";
+import { parseLedger } from "../src/continuity/continuity-ledger-parser.ts";
 import {
 	appendOpsEntry,
 	CONTINUITY_OPS_CUSTOM_TYPE,

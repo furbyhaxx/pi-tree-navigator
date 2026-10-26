@@ -13,7 +13,6 @@ import {
 } from "../continuity/continuity-briefing.ts";
 import {
 	type AppliedOp,
-	applyOps,
 	type ItemKind,
 	type ItemOrigin,
 	isProtected,
@@ -23,7 +22,8 @@ import {
 	type LedgerOp,
 	MAX_ITEM_TEXT_CHARS,
 	type RejectedOp,
-} from "../continuity/continuity-ledger.ts";
+} from "../continuity/continuity-ledger-model.ts";
+import { applyOps } from "../continuity/continuity-ledger-reducer.ts";
 import {
 	appendOpsEntry,
 	readBranchLedger,
