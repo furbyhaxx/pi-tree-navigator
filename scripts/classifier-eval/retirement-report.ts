@@ -184,7 +184,7 @@ export interface Simulation {
 
 interface Vote {
 	accepted: boolean;
-	choice?: string;
+	choice?: string | undefined;
 	correct: boolean;
 	unsafe: boolean;
 }
@@ -254,7 +254,7 @@ export function simulate(
 	let addedCost = 0;
 
 	for (const parent of input.parents) {
-		const expected = parent.expected.contradicts;
+		const expected = parent.expected["contradicts"];
 		if (!expected) continue;
 		for (const [key, msObservation] of msByKey) {
 			if (msObservation.caseId !== parent.id) continue;

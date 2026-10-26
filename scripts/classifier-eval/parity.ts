@@ -306,7 +306,7 @@ export function createMeter(options: MeterOptions) {
 						})
 						.result(),
 				(message: AssistantMessage) => ({
-					responseId: message.responseId,
+					...(message.responseId !== undefined && { responseId: message.responseId }),
 					text: message.content.map((block) => (block.type === "text" ? block.text : "")).join(""),
 					...(message.stopReason === "error" && {
 						status: "error" as const,
@@ -387,7 +387,7 @@ export async function replayVerdict(
 			}
 		}
 	}
-	const contradicts = luna?.status === "ok" ? luna.answers.contradicts : undefined;
+	const contradicts = luna?.status === "ok" ? luna.answers["contradicts"] : undefined;
 	const registry = {
 		getModelOfType: () => undefined,
 		getAvailableOfType: async (type: string) => [
@@ -503,9 +503,9 @@ const same = (
 function acceptedUnsafe(
 	prepared: PreparedCase,
 	answers: {
-		kind?: EvalAnswer;
-		contradicts?: EvalAnswer;
-		lunaContradicts?: EvalAnswer;
+		kind?: EvalAnswer | undefined;
+		contradicts?: EvalAnswer | undefined;
+		lunaContradicts?: EvalAnswer | undefined;
 	},
 ): number {
 	const unsafe = (question: string, answer: EvalAnswer | undefined) => {
@@ -575,25 +575,30 @@ export async function compareCase(
 				liveMicro?.requestSha256 === undefined || hashes.length === 0
 					? null
 					: hashes.includes(liveMicro.requestSha256),
-			microsoftKind: same(prepared, "kind", liveMicro?.answers?.kind, micro),
-			microsoftContradicts: same(prepared, "contradicts", liveMicro?.answers?.contradicts, micro),
+			microsoftKind: same(prepared, "kind", liveMicro?.answers?.["kind"], micro),
+			microsoftContradicts: same(
+				prepared,
+				"contradicts",
+				liveMicro?.answers?.["contradicts"],
+				micro,
+			),
 			lunaContradicts:
 				liveLuna === undefined ? null : same(prepared, "contradicts", lunaAnswer(liveLuna), luna),
 			verdictModal: liveDecision === modal(decisions),
 			verdictAnyRepetition: decisions.includes(liveDecision),
 		},
 		liveUnsafeAccepted: acceptedUnsafe(prepared, {
-			kind: liveMicro?.answers?.kind,
-			contradicts: liveMicro?.answers?.contradicts,
+			kind: liveMicro?.answers?.["kind"],
+			contradicts: liveMicro?.answers?.["contradicts"],
 			lunaContradicts: liveLuna && lunaAnswer(liveLuna),
 		}),
 		benchmarkUnsafeAccepted: micro.reduce(
 			(sum, o) =>
 				sum +
 				acceptedUnsafe(prepared, {
-					kind: o.answers.kind,
-					contradicts: o.answers.contradicts,
-					lunaContradicts: luna.find((l) => l.repetition === o.repetition)?.answers.contradicts,
+					kind: o.answers["kind"],
+					contradicts: o.answers["contradicts"],
+					lunaContradicts: luna.find((l) => l.repetition === o.repetition)?.answers["contradicts"],
 				}),
 			0,
 		),
@@ -609,12 +614,14 @@ function lunaAnswer(call: CallRecord): EvalAnswer | undefined {
 	try {
 		const parsed: unknown = JSON.parse(call.text ?? "");
 		const entry =
-			isRecord(parsed) && isRecord(parsed.answers) ? parsed.answers.contradicts : undefined;
-		return isRecord(entry) && typeof entry.choice === "string"
+			isRecord(parsed) && isRecord(parsed["answers"])
+				? parsed["answers"]["contradicts"]
+				: undefined;
+		return isRecord(entry) && typeof entry["choice"] === "string"
 			? {
-					choice: entry.choice,
-					...(typeof entry.confidence === "number" && {
-						confidence: entry.confidence,
+					choice: entry["choice"],
+					...(typeof entry["confidence"] === "number" && {
+						confidence: entry["confidence"],
 					}),
 				}
 			: undefined;
@@ -747,8 +754,8 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 	} catch (error) {
 		throw new UsageError(error instanceof Error ? error.message : String(error));
 	}
-	if (values.help) return "help";
-	const split = String(values.split);
+	if (values["help"]) return "help";
+	const split = String(values["split"]);
 	if (split !== "development" && split !== "holdout" && split !== "all")
 		throw new UsageError("--split must be development, holdout or all");
 	const positive = (name: string) => {
@@ -757,16 +764,16 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 			throw new UsageError(`--${name} must be a positive number`);
 		return value;
 	};
-	if (values.out === undefined && values["dry-run"] !== true)
+	if (values["out"] === undefined && values["dry-run"] !== true)
 		throw new UsageError("--out is required");
 	return {
-		out: String(values.out ?? ""),
+		out: String(values["out"] ?? ""),
 		split,
-		ledger: String(values.ledger),
+		ledger: String(values["ledger"]),
 		cap: positive("cap"),
 		maxUsd: positive("max-usd"),
 		waitMinutes: positive("wait-minutes"),
-		benchmark: (values.benchmark as string[] | undefined) ?? DEFAULT_BENCHMARK,
+		benchmark: (values["benchmark"] as string[] | undefined) ?? DEFAULT_BENCHMARK,
 		dryRun: values["dry-run"] === true,
 	};
 }
@@ -918,7 +925,7 @@ async function run(options: Options, deps: Deps): Promise<number> {
 					// The same question the escalation asks, alone, for every case that has active items.
 					meter.setCase(`${prepared.id}${PROBE_SUFFIX}`);
 					const { context } = buildIntentClassifierContext(intentInput(prepared));
-					const contradicts = context.questions.contradicts;
+					const contradicts = context.questions["contradicts"];
 					if (contradicts) {
 						await lunaAsk(
 							{ state: context.state, questions: { contradicts } },
@@ -1006,7 +1013,7 @@ const REPO_ROOT = resolve(import.meta.dirname, "../..");
 
 async function createRegistry(storePath: string, offline: boolean): Promise<BaseRegistry> {
 	const { ModelRegistry, ModelRuntime } = await import("@earendil-works/pi-coding-agent");
-	const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+	const agentDir = process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent");
 	const runtime = await ModelRuntime.create({
 		authPath: join(agentDir, "auth.json"),
 		modelsPath: join(agentDir, "models.json"),

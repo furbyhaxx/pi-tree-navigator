@@ -126,14 +126,14 @@ export function parseRouteTable(value: unknown, where: string): RouteTable {
 	for (const [id, entry] of Object.entries(models)) {
 		if (
 			!isRecord(entry) ||
-			(entry.kind !== "decisions" && entry.kind !== "chat") ||
-			!isUsd(entry.promptUsdPerM) ||
-			!isUsd(entry.completionUsdPerM) ||
+			(entry["kind"] !== "decisions" && entry["kind"] !== "chat") ||
+			!isUsd(entry["promptUsdPerM"]) ||
+			!isUsd(entry["completionUsdPerM"]) ||
 			!(
-				entry.contextTokens === null ||
-				(Number.isInteger(entry.contextTokens) && (entry.contextTokens as number) > 0)
+				entry["contextTokens"] === null ||
+				(Number.isInteger(entry["contextTokens"]) && (entry["contextTokens"] as number) > 0)
 			) ||
-			(entry.free !== undefined && entry.free !== true)
+			(entry["free"] !== undefined && entry["free"] !== true)
 		)
 			fail(`models.${id} is not a valid route entry`);
 	}
@@ -276,7 +276,7 @@ export function createBilling(options: BillingOptions): Billing {
 				const response = await get(path, apiKey, signal);
 				if (response.ok) {
 					const body: unknown = await response.json();
-					const cost = isRecord(body) && isRecord(body.data) && body.data.total_cost;
+					const cost = isRecord(body) && isRecord(body["data"]) && body["data"]["total_cost"];
 					if (isUsd(cost)) return cost;
 				} else if (!RETRYABLE_STATUSES.has(response.status) && response.status < 500) {
 					return undefined;
@@ -316,14 +316,14 @@ export function createBilling(options: BillingOptions): Billing {
 				throw new Error(`OpenRouter /key returned HTTP ${response.status}`);
 			}
 			const body: unknown = await response.json();
-			const data = isRecord(body) && isRecord(body.data) ? body.data : {};
+			const data = isRecord(body) && isRecord(body["data"]) ? body["data"] : {};
 			const number = (value: unknown) =>
 				typeof value === "number" && Number.isFinite(value) ? value : null;
 			return {
-				usage: number(data.usage),
-				usageDaily: number(data.usage_daily),
-				limit: number(data.limit),
-				limitRemaining: number(data.limit_remaining),
+				usage: number(data["usage"]),
+				usageDaily: number(data["usage_daily"]),
+				limit: number(data["limit"]),
+				limitRemaining: number(data["limit_remaining"]),
 			};
 		},
 	};

@@ -61,7 +61,7 @@ export function retirementCases(source: readonly EvalCase[]): readonly EvalCase[
 	return source.flatMap((parent) => {
 		if (parent.task !== "supersession" || parent.input.type !== "intent") return [];
 		const { message, activeItems } = parent.input;
-		const answer = parent.expected.contradicts;
+		const answer = parent.expected["contradicts"];
 		if (!answer) return [];
 		return activeItems.map((item): EvalCase => {
 			const named = answer.choices.includes(item.id);

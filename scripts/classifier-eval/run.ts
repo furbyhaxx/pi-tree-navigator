@@ -186,21 +186,23 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 	} catch (error) {
 		throw new UsageError(error instanceof Error ? error.message : String(error));
 	}
-	if (parsed.help) return "help";
-	const split = parsed.split === "dev" ? "development" : String(parsed.split);
+	if (parsed["help"]) return "help";
+	const split = parsed["split"] === "dev" ? "development" : String(parsed["split"]);
 	if (split !== "development" && split !== "holdout" && split !== "all")
 		throw new UsageError("--split must be development, holdout or all");
 	const tasks =
-		parsed.tasks === undefined
+		parsed["tasks"] === undefined
 			? TASKS
-			: String(parsed.tasks)
+			: String(parsed["tasks"])
 					.split(",")
 					.map((task) => {
 						if (!TASKS.includes(task as EvalTask)) throw new UsageError(`unknown task ${task}`);
 						return task as EvalTask;
 					});
 	const variants: Variant[] = [];
-	for (const spec of parsed.variants === undefined ? [] : String(parsed.variants).split(",")) {
+	for (const spec of parsed["variants"] === undefined
+		? []
+		: String(parsed["variants"]).split(",")) {
 		try {
 			const variant = parseVariant(spec);
 			if (!variants.some((known) => known.id === variant.id)) variants.push(variant);
@@ -208,10 +210,10 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 			throw new UsageError(error instanceof Error ? error.message : String(error));
 		}
 	}
-	const cap = Number(parsed.cap);
+	const cap = Number(parsed["cap"]);
 	if (!Number.isFinite(cap) || cap <= 0) throw new UsageError("--cap must be a positive number");
-	const uncatalogued = (parsed.uncatalogued as string[] | undefined) ?? [];
-	const models = String(parsed.models ?? "")
+	const uncatalogued = (parsed["uncatalogued"] as string[] | undefined) ?? [];
+	const models = String(parsed["models"] ?? "")
 		.split(",")
 		.map((model) => model.trim())
 		.filter(Boolean);
@@ -227,16 +229,16 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 		split,
 		tasks,
 		variants,
-		repetitions: integer(String(parsed.repetitions), "repetitions"),
-		concurrency: integer(String(parsed.concurrency), "concurrency", 64),
+		repetitions: integer(String(parsed["repetitions"]), "repetitions"),
+		concurrency: integer(String(parsed["concurrency"]), "concurrency", 64),
 		timeoutMs: integer(String(parsed["timeout-ms"]), "timeout-ms"),
 		dryRun,
-		ledger: String(parsed.ledger),
+		ledger: String(parsed["ledger"]),
 		cap,
 		...(out !== undefined && { out }),
 		...(resume !== undefined && { resume }),
-		...(parsed.cases !== undefined && { cases: String(parsed.cases) }),
-		...(parsed.rates !== undefined && { rates: String(parsed.rates) }),
+		...(parsed["cases"] !== undefined && { cases: String(parsed["cases"]) }),
+		...(parsed["rates"] !== undefined && { rates: String(parsed["rates"]) }),
 	};
 }
 
@@ -1130,7 +1132,7 @@ async function createRegistry(options: {
 	offline: boolean;
 }): Promise<RunRegistry> {
 	const { ModelRegistry, ModelRuntime } = await import("@earendil-works/pi-coding-agent");
-	const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+	const agentDir = process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent");
 	const runtime = await ModelRuntime.create({
 		authPath: join(agentDir, "auth.json"),
 		modelsPath: join(agentDir, "models.json"),

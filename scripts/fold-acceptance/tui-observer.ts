@@ -99,7 +99,7 @@ export default function tuiObserver(pi: ExtensionAPI): void {
 			typeof runtime.classify !== "function"
 		)
 			throw new Error("Installed runtime lacks the metering seam; dispatch refused");
-		if (model?.provider !== "openrouter" || model.id !== process.env.FOLD_TUI_MODEL)
+		if (model?.provider !== "openrouter" || model.id !== process.env["FOLD_TUI_MODEL"])
 			throw new Error("Selected route differs from the requested registry route");
 		if (model.contextWindow < 96000 || model.maxTokens < 8192)
 			throw new Error("Registry route cannot support the controlled 96k/8192 window");
@@ -108,7 +108,7 @@ export default function tuiObserver(pi: ExtensionAPI): void {
 		if (initialTokens + 16384 >= 96000)
 			throw new Error("Synthetic corpus does not fit with output/headroom; dispatch refused");
 		actual.agent.state.messages = actual.sessionManager.buildSessionContext().messages;
-		ledger = BudgetLedger.open(process.env.FOLD_TUI_LEDGER ?? "", 25);
+		ledger = BudgetLedger.open(process.env["FOLD_TUI_LEDGER"] ?? "", 25);
 		const beforeBudget = ledger.snapshot();
 		transport = createBudgetedTransport({
 			fetch: globalThis.fetch,
@@ -207,9 +207,9 @@ export default function tuiObserver(pi: ExtensionAPI): void {
 			}
 			return previous.apply(this, args);
 		};
-		out = process.env.FOLD_TUI_OUT ?? "";
-		target = process.env.FOLD_TUI_TARGET ?? "";
-		if (!isAbsolute(out) || !isAbsolute(process.env.FOLD_TUI_LEDGER ?? ""))
+		out = process.env["FOLD_TUI_OUT"] ?? "";
+		target = process.env["FOLD_TUI_TARGET"] ?? "";
+		if (!isAbsolute(out) || !isAbsolute(process.env["FOLD_TUI_LEDGER"] ?? ""))
 			throw new Error("Acceptance requires absolute evidence and shared-ledger paths");
 		sm = ctx.sessionManager as SessionManager;
 		if (

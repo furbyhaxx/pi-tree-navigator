@@ -14,6 +14,7 @@ export function scoreObservation(
 	const knownQuestions = Object.keys(observation.answers).every((key) => key in fixture.questions);
 	const answers: AnswerScore[] = Object.entries(fixture.expected).map(([question, expected]) => {
 		const answer = observation.answers[question];
+		const questionSpec = fixture.questions[question];
 		const confidenceValid =
 			answer?.confidence === undefined ||
 			(Number.isFinite(answer.confidence) && answer.confidence >= 0 && answer.confidence <= 1);
@@ -21,7 +22,7 @@ export function scoreObservation(
 			observation.status === "ok" &&
 			knownQuestions &&
 			answer !== undefined &&
-			Object.hasOwn(fixture.questions[question].choices, answer.choice) &&
+			Object.hasOwn(choicesOf(questionSpec, question), answer.choice) &&
 			confidenceValid;
 		return {
 			question,
@@ -50,6 +51,11 @@ export function scoreObservation(
 	};
 }
 
+function choicesOf(question: PreparedCase["questions"][string] | undefined, name: string) {
+	if (question === undefined) throw new TypeError(`Missing question: ${name}`);
+	return question.choices;
+}
+
 function wilson(successes: number, n: number) {
 	if (n === 0) return { n, low: null, high: null };
 	const z = 1.959963984540054;
@@ -65,7 +71,7 @@ function wilson(successes: number, n: number) {
 }
 
 function percentile(sorted: number[], fraction: number): number | null {
-	return sorted.length === 0 ? null : sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)];
+	return sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] ?? null;
 }
 
 /** Summarize a chosen model/task/split without dropping failed or unsupported cases. */
@@ -96,6 +102,7 @@ export function summarizeScores(scores: readonly CaseScore[]) {
 		const confidence = answer.confidence ?? 0;
 		const truth = Number(answer.correct);
 		const bin = bins[Math.min(9, Math.floor(confidence * 10))];
+		if (bin === undefined) throw new TypeError("Calibration bin is missing");
 		bin.n++;
 		bin.correct += truth;
 		bin.confidence += confidence;
