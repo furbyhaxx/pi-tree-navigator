@@ -19,14 +19,16 @@ import {
 	createModelClassifier,
 	FOLD_REQUEST_RE,
 	heuristicClassifier,
-	INTENT_KINDS,
 	type IntentClassifier,
 	type IntentInput,
 	type IntentKind,
 	type IntentVerdict,
+} from "../../src/continuity/continuity-capture.ts";
+import {
+	INTENT_KINDS,
 	MAX_CLASSIFIER_ITEMS,
 	MAX_CLASSIFIER_MESSAGE_CHARS,
-} from "../../src/continuity/continuity-capture.ts";
+} from "../../src/continuity/continuity-capture-model.ts";
 import {
 	applyOps,
 	createLedger,
