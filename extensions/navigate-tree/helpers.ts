@@ -30,15 +30,15 @@ export const TOOL_NAME = "navigate_tree";
  * the optional `focus` only ever extends the text after the matched prefix.
  */
 export function buildFoldRequestText(
-  anchorName: string,
-  newLabel: string,
-  minFocusLength: number,
-  focus?: string,
+	anchorName: string,
+	newLabel: string,
+	minFocusLength: number,
+	focus?: string,
 ): string {
-  const request = `Please fold the work since the '${anchorName}' anchor: call ${TOOL_NAME}(action='rewind', rewindTo='${anchorName}', newLabel='${newLabel}'), with a summaryFocus of at least ${minFocusLength} characters covering my latest instruction, what is done since that anchor and what remains.`;
-  if (focus === undefined) return request;
-  const escaped = focus.replace(/[\\"]/g, "\\$&");
-  return `${request} Use this summaryFocus: "${escaped}"`;
+	const request = `Please fold the work since the '${anchorName}' anchor: call ${TOOL_NAME}(action='rewind', rewindTo='${anchorName}', newLabel='${newLabel}'), with a summaryFocus of at least ${minFocusLength} characters covering my latest instruction, what is done since that anchor and what remains.`;
+	if (focus === undefined) return request;
+	const escaped = focus.replace(/[\\"]/g, "\\$&");
+	return `${request} Use this summaryFocus: "${escaped}"`;
 }
 
 // Reserved label prefix shared by anchor/rewind labels. Lives here (not
@@ -82,8 +82,7 @@ export const MAX_BOILERPLATE_LEAD_IN = 200;
 // if pi reworks the prelude wording, the strip falls back to a no-op
 // (`findLabelHint` shows the unmodified prelude). Verify when bumping
 // the peer-dep floor.
-const BRANCH_SUMMARY_SENTINEL =
-  "The user explored a different conversation branch";
+const BRANCH_SUMMARY_SENTINEL = "The user explored a different conversation branch";
 
 // Pi 0.75.5's branch-summary boilerplate places `## Goal` after the prelude
 // (verified against `dist/core/compaction/branch-summarization.js`). Used to
@@ -93,47 +92,41 @@ const GOAL_HEADER = "## Goal";
 
 /** Validate a kebab-case name suitable for use as a navigate-tree label. */
 export function isValidName(s: unknown): s is string {
-  return (
-    typeof s === "string" &&
-    s.length > 0 &&
-    s.length <= MAX_NAME_LENGTH &&
-    NAME_RE.test(s)
-  );
+	return typeof s === "string" && s.length > 0 && s.length <= MAX_NAME_LENGTH && NAME_RE.test(s);
 }
 
 /** Truncate text to a one-line preview, collapsing whitespace. */
 export function toOneLine(text: string, maxLen: number): string | null {
-  const t = text.replace(/\s+/g, " ").trim();
-  if (t.length === 0) return null;
-  if (maxLen <= 1) return t.length > 0 ? "…" : null;
-  return t.length > maxLen ? `${t.slice(0, maxLen - 1)}…` : t;
+	const t = text.replace(/\s+/g, " ").trim();
+	if (t.length === 0) return null;
+	if (maxLen <= 1) return t.length > 0 ? "…" : null;
+	return t.length > maxLen ? `${t.slice(0, maxLen - 1)}…` : t;
 }
 
 /**
  * Format token count as a percentage with one decimal, or as `Nk` if no window.
  */
 export function formatPct1(tokens: number, contextWindow: number): string {
-  if (contextWindow <= 0) return `${(tokens / 1000).toFixed(1)}k`;
-  return `${((tokens / contextWindow) * 100).toFixed(1)}%`;
+	if (contextWindow <= 0) return `${(tokens / 1000).toFixed(1)}k`;
+	return `${((tokens / contextWindow) * 100).toFixed(1)}%`;
 }
 
 /** Format a context window size as `1.0M` or `200k`. Empty string when unknown. */
 export function formatWindow(contextWindow: number): string {
-  if (contextWindow <= 0) return "";
-  if (contextWindow >= 1_000_000)
-    return `${(contextWindow / 1_000_000).toFixed(1)}M`;
-  return `${(contextWindow / 1000).toFixed(0)}k`;
+	if (contextWindow <= 0) return "";
+	if (contextWindow >= 1_000_000) return `${(contextWindow / 1_000_000).toFixed(1)}M`;
+	return `${(contextWindow / 1000).toFixed(0)}k`;
 }
 
 export function formatContextDelta(
-  beforeTokens: number,
-  afterTokens: number,
-  contextWindow: number,
+	beforeTokens: number,
+	afterTokens: number,
+	contextWindow: number,
 ): string {
-  if (contextWindow > 0) {
-    return `context ${formatPct1(beforeTokens, contextWindow)} → ${formatPct1(afterTokens, contextWindow)} of ${formatWindow(contextWindow)}`;
-  }
-  return `tokens ${beforeTokens} → ${afterTokens}`;
+	if (contextWindow > 0) {
+		return `context ${formatPct1(beforeTokens, contextWindow)} → ${formatPct1(afterTokens, contextWindow)} of ${formatWindow(contextWindow)}`;
+	}
+	return `tokens ${beforeTokens} → ${afterTokens}`;
 }
 
 /**
@@ -141,12 +134,12 @@ export function formatContextDelta(
  * different conversation branch...") so the hint shows the actual content.
  */
 export function stripBranchSummaryBoilerplate(text: string): string {
-  if (!text.startsWith(BRANCH_SUMMARY_SENTINEL)) return text;
-  const goalIdx = text.indexOf(GOAL_HEADER);
-  if (goalIdx > 0 && goalIdx < MAX_BOILERPLATE_LEAD_IN) {
-    return text.slice(goalIdx + GOAL_HEADER.length);
-  }
-  return text;
+	if (!text.startsWith(BRANCH_SUMMARY_SENTINEL)) return text;
+	const goalIdx = text.indexOf(GOAL_HEADER);
+	if (goalIdx > 0 && goalIdx < MAX_BOILERPLATE_LEAD_IN) {
+		return text.slice(goalIdx + GOAL_HEADER.length);
+	}
+	return text;
 }
 
 /**
@@ -155,27 +148,27 @@ export function stripBranchSummaryBoilerplate(text: string): string {
  * text blocks with spaces.
  */
 export function extractTextContent(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter(
-      (c): c is { type: "text"; text: string } =>
-        typeof c === "object" &&
-        c !== null &&
-        (c as { type?: string }).type === "text" &&
-        typeof (c as { text?: unknown }).text === "string",
-    )
-    .map((c) => c.text)
-    .join(" ");
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter(
+			(c): c is { type: "text"; text: string } =>
+				typeof c === "object" &&
+				c !== null &&
+				(c as { type?: string }).type === "text" &&
+				typeof (c as { text?: unknown }).text === "string",
+		)
+		.map((c) => c.text)
+		.join(" ");
 }
 
 /** One row of the active-anchor table (#101, D19). */
 export interface AnchorTableRow {
-  /** Cumulative context at the anchor, as `formatPct1` renders it. */
-  pct: string;
-  name: string;
-  /** `list` only: a preview of the entry the anchor sits on. */
-  after?: string;
+	/** Cumulative context at the anchor, as `formatPct1` renders it. */
+	pct: string;
+	name: string;
+	/** `list` only: a preview of the entry the anchor sits on. */
+	after?: string;
 }
 
 /**
@@ -193,24 +186,21 @@ export interface AnchorTableRow {
  * padded (to the longest name, capped at `MAX_NAME_LENGTH`), so rows never
  * end in spaces.
  */
-export function formatAnchorTable(
-  rows: readonly AnchorTableRow[],
-  contextWindow: number,
-): string {
-  const header =
-    contextWindow > 0
-      ? `Active anchors (root → leaf, % of ${formatWindow(contextWindow)}):`
-      : "Active anchors (root → leaf):";
-  const pctWidth = Math.max(5, ...rows.map((r) => r.pct.length));
-  const withAfter = rows.some((r) => r.after !== undefined);
-  const nameWidth = withAfter
-    ? Math.min(MAX_NAME_LENGTH, Math.max(0, ...rows.map((r) => r.name.length)))
-    : 0;
-  const lines = rows.map((r) => {
-    const cells = `  ${r.pct.padStart(pctWidth)}  `;
-    return r.after !== undefined
-      ? `${cells}${r.name.padEnd(nameWidth)}  (after: “${r.after}”)`
-      : `${cells}${r.name}`;
-  });
-  return [header, ...lines].join("\n");
+export function formatAnchorTable(rows: readonly AnchorTableRow[], contextWindow: number): string {
+	const header =
+		contextWindow > 0
+			? `Active anchors (root → leaf, % of ${formatWindow(contextWindow)}):`
+			: "Active anchors (root → leaf):";
+	const pctWidth = Math.max(5, ...rows.map((r) => r.pct.length));
+	const withAfter = rows.some((r) => r.after !== undefined);
+	const nameWidth = withAfter
+		? Math.min(MAX_NAME_LENGTH, Math.max(0, ...rows.map((r) => r.name.length)))
+		: 0;
+	const lines = rows.map((r) => {
+		const cells = `  ${r.pct.padStart(pctWidth)}  `;
+		return r.after !== undefined
+			? `${cells}${r.name.padEnd(nameWidth)}  (after: “${r.after}”)`
+			: `${cells}${r.name}`;
+	});
+	return [header, ...lines].join("\n");
 }

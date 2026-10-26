@@ -11,19 +11,16 @@ const store = new Map<string, Record<string, unknown>>();
 
 /** The runtime root for `sessionId` (a fresh empty object when none is set). */
 export function readRuntimeConfig(sessionId: string): Record<string, unknown> {
-  const root = store.get(sessionId);
-  return root === undefined ? {} : structuredClone(root);
+	const root = store.get(sessionId);
+	return root === undefined ? {} : structuredClone(root);
 }
 
 /** Replace the runtime root for `sessionId` with a copy of `root`. */
-export function writeRuntimeConfig(
-  sessionId: string,
-  root: Record<string, unknown>,
-): void {
-  store.set(sessionId, structuredClone(root));
+export function writeRuntimeConfig(sessionId: string, root: Record<string, unknown>): void {
+	store.set(sessionId, structuredClone(root));
 }
 
 /** Drop the runtime root for `sessionId`. */
 export function clearRuntimeConfig(sessionId: string): void {
-  store.delete(sessionId);
+	store.delete(sessionId);
 }

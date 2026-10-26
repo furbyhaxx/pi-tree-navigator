@@ -23,43 +23,43 @@ export const REWIND_HINT_CUSTOM_TYPE = "navigate-tree-rewind-hint";
  * active model, #86) never fires, and always re-arms.
  */
 export class RewindHintTracker {
-  private spent = false;
+	private spent = false;
 
-  observe(tokensLeft: number, reserve: number | null): boolean {
-    if (reserve === null || tokensLeft > reserve) {
-      this.spent = false;
-      return false;
-    }
-    if (this.spent) return false;
-    this.spent = true;
-    return true;
-  }
+	observe(tokensLeft: number, reserve: number | null): boolean {
+		if (reserve === null || tokensLeft > reserve) {
+			this.spent = false;
+			return false;
+		}
+		if (this.spent) return false;
+		this.spent = true;
+		return true;
+	}
 
-  /** True while the current crossing's one hint has been sent. */
-  isSpent(): boolean {
-    return this.spent;
-  }
+	/** True while the current crossing's one hint has been sent. */
+	isSpent(): boolean {
+		return this.spent;
+	}
 
-  /**
-   * Spend the current crossing without a hint (#101, D17): a forced rewind
-   * is already asking for one. `observe` re-arms as usual.
-   */
-  markSpent(): void {
-    this.spent = true;
-  }
+	/**
+	 * Spend the current crossing without a hint (#101, D17): a forced rewind
+	 * is already asking for one. `observe` re-arms as usual.
+	 */
+	markSpent(): void {
+		this.spent = true;
+	}
 
-  /** Re-arm for a fresh session (`session_start`). */
-  reset(): void {
-    this.spent = false;
-  }
+	/** Re-arm for a fresh session (`session_start`). */
+	reset(): void {
+		this.spent = false;
+	}
 }
 
 /** `12.3k` / `1.0M`; negative (an overrun window) clamps to `0.0k`. */
 function formatTokensK(tokens: number): string {
-  const t = Math.max(0, tokens);
-  // 999_950+ would round to `1000.0k`.
-  if (t >= 999_950) return `${(t / 1_000_000).toFixed(1)}M`;
-  return `${(t / 1000).toFixed(1)}k`;
+	const t = Math.max(0, tokens);
+	// 999_950+ would round to `1000.0k`.
+	if (t >= 999_950) return `${(t / 1_000_000).toFixed(1)}M`;
+	return `${(t / 1000).toFixed(1)}k`;
 }
 
 /**
@@ -72,21 +72,18 @@ function formatTokensK(tokens: number): string {
  * guidance-placement rule.
  */
 export function buildRewindHintText(
-  percent: number,
-  tokensLeft: number,
-  reserve: number,
-  contextWindow: number,
-  anchorTable: string,
+	percent: number,
+	tokensLeft: number,
+	reserve: number,
+	contextWindow: number,
+	anchorTable: string,
 ): string {
-  return `[${TOOL_NAME} hint] Context is at ${percent.toFixed(1)}% of ${formatWindow(contextWindow)} — ${formatTokensK(tokensLeft)} tokens left, within the ${formatTokensK(reserve)} reserve. Persist what matters to files now, then rewind to the oldest appropriate anchor.\n${anchorTable}`;
+	return `[${TOOL_NAME} hint] Context is at ${percent.toFixed(1)}% of ${formatWindow(contextWindow)} — ${formatTokensK(tokensLeft)} tokens left, within the ${formatTokensK(reserve)} reserve. Persist what matters to files now, then rewind to the oldest appropriate anchor.\n${anchorTable}`;
 }
 
 /** The TUI-only warning shown when a crossing has no anchor to rewind to. */
-export function buildNoAnchorText(
-  percent: number,
-  contextWindow: number,
-): string {
-  return `${TOOL_NAME}: context at ${percent.toFixed(1)}% of ${formatWindow(contextWindow)} — no anchors on the active branch, so no rewind hint was sent. To enable one: /tree, select the entry to rewind to, press shift+l, label it \`${LABEL_PREFIX}<name>\` (e.g. ${LABEL_PREFIX}context-gathered), then ask me to rewind to it.`;
+export function buildNoAnchorText(percent: number, contextWindow: number): string {
+	return `${TOOL_NAME}: context at ${percent.toFixed(1)}% of ${formatWindow(contextWindow)} — no anchors on the active branch, so no rewind hint was sent. To enable one: /tree, select the entry to rewind to, press shift+l, label it \`${LABEL_PREFIX}<name>\` (e.g. ${LABEL_PREFIX}context-gathered), then ask me to rewind to it.`;
 }
 
 // -----------------------------------------------------------------------------
@@ -95,12 +92,12 @@ export function buildNoAnchorText(
 
 /** D8 reasons (D8, D14, D16, §9.6). */
 export const COMPACTION_FAILED_OVERFLOWED_AGAIN =
-  "the context overflowed again during the forced rewind";
+	"the context overflowed again during the forced rewind";
 export const COMPACTION_FAILED_NO_REWIND = `no rewind after 3 attempts`;
 export const COMPACTION_FAILED_NO_ANCHOR = "no anchor to rewind to";
 export const COMPACTION_FAILED_ABORTED = "the forced rewind was aborted";
 export const COMPACTION_FAILED_STILL_OVER =
-  "the protected context cannot fit the recovery budget; no tool-result replacements were applied";
+	"the protected context cannot fit the recovery budget; no tool-result replacements were applied";
 export const COMPACTION_FAILED_RUN_ENDED = "the run ended before the rewind";
 
 /** Reason of a tool call blocked during a forced rewind (TUI-only, §9.6). */
@@ -111,18 +108,18 @@ export const REWIND_COMPACTION_OFF_TEXT = `${TOOL_NAME}: the rewind hint and rew
 
 /** The reserve-ordering warning (D10), numbers raw, model key as written. */
 export function buildReserveOrderWarning(
-  hintReserve: number,
-  piReserve: number,
-  modelKey: string,
+	hintReserve: number,
+	piReserve: number,
+	modelKey: string,
 ): string {
-  return `rewindHintReserveTokens (${hintReserve}) is below pi's compaction.reserveTokens (${piReserve}) for ${modelKey}: rewind-driven compaction may fire before the hint, giving the model no time to prepare and persist what matters to files.`;
+	return `rewindHintReserveTokens (${hintReserve}) is below pi's compaction.reserveTokens (${piReserve}) for ${modelKey}: rewind-driven compaction may fire before the hint, giving the model no time to prepare and persist what matters to files.`;
 }
 
 /** The guard-ordering warning: the hint reserve does not exceed what the request guard keeps free. */
 export function buildReserveGuardWarning(
-  hintReserve: number,
-  guardTokens: number,
-  modelKey: string,
+	hintReserve: number,
+	guardTokens: number,
+	modelKey: string,
 ): string {
-  return `rewindHintReserveTokens (${hintReserve}) does not exceed the ${guardTokens} tokens the request guard keeps free for ${modelKey}: a request can be refused before generation without the hint having fired. Raise it above ${guardTokens}.`;
+	return `rewindHintReserveTokens (${hintReserve}) does not exceed the ${guardTokens} tokens the request guard keeps free for ${modelKey}: a request can be refused before generation without the hint having fired. Raise it above ${guardTokens}.`;
 }

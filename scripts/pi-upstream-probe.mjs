@@ -61,388 +61,405 @@ const results = [];
 const failures = [];
 
 function check(name, ok, detail = "") {
-  results.push({ name, ok: !!ok, detail });
-  if (!ok) failures.push({ name, detail });
-  console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  — " + detail : ""}`);
+	results.push({ name, ok: !!ok, detail });
+	if (!ok) failures.push({ name, detail });
+	console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? `  — ${detail}` : ""}`);
 }
 
 // Resolve the package dist paths (ESM-only packages).
 function resolveDist(pkgName, entry = "dist/index.js") {
-  // PROBE_NODE_MODULES, when set, is authoritative: the workflow installs the
-  // LATEST packages there, and the probe must inspect those — NOT the repo's
-  // own node_modules (dev-deps) or anything require.resolve finds via cwd.
-  // require.resolve from cwd can also short-circuit to the repo's version for
-  // packages that DO export package.json (e.g. pi-agent-core), which would
-  // make the probe pass trivially against a stale version.
-  const bases = process.env.PROBE_NODE_MODULES
-    ? [process.env.PROBE_NODE_MODULES]
-    : [path.join(process.cwd(), "node_modules"), path.resolve(process.cwd(), "../node_modules")];
-  for (const base of bases) {
-    try {
-      const scoped = pkgName.startsWith("@")
-        ? path.join(base, ...pkgName.split("/"), "package.json")
-        : path.join(base, pkgName, "package.json");
-      const pkgJson = require.resolve(scoped);
-      return path.join(path.dirname(pkgJson), entry);
-    } catch {}
-  }
-  return null;
+	// PROBE_NODE_MODULES, when set, is authoritative: the workflow installs the
+	// LATEST packages there, and the probe must inspect those — NOT the repo's
+	// own node_modules (dev-deps) or anything require.resolve finds via cwd.
+	// require.resolve from cwd can also short-circuit to the repo's version for
+	// packages that DO export package.json (e.g. pi-agent-core), which would
+	// make the probe pass trivially against a stale version.
+	const bases = process.env.PROBE_NODE_MODULES
+		? [process.env.PROBE_NODE_MODULES]
+		: [path.join(process.cwd(), "node_modules"), path.resolve(process.cwd(), "../node_modules")];
+	for (const base of bases) {
+		try {
+			const scoped = pkgName.startsWith("@")
+				? path.join(base, ...pkgName.split("/"), "package.json")
+				: path.join(base, pkgName, "package.json");
+			const pkgJson = require.resolve(scoped);
+			return path.join(path.dirname(pkgJson), entry);
+		} catch {}
+	}
+	return null;
 }
 
-let AgentSession, SessionManager, Agent, SettingsManager;
+let AgentSession, SessionManager, Agent;
 
 try {
-  const codingAgentDist = resolveDist("@earendil-works/pi-coding-agent");
-  const coreDist = resolveDist("@earendil-works/pi-agent-core");
-  if (!codingAgentDist || !coreDist) {
-    check("deps installed", false, `codingAgent: ${codingAgentDist}, core: ${coreDist}`);
-    process.exit(1);
-  }
+	const codingAgentDist = resolveDist("@earendil-works/pi-coding-agent");
+	const coreDist = resolveDist("@earendil-works/pi-agent-core");
+	if (!codingAgentDist || !coreDist) {
+		check("deps installed", false, `codingAgent: ${codingAgentDist}, core: ${coreDist}`);
+		process.exit(1);
+	}
 
-  const codingAgent = await import(pathToFileURL(codingAgentDist));
-  AgentSession = codingAgent.AgentSession;
-  SessionManager = codingAgent.SessionManager;
-  SettingsManager = codingAgent.SettingsManager;
+	const codingAgent = await import(pathToFileURL(codingAgentDist));
+	AgentSession = codingAgent.AgentSession;
+	SessionManager = codingAgent.SessionManager;
 
-  const core = await import(pathToFileURL(coreDist));
-  Agent = core.Agent;
+	const core = await import(pathToFileURL(coreDist));
+	Agent = core.Agent;
 
-  // --- 1. AgentSession.prototype.prompt ---
-  check("AgentSession exported", typeof AgentSession === "function", typeof AgentSession);
-  const proto = AgentSession.prototype;
-  const promptDesc = Object.getOwnPropertyDescriptor(proto, "prompt");
-  check(
-    "prompt is own data property",
-    !!promptDesc && "value" in promptDesc && !promptDesc.get,
-    JSON.stringify(promptDesc ? { writable: promptDesc.writable, hasGet: !!promptDesc.get } : null),
-  );
-  check("prompt is writable", !promptDesc || promptDesc.writable !== false, "");
-  check("prompt is a function", typeof proto.prompt === "function", typeof proto.prompt);
+	// --- 1. AgentSession.prototype.prompt ---
+	check("AgentSession exported", typeof AgentSession === "function", typeof AgentSession);
+	const proto = AgentSession.prototype;
+	const promptDesc = Object.getOwnPropertyDescriptor(proto, "prompt");
+	check(
+		"prompt is own data property",
+		!!promptDesc && "value" in promptDesc && !promptDesc.get,
+		JSON.stringify(promptDesc ? { writable: promptDesc.writable, hasGet: !!promptDesc.get } : null),
+	);
+	check("prompt is writable", promptDesc?.writable !== false, "");
+	check("prompt is a function", typeof proto.prompt === "function", typeof proto.prompt);
 
-  // --- 2. sessionManager plain instance field (constructor assignment) ---
-  // The d.ts says `readonly sessionManager: SessionManager`. Verify the dist
-  // source assigns `this.sessionManager =` (plain field, not `this.#...`).
-  const sessionSrc = readFileSync(
-    path.join(path.dirname(codingAgentDist), "core/agent-session.js"),
-    "utf8",
-  );
-  check(
-    "sessionManager plain-field assignment",
-    /this\.sessionManager\s*=\s*config\.sessionManager/.test(sessionSrc),
-    sessionSrc.includes("this.#sessionManager") ? "FOUND #-private" : "plain this.sessionManager = found",
-  );
+	// --- 2. sessionManager plain instance field (constructor assignment) ---
+	// The d.ts says `readonly sessionManager: SessionManager`. Verify the dist
+	// source assigns `this.sessionManager =` (plain field, not `this.#...`).
+	const sessionSrc = readFileSync(
+		path.join(path.dirname(codingAgentDist), "core/agent-session.js"),
+		"utf8",
+	);
+	check(
+		"sessionManager plain-field assignment",
+		/this\.sessionManager\s*=\s*config\.sessionManager/.test(sessionSrc),
+		sessionSrc.includes("this.#sessionManager")
+			? "FOUND #-private"
+			: "plain this.sessionManager = found",
+	);
 
-  // --- 3. SessionManager.buildSessionContext ---
-  check("SessionManager exported", typeof SessionManager === "function", typeof SessionManager);
-  check(
-    "buildSessionContext is prototype method",
-    typeof SessionManager?.prototype?.buildSessionContext === "function",
-    typeof SessionManager?.prototype?.buildSessionContext,
-  );
-  // The extension calls it with NO args and expects { messages } back
-  // (index.ts: refreshAgentMessages). A signature change (required param)
-  // or a return-shape change would pass the existence check above but
-  // throw/break at runtime — so call it for real. The stub carries the
-  // 0.87+/1.x `buildSessionProjection` dependency (the 1.x implementation
-  // delegates to it; 0.84.2 ignores it).
-  let bscResult = null;
-  let bscThrew = null;
-  try {
-    bscResult = SessionManager.prototype.buildSessionContext.call({
-      getEntries: () => [],
-      leafId: null,
-      byId: new Map(),
-      buildSessionProjection: () => ({
-        entries: [],
-        messages: [],
-        thinkingLevel: "off",
-        model: null,
-      }),
-    });
-  } catch (e) {
-    bscThrew = e instanceof Error ? e.message : String(e);
-  }
-  check(
-    "buildSessionContext callable with no args → { messages }",
-    !bscThrew && bscResult && Array.isArray(bscResult.messages),
-    bscThrew ? `threw: ${bscThrew}` : Array.isArray(bscResult?.messages) ? "returns messages array" : "no messages array",
-  );
+	// --- 3. SessionManager.buildSessionContext ---
+	check("SessionManager exported", typeof SessionManager === "function", typeof SessionManager);
+	check(
+		"buildSessionContext is prototype method",
+		typeof SessionManager?.prototype?.buildSessionContext === "function",
+		typeof SessionManager?.prototype?.buildSessionContext,
+	);
+	// The extension calls it with NO args and expects { messages } back
+	// (index.ts: refreshAgentMessages). A signature change (required param)
+	// or a return-shape change would pass the existence check above but
+	// throw/break at runtime — so call it for real. The stub carries the
+	// 0.87+/1.x `buildSessionProjection` dependency (the 1.x implementation
+	// delegates to it; 0.84.2 ignores it).
+	let bscResult = null;
+	let bscThrew = null;
+	try {
+		bscResult = SessionManager.prototype.buildSessionContext.call({
+			getEntries: () => [],
+			leafId: null,
+			byId: new Map(),
+			buildSessionProjection: () => ({
+				entries: [],
+				messages: [],
+				thinkingLevel: "off",
+				model: null,
+			}),
+		});
+	} catch (e) {
+		bscThrew = e instanceof Error ? e.message : String(e);
+	}
+	check(
+		"buildSessionContext callable with no args → { messages }",
+		!bscThrew && bscResult && Array.isArray(bscResult.messages),
+		bscThrew
+			? `threw: ${bscThrew}`
+			: Array.isArray(bscResult?.messages)
+				? "returns messages array"
+				: "no messages array",
+	);
 
-  // The rewind hint's `turn_end` anchor walk (#84) reads these three on
-  // `ctx.sessionManager` (the ReadonlySessionManager surface).
-  for (const name of ["getEntries", "getBranch", "getLabel"]) {
-    check(
-      `SessionManager.prototype.${name} is a method (hint anchor walk)`,
-      typeof SessionManager?.prototype?.[name] === "function",
-      typeof SessionManager?.prototype?.[name],
-    );
-  }
+	// The rewind hint's `turn_end` anchor walk (#84) reads these three on
+	// `ctx.sessionManager` (the ReadonlySessionManager surface).
+	for (const name of ["getEntries", "getBranch", "getLabel"]) {
+		check(
+			`SessionManager.prototype.${name} is a method (hint anchor walk)`,
+			typeof SessionManager?.prototype?.[name] === "function",
+			typeof SessionManager?.prototype?.[name],
+		);
+	}
 
-  // --- 4. Agent.state accessor + messages writable ---
-  check("Agent exported (pi-agent-core)", typeof Agent === "function", typeof Agent);
-  const stateDesc = Object.getOwnPropertyDescriptor(Agent.prototype, "state");
-  check(
-    "Agent.prototype.state readable",
-    !!stateDesc && !!stateDesc.get,
-    JSON.stringify(stateDesc ? { hasGet: !!stateDesc.get, hasValue: "value" in stateDesc } : null),
-  );
+	// --- 4. Agent.state accessor + messages writable ---
+	check("Agent exported (pi-agent-core)", typeof Agent === "function", typeof Agent);
+	const stateDesc = Object.getOwnPropertyDescriptor(Agent.prototype, "state");
+	check(
+		"Agent.prototype.state readable",
+		!!stateDesc && !!stateDesc.get,
+		JSON.stringify(stateDesc ? { hasGet: !!stateDesc.get, hasValue: "value" in stateDesc } : null),
+	);
 
-  // agent.state.messages: the extension ASSIGNS it. In pi-agent-core the
-  // state setter copies the array (see agent.js createMutableAgentState:
-  // `set messages(nextMessages) { messages = nextMessages.slice() }`).
-  // Verify the accessor pair exists in source (stronger than a bare
-  // `includes("messages")` — catches getter-only messages, which would
-  // make the assignment throw in strict mode / silently no-op).
-  const agentSrc = readFileSync(
-    path.join(path.dirname(coreDist), "agent.js"),
-    "utf8",
-  );
-  check(
-    "state.messages writable (source: set messages accessor)",
-    /set\s+messages\s*\(/.test(agentSrc) &&
-      /get\s+messages\s*\(/.test(agentSrc) &&
-      !agentSrc.includes("this.#state"),
-    agentSrc.includes("this.#state")
-      ? "#-private state"
-      : /set\s+messages\s*\(/.test(agentSrc)
-        ? "set messages accessor found"
-        : "set messages accessor MISSING",
-  );
+	// agent.state.messages: the extension ASSIGNS it. In pi-agent-core the
+	// state setter copies the array (see agent.js createMutableAgentState:
+	// `set messages(nextMessages) { messages = nextMessages.slice() }`).
+	// Verify the accessor pair exists in source (stronger than a bare
+	// `includes("messages")` — catches getter-only messages, which would
+	// make the assignment throw in strict mode / silently no-op).
+	const agentSrc = readFileSync(path.join(path.dirname(coreDist), "agent.js"), "utf8");
+	check(
+		"state.messages writable (source: set messages accessor)",
+		/set\s+messages\s*\(/.test(agentSrc) &&
+			/get\s+messages\s*\(/.test(agentSrc) &&
+			!agentSrc.includes("this.#state"),
+		agentSrc.includes("this.#state")
+			? "#-private state"
+			: /set\s+messages\s*\(/.test(agentSrc)
+				? "set messages accessor found"
+				: "set messages accessor MISSING",
+	);
 
-  // --- 7. SessionManager.getSessionId (#33/#75) ---
-  check(
-    "getSessionId is prototype method",
-    typeof SessionManager?.prototype?.getSessionId === "function",
-    typeof SessionManager?.prototype?.getSessionId,
-  );
+	// --- 7. SessionManager.getSessionId (#33/#75) ---
+	check(
+		"getSessionId is prototype method",
+		typeof SessionManager?.prototype?.getSessionId === "function",
+		typeof SessionManager?.prototype?.getSessionId,
+	);
 
-  for (const [name, prototype, method] of [
-    ["native handoff updateDisplay", codingAgent.BranchSummaryMessageComponent?.prototype, "updateDisplay"],
-    ["native tree render", codingAgent.TreeSelectorComponent?.prototype, "render"],
-    ["native tree input", codingAgent.TreeSelectorComponent?.prototype, "handleInput"],
-    ["native tree list access", codingAgent.TreeSelectorComponent?.prototype, "getTreeList"],
-    ["native session projection", SessionManager?.prototype, "buildSessionProjection"],
-    ["proposal model lookup", codingAgent.ModelRegistry?.prototype, "find"],
-    ["proposal model authentication", codingAgent.ModelRegistry?.prototype, "hasConfiguredAuth"],
-    ["proposal provider-neutral streaming", codingAgent.ModelRegistry?.prototype, "streamSimple"],
-    ["offline proposal model runtime", codingAgent.ModelRuntime, "create"],
-  ]) {
-    check(name, typeof prototype?.[method] === "function", typeof prototype?.[method]);
-  }
-  codingAgent.initTheme();
-  const nativeTree = new codingAgent.TreeSelectorComponent([], null, 20, () => {}, () => {});
-  check("native tree row presentation", typeof Object.getPrototypeOf(nativeTree.getTreeList()).getEntryDisplayText === "function");
+	for (const [name, prototype, method] of [
+		[
+			"native handoff updateDisplay",
+			codingAgent.BranchSummaryMessageComponent?.prototype,
+			"updateDisplay",
+		],
+		["native tree render", codingAgent.TreeSelectorComponent?.prototype, "render"],
+		["native tree input", codingAgent.TreeSelectorComponent?.prototype, "handleInput"],
+		["native tree list access", codingAgent.TreeSelectorComponent?.prototype, "getTreeList"],
+		["native session projection", SessionManager?.prototype, "buildSessionProjection"],
+		["proposal model lookup", codingAgent.ModelRegistry?.prototype, "find"],
+		["proposal model authentication", codingAgent.ModelRegistry?.prototype, "hasConfiguredAuth"],
+		["proposal provider-neutral streaming", codingAgent.ModelRegistry?.prototype, "streamSimple"],
+		["offline proposal model runtime", codingAgent.ModelRuntime, "create"],
+	]) {
+		check(name, typeof prototype?.[method] === "function", typeof prototype?.[method]);
+	}
+	codingAgent.initTheme();
+	const nativeTree = new codingAgent.TreeSelectorComponent(
+		[],
+		null,
+		20,
+		() => {},
+		() => {},
+	);
+	check(
+		"native tree row presentation",
+		typeof Object.getPrototypeOf(nativeTree.getTreeList()).getEntryDisplayText === "function",
+	);
 
-  // --- 7d. AgentSession._extensionRunner + ExtensionRunner.emit (#79) ---
-  // After a rewind the extension emits `session_tree` through the captured
-  // session's runner, mirroring pi's own navigateTree, so history-mirroring
-  // extensions (pi-claude-bridge) rebuild. A `#`-private runner or a missing
-  // `emit` makes the notification a silent no-op (`historyRewriteNotified:
-  // false`) and the bridge keeps the pre-rewind context.
-  check(
-    "AgentSession._extensionRunner plain field (#79)",
-    /this\._extensionRunner\s*=/.test(sessionSrc) &&
-      !sessionSrc.includes("this.#extensionRunner"),
-    /this\._extensionRunner\s*=/.test(sessionSrc)
-      ? "plain this._extensionRunner = found"
-      : "_extensionRunner assignment MISSING",
-  );
-  check(
-    "ExtensionRunner.emit is prototype method (#79)",
-    typeof codingAgent.ExtensionRunner?.prototype?.emit === "function",
-    typeof codingAgent.ExtensionRunner?.prototype?.emit,
-  );
-  check(
-    "navigateTree emits session_tree (#79 payload parity)",
-    /type:\s*"session_tree"/.test(sessionSrc),
-    /type:\s*"session_tree"/.test(sessionSrc)
-      ? "session_tree emit found"
-      : "session_tree emit MISSING",
-  );
+	// --- 7d. AgentSession._extensionRunner + ExtensionRunner.emit (#79) ---
+	// After a rewind the extension emits `session_tree` through the captured
+	// session's runner, mirroring pi's own navigateTree, so history-mirroring
+	// extensions (pi-claude-bridge) rebuild. A `#`-private runner or a missing
+	// `emit` makes the notification a silent no-op (`historyRewriteNotified:
+	// false`) and the bridge keeps the pre-rewind context.
+	check(
+		"AgentSession._extensionRunner plain field (#79)",
+		/this\._extensionRunner\s*=/.test(sessionSrc) && !sessionSrc.includes("this.#extensionRunner"),
+		/this\._extensionRunner\s*=/.test(sessionSrc)
+			? "plain this._extensionRunner = found"
+			: "_extensionRunner assignment MISSING",
+	);
+	check(
+		"ExtensionRunner.emit is prototype method (#79)",
+		typeof codingAgent.ExtensionRunner?.prototype?.emit === "function",
+		typeof codingAgent.ExtensionRunner?.prototype?.emit,
+	);
+	check(
+		"navigateTree emits session_tree (#79 payload parity)",
+		/type:\s*"session_tree"/.test(sessionSrc),
+		/type:\s*"session_tree"/.test(sessionSrc)
+			? "session_tree emit found"
+			: "session_tree emit MISSING",
+	);
 
-  // --- 8. turn_end handlers settle before the steering drain (#80) ---
-  // The in-band rewind completes in a `turn_end` handler and returns its
-  // continuation as a boundary entry with `continue: true`: a text-only
-  // summary turn would otherwise end the loop, and the rewound context would
-  // only reach a real turn on the next user prompt. That needs (a) the loop
-  // to await `finishTurn` before reading steering messages, (b)
-  // AgentSession's `finishTurn` to await the extension `turn_end` dispatch,
-  // and (c) that dispatch to commit the returned entries and return
-  // `continue`.
-  let loopSrc = "";
-  try {
-    loopSrc = readFileSync(path.join(path.dirname(coreDist), "agent-loop.js"), "utf8");
-  } catch {}
-  const loopOrder =
-    /await config\.finishTurn\?\.\([\s\S]{0,400}?config\.getSteeringMessages/.test(loopSrc);
-  check(
-    "agent loop awaits finishTurn before the steering drain (#80)",
-    loopOrder,
-    loopOrder ? "finishTurn → getSteeringMessages order found" : "order MISSING",
-  );
-  const finishDispatch =
-    /this\.agent\.finishTurn = async[\s\S]{0,300}?await this\._dispatchTurnEndBoundary\(/.test(sessionSrc);
-  check(
-    "AgentSession.finishTurn awaits the turn_end dispatch (#80)",
-    finishDispatch,
-    finishDispatch ? "await _dispatchTurnEndBoundary found" : "dispatch MISSING",
-  );
-  const boundaryCommit =
-    /_dispatchTurnEndBoundary\([\s\S]{0,1500}?this\._commitBoundaryDrafts\(boundary\.entries\)[\s\S]{0,400}?return boundary\.continue;/.test(sessionSrc);
-  check(
-    "turn_end dispatch commits boundary entries and returns continue (#80)",
-    boundaryCommit,
-    boundaryCommit ? "_commitBoundaryDrafts(boundary.entries) … return boundary.continue found" : "commit/continue MISSING",
-  );
+	// --- 8. turn_end handlers settle before the steering drain (#80) ---
+	// The in-band rewind completes in a `turn_end` handler and returns its
+	// continuation as a boundary entry with `continue: true`: a text-only
+	// summary turn would otherwise end the loop, and the rewound context would
+	// only reach a real turn on the next user prompt. That needs (a) the loop
+	// to await `finishTurn` before reading steering messages, (b)
+	// AgentSession's `finishTurn` to await the extension `turn_end` dispatch,
+	// and (c) that dispatch to commit the returned entries and return
+	// `continue`.
+	let loopSrc = "";
+	try {
+		loopSrc = readFileSync(path.join(path.dirname(coreDist), "agent-loop.js"), "utf8");
+	} catch {}
+	const loopOrder = /await config\.finishTurn\?\.\([\s\S]{0,400}?config\.getSteeringMessages/.test(
+		loopSrc,
+	);
+	check(
+		"agent loop awaits finishTurn before the steering drain (#80)",
+		loopOrder,
+		loopOrder ? "finishTurn → getSteeringMessages order found" : "order MISSING",
+	);
+	const finishDispatch =
+		/this\.agent\.finishTurn = async[\s\S]{0,300}?await this\._dispatchTurnEndBoundary\(/.test(
+			sessionSrc,
+		);
+	check(
+		"AgentSession.finishTurn awaits the turn_end dispatch (#80)",
+		finishDispatch,
+		finishDispatch ? "await _dispatchTurnEndBoundary found" : "dispatch MISSING",
+	);
+	const boundaryCommit =
+		/_dispatchTurnEndBoundary\([\s\S]{0,1500}?this\._commitBoundaryDrafts\(boundary\.entries\)[\s\S]{0,400}?return boundary\.continue;/.test(
+			sessionSrc,
+		);
+	check(
+		"turn_end dispatch commits boundary entries and returns continue (#80)",
+		boundaryCommit,
+		boundaryCommit
+			? "_commitBoundaryDrafts(boundary.entries) … return boundary.continue found"
+			: "commit/continue MISSING",
+	);
 
-  // --- 9. Assistant persisted before tool execution (#37, #80) ---
-  // The rewind reads the active branch with the in-flight assistant (the one
-  // declaring the rewind tool call) as the leaf: `contextBefore` is measured
-  // at its parent and the summary turn is told apart by its tool-call id. That read
-  // is only sound because pi:
-  //   (a) emits the assistant `message_end` — and AgentSession persists it
-  //       via `sessionManager.appendMessage` — before the loop calls
-  //       `executeToolCalls` → emits `tool_execution_start`;
-  //   (b) awaits listeners inside the event dispatch, so persistence
-  //       completes before the tool body runs.
-  // Verify (a)+(b) behaviorally with a real Agent + stub streamFn: a listener
-  // that appends on assistant message_end must have the append visible from
-  // the tool body. Then pin the AgentSession persistence site and its
-  // subscription from source. A future pi reorder must fail this probe
-  // loudly instead of silently reopening #37.
-  let batchOrdering = { ok: false, detail: "not run" };
-  try {
-    const ZERO_USAGE = {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    };
-    const batchEvents = [];
-    const persisted = new Set();
-    let toolSawPersistedAssistant = true;
-    let streamCalls = 0;
-    const makeAssistant = (content, stopReason) => ({
-      role: "assistant",
-      content,
-      api: "anthropic",
-      provider: "probe",
-      model: "probe",
-      stopReason,
-      timestamp: Date.now(),
-      usage: ZERO_USAGE,
-    });
-    const probeTool = (name) => ({
-      name,
-      label: name,
-      description: "probe",
-      parameters: {
-        type: "object",
-        properties: {},
-        additionalProperties: false,
-      },
-      executionMode: "sequential",
-      execute: async (toolCallId) => {
-        batchEvents.push(`execute:${toolCallId}`);
-        if (!persisted.has(toolCallId)) toolSawPersistedAssistant = false;
-        return { content: [{ type: "text", text: "ok" }], details: {} };
-      },
-    });
-    const batchAgent = new Agent({
-      streamFn: async () => {
-        streamCalls++;
-        const message =
-          streamCalls === 1
-            ? makeAssistant(
-                [
-                  {
-                    type: "toolCall",
-                    id: "probe-tc-a",
-                    name: "probe_batch_a",
-                    arguments: {},
-                  },
-                  {
-                    type: "toolCall",
-                    id: "probe-tc-b",
-                    name: "probe_batch_b",
-                    arguments: {},
-                  },
-                ],
-                "toolUse",
-              )
-            : makeAssistant([{ type: "text", text: "done" }], "endTurn");
-        return {
-          async *[Symbol.asyncIterator]() {},
-          async result() {
-            return message;
-          },
-        };
-      },
-      initialState: {
-        systemPrompt: "probe",
-        model: { id: "probe", provider: "probe", api: "anthropic" },
-        thinkingLevel: "off",
-        messages: [],
-        tools: [probeTool("probe_batch_a"), probeTool("probe_batch_b")],
-      },
-    });
-    batchAgent.subscribe((event) => {
-      if (event.type === "message_end" && event.message.role === "assistant") {
-        for (const block of event.message.content) {
-          if (block.type === "toolCall") persisted.add(block.id);
-        }
-        batchEvents.push("persist:assistant");
-      } else if (event.type === "tool_execution_start") {
-        batchEvents.push(`tool_execution_start:${event.toolCallId}`);
-      }
-    });
-    await batchAgent.prompt("go");
-    const firstPersist = batchEvents.indexOf("persist:assistant");
-    const firstToolStart = batchEvents.findIndex((e) =>
-      e.startsWith("tool_execution_start:"),
-    );
-    const ok =
-      firstPersist !== -1 &&
-      firstToolStart !== -1 &&
-      firstPersist < firstToolStart &&
-      toolSawPersistedAssistant;
-    batchOrdering = {
-      ok,
-      detail: `${batchEvents.join(" -> ")}${toolSawPersistedAssistant ? "" : " [tool ran before persist]"}`,
-    };
-  } catch (e) {
-    batchOrdering = {
-      ok: false,
-      detail: `threw: ${e instanceof Error ? e.message : String(e)}`,
-    };
-  }
-  check(
-    "assistant message_end (persisted) precedes tool_execution_start (#37)",
-    batchOrdering.ok,
-    batchOrdering.detail,
-  );
-  // 1.x widened the role list (`"system" ||` first) and assigns the returned
-  // entry id, so anchor on the message_end block + the appendMessage call
-  // instead of the exact 0.84.2 role-line shape (the call sits ~620–720
-  // chars into the block on both versions).
-  const sessionPersistsOnMessageEnd =
-    /if \(event\.type === "message_end"\)[\s\S]{0,1000}?this\.sessionManager\.appendMessage\(event\.message\)/.test(
-      sessionSrc,
-    );
-  const sessionSubscribes = /this\.agent\.subscribe\(this\._handleAgentEvent\)/.test(
-    sessionSrc,
-  );
-  check(
-    "AgentSession persists message_end payloads via sessionManager.appendMessage (#37)",
-    sessionSubscribes && sessionPersistsOnMessageEnd,
-    sessionSubscribes && sessionPersistsOnMessageEnd
-      ? "subscription + message_end appendMessage found"
-      : `subscription: ${sessionSubscribes ? "found" : "MISSING"}, message_end persistence: ${sessionPersistsOnMessageEnd ? "found" : "MISSING"}`,
-  );
+	// --- 9. Assistant persisted before tool execution (#37, #80) ---
+	// The rewind reads the active branch with the in-flight assistant (the one
+	// declaring the rewind tool call) as the leaf: `contextBefore` is measured
+	// at its parent and the summary turn is told apart by its tool-call id. That read
+	// is only sound because pi:
+	//   (a) emits the assistant `message_end` — and AgentSession persists it
+	//       via `sessionManager.appendMessage` — before the loop calls
+	//       `executeToolCalls` → emits `tool_execution_start`;
+	//   (b) awaits listeners inside the event dispatch, so persistence
+	//       completes before the tool body runs.
+	// Verify (a)+(b) behaviorally with a real Agent + stub streamFn: a listener
+	// that appends on assistant message_end must have the append visible from
+	// the tool body. Then pin the AgentSession persistence site and its
+	// subscription from source. A future pi reorder must fail this probe
+	// loudly instead of silently reopening #37.
+	let batchOrdering = { ok: false, detail: "not run" };
+	try {
+		const ZERO_USAGE = {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		};
+		const batchEvents = [];
+		const persisted = new Set();
+		let toolSawPersistedAssistant = true;
+		let streamCalls = 0;
+		const makeAssistant = (content, stopReason) => ({
+			role: "assistant",
+			content,
+			api: "anthropic",
+			provider: "probe",
+			model: "probe",
+			stopReason,
+			timestamp: Date.now(),
+			usage: ZERO_USAGE,
+		});
+		const probeTool = (name) => ({
+			name,
+			label: name,
+			description: "probe",
+			parameters: {
+				type: "object",
+				properties: {},
+				additionalProperties: false,
+			},
+			executionMode: "sequential",
+			execute: async (toolCallId) => {
+				batchEvents.push(`execute:${toolCallId}`);
+				if (!persisted.has(toolCallId)) toolSawPersistedAssistant = false;
+				return { content: [{ type: "text", text: "ok" }], details: {} };
+			},
+		});
+		const batchAgent = new Agent({
+			streamFn: async () => {
+				streamCalls++;
+				const message =
+					streamCalls === 1
+						? makeAssistant(
+								[
+									{
+										type: "toolCall",
+										id: "probe-tc-a",
+										name: "probe_batch_a",
+										arguments: {},
+									},
+									{
+										type: "toolCall",
+										id: "probe-tc-b",
+										name: "probe_batch_b",
+										arguments: {},
+									},
+								],
+								"toolUse",
+							)
+						: makeAssistant([{ type: "text", text: "done" }], "endTurn");
+				return {
+					async *[Symbol.asyncIterator]() {},
+					async result() {
+						return message;
+					},
+				};
+			},
+			initialState: {
+				systemPrompt: "probe",
+				model: { id: "probe", provider: "probe", api: "anthropic" },
+				thinkingLevel: "off",
+				messages: [],
+				tools: [probeTool("probe_batch_a"), probeTool("probe_batch_b")],
+			},
+		});
+		batchAgent.subscribe((event) => {
+			if (event.type === "message_end" && event.message.role === "assistant") {
+				for (const block of event.message.content) {
+					if (block.type === "toolCall") persisted.add(block.id);
+				}
+				batchEvents.push("persist:assistant");
+			} else if (event.type === "tool_execution_start") {
+				batchEvents.push(`tool_execution_start:${event.toolCallId}`);
+			}
+		});
+		await batchAgent.prompt("go");
+		const firstPersist = batchEvents.indexOf("persist:assistant");
+		const firstToolStart = batchEvents.findIndex((e) => e.startsWith("tool_execution_start:"));
+		const ok =
+			firstPersist !== -1 &&
+			firstToolStart !== -1 &&
+			firstPersist < firstToolStart &&
+			toolSawPersistedAssistant;
+		batchOrdering = {
+			ok,
+			detail: `${batchEvents.join(" -> ")}${toolSawPersistedAssistant ? "" : " [tool ran before persist]"}`,
+		};
+	} catch (e) {
+		batchOrdering = {
+			ok: false,
+			detail: `threw: ${e instanceof Error ? e.message : String(e)}`,
+		};
+	}
+	check(
+		"assistant message_end (persisted) precedes tool_execution_start (#37)",
+		batchOrdering.ok,
+		batchOrdering.detail,
+	);
+	// 1.x widened the role list (`"system" ||` first) and assigns the returned
+	// entry id, so anchor on the message_end block + the appendMessage call
+	// instead of the exact 0.84.2 role-line shape (the call sits ~620–720
+	// chars into the block on both versions).
+	const sessionPersistsOnMessageEnd =
+		/if \(event\.type === "message_end"\)[\s\S]{0,1000}?this\.sessionManager\.appendMessage\(event\.message\)/.test(
+			sessionSrc,
+		);
+	const sessionSubscribes = /this\.agent\.subscribe\(this\._handleAgentEvent\)/.test(sessionSrc);
+	check(
+		"AgentSession persists message_end payloads via sessionManager.appendMessage (#37)",
+		sessionSubscribes && sessionPersistsOnMessageEnd,
+		sessionSubscribes && sessionPersistsOnMessageEnd
+			? "subscription + message_end appendMessage found"
+			: `subscription: ${sessionSubscribes ? "found" : "MISSING"}, message_end persistence: ${sessionPersistsOnMessageEnd ? "found" : "MISSING"}`,
+	);
 } catch (e) {
-  check("probe crashed", false, String(e.stack || e.message));
+	check("probe crashed", false, String(e.stack || e.message));
 }
 
 // ---------------------------------------------------------------------------
@@ -456,23 +473,23 @@ try {
 // ---------------------------------------------------------------------------
 
 const EXTENSION_SOURCE_DIR = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "extensions",
-  "navigate-tree",
+	path.dirname(fileURLToPath(import.meta.url)),
+	"..",
+	"extensions",
+	"navigate-tree",
 );
 const IMPORT_SURFACE_PACKAGES = [
-  "@earendil-works/pi-coding-agent",
-  "@earendil-works/pi-agent-core",
-  "@earendil-works/pi-ai",
-  "@earendil-works/pi-tui",
-  "typebox",
+	"@earendil-works/pi-coding-agent",
+	"@earendil-works/pi-agent-core",
+	"@earendil-works/pi-ai",
+	"@earendil-works/pi-tui",
+	"typebox",
 ];
-const IMPORT_STATEMENT_RE = /(?:^|[;}\)\]])\s*import\s+([\s\S]*?)\s+from\s+["']([^"']+)["']/gm;
+const IMPORT_STATEMENT_RE = /(?:^|[;})\]])\s*import\s+([\s\S]*?)\s+from\s+["']([^"']+)["']/gm;
 
 /** `type`-prefixed clause or member: the only value-free import form. */
 function clauseIsTypeOnly(text) {
-  return /^type\b/.test(text);
+	return /^type\b/.test(text);
 }
 
 /**
@@ -485,44 +502,39 @@ function clauseIsTypeOnly(text) {
  * mixed imports.
  */
 function extractRuntimeImports(source) {
-  const found = new Map();
-  const expected = new Set();
-  for (const match of source.matchAll(IMPORT_STATEMENT_RE)) {
-    const clause = match[1].trim();
-    const specifier = match[2];
-    if (!IMPORT_SURFACE_PACKAGES.includes(specifier)) continue;
-    // `import type { ... }` and namespace imports carry no named values.
-    if (clauseIsTypeOnly(clause) || clause.startsWith("*")) continue;
-    // A runtime statement matched: the guard expects names for this package
-    // even if the member parser below yields none.
-    expected.add(specifier);
-    const names = new Set();
-    const brace = clause.indexOf("{");
-    const head = (brace === -1 ? clause : clause.slice(0, brace))
-      .trim()
-      .replace(/,$/, "")
-      .trim();
-    if (head) names.add("default");
-    if (brace !== -1) {
-      const body = clause.slice(brace + 1, clause.lastIndexOf("}"));
-      for (const raw of body.split(",")) {
-        const member = raw.trim();
-        if (!member || clauseIsTypeOnly(member)) continue;
-        const imported = member.split(/\s+as\s+/)[0].trim();
-        if (imported) names.add(imported);
-      }
-    }
-    if (names.size === 0) continue;
-    const bucket = found.get(specifier) ?? new Set();
-    for (const name of names) bucket.add(name);
-    found.set(specifier, bucket);
-  }
-  return { found, expected };
+	const found = new Map();
+	const expected = new Set();
+	for (const match of source.matchAll(IMPORT_STATEMENT_RE)) {
+		const clause = match[1].trim();
+		const specifier = match[2];
+		if (!IMPORT_SURFACE_PACKAGES.includes(specifier)) continue;
+		// `import type { ... }` and namespace imports carry no named values.
+		if (clauseIsTypeOnly(clause) || clause.startsWith("*")) continue;
+		// A runtime statement matched: the guard expects names for this package
+		// even if the member parser below yields none.
+		expected.add(specifier);
+		const names = new Set();
+		const brace = clause.indexOf("{");
+		const head = (brace === -1 ? clause : clause.slice(0, brace)).trim().replace(/,$/, "").trim();
+		if (head) names.add("default");
+		if (brace !== -1) {
+			const body = clause.slice(brace + 1, clause.lastIndexOf("}"));
+			for (const raw of body.split(",")) {
+				const member = raw.trim();
+				if (!member || clauseIsTypeOnly(member)) continue;
+				const imported = member.split(/\s+as\s+/)[0].trim();
+				if (imported) names.add(imported);
+			}
+		}
+		if (names.size === 0) continue;
+		const bucket = found.get(specifier) ?? new Set();
+		for (const name of names) bucket.add(name);
+		found.set(specifier, bucket);
+	}
+	return { found, expected };
 }
 
-const SPECIFIER_BOUNDARY_CHARS = new Set([
-  ";", "{", "}", "(", ")", "[", "]", '"', "'", "\n", "\r",
-]);
+const SPECIFIER_BOUNDARY_CHARS = new Set([";", "{", "}", "(", ")", "[", "]", '"', "'", "\n", "\r"]);
 
 /**
  * Blank `//` and block comments and the contents of string / template
@@ -542,92 +554,110 @@ const SPECIFIER_BOUNDARY_CHARS = new Set([
  * cause a false-positive probe failure, never a silent miss.
  */
 function maskCommentsAndLiterals(source) {
-  let out = "";
-  let i = 0;
-  let state = "code";
-  let keepLiteral = false;
-  while (i < source.length) {
-    const ch = source[i];
-    const next = source[i + 1];
-    if (state === "code") {
-      if (ch === "/" && next === "/") { state = "line"; i += 2; continue; }
-      if (ch === "/" && next === "*") { state = "block"; i += 2; continue; }
-      if (ch === "'" || ch === '"' || ch === "`") {
-        state = ch === "'" ? "single" : ch === '"' ? "double" : "template";
-        // Module specifiers (never templates) stay readable for extraction.
-        keepLiteral = ch !== "`" && /from\s*$/.test(out);
-        out += ch;
-        i += 1;
-        continue;
-      }
-      out += ch; i += 1; continue;
-    }
-    if (state === "line") {
-      if (ch === "\n") { state = "code"; out += ch; }
-      i += 1; continue;
-    }
-    if (state === "block") {
-      if (ch === "*" && next === "/") { state = "code"; i += 2; continue; }
-      i += 1; continue;
-    }
-    // single | double | template
-    const closing = state === "single" ? "'" : state === "double" ? '"' : "`";
-    if (keepLiteral) {
-      if (ch === "\\") {
-        // An escape cannot appear in a module specifier; blank the pair.
-        out += "  ";
-        i += 2;
-        continue;
-      }
-      if (ch === closing) {
-        out += ch;
-        state = "code";
-        keepLiteral = false;
-        i += 1;
-        continue;
-      }
-      out += SPECIFIER_BOUNDARY_CHARS.has(ch) ? " " : ch;
-      i += 1;
-      continue;
-    }
-    if (ch === "\\") {
-      // Blank the escape pair; keep a line continuation's newline.
-      out += next === "\n" ? "\n" : "  ";
-      i += 2;
-      continue;
-    }
-    if (ch === closing) {
-      out += ch;
-      state = "code";
-      i += 1;
-      continue;
-    }
-    out += ch === "\n" ? "\n" : " ";
-    i += 1;
-  }
-  return out;
+	let out = "";
+	let i = 0;
+	let state = "code";
+	let keepLiteral = false;
+	while (i < source.length) {
+		const ch = source[i];
+		const next = source[i + 1];
+		if (state === "code") {
+			if (ch === "/" && next === "/") {
+				state = "line";
+				i += 2;
+				continue;
+			}
+			if (ch === "/" && next === "*") {
+				state = "block";
+				i += 2;
+				continue;
+			}
+			if (ch === "'" || ch === '"' || ch === "`") {
+				state = ch === "'" ? "single" : ch === '"' ? "double" : "template";
+				// Module specifiers (never templates) stay readable for extraction.
+				keepLiteral = ch !== "`" && /from\s*$/.test(out);
+				out += ch;
+				i += 1;
+				continue;
+			}
+			out += ch;
+			i += 1;
+			continue;
+		}
+		if (state === "line") {
+			if (ch === "\n") {
+				state = "code";
+				out += ch;
+			}
+			i += 1;
+			continue;
+		}
+		if (state === "block") {
+			if (ch === "*" && next === "/") {
+				state = "code";
+				i += 2;
+				continue;
+			}
+			i += 1;
+			continue;
+		}
+		// single | double | template
+		const closing = state === "single" ? "'" : state === "double" ? '"' : "`";
+		if (keepLiteral) {
+			if (ch === "\\") {
+				// An escape cannot appear in a module specifier; blank the pair.
+				out += "  ";
+				i += 2;
+				continue;
+			}
+			if (ch === closing) {
+				out += ch;
+				state = "code";
+				keepLiteral = false;
+				i += 1;
+				continue;
+			}
+			out += SPECIFIER_BOUNDARY_CHARS.has(ch) ? " " : ch;
+			i += 1;
+			continue;
+		}
+		if (ch === "\\") {
+			// Blank the escape pair; keep a line continuation's newline.
+			out += next === "\n" ? "\n" : "  ";
+			i += 2;
+			continue;
+		}
+		if (ch === closing) {
+			out += ch;
+			state = "code";
+			i += 1;
+			continue;
+		}
+		out += ch === "\n" ? "\n" : " ";
+		i += 1;
+	}
+	return out;
 }
 
 /** Parse a package dir's package.json `exports["."]` / `main` root entry. */
 function entryFromPackageJson(pkgDir) {
-  const pkgJsonPath = path.join(pkgDir, "package.json");
-  if (!existsSync(pkgJsonPath)) return null;
-  let pkg;
-  try {
-    pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
-  } catch {
-    return null;
-  }
-  const rootExport =
-    typeof pkg.exports === "string" ? pkg.exports : pkg.exports?.["."];
-  let entry;
-  if (typeof rootExport === "string") entry = rootExport;
-  else if (rootExport && typeof rootExport === "object") {
-    entry = rootExport.import ?? rootExport.default ?? rootExport.require ?? rootExport.node;
-  }
-  if (!entry && typeof pkg.main === "string") entry = pkg.main;
-  if (!entry) return null;
-  return path.join(pkgDir, entry);
+	const pkgJsonPath = path.join(pkgDir, "package.json");
+	if (!existsSync(pkgJsonPath)) return null;
+	let pkg;
+	try {
+		pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
+	} catch {
+		return null;
+	}
+	const rootExport = typeof pkg.exports === "string" ? pkg.exports : pkg.exports?.["."];
+	let entry;
+	if (typeof rootExport === "string") entry = rootExport;
+	else if (rootExport && typeof rootExport === "object") {
+		entry = rootExport.import ?? rootExport.default ?? rootExport.require ?? rootExport.node;
+	}
+	if (!entry && typeof pkg.main === "string") entry = pkg.main;
+	if (!entry) return null;
+	return path.join(pkgDir, entry);
 }
 
 /**
@@ -640,33 +670,27 @@ function entryFromPackageJson(pkgDir) {
  * cannot be reused.
  */
 function resolveFromPackageDir(pkgDir, pkgName) {
-  try {
-    return createRequire(path.join(pkgDir, "resolve.cjs")).resolve(pkgName);
-  } catch {}
-  return entryFromPackageJson(pkgDir);
+	try {
+		return createRequire(path.join(pkgDir, "resolve.cjs")).resolve(pkgName);
+	} catch {}
+	return entryFromPackageJson(pkgDir);
 }
 
 /** Walk the probe's node_modules candidates (hoisted, then nested). */
 function resolveFromBaseWalk(pkgName, bases) {
-  for (const base of bases) {
-    const pkgDirs = [
-      path.join(base, ...pkgName.split("/")),
-      // npm can hoist a transitive host package under a direct dependency
-      // (pi-tui lands in pi-coding-agent/node_modules in the probe install).
-      path.join(
-        base,
-        "@earendil-works",
-        "pi-coding-agent",
-        "node_modules",
-        ...pkgName.split("/"),
-      ),
-    ];
-    for (const pkgDir of pkgDirs) {
-      const entry = resolveFromPackageDir(pkgDir, pkgName);
-      if (entry) return entry;
-    }
-  }
-  return null;
+	for (const base of bases) {
+		const pkgDirs = [
+			path.join(base, ...pkgName.split("/")),
+			// npm can hoist a transitive host package under a direct dependency
+			// (pi-tui lands in pi-coding-agent/node_modules in the probe install).
+			path.join(base, "@earendil-works", "pi-coding-agent", "node_modules", ...pkgName.split("/")),
+		];
+		for (const pkgDir of pkgDirs) {
+			const entry = resolveFromPackageDir(pkgDir, pkgName);
+			if (entry) return entry;
+		}
+	}
+	return null;
 }
 
 /**
@@ -678,98 +702,98 @@ function resolveFromBaseWalk(pkgName, bases) {
  * that fails fall back to the base-dir walk.
  */
 function resolveHostPackageEntry(pkgName) {
-  const bases = process.env.PROBE_NODE_MODULES
-    ? [process.env.PROBE_NODE_MODULES]
-    : [path.join(process.cwd(), "node_modules"), path.resolve(process.cwd(), "../node_modules")];
+	const bases = process.env.PROBE_NODE_MODULES
+		? [process.env.PROBE_NODE_MODULES]
+		: [path.join(process.cwd(), "node_modules"), path.resolve(process.cwd(), "../node_modules")];
 
-  if (pkgName !== "@earendil-works/pi-coding-agent") {
-    const piEntry = resolveFromBaseWalk("@earendil-works/pi-coding-agent", bases);
-    if (piEntry) {
-      // realpath: pnpm's package dirs are symlinks into the virtual store;
-      // anchoring on the symlink path misses the store's dependency
-      // siblings (e.g. pi-coding-agent's own typebox), so the repo-root
-      // copy would win. The loader sees the realpath copy.
-      const fromPiDir = createRequire(
-        path.join(path.dirname(realpathSync(piEntry)), "probe-resolve.cjs"),
-      );
-      try {
-        return fromPiDir.resolve(pkgName);
-      } catch {
-        // pi packages expose only `import`/`types`, so require.resolve throws
-        // ERR_PACKAGE_PATH_NOT_EXPORTED. Parse the package.json of the copy
-        // Node would have picked from the same search paths.
-        for (const searchPath of fromPiDir.resolve.paths(pkgName) ?? []) {
-          const entry = entryFromPackageJson(path.join(searchPath, ...pkgName.split("/")));
-          if (entry) return entry;
-        }
-      }
-    }
-  }
-  return resolveFromBaseWalk(pkgName, bases);
+	if (pkgName !== "@earendil-works/pi-coding-agent") {
+		const piEntry = resolveFromBaseWalk("@earendil-works/pi-coding-agent", bases);
+		if (piEntry) {
+			// realpath: pnpm's package dirs are symlinks into the virtual store;
+			// anchoring on the symlink path misses the store's dependency
+			// siblings (e.g. pi-coding-agent's own typebox), so the repo-root
+			// copy would win. The loader sees the realpath copy.
+			const fromPiDir = createRequire(
+				path.join(path.dirname(realpathSync(piEntry)), "probe-resolve.cjs"),
+			);
+			try {
+				return fromPiDir.resolve(pkgName);
+			} catch {
+				// pi packages expose only `import`/`types`, so require.resolve throws
+				// ERR_PACKAGE_PATH_NOT_EXPORTED. Parse the package.json of the copy
+				// Node would have picked from the same search paths.
+				for (const searchPath of fromPiDir.resolve.paths(pkgName) ?? []) {
+					const entry = entryFromPackageJson(path.join(searchPath, ...pkgName.split("/")));
+					if (entry) return entry;
+				}
+			}
+		}
+	}
+	return resolveFromBaseWalk(pkgName, bases);
 }
 
 let importSurface;
 try {
-  const files = readdirSync(EXTENSION_SOURCE_DIR)
-    .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
-    .sort();
-  const used = new Map();
-  const expectedRuntime = new Set();
-  for (const file of files) {
-    const source = maskCommentsAndLiterals(
-      readFileSync(path.join(EXTENSION_SOURCE_DIR, file), "utf8"),
-    );
-    const { found, expected } = extractRuntimeImports(source);
-    for (const pkgName of expected) expectedRuntime.add(pkgName);
-    for (const [specifier, names] of found) {
-      const bucket = used.get(specifier) ?? new Set();
-      for (const name of names) bucket.add(name);
-      used.set(specifier, bucket);
-    }
-  }
-  const missing = [];
-  let verified = 0;
-  for (const pkgName of IMPORT_SURFACE_PACKAGES) {
-    if (expectedRuntime.has(pkgName) && !used.get(pkgName)?.size) {
-      missing.push(
-        `${pkgName} (runtime import statement matched but no names extracted — clause parser may have drifted)`,
-      );
-    }
-  }
-  for (const pkgName of IMPORT_SURFACE_PACKAGES) {
-    const names = used.get(pkgName);
-    if (!names || names.size === 0) continue;
-    const entry = resolveHostPackageEntry(pkgName);
-    if (!entry) {
-      missing.push(`${pkgName} (entry not found under the probe node_modules)`);
-      continue;
-    }
-    const namespace = await import(pathToFileURL(entry).href);
-    for (const name of [...names].sort()) {
-      if (name in namespace) verified++;
-      else missing.push(`${pkgName} -> ${name}`);
-    }
-  }
-  importSurface = {
-    ok: missing.length === 0,
-    detail: missing.length
-      ? `missing on host: ${missing.join(", ")}`
-      : `${verified} runtime named import(s) across ${files.length} source file(s) verified`,
-  };
+	const files = readdirSync(EXTENSION_SOURCE_DIR)
+		.filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+		.sort();
+	const used = new Map();
+	const expectedRuntime = new Set();
+	for (const file of files) {
+		const source = maskCommentsAndLiterals(
+			readFileSync(path.join(EXTENSION_SOURCE_DIR, file), "utf8"),
+		);
+		const { found, expected } = extractRuntimeImports(source);
+		for (const pkgName of expected) expectedRuntime.add(pkgName);
+		for (const [specifier, names] of found) {
+			const bucket = used.get(specifier) ?? new Set();
+			for (const name of names) bucket.add(name);
+			used.set(specifier, bucket);
+		}
+	}
+	const missing = [];
+	let verified = 0;
+	for (const pkgName of IMPORT_SURFACE_PACKAGES) {
+		if (expectedRuntime.has(pkgName) && !used.get(pkgName)?.size) {
+			missing.push(
+				`${pkgName} (runtime import statement matched but no names extracted — clause parser may have drifted)`,
+			);
+		}
+	}
+	for (const pkgName of IMPORT_SURFACE_PACKAGES) {
+		const names = used.get(pkgName);
+		if (!names || names.size === 0) continue;
+		const entry = resolveHostPackageEntry(pkgName);
+		if (!entry) {
+			missing.push(`${pkgName} (entry not found under the probe node_modules)`);
+			continue;
+		}
+		const namespace = await import(pathToFileURL(entry).href);
+		for (const name of [...names].sort()) {
+			if (name in namespace) verified++;
+			else missing.push(`${pkgName} -> ${name}`);
+		}
+	}
+	importSurface = {
+		ok: missing.length === 0,
+		detail: missing.length
+			? `missing on host: ${missing.join(", ")}`
+			: `${verified} runtime named import(s) across ${files.length} source file(s) verified`,
+	};
 } catch (e) {
-  importSurface = {
-    ok: false,
-    detail: `threw: ${e instanceof Error ? e.message : String(e)}`,
-  };
+	importSurface = {
+		ok: false,
+		detail: `threw: ${e instanceof Error ? e.message : String(e)}`,
+	};
 }
 check(
-  "extension runtime named imports exist on host packages",
-  importSurface.ok,
-  importSurface.detail,
+	"extension runtime named imports exist on host packages",
+	importSurface.ok,
+	importSurface.detail,
 );
 
 console.log(`\n${failures.length} of ${results.length} checks failed`);
 if (failures.length > 0) {
-  for (const f of failures) console.log(`  FAILED: ${f.name} — ${f.detail}`);
+	for (const f of failures) console.log(`  FAILED: ${f.name} — ${f.detail}`);
 }
 process.exit(failures.length ? 1 : 0);

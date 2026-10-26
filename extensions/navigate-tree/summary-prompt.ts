@@ -61,39 +61,37 @@ The no-tools restriction applies only to this summary turn; normal tools return 
  * (`${PROMPT}\n\nAdditional focus: ...`).
  */
 export function buildSummaryInstruction(
-  first: number,
-  focus: string,
-  parent?: { mode: "full" | "synthesized" | "digest"; childCount: number },
-  continuitySection?: string,
+	first: number,
+	focus: string,
+	parent?: { mode: "full" | "synthesized" | "digest"; childCount: number },
+	continuitySection?: string,
 ): string {
-  // Substitute in the prompt only: a focus that quotes `{first}` stays
-  // verbatim.
-  let prompt = REWIND_SUMMARY_PROMPT.replaceAll("{first}", String(first));
-  if (parent && parent.childCount > 0) {
-    prompt = prompt.replace(
-      "Keep the complete summary under about 4000 characters while preserving all decisions.",
-      "This parent folds completed child handoffs. Use the length needed to preserve what remains relevant to this parent; there is no fixed 4000-character cap.",
-    );
-    prompt += `\n\nThis is a work handoff, not an alternative conversation. There are ${parent.childCount} child handoffs in scope. ${parent.mode === "full" ? "Child reports will be attached verbatim once each; write the parent's own scope, final outcome, superseding decisions and remaining work without recopying child reports." : "Synthesize the child reports into this parent's handoff. Keep their relevant decisions, rejected or superseded approaches, deliverables, verification evidence and limits, commits, deferred/open work, and key facts needed for subsequent work. Omit child detail only when it is no longer relevant to the parent."} Include explicit Delivered, Verification, Rejected or Superseded, Commits, and Open or Deferred sections when supported by the evidence. Distinguish historical next steps from still-open work.`;
-    if (parent.mode === "digest")
-      prompt +=
-        "\n\nChild handoffs will appear only as a one-line index per child, not full reports. The parent report must carry all still-relevant decisions, verification, commits and open work from those reports.";
-  }
-  prompt += `\n\n${STANDING_AUTHORIZATION_INSTRUCTION}`;
-  const instruction = `${prompt}\n\nAdditional focus: ${focus}`;
-  return continuitySection === undefined
-    ? instruction
-    : `${instruction}\n\n${continuitySection}`;
+	// Substitute in the prompt only: a focus that quotes `{first}` stays
+	// verbatim.
+	let prompt = REWIND_SUMMARY_PROMPT.replaceAll("{first}", String(first));
+	if (parent && parent.childCount > 0) {
+		prompt = prompt.replace(
+			"Keep the complete summary under about 4000 characters while preserving all decisions.",
+			"This parent folds completed child handoffs. Use the length needed to preserve what remains relevant to this parent; there is no fixed 4000-character cap.",
+		);
+		prompt += `\n\nThis is a work handoff, not an alternative conversation. There are ${parent.childCount} child handoffs in scope. ${parent.mode === "full" ? "Child reports will be attached verbatim once each; write the parent's own scope, final outcome, superseding decisions and remaining work without recopying child reports." : "Synthesize the child reports into this parent's handoff. Keep their relevant decisions, rejected or superseded approaches, deliverables, verification evidence and limits, commits, deferred/open work, and key facts needed for subsequent work. Omit child detail only when it is no longer relevant to the parent."} Include explicit Delivered, Verification, Rejected or Superseded, Commits, and Open or Deferred sections when supported by the evidence. Distinguish historical next steps from still-open work.`;
+		if (parent.mode === "digest")
+			prompt +=
+				"\n\nChild handoffs will appear only as a one-line index per child, not full reports. The parent report must carry all still-relevant decisions, verification, commits and open work from those reports.";
+	}
+	prompt += `\n\n${STANDING_AUTHORIZATION_INSTRUCTION}`;
+	const instruction = `${prompt}\n\nAdditional focus: ${focus}`;
+	return continuitySection === undefined ? instruction : `${instruction}\n\n${continuitySection}`;
 }
 
 /** Build the user instruction appended to an independent summarization request. */
 export function buildSummaryRequestText(
-  first: number,
-  focus: string,
-  parent?: { mode: "full" | "synthesized" | "digest"; childCount: number },
-  continuitySection?: string,
+	first: number,
+	focus: string,
+	parent?: { mode: "full" | "synthesized" | "digest"; childCount: number },
+	continuitySection?: string,
 ): string {
-  return `[navigate_tree]\n${buildSummaryInstruction(first, focus, parent, continuitySection)}`;
+	return `[navigate_tree]\n${buildSummaryInstruction(first, focus, parent, continuitySection)}`;
 }
 
 /** Merges older handoffs into one project-history compaction summary; `{first}` is the first summarized message. */
@@ -131,7 +129,7 @@ Keep it under about 6000 characters.`;
 
 /** Build the user instruction for a handoff consolidation request. */
 export function buildConsolidationRequestText(first: number): string {
-  return `[navigate_tree consolidation]\n${CONSOLIDATION_PROMPT.replaceAll("{first}", String(first))}`;
+	return `[navigate_tree consolidation]\n${CONSOLIDATION_PROMPT.replaceAll("{first}", String(first))}`;
 }
 
 /**
@@ -141,12 +139,12 @@ export function buildConsolidationRequestText(first: number): string {
  * summary. Any preamble before the heading is dropped.
  */
 export function extractSummaryText(text: string): string | null {
-  const start = text.search(/^## Goal\b/m);
-  if (start < 0) return null;
-  const summary = text.slice(start).trim();
-  // A bare heading is not a summary: storing it would lose the collapsed work.
-  const body = summary.replace(/^## Goal\b[^\n]*/, "").trim();
-  return body.length > 0 ? summary : null;
+	const start = text.search(/^## Goal\b/m);
+	if (start < 0) return null;
+	const summary = text.slice(start).trim();
+	// A bare heading is not a summary: storing it would lose the collapsed work.
+	const body = summary.replace(/^## Goal\b[^\n]*/, "").trim();
+	return body.length > 0 ? summary : null;
 }
 
 /**
@@ -163,21 +161,16 @@ Summary of that exploration:
  * Byte-exact port of upstream's (non-exported) `formatFileOperations`
  * (`core/compaction/utils.js`): file lists appended to the stored summary.
  */
-export function formatFileOperations(
-  readFiles: string[],
-  modifiedFiles: string[],
-): string {
-  const sections: string[] = [];
-  if (readFiles.length > 0) {
-    sections.push(`<read-files>\n${readFiles.join("\n")}\n</read-files>`);
-  }
-  if (modifiedFiles.length > 0) {
-    sections.push(
-      `<modified-files>\n${modifiedFiles.join("\n")}\n</modified-files>`,
-    );
-  }
-  if (sections.length === 0) return "";
-  return `\n\n${sections.join("\n\n")}`;
+export function formatFileOperations(readFiles: string[], modifiedFiles: string[]): string {
+	const sections: string[] = [];
+	if (readFiles.length > 0) {
+		sections.push(`<read-files>\n${readFiles.join("\n")}\n</read-files>`);
+	}
+	if (modifiedFiles.length > 0) {
+		sections.push(`<modified-files>\n${modifiedFiles.join("\n")}\n</modified-files>`);
+	}
+	if (sections.length === 0) return "";
+	return `\n\n${sections.join("\n\n")}`;
 }
 
 /**
@@ -185,27 +178,23 @@ export function formatFileOperations(
  * (read but never edited/written) and modified files, both sorted.
  */
 export function computeFileLists(fileOps: {
-  read: Set<string>;
-  written: Set<string>;
-  edited: Set<string>;
+	read: Set<string>;
+	written: Set<string>;
+	edited: Set<string>;
 }): { readFiles: string[]; modifiedFiles: string[] } {
-  const modified = new Set([...fileOps.edited, ...fileOps.written]);
-  const readFiles = [...fileOps.read].filter((f) => !modified.has(f)).sort();
-  const modifiedFiles = [...modified].sort();
-  return { readFiles, modifiedFiles };
+	const modified = new Set([...fileOps.edited, ...fileOps.written]);
+	const readFiles = [...fileOps.read].filter((f) => !modified.has(f)).sort();
+	const modifiedFiles = [...modified].sort();
+	return { readFiles, modifiedFiles };
 }
 
 /** Compose a legacy stored branch_summary from generated text and file lists. */
 export function buildStoredSummary(
-  summaryText: string,
-  readFiles: string[],
-  modifiedFiles: string[],
+	summaryText: string,
+	readFiles: string[],
+	modifiedFiles: string[],
 ): string {
-  return (
-    BRANCH_SUMMARY_PREAMBLE +
-    summaryText +
-    formatFileOperations(readFiles, modifiedFiles)
-  );
+	return BRANCH_SUMMARY_PREAMBLE + summaryText + formatFileOperations(readFiles, modifiedFiles);
 }
 
 const CONTINUITY_HEADING = "## Continuity ledger";
@@ -213,11 +202,8 @@ const CONTINUITY_HEADING = "## Continuity ledger";
 const CONTINUITY_MARKER = "[navigate_tree continuity ledger rev ";
 
 /** Append a rendered continuity briefing to stored handoff text, as its last section. */
-export function appendContinuityBriefing(
-  text: string,
-  briefing: string,
-): string {
-  return `${text}\n\n${CONTINUITY_HEADING}\n\n${briefing}`;
+export function appendContinuityBriefing(text: string, briefing: string): string {
+	return `${text}\n\n${CONTINUITY_HEADING}\n\n${briefing}`;
 }
 
 /**
@@ -226,10 +212,8 @@ export function appendContinuityBriefing(
  * stay in force.
  */
 export function stripContinuityBriefing(text: string): string {
-  const at = text.lastIndexOf(
-    `\n\n${CONTINUITY_HEADING}\n\n${CONTINUITY_MARKER}`,
-  );
-  return at < 0 ? text : text.slice(0, at);
+	const at = text.lastIndexOf(`\n\n${CONTINUITY_HEADING}\n\n${CONTINUITY_MARKER}`);
+	return at < 0 ? text : text.slice(0, at);
 }
 
 // A parent's embedded child handoffs carry their own, historical, sections.
@@ -237,25 +221,17 @@ const CHILD_HANDOFFS_MARK = "\n\n---\n\n## Child handoffs";
 const NO_ITEM = /^\(?(?:none|n\/a|nothing|empty)\b[^a-z]*$/i;
 
 function sectionItems(text: string, heading: string): string[] {
-  const lines = text.split("\n");
-  const level = /^#+/.exec(heading)?.[0].length ?? 2;
-  const at = lines.findIndex(
-    (line) => line.trimEnd().toLowerCase() === heading.toLowerCase(),
-  );
-  if (at < 0) return [];
-  const items: string[] = [];
-  for (const line of lines.slice(at + 1)) {
-    const next = /^(#+)\s/.exec(line);
-    if (
-      (next && next[1].length <= level) ||
-      /^<(?:read|modified)-files>/.test(line)
-    )
-      break;
-    items.push(
-      line.replace(/^\s*(?:[-*]|\d+[.)])?\s*(?:\[[ xX]\])?\s*/, "").trim(),
-    );
-  }
-  return items.filter((item) => item !== "" && !NO_ITEM.test(item));
+	const lines = text.split("\n");
+	const level = /^#+/.exec(heading)?.[0].length ?? 2;
+	const at = lines.findIndex((line) => line.trimEnd().toLowerCase() === heading.toLowerCase());
+	if (at < 0) return [];
+	const items: string[] = [];
+	for (const line of lines.slice(at + 1)) {
+		const next = /^(#+)\s/.exec(line);
+		if ((next && next[1].length <= level) || /^<(?:read|modified)-files>/.test(line)) break;
+		items.push(line.replace(/^\s*(?:[-*]|\d+[.)])?\s*(?:\[[ xX]\])?\s*/, "").trim());
+	}
+	return items.filter((item) => item !== "" && !NO_ITEM.test(item));
 }
 
 /**
@@ -263,9 +239,8 @@ function sectionItems(text: string, heading: string): string[] {
  * item under `### In Progress` or `## Next Steps`.
  */
 export function hasOpenWork(summary: string): boolean {
-  const own = summary.split(CHILD_HANDOFFS_MARK)[0];
-  return (
-    sectionItems(own, "### In Progress").length > 0 ||
-    sectionItems(own, "## Next Steps").length > 0
-  );
+	const own = summary.split(CHILD_HANDOFFS_MARK)[0];
+	return (
+		sectionItems(own, "### In Progress").length > 0 || sectionItems(own, "## Next Steps").length > 0
+	);
 }

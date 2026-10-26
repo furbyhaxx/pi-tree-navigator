@@ -1,10 +1,10 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Message, TextContent } from "@earendil-works/pi-ai";
 import {
-  buildSessionProjection,
-  convertToLlm,
-  type ProjectedSessionEntry,
-  type SessionEntry,
+	buildSessionProjection,
+	convertToLlm,
+	type ProjectedSessionEntry,
+	type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import type { FoldSegmentRecord } from "./fold-summarizer.ts";
 import { projectHandoffs } from "./handoff-projection.ts";
@@ -12,106 +12,87 @@ import { projectHandoffs } from "./handoff-projection.ts";
 type Blocks = string | readonly (TextContent | ImageContent)[];
 
 function imagePlaceholder(image: ImageContent): string {
-  return `[image omitted: ${image.mimeType}, ${Math.ceil((image.data.length * 3) / 4)} bytes]`;
+	return `[image omitted: ${image.mimeType}, ${Math.ceil((image.data.length * 3) / 4)} bytes]`;
 }
 
 function blocksText(content: Blocks): string {
-  if (typeof content === "string") return content;
-  return content
-    .map((block) =>
-      block.type === "text" ? block.text : imagePlaceholder(block),
-    )
-    .join("\n");
+	if (typeof content === "string") return content;
+	return content
+		.map((block) => (block.type === "text" ? block.text : imagePlaceholder(block)))
+		.join("\n");
 }
 
 type RecordBody = Pick<FoldSegmentRecord, "role" | "text">;
 
-function recordBody(
-  message: AgentMessage,
-  source: SessionEntry,
-): RecordBody | undefined {
-  const [llm] = convertToLlm([message]);
-  if (!llm) return undefined;
-  const text = llm.role === "user" ? blocksText(llm.content) : "";
-  switch (message.role) {
-    case "user":
-    case "bashExecution":
-      return { role: "user", text };
-    case "branchSummary":
-    case "compactionSummary":
-      return { role: "summary", text };
-    case "custom":
-      if (source.type === "branch_summary") return { role: "summary", text };
-      return message.display ? { role: "custom", text } : undefined;
-    case "assistant":
-      return {
-        role: "assistant",
-        text: message.content
-          .flatMap((block) =>
-            block.type === "text"
-              ? [block.text]
-              : block.type === "toolCall"
-                ? [
-                    `[tool call ${block.name}] ${JSON.stringify(block.arguments)}`,
-                  ]
-                : [],
-          )
-          .join("\n"),
-      };
-    case "toolResult": {
-      const body = blocksText(message.content);
-      return {
-        role: "tool",
-        text: `[result of ${message.toolName}${message.isError ? ", error" : ""}]${body ? `\n${body}` : " (empty)"}`,
-      };
-    }
-    default:
-      return undefined;
-  }
+function recordBody(message: AgentMessage, source: SessionEntry): RecordBody | undefined {
+	const [llm] = convertToLlm([message]);
+	if (!llm) return undefined;
+	const text = llm.role === "user" ? blocksText(llm.content) : "";
+	switch (message.role) {
+		case "user":
+		case "bashExecution":
+			return { role: "user", text };
+		case "branchSummary":
+		case "compactionSummary":
+			return { role: "summary", text };
+		case "custom":
+			if (source.type === "branch_summary") return { role: "summary", text };
+			return message.display ? { role: "custom", text } : undefined;
+		case "assistant":
+			return {
+				role: "assistant",
+				text: message.content
+					.flatMap((block) =>
+						block.type === "text"
+							? [block.text]
+							: block.type === "toolCall"
+								? [`[tool call ${block.name}] ${JSON.stringify(block.arguments)}`]
+								: [],
+					)
+					.join("\n"),
+			};
+		case "toolResult": {
+			const body = blocksText(message.content);
+			return {
+				role: "tool",
+				text: `[result of ${message.toolName}${message.isError ? ", error" : ""}]${body ? `\n${body}` : " (empty)"}`,
+			};
+		}
+		default:
+			return undefined;
+	}
 }
 
 function entryRecords(entry: ProjectedSessionEntry): FoldSegmentRecord[] {
-  const bodies = entry.messages.flatMap((message) => {
-    const body = recordBody(message, entry.sourceEntry);
-    return body?.text.trim() ? [body] : [];
-  });
-  return bodies.map((body, index) => ({
-    id:
-      bodies.length === 1
-        ? entry.sourceEntry.id
-        : `${entry.sourceEntry.id}.${index + 1}`,
-    ...body,
-  }));
+	const bodies = entry.messages.flatMap((message) => {
+		const body = recordBody(message, entry.sourceEntry);
+		return body?.text.trim() ? [body] : [];
+	});
+	return bodies.map((body, index) => ({
+		id: bodies.length === 1 ? entry.sourceEntry.id : `${entry.sourceEntry.id}.${index + 1}`,
+		...body,
+	}));
 }
 
 /** Current canonical context restricted to the selected fold point ancestry. */
-export function buildFoldProjection(
-  entries: SessionEntry[],
-  leafId: string,
-  throughId = leafId,
-) {
-  const projection = projectHandoffs(
-    buildSessionProjection(entries, leafId),
-    entries,
-  );
-  const byId = new Map(entries.map((entry) => [entry.id, entry]));
-  const ancestry = new Set<string>();
-  let id: string | null = throughId;
-  while (id !== null) {
-    if (ancestry.has(id)) throw new Error("cyclic fold ancestry");
-    ancestry.add(id);
-    const entry = byId.get(id);
-    if (!entry) throw new Error("missing fold ancestry");
-    id = entry.parentId;
-  }
-  const restricted = projection.entries.filter((entry) =>
-    ancestry.has(entry.sourceEntry.id),
-  );
-  return {
-    ...projection,
-    entries: restricted,
-    messages: restricted.flatMap((entry) => entry.messages),
-  };
+export function buildFoldProjection(entries: SessionEntry[], leafId: string, throughId = leafId) {
+	const projection = projectHandoffs(buildSessionProjection(entries, leafId), entries);
+	const byId = new Map(entries.map((entry) => [entry.id, entry]));
+	const ancestry = new Set<string>();
+	let id: string | null = throughId;
+	while (id !== null) {
+		if (ancestry.has(id)) throw new Error("cyclic fold ancestry");
+		ancestry.add(id);
+		const entry = byId.get(id);
+		if (!entry) throw new Error("missing fold ancestry");
+		id = entry.parentId;
+	}
+	const restricted = projection.entries.filter((entry) => ancestry.has(entry.sourceEntry.id));
+	return {
+		...projection,
+		entries: restricted,
+		messages: restricted.flatMap((entry) => entry.messages),
+	};
 }
 
 /**
@@ -129,31 +110,27 @@ export function buildFoldProjection(
  * telling the summarizer what the collapsed work builds on.
  */
 export function buildFoldSegment(
-  entries: SessionEntry[],
-  leafId: string,
-  targetId: string,
-  throughId = leafId,
+	entries: SessionEntry[],
+	leafId: string,
+	targetId: string,
+	throughId = leafId,
 ): { background: string; records: FoldSegmentRecord[] } {
-  const projected = buildFoldProjection(entries, leafId, throughId).entries;
-  const at = projected.findIndex((entry) => entry.sourceEntry.id === targetId);
-  const handoff = projected
-    .slice(0, at + 1)
-    .findLast(
-      (entry) =>
-        entry.sourceEntry.type === "branch_summary" &&
-        entry.messages.length > 0,
-    );
-  const background =
-    handoff?.messages
-      .flatMap((message) => {
-        const body = recordBody(message, handoff.sourceEntry);
-        return body ? [body.text] : [];
-      })
-      .join("\n\n") ?? "";
-  return {
-    background,
-    records: projected.slice(at + 1).flatMap(entryRecords),
-  };
+	const projected = buildFoldProjection(entries, leafId, throughId).entries;
+	const at = projected.findIndex((entry) => entry.sourceEntry.id === targetId);
+	const handoff = projected
+		.slice(0, at + 1)
+		.findLast((entry) => entry.sourceEntry.type === "branch_summary" && entry.messages.length > 0);
+	const background =
+		handoff?.messages
+			.flatMap((message) => {
+				const body = recordBody(message, handoff.sourceEntry);
+				return body ? [body.text] : [];
+			})
+			.join("\n\n") ?? "";
+	return {
+		background,
+		records: projected.slice(at + 1).flatMap(entryRecords),
+	};
 }
 
 /**
@@ -163,15 +140,13 @@ export function buildFoldSegment(
  * projection does not carry `firstKeptId`.
  */
 export function buildConsolidationSegment(
-  entries: SessionEntry[],
-  leafId: string,
-  firstKeptId: string,
+	entries: SessionEntry[],
+	leafId: string,
+	firstKeptId: string,
 ): FoldSegmentRecord[] {
-  const projected = buildFoldProjection(entries, leafId).entries;
-  const at = projected.findIndex(
-    (entry) => entry.sourceEntry.id === firstKeptId,
-  );
-  return at < 0 ? [] : projected.slice(0, at).flatMap(entryRecords);
+	const projected = buildFoldProjection(entries, leafId).entries;
+	const at = projected.findIndex((entry) => entry.sourceEntry.id === firstKeptId);
+	return at < 0 ? [] : projected.slice(0, at).flatMap(entryRecords);
 }
 
 /**
@@ -179,15 +154,15 @@ export function buildConsolidationSegment(
  * projection no longer carries the anchor.
  */
 export function anchorMessageIndex(
-  projection: { entries: readonly ProjectedSessionEntry[] },
-  targetId: string,
+	projection: { entries: readonly ProjectedSessionEntry[] },
+	targetId: string,
 ): number {
-  let count = 0;
-  for (const entry of projection.entries) {
-    count += entry.messages.length;
-    if (entry.sourceEntry.id === targetId) return count - 1;
-  }
-  return -1;
+	let count = 0;
+	for (const entry of projection.entries) {
+		count += entry.messages.length;
+		if (entry.sourceEntry.id === targetId) return count - 1;
+	}
+	return -1;
 }
 
 /**
@@ -196,30 +171,28 @@ export function anchorMessageIndex(
  * must not consume a message number. Unknown block types count as visible.
  */
 function isProviderVisible(message: Message): boolean {
-  if (message.role !== "assistant") return true;
-  const content: unknown = message.content;
-  if (typeof content === "string") return content.trim().length > 0;
-  if (!Array.isArray(content)) return true;
-  for (const block of content as unknown[]) {
-    if (typeof block !== "object" || block === null) continue;
-    const entry = block as { [key: string]: unknown };
-    if (entry.type === "text") {
-      if (typeof entry.text === "string" && entry.text.trim().length > 0)
-        return true;
-    } else if (entry.type === "thinking") {
-      const { thinking, thinkingSignature } = entry;
-      if (
-        (typeof thinking === "string" && thinking.trim().length > 0) ||
-        (typeof thinkingSignature === "string" &&
-          thinkingSignature.trim().length > 0) ||
-        entry.redacted === true
-      )
-        return true;
-    } else if (entry.type !== undefined) {
-      return true;
-    }
-  }
-  return false;
+	if (message.role !== "assistant") return true;
+	const content: unknown = message.content;
+	if (typeof content === "string") return content.trim().length > 0;
+	if (!Array.isArray(content)) return true;
+	for (const block of content as unknown[]) {
+		if (typeof block !== "object" || block === null) continue;
+		const entry = block as { [key: string]: unknown };
+		if (entry.type === "text") {
+			if (typeof entry.text === "string" && entry.text.trim().length > 0) return true;
+		} else if (entry.type === "thinking") {
+			const { thinking, thinkingSignature } = entry;
+			if (
+				(typeof thinking === "string" && thinking.trim().length > 0) ||
+				(typeof thinkingSignature === "string" && thinkingSignature.trim().length > 0) ||
+				entry.redacted === true
+			)
+				return true;
+		} else if (entry.type !== undefined) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /**
@@ -230,18 +203,17 @@ function isProviderVisible(message: Message): boolean {
  * `targetIndex` (see {@link anchorMessageIndex}) ends the background.
  */
 export function buildInContextMessages(
-  systemMessages: readonly Message[],
-  projectedMessages: AgentMessage[],
-  targetIndex: number,
+	systemMessages: readonly Message[],
+	projectedMessages: AgentMessage[],
+	targetIndex: number,
 ): { messages: Message[]; first: number } {
-  const background = convertToLlm(
-    targetIndex < 0 ? [] : projectedMessages.slice(0, targetIndex + 1),
-  );
-  return {
-    messages: [...systemMessages, ...convertToLlm(projectedMessages)],
-    first:
-      background.filter(
-        (message) => message.role !== "system" && isProviderVisible(message),
-      ).length + 1,
-  };
+	const background = convertToLlm(
+		targetIndex < 0 ? [] : projectedMessages.slice(0, targetIndex + 1),
+	);
+	return {
+		messages: [...systemMessages, ...convertToLlm(projectedMessages)],
+		first:
+			background.filter((message) => message.role !== "system" && isProviderVisible(message))
+				.length + 1,
+	};
 }
