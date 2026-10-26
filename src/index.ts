@@ -69,7 +69,7 @@ import {
 	START_ANCHOR_DEFAULT_TURNS,
 	TREE_NAVIGATOR_CONFIG_FILENAME,
 } from "./core/config.ts";
-import { extractTextContent, TOOL_NAME } from "./core/helpers.ts";
+import { extractTextContent } from "./core/helpers.ts";
 import { createHintController } from "./core/hint-and-start-anchor.ts";
 import {
 	LEGACY_REWIND_OUTCOME_CUSTOM_TYPE,
@@ -90,19 +90,12 @@ import {
 	resetPrototype,
 	sessionRefCount,
 } from "./core/pi-internals.ts";
+import { buildContextMessages, findLabeledEntry } from "./core/projection.ts";
 import {
-	buildContextMessages,
-	effectiveRequestMessages,
-	findLabeledEntry,
-} from "./core/projection.ts";
-import {
-	ANCHOR_MANDATE,
 	estimateAdmissionTokens,
-	noteOutgoingRequest,
 	noteRequestUsage,
 	type OverflowModel,
 	overflowed,
-	requestAccounting,
 	tokenCalibration,
 } from "./core/request-accounting.ts";
 import {
@@ -114,7 +107,7 @@ import { clearRuntimeConfig } from "./core/runtime-config.ts";
 import { trySessionWrite } from "./core/session-write.ts";
 import { createConsolidationController } from "./fold/consolidation-runtime.ts";
 import { createFoldAdaptersController } from "./fold/fold-adapters.ts";
-import type { FoldApi, FoldHost } from "./fold/fold-api.ts";
+import type { FoldApi } from "./fold/fold-api.ts";
 import { unrestoredFoldCursors } from "./fold/fold-commit.ts";
 import { RECOVERY_HEADROOM_TOKENS, RECOVERY_MIN_OUTPUT_TOKENS } from "./fold/fold-policy.ts";
 import {
@@ -128,6 +121,7 @@ import { createFoldRuntime } from "./fold/fold-runtime.ts";
 import { installHandoffProjection } from "./fold/handoff-projection.ts";
 import { createIndependentRecoveryController } from "./recovery/independent-recovery.ts";
 import { createPressureCompactionController } from "./recovery/pressure-compaction.ts";
+import { createRequestGuard } from "./recovery/request-guard.ts";
 import { createNavigateTreeTool } from "./tool/navigate-tree-tool.ts";
 import { registerAnchorCommand } from "./ui/anchor-command.ts";
 import { createAnchorCommandDeps } from "./ui/anchor-command-deps.ts";
@@ -232,6 +226,14 @@ export default function (pi: ExtensionAPI) {
 		minRewindSavingsTokens: MIN_REWIND_SAVINGS_TOKENS,
 		consolidationCustomType: CONSOLIDATION_CUSTOM_TYPE,
 		foldHostOf,
+	});
+
+	const requestGuard = createRequestGuard({
+		state,
+		piCompaction,
+		foldHostOf,
+		captureSystemHead,
+		recoverIndependently,
 	});
 
 	foldApis.set(pi, { queueFold, runFoldNow });
@@ -709,146 +711,10 @@ export default function (pi: ExtensionAPI) {
 		return warnings;
 	}
 
-	// Public context event: replace the wire messages with the session-tree
-	// projection before every LLM call. This is the public-API replacement for
-	// the deleted `agent.prepareNextTurnWithContext` per-turn refresh — it
-	// fires inside `streamAssistantResponse` (via `Agent.transformContext` →
-	// `runner.emitContext`), before EVERY LLM call including the turn right
-	// after a mid-loop rewind, so the rewound chain (branch_summary +
-	// continuation message) reaches the next API call.
-	//
-	pi.on("context", (_event, ctx) => ({
-		messages: buildContextMessages(ctx.sessionManager as SessionManager),
-	}));
-
-	pi.on("context_with_system", async (event, ctx) => {
-		let sm: SessionManager;
-		let sessionId: string;
-		let model: OverflowModel | undefined;
-		let signal: AbortSignal | undefined;
-		let host: FoldHost;
-		try {
-			sm = ctx.sessionManager as SessionManager;
-			sessionId = sm.getSessionId();
-			model = ctx.model;
-			signal = ctx.signal;
-			host = foldHostOf(ctx);
-		} catch {
-			return;
-		}
-		// Captured before any await: Strategy A and the returned request share it.
-		const systemHead = effectiveRequestMessages(sm, event.messages).filter(
-			(message) => message.role === "system",
-		);
-		captureSystemHead(sm, sessionId, model, event.messages);
-		const modelKey = model ? `${model.provider}/${model.id}` : undefined;
-		if (modelKey)
-			noteOutgoingRequest(sessionId, modelKey, effectiveRequestMessages(sm, event.messages));
-		if (signal?.aborted) return;
-		if ((state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) === false)
-			return;
-		if (state.recovery.nativeRetryOwned.has(sessionId)) {
-			state.recovery.nativeRetryOwned.delete(sessionId);
-			return;
-		}
-		if (!model?.contextWindow || model.contextWindow <= 0) return;
-		// Native auto-compaction owns recovery when it is enabled (single owner).
-		if (piCompaction(sm, model)?.enabled !== false) return;
-		const contextWindow = model.contextWindow;
-		const inputEstimate = requestAccounting(sm, event.messages).tokens;
-		const reserve = RECOVERY_MIN_OUTPUT_TOKENS + RECOVERY_HEADROOM_TOKENS;
-		if (inputEstimate + reserve <= contextWindow) return;
-		const refuse = (detail?: string) => {
-			state.recovery.requestBudgetFailures.set(sessionId, {
-				inputEstimate,
-				contextWindow,
-				receiptId: randomUUID(),
-				...(detail ? { detail } : {}),
-			});
-			try {
-				ctx.abort();
-			} catch {
-				// Stale ctx: settlement still persists the receipt.
-			}
-		};
-		try {
-			const outcome = await recoverIndependently(ctx, host, signal);
-			if (outcome.status === "cancelled") return;
-			if (outcome.status === "failed") {
-				refuse(outcome.detail);
-				return;
-			}
-			const { draft } = outcome;
-			// Contain the receipt write: an unpersisted receipt must not become the
-			// parent of the next main-agent reply.
-			const receipt = trySessionWrite(sm, () =>
-				sm.appendCustomMessageEntry(draft.customType, draft.content, draft.display, draft.details),
-			);
-			if (!receipt.ok && !receipt.cursorRestored) {
-				unrestoredFoldCursors.add(sm);
-				refuse("the fold landed but its receipt could not be written, so persistence is uncertain");
-				return;
-			}
-			refreshAgentMessages(sm);
-			try {
-				const recovered = [...systemHead, ...buildContextMessages(sm)];
-				if (modelKey) noteOutgoingRequest(sessionId, modelKey, recovered);
-				return { messages: recovered };
-			} catch {
-				refuse("the recovered projection could not be built");
-				return;
-			}
-		} catch (error) {
-			refuse(
-				`independent recovery failed: ${error instanceof Error ? error.message : String(error)}`,
-			);
-		}
-		return undefined;
-	});
-
-	// Anchor mandate (#31): a before_agent_start append lands at the END of
-	// the system prompt — stronger than the mid-prompt Guidelines block, and
-	// re-applied on every prompt instead of living in the conversation. Skip
-	// only when the tool is verifiably absent from the active set; fail-open
-	// when `selectedTools` is undefined (this extension always registers it).
-	// The same check gates the rewind hint (#44): an inactive tool must not
-	// fire `turn_end` nudges the model can't act on.
-	pi.on("before_agent_start", async (event, ctx) => {
-		const selected = event.systemPromptOptions?.selectedTools;
-		state.activity.toolActive = !Array.isArray(selected) || selected.includes(TOOL_NAME);
-		// Per-session copy of the gate (#55): the shared `toolActive` above
-		// drives the hint, but an in-process sibling session must not clear this
-		// session's auto-anchor gate.
-		try {
-			const sessionId = ctx.sessionManager.getSessionId();
-			state.recovery.requestBudgetFailures.delete(sessionId);
-			state.recovery.recoveryReceipts.delete(sessionId);
-			state.recovery.recoveryAttempts.delete(sessionId);
-			state.recovery.nativeRetryOwned.delete(sessionId);
-			state.activity.toolActiveBySession.set(sessionId, state.activity.toolActive);
-		} catch {
-			// Fail-open: the per-session gate stays absent.
-		}
-		if (!state.activity.toolActive) return {};
-		return { systemPrompt: `${event.systemPrompt}\n\n${ANCHOR_MANDATE}` };
-	});
-
-	// Refusals must render (and be recorded) as failed tool calls. A returned
-	// `isError: true` never reaches the host's error channel — pi-agent-core
-	// only finalizes a call as failed when `execute()` throws, overwriting the
-	// flag with its own boolean — so `toolError` tags its details with
-	// `refusal: true` and this handler flips the host's `isError`, which drives
-	// the TUI's `toolErrorBg` shell, the transcript entry, and any other
-	// extension's `tool_result` view. Content is left untouched, so the model
-	// still reads the refusal copy.
-	pi.on("tool_result", (event) => {
-		if (event.toolName !== TOOL_NAME) return undefined;
-		const details = event.details as { refusal?: boolean } | undefined;
-		if (details?.refusal === true) {
-			return { isError: true };
-		}
-		return undefined;
-	});
+	pi.on("context", requestGuard.onContext);
+	pi.on("context_with_system", requestGuard.onContextWithSystem);
+	pi.on("before_agent_start", requestGuard.onBeforeAgentStart);
+	pi.on("tool_result", requestGuard.onToolResult);
 
 	pi.on("turn_end", hint.onTurnEnd);
 
