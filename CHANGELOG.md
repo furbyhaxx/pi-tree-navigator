@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Removed
+
+- **npm publishing and GitHub Actions**: this fork no longer publishes `@cad0p/pi-tree-navigator` to npm or runs CI. Install with `pi install git:github.com/furbyhaxx/pi-tree-navigator`; the local gates in `docs/verification.md` replace CI.
+
 ## [0.3.0] - 2026-10-15
 
 <!-- USER-EDITABLE SECTION START -->

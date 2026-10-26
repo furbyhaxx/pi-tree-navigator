@@ -11,22 +11,10 @@ This way you can have a session that looks like this :)
 
 ## Install
 
-Stable npm release:
+This fork is installed from git; `main` is the release channel:
 
 ```bash
-pi install npm:@cad0p/pi-tree-navigator
-```
-
-Pre-release npm snapshots from `main` are published with the `next` dist-tag:
-
-```bash
-pi install npm:@cad0p/pi-tree-navigator@next
-```
-
-You can also install directly from the git source when testing unreleased branches:
-
-```bash
-pi install git:github.com/cad0p/pi-tree-navigator
+pi install git:github.com/furbyhaxx/pi-tree-navigator
 ```
 
 ## Restructure an existing session
@@ -94,15 +82,7 @@ See [Retrospective session cloning](docs/retrospective-cloning.md) for the plan
 format, safety checks, CLI commands, and limitations. See
 [Code overview and invariants](docs/architecture.md) for implementation boundaries.
 
-## Publishing
-
-This repo uses [`cad0p/semver-calver-release`](https://github.com/cad0p/semver-calver-release)'s npm-package workflow:
-
-- Pushes to `main` compute the next hybrid SemVer + CalVer version, tag a GitHub prerelease, and publish to npm with the `next` dist-tag.
-- Curated release PRs from `release/from-v*` branches bump the base `package.json` version and publish stable npm releases.
-- npm publishing uses GitHub OIDC / npm trusted publishing via `.github/workflows/release.yml` (`id-token: write`) and `publishConfig.access: public`.
-
-### Requirements
+## Requirements
 
 - **pi 1.3+** (Node ≥22.19). This fork raises the host floor for retrospective cloning's system/tool-state replay checks; live rewinds still require a configured model provider. Offline clone inspection, preview and creation do not.
 - Peer dependencies (the source of truth is `package.json` `peerDependencies`):
