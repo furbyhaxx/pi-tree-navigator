@@ -15,13 +15,13 @@ import {
   estimateTokens,
   parseSessionEntries,
 } from "@earendil-works/pi-coding-agent";
-import { projectHandoffs, invalidateStaleUsage } from "/mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/handoff-projection.ts";
+import { projectHandoffs, invalidateStaleUsage } from "/mnt/Projects/furbyhaxx/pi-tree-navigator/src/fold/handoff-projection.ts";
 import {
   estimateContentTokens,
   estimateContextTokens,
   estimateRequestTokens,
   splitContextEstimate,
-} from "/mnt/Projects/furbyhaxx/pi-tree-navigator/extensions/navigate-tree/context-tokens.ts";
+} from "/mnt/Projects/furbyhaxx/pi-tree-navigator/src/core/context-tokens.ts";
 
 // index.ts ANCHOR_MANDATE, duplicated so this script does not import the
 // extension entry point (which patches AgentSession on import).

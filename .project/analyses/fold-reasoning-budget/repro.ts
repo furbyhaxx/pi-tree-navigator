@@ -31,7 +31,7 @@ mkdirSync(out);
 const summarizer = await import(
   values.impl === "old"
     ? "../../../extensions/navigate-tree/fold-summarizer.main.tmp.ts"
-    : "../../../extensions/navigate-tree/fold-summarizer.ts"
+    : "../../../src/fold/fold-summarizer.ts"
 );
 const agentDir = join(homedir(), ".pi", "agent");
 const runtime = await ModelRuntime.create({

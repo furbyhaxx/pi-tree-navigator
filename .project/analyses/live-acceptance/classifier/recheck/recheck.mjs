@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ModelRuntime, ModelRegistry } from '@earendil-works/pi-coding-agent';
-import { createModelClassifier, captureIntent, DEFAULT_MIN_CONFIDENCE } from '../../../../../extensions/navigate-tree/continuity-capture.ts';
-import { applyOps, capText, createLedger, isProtected, MAX_ITEM_TEXT_CHARS, MAX_QUOTE_CHARS } from '../../../../../extensions/navigate-tree/continuity-ledger.ts';
+import { createModelClassifier, captureIntent, DEFAULT_MIN_CONFIDENCE } from '../../../../../src/continuity/continuity-capture.ts';
+import { applyOps, capText, createLedger, isProtected, MAX_ITEM_TEXT_CHARS, MAX_QUOTE_CHARS } from '../../../../../src/continuity/continuity-ledger.ts';
 
 // Each invocation gets an exclusive evidence directory; no previous evidence is overwritten.
 const out = new URL(`./run-${new Date().toISOString().replaceAll(':', '-')}/`, import.meta.url);
 mkdirSync(out);
 const save = (name, value) => writeFileSync(new URL(name, out), typeof value === 'string' ? value : JSON.stringify(value, null, 2) + '\n', { flag: 'wx' });
-const sourceUrl = new URL('../../../../../extensions/navigate-tree/continuity-capture.ts', import.meta.url);
+const sourceUrl = new URL('../../../../../src/continuity/continuity-capture.ts', import.meta.url);
 const sourceSha256 = createHash('sha256').update(readFileSync(sourceUrl)).digest('hex');
 const fixtures = [
   {

@@ -32,7 +32,7 @@ import {
   createModelClassifier,
   type IntentClassifier,
   type IntentVerdict,
-} from "../../../../extensions/navigate-tree/continuity-capture.ts";
+} from "../../../../src/continuity/continuity-capture.ts";
 import {
   applyOps,
   archiveSteeringForAnchor,
@@ -45,7 +45,7 @@ import {
   MAX_QUOTE_CHARS,
   type OpContext,
   type ReduceResult,
-} from "../../../../extensions/navigate-tree/continuity-ledger.ts";
+} from "../../../../src/continuity/continuity-ledger.ts";
 
 const AUTH_PATH = "/home/furbyhaxx/.pi/agent/auth.json";
 const MODELS_PATH = "/home/furbyhaxx/.pi/agent/models.json";

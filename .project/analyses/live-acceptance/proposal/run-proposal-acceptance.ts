@@ -35,17 +35,17 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { proposeTree } from "../../../../extensions/navigate-tree/proposal-engine.ts";
-import { createProposalModelRunner, resolveProposalModel } from "../../../../extensions/navigate-tree/proposal-model.ts";
-import { saveTreeProposal, validateTreeProposal } from "../../../../extensions/navigate-tree/proposal-command.ts";
-import type { ProposalOptions } from "../../../../extensions/navigate-tree/proposal-options.ts";
-import { cloneRetrospectiveSession, previewRetrospectiveSession } from "../../../../extensions/navigate-tree/retrospective.ts";
+import { proposeTree } from "../../../../src/retrospective/proposal-engine.ts";
+import { createProposalModelRunner, resolveProposalModel } from "../../../../src/retrospective/proposal-model.ts";
+import { saveTreeProposal, validateTreeProposal } from "../../../../src/retrospective/proposal-command.ts";
+import type { ProposalOptions } from "../../../../src/retrospective/proposal-options.ts";
+import { cloneRetrospectiveSession, previewRetrospectiveSession } from "../../../../src/retrospective/retrospective.ts";
 import {
   readSessionSnapshot,
   type SessionSnapshot,
   sha256,
   validateCompleteToolCalls,
-} from "../../../../extensions/navigate-tree/retrospective-plan.ts";
+} from "../../../../src/retrospective/retrospective-plan.ts";
 
 const AUTH_PATH = "/home/furbyhaxx/.pi/agent/auth.json";
 const MODELS_PATH = "/home/furbyhaxx/.pi/agent/models.json";

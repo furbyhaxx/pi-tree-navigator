@@ -17,8 +17,8 @@ import {
   type RetrospectivePlan,
   readSessionSnapshot,
   type SessionSnapshot,
-} from "../../../../extensions/navigate-tree/retrospective-plan.ts";
-import { validateRetrospectivePlan } from "../../../../extensions/navigate-tree/retrospective.ts";
+} from "../../../../src/retrospective/retrospective-plan.ts";
+import { validateRetrospectivePlan } from "../../../../src/retrospective/retrospective.ts";
 
 const OUT = resolve(
   process.argv.includes("--out")

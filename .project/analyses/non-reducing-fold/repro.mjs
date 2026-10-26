@@ -9,8 +9,8 @@ import {
   convertToLlm,
   estimateTokens,
 } from "@earendil-works/pi-coding-agent";
-import { estimateContentTokens } from "../../../extensions/navigate-tree/context-tokens.ts";
-import { projectHandoffs } from "../../../extensions/navigate-tree/handoff-projection.ts";
+import { estimateContentTokens } from "../../../src/core/context-tokens.ts";
+import { projectHandoffs } from "../../../src/fold/handoff-projection.ts";
 
 const file = process.argv[2];
 if (!file) throw new Error("usage: repro.mjs <session.jsonl>");
