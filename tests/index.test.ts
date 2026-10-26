@@ -118,7 +118,11 @@ import navigateTree, {
 	wrapPlainLine,
 } from "../src/index.ts";
 
+// The extension holds captured sessions only weakly; keep test fakes alive until the test ends.
+const capturedFakes: FakeAgentSession[] = [];
+
 afterEach(() => {
+	capturedFakes.length = 0;
 	__testHooks.resetPrototype();
 });
 
@@ -608,6 +612,7 @@ function setupRewindable(
 	}
 	if (opts.capture) {
 		const fake = makeFakeSession(sm);
+		capturedFakes.push(fake);
 		__testHooks.captureSession(fake as unknown as AgentSession);
 		return { fake, anchorId: t1.assistantId };
 	}
@@ -3665,6 +3670,7 @@ describe("rewind: multi-block summaries and late entries", () => {
 		}
 		// No steer queue: re-appends never go back through input handlers.
 		assert.deepEqual(f.pi.sendUserMessageCalls, []);
+		assert.equal(done.details.agentMessagesRefreshed, true);
 		assert.ok(done.content.endsWith(`\n\n${NOTE_TWO}`));
 	});
 
@@ -3687,6 +3693,7 @@ describe("rewind: multi-block summaries and late entries", () => {
 		await rewindWithLate(f, () => appendLateUser(f.sm, "steer"));
 		const done = rewindMessages(f.pi)[0].message;
 		assert.equal(done.details.reappendedLateMessages, 1);
+		assert.equal(done.details.agentMessagesRefreshed, true);
 		assert.ok(done.content.endsWith(`\n\n${NOTE_ONE}`));
 		assert.equal(buildLateEntriesNote(1), NOTE_ONE);
 		assert.equal(buildLateEntriesNote(2), NOTE_TWO);
