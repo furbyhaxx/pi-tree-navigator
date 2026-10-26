@@ -271,7 +271,8 @@ export function treeItems(
 	const tip = branch.findLast((entry) => TIP_TYPES.has(entry.type));
 	if (tip) {
 		const at = items.findLastIndex((item) => item.targetId === tip.id && item.depth === 0);
-		if (at >= 0) items[at].current = true;
+		const current = items[at];
+		if (current) current.current = true;
 		else {
 			const destination = destinationOf(tip);
 			items.push({
@@ -407,7 +408,7 @@ export async function openTreeScreen(
 		if (!item) continue;
 		focus = keyOf(item);
 		if (choice.key === "f") {
-			filter = FILTERS[(FILTERS.indexOf(filter) + 1) % FILTERS.length];
+			filter = FILTERS[(FILTERS.indexOf(filter) + 1) % FILTERS.length] ?? "all";
 		} else if (choice.key === "g") {
 			if (await goTo(ctx, item)) return "done";
 		} else {

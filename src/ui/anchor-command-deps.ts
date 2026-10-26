@@ -70,9 +70,13 @@ export function createAnchorCommandDeps({
 				);
 				const oldController = resolveAutoNavigateConfig(
 					{
-						autoNavigate: state.config.autoNavigateBase,
+						...(state.config.autoNavigateBase === undefined
+							? {}
+							: { autoNavigate: state.config.autoNavigateBase }),
 						autoNavigateByModel: state.config.autoNavigateByModel,
-						proposal: state.config.proposalConfig,
+						...(state.config.proposalConfig === undefined
+							? {}
+							: { proposal: state.config.proposalConfig }),
 					},
 					modelKey,
 				);

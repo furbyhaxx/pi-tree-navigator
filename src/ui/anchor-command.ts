@@ -162,19 +162,21 @@ function resolveSubcommand(token: string): SubcommandName | undefined {
 }
 
 function editDistance(a: string, b: string): number {
-	let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+	let previous = Array.from({ length: b.length }, (_, index) => index + 1);
+	let distance = b.length;
 	for (let i = 1; i <= a.length; i++) {
-		const current = [i];
-		for (let j = 1; j <= b.length; j++) {
-			current[j] = Math.min(
-				previous[j] + 1,
-				current[j - 1] + 1,
-				previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
-			);
+		const current: number[] = [];
+		let diagonal = i - 1;
+		let left = i;
+		for (const [j, above] of previous.entries()) {
+			left = Math.min(above + 1, left + 1, diagonal + (a[i - 1] === b[j] ? 0 : 1));
+			current.push(left);
+			diagonal = above;
 		}
 		previous = current;
+		distance = left;
 	}
-	return previous[b.length];
+	return distance;
 }
 
 function suggestSubcommand(token: string): SubcommandName | undefined {
@@ -217,10 +219,11 @@ function completions(argumentText: string): AutocompleteItem[] | null {
 	}
 
 	const [, head, gap, rest] = match;
+	if (head === undefined || gap === undefined || rest === undefined) return null;
 	if (resolveSubcommand(head) !== "clone") return null;
 	const prefix = `${head}${gap}`;
 	const verb = /^(\S*)$/.exec(rest);
-	if (verb) {
+	if (verb?.[1] !== undefined) {
 		return fuzzyItems(
 			CLONE_SUBCOMMANDS,
 			verb[1],
@@ -233,8 +236,9 @@ function completions(argumentText: string): AutocompleteItem[] | null {
 		);
 	}
 	const flag = /^(propose\s[\s\S]*?)(--[\w-]*)$/.exec(rest);
-	if (!flag) return null;
-	const flags = CLONE_PROPOSE_FLAGS.filter((candidate) => candidate.startsWith(flag[2]));
+	if (flag?.[2] === undefined) return null;
+	const partial = flag[2];
+	const flags = CLONE_PROPOSE_FLAGS.filter((candidate) => candidate.startsWith(partial));
 	return flags.length
 		? flags.map((candidate) => ({
 				value: `${prefix}${flag[1]}${candidate} `,
@@ -368,7 +372,9 @@ async function openCloneMenu(ctx: ExtensionCommandContext, pi: ExtensionAPI): Pr
 		});
 		if (!choice) return "back";
 		cursor = choice.index;
-		await runCloneSubcommand(CLONE_SUBCOMMANDS[choice.index].name, ctx, pi);
+		const command = CLONE_SUBCOMMANDS[choice.index];
+		if (!command) return "back";
+		await runCloneSubcommand(command.name, ctx, pi);
 	}
 }
 
@@ -433,7 +439,8 @@ async function openHub(
 		});
 		if (!choice) return;
 		cursor = choice.index;
-		if ((await openView(HUB[choice.index].view, ctx, pi, deps)) === "done") return;
+		const item = HUB[choice.index];
+		if (!item || (await openView(item.view, ctx, pi, deps)) === "done") return;
 	}
 }
 

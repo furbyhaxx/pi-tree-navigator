@@ -73,7 +73,7 @@ interface PanelOptions {
  */
 export class FoldPlanPanel implements Component, Focusable {
 	private mode: Mode = { kind: "plan" };
-	private status?: Message;
+	private status: Message | undefined;
 	private controller?: AbortController;
 	private frozen?: { width: number; terminalRows: number };
 	private planRows = 1;
@@ -131,7 +131,7 @@ export class FoldPlanPanel implements Component, Focusable {
 		const block = this.block(columns);
 		// The block takes the place of the frame's blank row under the search row.
 		this.extraRows = block.length - 1;
-		const lines = [frame[0], frame[1], ...block, ...frame.slice(3)];
+		const lines = [...frame.slice(0, 2), ...block, ...frame.slice(3)];
 		lines[lines.length - 2] = this.hintLine(columns);
 		return lines;
 	}
@@ -302,7 +302,7 @@ export class FoldPlanPanel implements Component, Focusable {
 			keybindings: this.keybindings(),
 			theme: this.options.theme,
 		});
-		return lines[lines.length - 2];
+		return lines.at(-2) ?? "";
 	}
 
 	private keybindings(): FrameKeybinding[] {

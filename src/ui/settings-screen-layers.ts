@@ -217,7 +217,7 @@ export function layerSummary(def: SettingDef, snap: Snapshot, layer: Layer): str
 export function invalidIn(
 	def: SettingDef,
 	snap: Snapshot,
-): { layer: Layer; error?: string } | undefined {
+): { layer: Layer; error?: string | undefined } | undefined {
 	for (const layer of PRECEDENCE) {
 		const parsed = snap.current.layers[layer];
 		const status = parsed ? def.status(parsed) : ABSENT;

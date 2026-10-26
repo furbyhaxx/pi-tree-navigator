@@ -69,18 +69,21 @@ const KEEP_RECENT_SHARE_RANGE = range(
 	AUTO_NAVIGATE_MAX_KEEP_RECENT_SHARE,
 );
 
+/** The reserve definition shared by the root catalog and per-model overrides. */
+export const BASE_RESERVE: SettingDef = {
+	key: "rewindHintReserveTokens",
+	path: [name("rewindHintReserveTokens", "rewind_hint_reserve_tokens")],
+	kind: "tokens",
+	off: true,
+	onInvalid: "claims",
+	expects: `${range(REWIND_HINT_MIN_RESERVE, REWIND_HINT_MAX_RESERVE)} tokens (e.g. 50k), or off`,
+	description: `Nudge the agent to rewind when this many tokens are left in the window. ${range(REWIND_HINT_MIN_RESERVE, REWIND_HINT_MAX_RESERVE)}, or off (default).`,
+	status: (layer) => fieldStatus(layer.hint),
+	read: (config) => config.rewindHintReserveTokens,
+};
+
 export const SETTINGS: readonly SettingDef[] = [
-	{
-		key: "rewindHintReserveTokens",
-		path: [name("rewindHintReserveTokens", "rewind_hint_reserve_tokens")],
-		kind: "tokens",
-		off: true,
-		onInvalid: "claims",
-		expects: `${range(REWIND_HINT_MIN_RESERVE, REWIND_HINT_MAX_RESERVE)} tokens (e.g. 50k), or off`,
-		description: `Nudge the agent to rewind when this many tokens are left in the window. ${range(REWIND_HINT_MIN_RESERVE, REWIND_HINT_MAX_RESERVE)}, or off (default).`,
-		status: (layer) => fieldStatus(layer.hint),
-		read: (config) => config.rewindHintReserveTokens,
-	},
+	BASE_RESERVE,
 	{
 		key: "anchorStartAfterTurns",
 		path: [name("anchorStartAfterTurns", "anchor_start_after_turns")],

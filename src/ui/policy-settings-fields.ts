@@ -59,7 +59,7 @@ export function frameRow(kind: PolicyKind, row: RowSpec, state: State): FrameRow
 		};
 	}
 	if (row.kind === "gate") {
-		const explicit = state.mode === "custom" && typeof state.draft.minConfidence === "number";
+		const explicit = state.mode === "custom" && typeof state.draft["minConfidence"] === "number";
 		return {
 			label: "gate",
 			value: String(gateOf(kind, state)),
@@ -120,7 +120,7 @@ function draftForProbe(state: State): Record<string, unknown> {
 function refuseHeuristics(ctx: ExtensionCommandContext, state: State, next: boolean): boolean {
 	if (next) return false;
 	const probe = draftForProbe(state);
-	probe.heuristics = false;
+	probe["heuristics"] = false;
 	const problem = knownProblems("intent", probe).find((item) => item.includes("no source"));
 	if (!problem) return false;
 	ctx.ui.notify(problem, "warning");
@@ -131,7 +131,7 @@ export function setHeuristics(ctx: ExtensionCommandContext, state: State, next: 
 	if (heuristicsOf(state) === next) return;
 	if (refuseHeuristics(ctx, state, next)) return;
 	promote(state);
-	state.draft.heuristics = next;
+	state.draft["heuristics"] = next;
 }
 
 export async function pickMode(
@@ -172,7 +172,7 @@ export async function editGate(
 	if (text === undefined) return;
 	const trimmed = text.trim();
 	if (!trimmed) {
-		if (state.mode === "custom") delete state.draft.minConfidence;
+		if (state.mode === "custom") delete state.draft["minConfidence"];
 		return;
 	}
 	const value = Number(trimmed);
@@ -187,7 +187,7 @@ export async function editGate(
 		return;
 	}
 	promote(state);
-	state.draft.minConfidence = value;
+	state.draft["minConfidence"] = value;
 }
 
 export async function editModel(

@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { sep } from "node:path";
 import type { FrameRow, FrameScreen } from "./frame.ts";
 import { policyWarning } from "./policy-settings.ts";
+import { BASE_RESERVE } from "./settings-screen-catalog.ts";
 import {
 	INVALID_TEXT,
 	invalidIn,
@@ -14,7 +15,6 @@ import {
 	show,
 } from "./settings-screen-layers.ts";
 import {
-	BASE_RESERVE,
 	entryProblem,
 	entrySettings,
 	entryTarget,
@@ -173,7 +173,7 @@ export function canReset(view: View, target: Target): boolean {
 
 export const otherLayer = (layer: Layer, trusted: boolean): Layer => {
 	const available = LAYERS.filter((item) => item !== "project" || trusted);
-	return available[(available.indexOf(layer) + 1) % available.length];
+	return available[(available.indexOf(layer) + 1) % available.length] ?? "global";
 };
 
 /** Why a layer's file cannot be read for entries, or undefined when it can. */
@@ -341,8 +341,9 @@ function entrySummary(pattern: string, root: Root): string {
 	const parts = entrySettings(pattern).flatMap((def) => {
 		const raw = rawOf(root, def);
 		if (!raw.present) return [];
-		const last = def.path[def.path.length - 1].snake;
-		const name = last === BASE_RESERVE.path[0].snake ? "reserve" : last;
+		const last = def.path.at(-1)?.snake;
+		if (last === undefined) return [];
+		const name = last === BASE_RESERVE.path[0]?.snake ? "reserve" : last;
 		return [`${name} ${show(def, raw.value)}`];
 	});
 	const tools = namesAt(root, overrideTools(pattern).path).length;

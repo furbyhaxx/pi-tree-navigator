@@ -28,7 +28,7 @@ export interface StageSpec {
 	id: string;
 	label: string;
 	modelPath?: readonly string[];
-	promptPath?: readonly string[];
+	promptPath?: readonly string[] | undefined;
 	modelHelp: string;
 	promptHelp: string;
 }
@@ -226,7 +226,7 @@ export function readCurrent(kind: PolicyKind, current: unknown): State {
 		};
 	}
 	const draft = structuredClone(value.object);
-	const onlyPreset = Object.keys(draft).length === 1 && draft.preset === "recommended";
+	const onlyPreset = Object.keys(draft).length === 1 && draft["preset"] === "recommended";
 	return { mode: onlyPreset ? "recommended" : "custom", draft };
 }
 
@@ -246,7 +246,7 @@ function presetModel(kind: PolicyKind, id: string): string | null {
 function usesPreset(state: State): boolean {
 	return (
 		state.mode === "recommended" ||
-		(state.mode === "custom" && state.draft.preset === "recommended")
+		(state.mode === "custom" && state.draft["preset"] === "recommended")
 	);
 }
 
@@ -291,15 +291,15 @@ export function defaultGate(kind: PolicyKind): number {
 }
 
 export function gateOf(kind: PolicyKind, state: State): number {
-	if (state.mode === "custom" && typeof state.draft.minConfidence === "number") {
-		return state.draft.minConfidence;
+	if (state.mode === "custom" && typeof state.draft["minConfidence"] === "number") {
+		return state.draft["minConfidence"];
 	}
 	return defaultGate(kind);
 }
 
 export function heuristicsOf(state: State): boolean {
-	if (state.mode === "custom" && typeof state.draft.heuristics === "boolean") {
-		return state.draft.heuristics;
+	if (state.mode === "custom" && typeof state.draft["heuristics"] === "boolean") {
+		return state.draft["heuristics"];
 	}
 	return true;
 }

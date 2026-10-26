@@ -145,10 +145,10 @@ async function listModels(
 
 /** Entries whose selector would not round-trip through the real parsers are not offered. */
 function usable(kind: SettingsModelPickerOptions["kind"], entry: Listed): boolean {
+	const [first] = entry.levels;
 	return kind !== "model"
 		? classifierSelector(entry.provider, entry.id) !== undefined
-		: entry.levels.length > 0 &&
-				llmSelector(entry.provider, entry.id, entry.levels[0]) !== undefined;
+		: first !== undefined && llmSelector(entry.provider, entry.id, first) !== undefined;
 }
 
 async function pickThinking(
@@ -157,11 +157,13 @@ async function pickThinking(
 	configured: Configured | undefined,
 ): Promise<string | undefined> {
 	const { provider, id, levels } = entry;
-	if (levels.length === 1) return llmSelector(provider, id, levels[0]);
+	const [first] = levels;
+	if (first === undefined) return undefined;
+	if (levels.length === 1) return llmSelector(provider, id, first);
 	const sameModel = configured?.provider === provider && configured.id === id;
 	const wanted = entry.model
 		? clampThinkingLevel(entry.model, configured?.thinking ?? DEFAULT_THINKING)
-		: levels[0];
+		: first;
 	const rows: FrameRow[] = levels.map((level) => ({
 		label: level,
 		...(sameModel && configured.thinking === level && { value: SELECTED, tone: "success" }),
@@ -173,7 +175,8 @@ async function pickThinking(
 		placeholder: `Thinking level for ${provider}/${id}`,
 		cancelAction: "back",
 	});
-	return choice ? llmSelector(provider, id, levels[choice.index]) : undefined;
+	const level = choice && levels[choice.index];
+	return level === undefined ? undefined : llmSelector(provider, id, level);
 }
 
 function customError(kind: SettingsModelPickerOptions["kind"], text: string): string | undefined {
@@ -348,7 +351,9 @@ export async function pickSettingsModel(
 		});
 		if (!chosen) return undefined;
 		cursor = chosen.index;
-		const result = await choices[cursor].pick();
+		const choice = choices[cursor];
+		if (!choice) return undefined;
+		const result = await choice.pick();
 		if (result !== undefined) return result;
 	}
 }

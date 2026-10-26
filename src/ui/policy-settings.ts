@@ -48,7 +48,7 @@ function commit(
 	if (state.mode === "recommended") return "recommended";
 	if (state.mode === "off") return null;
 	if (Object.keys(state.draft).length === 0) return null;
-	if (Object.keys(state.draft).length === 1 && state.draft.preset === "recommended") {
+	if (Object.keys(state.draft).length === 1 && state.draft["preset"] === "recommended") {
 		return "recommended";
 	}
 	const parsed = parsePolicy(kind, state.draft);
@@ -61,11 +61,11 @@ function commit(
 
 function overrideBits(kind: PolicyKind, object: Record<string, unknown>): string[] {
 	const bits: string[] = [];
-	if (typeof object.minConfidence === "number") {
-		bits.push(`gate ${object.minConfidence}`);
+	if (typeof object["minConfidence"] === "number") {
+		bits.push(`gate ${object["minConfidence"]}`);
 	}
-	if (kind === "intent" && object.heuristics === false) bits.push("heuristics off");
-	const preset = object.preset === "recommended";
+	if (kind === "intent" && object["heuristics"] === false) bits.push("heuristics off");
+	const preset = object["preset"] === "recommended";
 	for (const stage of stagesOf(kind)) {
 		if (stage.modelPath) {
 			const model = getPath(object, stage.modelPath);
@@ -99,7 +99,7 @@ export function summarizePolicy(kind: PolicyKind, value: unknown): string {
 	if (unwrapped.kind === "recommended") return "recommended";
 	if (unwrapped.kind === "single") return unwrapped.model;
 	if (unwrapped.kind === "invalid") return "invalid";
-	const preset = unwrapped.object.preset === "recommended";
+	const preset = unwrapped.object["preset"] === "recommended";
 	const bits = overrideBits(kind, unwrapped.object);
 	if (preset && bits.length === 0) return "recommended";
 	return [preset ? "recommended" : "custom", ...bits].join(" · ");

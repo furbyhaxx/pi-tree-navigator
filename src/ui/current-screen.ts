@@ -427,7 +427,7 @@ export async function openCurrentScreen(
 		const { items, screen } = currentFrame(ledger, {
 			showHistory,
 			cursor,
-			focusId,
+			...(focusId === undefined ? {} : { focusId }),
 		});
 		focusId = undefined;
 		const choice = await selectFrame(ctx, screen);
