@@ -733,7 +733,10 @@ describe("milestone variants", () => {
 			world.deps,
 		);
 		assert.equal(code, 0, world.err.join(""));
-		const [base, granular] = observations();
+		const all = observations();
+		const base = all.find((o) => o.model === `${JEV}#base`);
+		const granular = all.find((o) => o.model === `${JEV}#granular`);
+		assert.equal(all.length, 2);
 		assert.equal(base?.model, `${JEV}#base`);
 		assert.equal(granular?.model, `${JEV}#granular`);
 		assert.deepEqual(Object.keys(base?.answers ?? {}), ["status", "boundary"]);

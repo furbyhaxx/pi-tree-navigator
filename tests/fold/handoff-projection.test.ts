@@ -1,4 +1,4 @@
-import { beforeEach, test } from "bun:test";
+import { test } from "bun:test";
 import assert from "node:assert/strict";
 import { clampMaxTokensToContext } from "@earendil-works/pi-ai/api/simple-options";
 import { AgentSession, convertToLlm, SessionManager } from "@earendil-works/pi-coding-agent";
@@ -6,10 +6,21 @@ import { estimateContextTokens } from "../../src/core/context-tokens.ts";
 import {
 	installHandoffProjection,
 	invalidateStaleUsage,
+	resetHandoffProjection,
 } from "../../src/fold/handoff-projection.ts";
 
-// Bun shares one process across test files; extension tests leave the patch installed.
-beforeEach(() => installHandoffProjection()());
+test("reset removes every stacked installation of the projection patch", () => {
+	const original = SessionManager.prototype.buildSessionProjection;
+	installHandoffProjection();
+	installHandoffProjection();
+	resetHandoffProjection();
+	assert.equal(SessionManager.prototype.buildSessionProjection, original);
+	assert.equal(
+		Symbol.for("pi-tree-navigator.session-projection.original") in
+			SessionManager.prototype.buildSessionProjection,
+		false,
+	);
+});
 
 const usage = {
 	input: 100000,

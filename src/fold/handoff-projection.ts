@@ -173,3 +173,9 @@ export function installHandoffProjection(): () => void {
 			SessionManager.prototype.buildSessionProjection = original;
 	};
 }
+
+/** Restore the host's unpatched projection, whichever installation is current. */
+export function resetHandoffProjection(): void {
+	const current: ProjectionMethod = SessionManager.prototype.buildSessionProjection;
+	SessionManager.prototype.buildSessionProjection = current[originalKey] ?? current;
+}
