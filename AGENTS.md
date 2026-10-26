@@ -93,24 +93,6 @@ README.md, CHANGELOG.md, LICENSE, AGENTS.md
 - The package ships raw TypeScript (`pi.extensions` → `./src/index.ts`). No build step unless
   a consumer requires it.
 
-## Not yet aligned
-
-This file describes the target state.
-
-- Tooling is pnpm + `node --test` + TypeScript 5.8 + Biome 2.3 (spaces), with `package.json`
-  scripts and no `Justfile`; peers use `>=1.3.0` ranges.
-- Code lives flat in `extensions/navigate-tree/` (~60 modules) with tests beside the source.
-- `index.ts` (6052 lines), `settings-screen.ts` (2263), `continuity-ledger.ts` (1223),
-  `config.ts` (1117), `continuity-capture.ts` (1094), `fold-plan-screen.ts` (898),
-  `frame.ts` (834) and `policy-settings.ts` (777) exceed the module-size rule;
-  `index.test.ts` is 13205 lines.
-- The package name and the repository, homepage and bugs URLs in `package.json` still point
-  at `cad0p`; `publishConfig` targets npm.
-- `README.md` (~680 lines) exceeds the Markdown limit; released `CHANGELOG.md` sections use
-  the git-cliff format and there is no `## [Unreleased]` section yet.
-- Fix these in dedicated `refactor:`/`chore:` commits, not inside feature work. Delete each
-  line when done, and the section when empty.
-
 ## Folding, recovery and the tree
 
 `docs/architecture.md` holds the invariants; read it before touching `fold/`, `recovery/`,
