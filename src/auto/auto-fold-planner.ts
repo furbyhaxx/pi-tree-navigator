@@ -16,9 +16,9 @@ export interface AutoFoldState {
 	signature: string;
 	turnsSinceCheck: number;
 	lastCheckTokens: number;
-	lastAnchorEntryId?: string;
+	lastAnchorEntryId?: string | undefined;
 	aboveRewindThreshold: boolean;
-	lastActionTokens?: number;
+	lastActionTokens?: number | undefined;
 	/** Context at the last pressure fold; unlike `lastActionTokens`, the fold's own anchor does not reset it. */
 	lastPressureTokens?: number;
 }
@@ -44,19 +44,19 @@ export function pressureFoldBudget(rewindAtTokens: number): number {
 
 /** Immutable turn-end inputs; isCurrent must cover session, leaf, model and config. */
 export interface AutoFoldOptions {
-	state?: AutoFoldState;
+	state?: AutoFoldState | undefined;
 	sessionId: string;
 	modelKey: string;
 	config: AutoNavigateConfig;
 	activeTokens: number;
-	newestAnchorId?: string;
+	newestAnchorId?: string | undefined;
 	anchorTokens: number;
 	calledNavigateTree: boolean;
 	entries: SessionEntry[];
 	leafId: string;
 	getLabel: (id: string) => string | undefined;
 	registry: PolicyRegistry;
-	signal?: AbortSignal;
+	signal?: AbortSignal | undefined;
 	isCurrent: () => boolean;
 }
 
@@ -195,7 +195,7 @@ export async function planAutomaticFold(options: AutoFoldOptions): Promise<AutoF
 			policy,
 			registry: options.registry,
 			input: evidence.input,
-			signal: options.signal,
+			...(options.signal === undefined ? {} : { signal: options.signal }),
 		});
 		result.evaluation = evaluation;
 		result.warnings.push(...evaluation.warnings);

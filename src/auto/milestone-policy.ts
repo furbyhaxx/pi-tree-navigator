@@ -138,7 +138,7 @@ function modelStage(
 	}
 	checkKeys(where, value, ["model"], problems);
 	if (!("model" in value)) return {};
-	const model = value.model;
+	const model = value["model"];
 	if (model === null) return { model: null };
 	if (typeof model === "string" && parseClassifierModel(model.trim()) !== undefined)
 		return { model: model.trim() };
@@ -158,7 +158,7 @@ function questionStage(
 	}
 	checkKeys(where, value, ["instructions"], problems);
 	if (!("instructions" in value)) return {};
-	const text = value.instructions;
+	const text = value["instructions"];
 	if (
 		typeof text === "string" &&
 		text.trim().length > 0 &&
@@ -208,23 +208,23 @@ export function parseMilestonePolicyObject(
 	);
 	const setting: MilestonePolicySetting = {};
 	if ("preset" in value) {
-		if (value.preset === RECOMMENDED_MILESTONE_CLASSIFIER)
+		if (value["preset"] === RECOMMENDED_MILESTONE_CLASSIFIER)
 			setting.preset = RECOMMENDED_MILESTONE_CLASSIFIER;
 		else problems.push(`${root}.preset must be "${RECOMMENDED_MILESTONE_CLASSIFIER}"`);
 	}
 	if ("minConfidence" in value) {
-		const confidence = value.minConfidence;
+		const confidence = value["minConfidence"];
 		if (typeof confidence === "number" && confidence > 0 && confidence <= 1)
 			setting.minConfidence = confidence;
 		else problems.push(`${root}.minConfidence must be a number above 0 up to 1`);
 	}
-	const classifier = modelStage(`${root}.classifier`, value.classifier, problems);
+	const classifier = modelStage(`${root}.classifier`, value["classifier"], problems);
 	if (classifier) setting.classifier = classifier;
-	const confirmer = modelStage(`${root}.confirmer`, value.confirmer, problems);
+	const confirmer = modelStage(`${root}.confirmer`, value["confirmer"], problems);
 	if (confirmer) setting.confirmer = confirmer;
-	const status = questionStage(`${root}.status`, value.status, problems);
+	const status = questionStage(`${root}.status`, value["status"], problems);
 	if (status) setting.status = status;
-	const boundary = questionStage(`${root}.boundary`, value.boundary, problems);
+	const boundary = questionStage(`${root}.boundary`, value["boundary"], problems);
 	if (boundary) setting.boundary = boundary;
 	return problems.length > 0
 		? { ok: false, problems }

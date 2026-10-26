@@ -228,7 +228,8 @@ function sectionItems(text: string, heading: string): string[] {
 	const items: string[] = [];
 	for (const line of lines.slice(at + 1)) {
 		const next = /^(#+)\s/.exec(line);
-		if ((next && next[1].length <= level) || /^<(?:read|modified)-files>/.test(line)) break;
+		if ((next && next[0].trimEnd().length <= level) || /^<(?:read|modified)-files>/.test(line))
+			break;
 		items.push(line.replace(/^\s*(?:[-*]|\d+[.)])?\s*(?:\[[ xX]\])?\s*/, "").trim());
 	}
 	return items.filter((item) => item !== "" && !NO_ITEM.test(item));
@@ -239,7 +240,7 @@ function sectionItems(text: string, heading: string): string[] {
  * item under `### In Progress` or `## Next Steps`.
  */
 export function hasOpenWork(summary: string): boolean {
-	const own = summary.split(CHILD_HANDOFFS_MARK)[0];
+	const own = summary.split(CHILD_HANDOFFS_MARK)[0] ?? "";
 	return (
 		sectionItems(own, "### In Progress").length > 0 || sectionItems(own, "## Next Steps").length > 0
 	);

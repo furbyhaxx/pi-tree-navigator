@@ -172,7 +172,9 @@ export function createFoldRuntime({ state, minRewindSavingsTokens, writeLabel }:
 			handoffMode: prepared.parent?.mode ?? "full",
 			contextWindow,
 			foldPointId: prepared.leafId,
-			recoveryEvidenceId: host.recoveryEvidenceId,
+			...(host.recoveryEvidenceId === undefined
+				? {}
+				: { recoveryEvidenceId: host.recoveryEvidenceId }),
 			branchLabelEntryId: prepared.leafId,
 			continuationText: (afterTokens) =>
 				buildRewindDoneText(

@@ -27,7 +27,7 @@ export interface FoldPrepared {
 	segment: SummarizeFoldOptions["segment"];
 	inContext?: SummarizeFoldOptions["inContext"];
 	parent?: SummarizeFoldOptions["parent"];
-	continuitySection?: string;
+	continuitySection?: string | undefined;
 }
 
 /** A successful summary, as handed to the commit. */
@@ -83,7 +83,7 @@ export interface FoldEngineDeps<C extends object = object> {
 /** Per-run controls. */
 export interface FoldRunOptions {
 	/** Cancels the run until the commit starts; a started commit always finishes. */
-	signal?: AbortSignal;
+	signal?: AbortSignal | undefined;
 	onProgress?(progress: FoldSummaryProgress): void;
 }
 
@@ -200,7 +200,8 @@ export function selectFoldTarget<T extends FoldTargetCandidate>(
 	const valid = candidates.filter((candidate) => candidate.valid);
 	const fitting = valid.findLast((candidate) => candidate.projectedAfterTokens <= budget);
 	if (fitting) return { ok: true, candidate: fitting, withinBudget: true };
-	if (valid.length > 0) return { ok: true, candidate: valid[0], withinBudget: false };
+	const oldest = valid[0];
+	if (oldest) return { ok: true, candidate: oldest, withinBudget: false };
 	return {
 		ok: false,
 		reasons: candidates.length

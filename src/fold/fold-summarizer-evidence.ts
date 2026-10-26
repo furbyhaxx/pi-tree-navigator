@@ -50,7 +50,7 @@ export function extractionMessage(
 
 interface Chunk {
 	text: string;
-	ids: string[];
+	ids: [string, ...string[]];
 }
 
 export interface Note {
@@ -106,7 +106,9 @@ export function packRecords(
 	let ids: string[] = [];
 	let bytes = 0;
 	const flush = () => {
-		if (items.length) chunks.push({ text: items.join("\n\n"), ids });
+		const firstId = ids[0];
+		if (items.length && firstId !== undefined)
+			chunks.push({ text: items.join("\n\n"), ids: [firstId, ...ids.slice(1)] });
 		items = [];
 		ids = [];
 		bytes = 0;

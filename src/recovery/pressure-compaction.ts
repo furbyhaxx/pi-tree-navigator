@@ -148,18 +148,21 @@ export function createPressureCompactionController({
 					? continuity.summaryText + quoted
 					: appendContinuityBriefing(continuity.summaryText + quoted, continuity.briefing);
 			};
-			const previewOf = (summary: string, info?: object): CompactionEntry => ({
-				type: "compaction",
-				id: "tree-navigator-pressure-preview",
-				parentId: leafId,
-				timestamp: new Date().toISOString(),
-				summary,
-				firstKeptEntryId: cut.firstKeptEntryId,
-				tokensBefore: activeTokens,
-				details: info,
-				fromHook: true,
-				...systemCheckpoint(sm),
-			});
+			const previewOf = (summary: string, info?: object): CompactionEntry => {
+				const { systemMessage } = systemCheckpoint(sm);
+				return {
+					type: "compaction",
+					id: "tree-navigator-pressure-preview",
+					parentId: leafId,
+					timestamp: new Date().toISOString(),
+					summary,
+					firstKeptEntryId: cut.firstKeptEntryId,
+					tokensBefore: activeTokens,
+					...(info === undefined ? {} : { details: info }),
+					fromHook: true,
+					...(systemMessage === undefined ? {} : { systemMessage }),
+				};
+			};
 			// The request after the compaction, priced as the request guard prices it,
 			// including the effective system state and the model-visible receipt.
 			const admissionAfter = (preview: CompactionEntry, receipt: string) => {

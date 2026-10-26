@@ -43,7 +43,9 @@ export function planPressureCut(input: {
 	let suffix = 0;
 	let want = -1;
 	for (let i = entries.length - 1; i >= 0; i--) {
-		suffix += entries[i].tokens;
+		const entry = entries[i];
+		if (!entry) continue;
+		suffix += entry.tokens;
 		if (suffix >= keepRecentTokens) {
 			want = i;
 			break;
@@ -66,8 +68,8 @@ export function planPressureCut(input: {
 		for (const id of entry.toolResultIds) {
 			const c = callAt.get(id);
 			if (c === undefined || c >= r) continue;
-			split[c + 1] += 1;
-			split[r + 1] -= 1;
+			split[c + 1] = (split[c + 1] ?? 0) + 1;
+			split[r + 1] = (split[r + 1] ?? 0) - 1;
 		}
 	});
 	let open = 0;
@@ -77,12 +79,14 @@ export function planPressureCut(input: {
 	});
 
 	for (let j = want; j >= 1; j--) {
-		const first = entries[j].roles[0];
+		const entry = entries[j];
+		if (!entry) continue;
+		const first = entry.roles[0];
 		if (first === undefined || first === "toolResult" || separates[j]) continue;
 		const keptTokens = entries.slice(j).reduce((sum, entry) => sum + entry.tokens, 0);
 		return {
 			kind: "cut",
-			firstKeptEntryId: entries[j].entryId,
+			firstKeptEntryId: entry.entryId,
 			keptTokens,
 			prefixTokens: total - keptTokens,
 		};

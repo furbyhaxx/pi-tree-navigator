@@ -74,6 +74,7 @@ export function planConsolidation(input: ConsolidationInput): ConsolidationPlan 
 		};
 	const merged = handoffs.length - limits.keepNewest;
 	const cut = handoffs[merged];
+	if (!cut) throw new TypeError("Missing consolidation cut");
 	const savingTokens = cut.prefixTokens - input.summaryTokens;
 	if (savingTokens < input.minSavingTokens)
 		return {

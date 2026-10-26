@@ -52,7 +52,7 @@ export function createIndependentRecoveryController({
 	compactUnderPressure,
 }: IndependentRecoveryDeps) {
 	const holdRecoveryReceipt = (sessionId: string, draft: RewindMessageDraft) => {
-		draft.details.receiptId = randomUUID();
+		draft.details["receiptId"] = randomUUID();
 		state.recovery.recoveryReceipts.set(sessionId, [
 			...(state.recovery.recoveryReceipts.get(sessionId) ?? []),
 			draft,
@@ -173,9 +173,13 @@ export function createIndependentRecoveryController({
 			if (host.isIdle?.() === false) return { status: "failed", detail: why };
 			const config = resolveAutoNavigateConfig(
 				{
-					autoNavigate: state.config.autoNavigateBase,
+					...(state.config.autoNavigateBase === undefined
+						? {}
+						: { autoNavigate: state.config.autoNavigateBase }),
 					autoNavigateByModel: state.config.autoNavigateByModel,
-					proposal: state.config.proposalConfig,
+					...(state.config.proposalConfig === undefined
+						? {}
+						: { proposal: state.config.proposalConfig }),
 				},
 				modelKey,
 			);

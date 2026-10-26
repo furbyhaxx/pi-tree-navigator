@@ -117,52 +117,52 @@ export function parseAutoNavigatePartial(
 		}
 	}
 	let enabled: boolean | undefined;
-	if (record.enabled !== undefined) {
-		if (typeof record.enabled !== "boolean") {
+	if (record["enabled"] !== undefined) {
+		if (typeof record["enabled"] !== "boolean") {
 			throw new Error(`${where}.enabled must be a boolean`);
 		}
-		enabled = record.enabled;
+		enabled = record["enabled"];
 	}
 	let mode: AutoNavigateMode | undefined;
-	if (record.mode !== undefined) {
-		if (record.mode !== "anchor-only" && record.mode !== "anchor-and-rewind") {
+	if (record["mode"] !== undefined) {
+		if (record["mode"] !== "anchor-only" && record["mode"] !== "anchor-and-rewind") {
 			throw new Error(`${where}.mode must be "anchor-only" or "anchor-and-rewind"`);
 		}
-		mode = record.mode;
+		mode = record["mode"];
 	}
 	let pressure: "compact" | "fold" | undefined;
-	if (record.pressure !== undefined) {
-		if (record.pressure !== "compact" && record.pressure !== "fold") {
+	if (record["pressure"] !== undefined) {
+		if (record["pressure"] !== "compact" && record["pressure"] !== "fold") {
 			throw new Error(`${where}.pressure must be "compact" or "fold"`);
 		}
-		pressure = record.pressure;
+		pressure = record["pressure"];
 	}
 	const keepRecentShare =
-		record.keep_recent_share !== undefined
-			? parseShare(record.keep_recent_share, `${where}.keep_recent_share`)
+		record["keep_recent_share"] !== undefined
+			? parseShare(record["keep_recent_share"], `${where}.keep_recent_share`)
 			: undefined;
 	const checkEveryTurns =
-		record.check_every_turns !== undefined
+		record["check_every_turns"] !== undefined
 			? parsePositiveInt(
-					record.check_every_turns,
+					record["check_every_turns"],
 					AUTO_NAVIGATE_MIN_TURNS,
 					AUTO_NAVIGATE_MAX_TURNS,
 					`${where}.check_every_turns`,
 				)
 			: undefined;
 	const minTokensSinceAnchor =
-		record.min_tokens_since_anchor !== undefined
+		record["min_tokens_since_anchor"] !== undefined
 			? parsePositiveInt(
-					record.min_tokens_since_anchor,
+					record["min_tokens_since_anchor"],
 					AUTO_NAVIGATE_MIN_TOKENS,
 					AUTO_NAVIGATE_MAX_TOKENS,
 					`${where}.min_tokens_since_anchor`,
 				)
 			: undefined;
 	const rewindAtTokens =
-		record.rewind_at_tokens !== undefined
+		record["rewind_at_tokens"] !== undefined
 			? parsePositiveInt(
-					record.rewind_at_tokens,
+					record["rewind_at_tokens"],
 					AUTO_NAVIGATE_MIN_TOKENS,
 					AUTO_NAVIGATE_MAX_TOKENS,
 					`${where}.rewind_at_tokens`,
@@ -170,7 +170,7 @@ export function parseAutoNavigatePartial(
 			: undefined;
 	let milestonePolicy: string | null | undefined;
 	if ("milestone" in record) {
-		const value = record.milestone;
+		const value = record["milestone"];
 		if (value === null) {
 			milestonePolicy = null;
 		} else if (value === RECOMMENDED_MILESTONE_CLASSIFIER) {
@@ -186,12 +186,16 @@ export function parseAutoNavigatePartial(
 		}
 	}
 	let tools: Readonly<Record<string, ProposalToolMode>> | undefined;
-	if (record.tools !== undefined) {
-		if (typeof record.tools !== "object" || record.tools === null || Array.isArray(record.tools)) {
+	if (record["tools"] !== undefined) {
+		if (
+			typeof record["tools"] !== "object" ||
+			record["tools"] === null ||
+			Array.isArray(record["tools"])
+		) {
 			throw new Error(`${where}.tools must map exact tool names to full, calls-only or omit`);
 		}
 		const parsedTools: Record<string, ProposalToolMode> = {};
-		for (const [name, toolMode] of Object.entries(record.tools)) {
+		for (const [name, toolMode] of Object.entries(record["tools"])) {
 			if (
 				!name.trim() ||
 				(toolMode !== "full" && toolMode !== "calls-only" && toolMode !== "omit")

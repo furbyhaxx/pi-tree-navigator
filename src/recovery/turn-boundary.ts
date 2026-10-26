@@ -285,7 +285,7 @@ export function createTurnBoundary({
 		if (state.folds.queuedFolds.get(sessionId)?.origin === "agent")
 			state.folds.queuedFolds.delete(sessionId);
 		for (const draft of state.recovery.recoveryReceipts.get(sessionId) ?? [])
-			if (!receiptOnBranch(sm, draft.details.receiptId)) appendFoldMessage(sm, draft);
+			if (!receiptOnBranch(sm, draft.details["receiptId"])) appendFoldMessage(sm, draft);
 		state.recovery.recoveryReceipts.delete(sessionId);
 		const budgetFailure = state.recovery.requestBudgetFailures.get(sessionId);
 		if (budgetFailure) {

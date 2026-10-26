@@ -181,6 +181,7 @@ export function createConsolidationController({
 			};
 			// Deterministic gate: the compaction must free context as Pi will project it.
 			const all = sm.getEntries();
+			const { systemMessage } = systemCheckpoint(sm);
 			const preview = {
 				type: "compaction",
 				id: "tree-navigator-consolidation-preview",
@@ -191,7 +192,7 @@ export function createConsolidationController({
 				tokensBefore,
 				details,
 				fromHook: true,
-				...systemCheckpoint(sm),
+				...(systemMessage === undefined ? {} : { systemMessage }),
 			} satisfies CompactionEntry;
 			const before = estimateContentTokens(buildFoldProjection(all, leafId).messages);
 			const after = estimateContentTokens(
