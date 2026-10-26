@@ -78,9 +78,11 @@ describe("commitFold: engine shape", () => {
 			.slice(branch.findIndex((e) => e.id === outcome.summaryId) + 1)
 			.filter((e) => e.type !== "label");
 		assert.equal(tail.length, 1);
-		assert.notEqual(tail[0].id, lateId);
-		assert.ok(tail[0].type === "message" && tail[0].message.role === "user");
-		assert.equal(tail[0].id, f.sm.getLeafId());
+		const late = tail[0];
+		assert.ok(late);
+		assert.notEqual(late.id, lateId);
+		assert.ok(late.type === "message" && late.message.role === "user");
+		assert.equal(late.id, f.sm.getLeafId());
 		assert.ok(outcome.refreshed);
 		assert.ok(outcome.foldEstimateAfter < outcome.foldEstimateBefore);
 		assert.equal(outcome.afterTokens, estimateAdmissionTokens(f.sm));

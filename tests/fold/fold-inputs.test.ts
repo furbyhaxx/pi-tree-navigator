@@ -15,6 +15,12 @@ import {
 import { makeHandoff, materializeHandoff } from "../../src/fold/handoff.ts";
 import { projectHandoffs } from "../../src/fold/handoff-projection.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 let clock = 0;
 const timestamp = () => ++clock;
 
@@ -105,22 +111,22 @@ describe("buildFoldSegment", () => {
 				[f.ask, "user"],
 				[f.call, "assistant"],
 				[f.result, "tool"],
-				[records[3].id, "custom"],
-				[records[4].id, "summary"],
-				[records[5].id, "summary"],
+				[at(records, 3).id, "custom"],
+				[at(records, 4).id, "summary"],
+				[at(records, 5).id, "summary"],
 				[f.last, "user"],
 			],
 		);
-		assert.equal(records[0].text, "do the thing");
-		assert.equal(records[1].text, 'reading\n[tool call read] {"path":"a.ts"}');
+		assert.equal(at(records, 0).text, "do the thing");
+		assert.equal(at(records, 1).text, 'reading\n[tool call read] {"path":"a.ts"}');
 		assert.equal(
-			records[2].text,
+			at(records, 2).text,
 			"[result of read]\nfile body\n[image omitted: image/png, 6 bytes]",
 		);
-		assert.equal(records[3].text, "visible note");
-		assert.equal(records[4].text, materializeHandoff(f.child, []));
-		assert.match(records[5].text, /summary of a branch[\s\S]*plain report/);
-		assert.equal(records[6].text, "next");
+		assert.equal(at(records, 3).text, "visible note");
+		assert.equal(at(records, 4).text, materializeHandoff(f.child, []));
+		assert.match(at(records, 5).text, /summary of a branch[\s\S]*plain report/);
+		assert.equal(at(records, 6).text, "next");
 		assert.ok(
 			records.every((r) => !r.text.includes("private reasoning")),
 			"thinking is not evidence",
@@ -136,7 +142,7 @@ describe("buildFoldSegment", () => {
 		const leaf = sm.appendMessage(said("ok"));
 		const segment = buildFoldSegment(sm.getEntries(), leaf, target);
 		assert.equal(segment.background, "");
-		assert.equal(segment.records[0].text, long);
+		assert.equal(at(segment.records, 0).text, long);
 	});
 
 	it("applies context edits exactly as the model saw them", () => {
@@ -201,7 +207,7 @@ describe("buildFoldSegment", () => {
 				["user", "after"],
 			],
 		);
-		assert.match(records[0].text, /COMPACTED/);
+		assert.match(at(records, 0).text, /COMPACTED/);
 	});
 });
 

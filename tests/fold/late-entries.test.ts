@@ -18,6 +18,12 @@ import { requestRewind, rewindMessages } from "../support/rewind-drivers.ts";
 import { setupRewindable } from "../support/session-fakes.ts";
 import { appendTurn } from "../support/session-messages.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 installHarnessHooks();
 
 describe("rewind: multi-block summaries and late entries", () => {
@@ -32,9 +38,9 @@ describe("rewind: multi-block summaries and late entries", () => {
 		setupRewindable(f.sm, f.pi, { capture: true });
 		f.ctx.modelRegistry = fakeRegistry(() => replyBlocks(texts)).registry;
 		await requestRewind(f);
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.status, "done");
-		const entry = f.sm.getEntry(done.details.summaryId as string);
+		const done = at(rewindMessages(f.pi), 0).message;
+		assert.equal(done.details["status"], "done");
+		const entry = f.sm.getEntry(done.details["summaryId"] as string);
 		assert.ok(entry && entry.type === "branch_summary");
 		return entry;
 	}
@@ -129,9 +135,9 @@ describe("rewind: multi-block summaries and late entries", () => {
 			);
 		});
 
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.status, "done");
-		assert.equal(done.details.reappendedLateMessages, 2);
+		const done = at(rewindMessages(f.pi), 0).message;
+		assert.equal(done.details["status"], "done");
+		assert.equal(done.details["reappendedLateMessages"], 2);
 		assert.deepEqual(tailAfterSummary(f.sm), [
 			"branch_summary",
 			"label",
@@ -151,7 +157,7 @@ describe("rewind: multi-block summaries and late entries", () => {
 		}
 		// No steer queue: re-appends never go back through input handlers.
 		assert.deepEqual(f.pi.sendUserMessageCalls, []);
-		assert.equal(done.details.agentMessagesRefreshed, true);
+		assert.equal(done.details["agentMessagesRefreshed"], true);
 		assert.ok(done.content.endsWith(`\n\n${NOTE_TWO}`));
 	});
 
@@ -159,7 +165,7 @@ describe("rewind: multi-block summaries and late entries", () => {
 		const f = setup();
 		setupRewindable(f.sm, f.pi, { capture: true });
 		await rewindWithLate(f, () => appendLateUser(f.sm, "steer"));
-		const done = rewindMessages(f.pi)[0].message;
+		const done = at(rewindMessages(f.pi), 0).message;
 		assert.deepEqual(tailAfterSummary(f.sm, true), [
 			"branch_summary",
 			"label",
@@ -172,9 +178,9 @@ describe("rewind: multi-block summaries and late entries", () => {
 		const f = setup();
 		setupRewindable(f.sm, f.pi, { capture: true });
 		await rewindWithLate(f, () => appendLateUser(f.sm, "steer"));
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.reappendedLateMessages, 1);
-		assert.equal(done.details.agentMessagesRefreshed, true);
+		const done = at(rewindMessages(f.pi), 0).message;
+		assert.equal(done.details["reappendedLateMessages"], 1);
+		assert.equal(done.details["agentMessagesRefreshed"], true);
 		assert.ok(done.content.endsWith(`\n\n${NOTE_ONE}`));
 		assert.equal(buildLateEntriesNote(1), NOTE_ONE);
 		assert.equal(buildLateEntriesNote(2), NOTE_TWO);
@@ -191,9 +197,9 @@ describe("rewind: multi-block summaries and late entries", () => {
 			f.sm.appendCustomMessageEntry(REWIND_HINT_CUSTOM_TYPE, expectedHint(91), true, undefined);
 			appendLateUser(f.sm, "steer");
 		});
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.status, "done");
-		assert.equal(done.details.reappendedLateMessages, 1);
+		const done = at(rewindMessages(f.pi), 0).message;
+		assert.equal(done.details["status"], "done");
+		assert.equal(done.details["reappendedLateMessages"], 1);
 		assert.deepEqual(tailAfterSummary(f.sm), [
 			"branch_summary",
 			"label",
@@ -207,8 +213,8 @@ describe("rewind: multi-block summaries and late entries", () => {
 		await rewindWithLate(f, () => {
 			f.sm.appendCustomMessageEntry("timer", "tick", false, { n: 1 });
 		});
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.reappendedLateMessages, 1);
+		const done = at(rewindMessages(f.pi), 0).message;
+		assert.equal(done.details["reappendedLateMessages"], 1);
 		assert.deepEqual(tailAfterSummary(f.sm), ["branch_summary", "label", 'custom:timer:"tick"']);
 		const last = lastBeforeReceipt(f.sm);
 		assert.ok(last && last.type === "custom_message");
@@ -223,8 +229,8 @@ describe("rewind: multi-block summaries and late entries", () => {
 		appendLateUser(f.sm, "early user");
 		appendTurn(f.sm, "u9", "a9", 34_000);
 		await requestRewind(f);
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.reappendedLateMessages, 0);
+		const done = at(rewindMessages(f.pi), 0).message;
+		assert.equal(done.details["reappendedLateMessages"], 0);
 		assert.deepEqual(tailAfterSummary(f.sm), ["branch_summary", "label"]);
 	});
 
@@ -250,8 +256,8 @@ describe("rewind: multi-block summaries and late entries", () => {
 			f.sm.appendCustomMessageEntry("subagent-result", "kept", true, {});
 		});
 		// The original user input must stay active; a partial fold cannot continue.
-		const failed = rewindMessages(f.pi)[0].message;
-		assert.equal(failed.details.status, "failed");
+		const failed = at(rewindMessages(f.pi), 0).message;
+		assert.equal(failed.details["status"], "failed");
 		assert.equal(boundary.continue, false);
 		assert.match(failed.content, /late input could not be written/);
 		assert.ok(!failed.content.includes("Nothing was collapsed"));
@@ -313,10 +319,10 @@ describe("rewind: multi-block summaries and late entries", () => {
 			return id;
 		};
 		await requestRewind(f);
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.status, "done");
-		assert.equal(done.details.contextAfter, 0);
-		assert.equal(done.details.agentMessagesRefreshed, false);
+		const done = at(rewindMessages(f.pi), 0).message;
+		assert.equal(done.details["status"], "done");
+		assert.equal(done.details["contextAfter"], 0);
+		assert.equal(done.details["agentMessagesRefreshed"], false);
 		assert.match(done.content, / → 0\.0% of 1\.0M\n\n/);
 		assert.ok(
 			f.sm.getBranch().some((e) => e.type === "branch_summary"),

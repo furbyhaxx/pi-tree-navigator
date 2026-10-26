@@ -31,6 +31,12 @@ import {
 	usageOf,
 } from "../support/session-messages.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 installHarnessHooks();
 
 /** Ids hidden (last `context_edit` null) on the active branch. */
@@ -68,12 +74,13 @@ describe("rewind-driven compaction (#101)", () => {
 				false,
 			);
 			const [done] = forcedDrafts(settle);
-			assert.equal(done.details.status, "done");
+			assert.ok(done);
+			assert.equal(done.details["status"], "done");
 			assert.ok(f.ctx.registryCalls.length > 0);
 			assert.ok(f.sm.getBranch().some((entry) => entry.type === "branch_summary"));
 			for (const entry of archived) assert.deepEqual(f.sm.getEntry(entry.id), entry);
 			const wire = fireContext(f.pi, f.ctx);
-			assert.ok(!wire.some((message) => message.stopReason === "error"));
+			assert.ok(!wire.some((message) => message["stopReason"] === "error"));
 			assert.ok(!JSON.stringify(wire).includes("Output withheld"));
 			assert.equal(f.sm.getLabel(err.id), undefined);
 		} finally {
@@ -86,7 +93,7 @@ describe("rewind-driven compaction (#101)", () => {
 		try {
 			const first = await runErrorEnd(f, errorOverflow(f.sm).message);
 			assert.equal(first.settle.continue, true);
-			assert.equal(forcedDrafts(first.settle)[0]?.details.status, "done");
+			assert.equal(forcedDrafts(first.settle)[0]?.details["status"], "done");
 			// The recovered request still overflows (an undercounting estimate):
 			// the agent read more, and no reply generated in between.
 			for (const id of ["r3", "r4"]) {
@@ -136,7 +143,7 @@ describe("rewind-driven compaction (#101)", () => {
 					f.sm.getBranch().some((entry) => entry.type === "branch_summary"),
 					false,
 				);
-				assert.equal(forcedDrafts(settle)[0].details.status, "failed");
+				assert.equal(at(forcedDrafts(settle), 0).details["status"], "failed");
 			} finally {
 				cleanupConfigFixture(f.fixture);
 			}
@@ -173,7 +180,7 @@ describe("rewind-driven compaction (#101)", () => {
 			const wire = JSON.stringify(fireContext(f.pi, f.ctx));
 			assert.ok(!wire.includes("truncated"));
 			assert.ok(!wire.includes('"w1"'));
-			assert.equal(forcedDrafts(turn)[0].details.status, "done");
+			assert.equal(at(forcedDrafts(turn), 0).details["status"], "done");
 			assert.ok(f.ctx.registryCalls.length > 0);
 			// Rewind-owned: no start anchor on the overflowed turn (X = 2).
 			assert.equal(f.sm.getLabel(id), undefined);
@@ -264,7 +271,7 @@ describe("rewind-driven compaction (#101)", () => {
 			const edits = turn.entries.filter((d) => d.type === "context_edit");
 			assert.deepEqual(edits, []);
 			assert.ok(!hiddenIds(f.sm).has(id));
-			assert.equal(forcedDrafts(turn)[0].details.status, "done");
+			assert.equal(at(forcedDrafts(turn), 0).details["status"], "done");
 			const wire = fireContext(f.pi, f.ctx);
 			assert.ok(JSON.stringify(wire).includes("protected"));
 			assert.ok(JSON.stringify(wire).includes("done"));
@@ -320,7 +327,7 @@ describe("rewind-driven compaction (#101)", () => {
 				const err = errorOverflow(f.sm);
 				const { settle } = await runErrorEnd(f, err.message);
 				assert.equal(settle.continue, true);
-				assert.equal(forcedDrafts(settle)[0].details.status, "done");
+				assert.equal(at(forcedDrafts(settle), 0).details["status"], "done");
 			} finally {
 				cleanupConfigFixture(f.fixture);
 			}
@@ -365,8 +372,8 @@ describe("rewind-driven compaction (#101)", () => {
 			});
 			assert.equal(result.continue, false);
 			const failed = forcedDrafts(result).at(-1);
-			assert.equal(failed?.details.reason, "insufficient request headroom");
-			assert.ok(Number(failed?.details.inputEstimate) > WINDOW);
+			assert.equal(failed?.details["reason"], "insufficient request headroom");
+			assert.ok(Number(failed?.details["inputEstimate"]) > WINDOW);
 			assert.match(failed?.content ?? "", /No tool results were withheld/);
 			assert.ok(
 				!result.entries.some(

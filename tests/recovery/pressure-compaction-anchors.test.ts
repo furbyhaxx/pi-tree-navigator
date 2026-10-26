@@ -38,6 +38,12 @@ import { forcedSetup, theme, WINDOW } from "../support/pressure-fixtures.ts";
 import { REWIND_ARGS, requestRewind, rewindMessages } from "../support/rewind-drivers.ts";
 import { appendTurn } from "../support/session-messages.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 installHarnessHooks();
 
 /** Write the fixture's project pi `.pi/settings.json` (#101). */
@@ -105,12 +111,12 @@ describe("rewind-driven compaction (#101)", () => {
 		it("lists a pre-compaction anchor at its un-compacted footprint, not the compaction baseline", async () => {
 			const { sm, tool, ctx, ids } = compactedSession();
 			const res = await tool.execute("tc-list", { action: "list" }, undefined, undefined, ctx);
-			const text = res.content[0].text;
+			const text = at(res.content, 0).text;
 			for (const [name, id] of [
 				["early", ids.early],
 				["before-cut", ids.cut],
 				["after-cut", ids.late],
-			]) {
+			] as const) {
 				const pct = formatPct1(admissionAt(sm, id), WINDOW).replace(".", "\\.");
 				assert.match(text, new RegExp(`${pct}\\s+${name}\\b`), text);
 			}
@@ -126,7 +132,7 @@ describe("rewind-driven compaction (#101)", () => {
 			const command = f.pi.commands.get("anchor");
 			assert.ok(command);
 			await command.handler("list", ctx as unknown as ExtensionCommandContext);
-			const lines = ctx.notifyCalls[0][0].split("\n");
+			const lines = at(ctx.notifyCalls, 0)[0].split("\n");
 			const row = (name: string) => lines.find((line) => line.includes(` ${name} `)) ?? "";
 			assert.match(row("before-cut"), /−0 savable {2}\(before compaction\)$/);
 			assert.match(row("early"), /savable$/);
@@ -140,9 +146,9 @@ describe("rewind-driven compaction (#101)", () => {
 			assert.ok(original);
 			const uncarried = admissionAt(f.sm, f.ids.kept);
 			const { result } = await requestRewind(f, foldArgs("kept"), "tc-kept", 0);
-			assert.equal(result.isError, undefined, result.content[0].text);
+			assert.equal(result.isError, undefined, at(result.content, 0).text);
 			const done = rewindMessages(f.pi).at(-1)?.message;
-			assert.equal(done?.details.status, "done", String(done?.details.detail));
+			assert.equal(done?.details["status"], "done", String(done?.details["detail"]));
 
 			const branch = f.sm.getBranch();
 			const summaryAt = branch.findIndex((e) => e.type === "branch_summary");
@@ -172,7 +178,7 @@ describe("rewind-driven compaction (#101)", () => {
 			const carriedPrice =
 				estimateRequestTokens(messages.slice(0, handoffAt)) +
 				Math.ceil(ANCHOR_MANDATE.length / 3.5);
-			assert.equal(result.details.tokensAtTarget, carriedPrice);
+			assert.equal(result.details["tokensAtTarget"], carriedPrice);
 			assert.ok(carriedPrice < uncarried, "carrying keeps history compacted");
 		});
 
@@ -185,7 +191,7 @@ describe("rewind-driven compaction (#101)", () => {
 			const command = f.pi.commands.get("anchor");
 			assert.ok(command);
 			await command.handler("list", ctx as unknown as ExtensionCommandContext);
-			const lines = ctx.notifyCalls[0][0].split("\n");
+			const lines = at(ctx.notifyCalls, 0)[0].split("\n");
 			const row = (name: string) => lines.find((line) => line.includes(` ${name} `)) ?? "";
 			assert.match(row("kept"), /savable$/);
 			assert.match(row("folded"), /savable$/);
@@ -196,13 +202,13 @@ describe("rewind-driven compaction (#101)", () => {
 			const f = compactedSession();
 			const { result, callId } = await requestRewind(f, foldArgs("before-cut"), "tc-cut", 0);
 			assert.equal(result.isError, true);
-			assert.equal(result.details.rejected, "min-savings");
-			assert.match(result.content[0].text, /lies before the latest compaction/);
+			assert.equal(result.details["rejected"], "min-savings");
+			assert.match(at(result.content, 0).text, /lies before the latest compaction/);
 			assert.equal(
-				result.details.apparentSavings,
+				result.details["apparentSavings"],
 				admissionAt(f.sm, parentOf(f.sm, callId)) - admissionAt(f.sm, f.ids.cut),
 			);
-			assert.ok(Number(result.details.apparentSavings) < 0);
+			assert.ok(Number(result.details["apparentSavings"]) < 0);
 			assert.deepEqual(
 				f.pi.boundaryResults.flatMap((r) => r.entries),
 				[],
@@ -227,13 +233,13 @@ describe("rewind-driven compaction (#101)", () => {
 				const priced = footprintAt(f.sm, f.ids[key]);
 				// The fold point is the rewind call's tool result, which the fold collapses too.
 				const before = footprintAt(f.sm, leafBeforeFold);
-				assert.equal(result.details.tokensAtTarget, admissionAt(f.sm, f.ids[key]));
-				assert.equal(result.details.contextBefore, admissionAt(f.sm, parentOf(f.sm, callId)));
+				assert.equal(result.details["tokensAtTarget"], admissionAt(f.sm, f.ids[key]));
+				assert.equal(result.details["contextBefore"], admissionAt(f.sm, parentOf(f.sm, callId)));
 
 				const done = rewindMessages(f.pi).at(-1)?.message;
-				assert.equal(done?.details.status, "done");
-				assert.equal(done?.details.foldEstimateBefore, before);
-				assert.ok(Number(done?.details.foldEstimateAfter) > priced);
+				assert.equal(done?.details["status"], "done");
+				assert.equal(done?.details["foldEstimateBefore"], before);
+				assert.ok(Number(done?.details["foldEstimateAfter"]) > priced);
 				const messages = f.sm.buildSessionContext().messages;
 				const handoffAt = messages.findIndex(
 					(m) => m.role === "custom" && m.customType === "navigate-tree-handoff",
@@ -248,10 +254,10 @@ describe("rewind-driven compaction (#101)", () => {
 			const { result, boundary } = await requestRewind(f, foldArgs("before-cut"), "tc-cut", 0);
 			assert.equal(result.isError, undefined, "usage prices the target low");
 			assert.equal(f.sm.getEntries().filter((entry) => entry.type === "branch_summary").length, 0);
-			assert.equal(boundary.entries[0].details.status, "failed");
-			assert.equal(boundary.entries[0].details.stage, "commit");
+			assert.equal(at(boundary.entries, 0).details["status"], "failed");
+			assert.equal(at(boundary.entries, 0).details["stage"], "commit");
 			assert.match(
-				String(boundary.entries[0].details.detail),
+				String(at(boundary.entries, 0).details["detail"]),
 				/'before-cut' lies before the latest compaction.*\(estimated \d+ -> \d+ tokens\); original history was kept/,
 			);
 		});

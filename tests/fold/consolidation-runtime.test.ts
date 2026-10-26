@@ -82,8 +82,9 @@ describe("background handoff consolidation", () => {
 		const command = f.pi.commands.get("anchor");
 		assert.ok(command);
 		await command.handler("list", ctx as unknown as ExtensionCommandContext);
-		const row =
-			ctx.notifyCalls[0][0].split("\n").find((line) => line.includes(" after-cut ")) ?? "";
+		const notification = ctx.notifyCalls[0];
+		assert.ok(notification);
+		const row = notification[0].split("\n").find((line) => line.includes(" after-cut ")) ?? "";
 		assert.match(row, /savable$/);
 	});
 

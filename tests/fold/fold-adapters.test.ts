@@ -33,6 +33,12 @@ import { installHarnessHooks } from "../support/harness-hooks.ts";
 import { fakeRegistry, type RegistryCall, reply, SUMMARY_TEXT } from "../support/model-registry.ts";
 import { appendTurn, assistantMessage } from "../support/session-messages.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 installHarnessHooks();
 
 describe("independent folds through the engine host", () => {
@@ -70,7 +76,7 @@ describe("independent folds through the engine host", () => {
 		}
 		// pi persists a message sent while idle, without starting a turn.
 		const hooks = f.pi.pi as unknown as Record<string, unknown>;
-		hooks.sendMessage = (...args: unknown[]) => {
+		hooks["sendMessage"] = (...args: unknown[]) => {
 			f.pi.sendMessageCalls.push(args);
 			const [m] = args as [
 				{
@@ -82,7 +88,7 @@ describe("independent folds through the engine host", () => {
 			];
 			f.sm.appendCustomMessageEntry(m.customType, m.content, m.display, m.details);
 		};
-		hooks.getThinkingLevel = () => "medium";
+		hooks["getThinkingLevel"] = () => "medium";
 		const api = __testHooks.foldApi(f.pi.pi);
 		assert.ok(api, "the factory exposes its fold entry points");
 		return { ...f, fixture, api, anchorId: first.assistantId, leafId };
@@ -190,7 +196,7 @@ describe("independent folds through the engine host", () => {
 			assertFolded(f);
 			assertNoSummaryTurn(f, registry.calls);
 			assert.equal(
-				registry.calls[0].options.reasoning,
+				at(registry.calls, 0).options.reasoning,
 				"low",
 				"fold summaries cap the session's medium thinking at low",
 			);
@@ -227,7 +233,8 @@ describe("independent folds through the engine host", () => {
 			assertNoSummaryTurn(f, registry.calls);
 			assert.equal(f.pi.sendMessageCalls.length, 0, "the receipt is a boundary entry");
 			const [done] = result.entries.filter((d) => d.customType === REWIND_CUSTOM_TYPE);
-			assert.equal(done.details.status, "done");
+			assert.ok(done);
+			assert.equal(done.details["status"], "done");
 			assert.equal(f.sm.getLeafId(), receiptsOf(f.sm).at(-1)?.id);
 			assert.equal(await guardAborts(f, ctx), false, "the next request fits");
 
@@ -262,7 +269,7 @@ describe("independent folds through the engine host", () => {
 			assert.ok(String(done.content).includes(sourceEntryId));
 			assert.match(String(done.content), /rewind is completed; do not repeat it/i);
 			assert.match(String(done.content), /fulfill the remaining request/i);
-			assert.deepEqual(done.details.openUserRequests, [{ sourceEntryId, text }]);
+			assert.deepEqual(done.details["openUserRequests"], [{ sourceEntryId, text }]);
 			const summary = f.sm.getBranch().find((e) => e.type === "branch_summary");
 			assert.ok(summary?.type === "branch_summary");
 			assert.ok(!summary.summary.includes(text));
@@ -285,7 +292,7 @@ describe("independent folds through the engine host", () => {
 			if (outcome.status !== "done") return;
 			assert.equal(outcome.strategy, "in-context");
 			assert.equal(registry.calls.length, 1);
-			const { messages } = registry.calls[0].context;
+			const { messages } = at(registry.calls, 0).context;
 			assert.equal(messages[0], SYSTEM_MESSAGE);
 			const last = messages.at(-1);
 			assert.equal(last?.role, "user");
@@ -356,9 +363,10 @@ describe("independent folds through the engine host", () => {
 			const result = await fireTurnEndAll(f.pi, ctx, leafMessage(f));
 			assert.equal(result.continue, true, "the model that asked hears about it");
 			const [receipt] = result.entries;
-			assert.equal(receipt.details.status, "failed");
-			assert.equal(receipt.details.stage, "summary");
-			assert.equal(receipt.details.reason, "provider-error");
+			assert.ok(receipt);
+			assert.equal(receipt.details["status"], "failed");
+			assert.equal(receipt.details["stage"], "summary");
+			assert.equal(receipt.details["reason"], "provider-error");
 			assert.match(receipt.content, /Nothing was collapsed/);
 			const after = snapshotOf(f.sm);
 			assert.deepEqual(after.entries.slice(0, before.entries.length), before.entries);
@@ -405,8 +413,9 @@ describe("independent folds through the engine host", () => {
 			const result = await fireTurnEndAll(f.pi, ctx, leafMessage(f));
 			assert.equal(registry.calls.length, 0);
 			const [receipt] = result.entries;
-			assert.equal(receipt.details.status, "failed");
-			assert.equal(receipt.details.reason, "cancelled");
+			assert.ok(receipt);
+			assert.equal(receipt.details["status"], "failed");
+			assert.equal(receipt.details["reason"], "cancelled");
 			assert.deepEqual(snapshotOf(f.sm).entries.slice(0, before.entries.length), before.entries);
 			assert.equal(
 				f.sm.getBranch().some((e) => e.type === "branch_summary"),
@@ -830,7 +839,7 @@ describe("independent folds through the engine host", () => {
 			const assistants = f.sm
 				.getBranch()
 				.filter((entry) => entry.type === "message" && entry.message.role === "assistant");
-			f.pi.pi.setLabel(assistants[2].id, "anchor:mid");
+			f.pi.pi.setLabel(at(assistants, 2).id, "anchor:mid");
 			const ctx = foldCtx(f, fakeRegistry().registry);
 			await driveAnchor(f, ctx, "list", [
 				async (screen) => {

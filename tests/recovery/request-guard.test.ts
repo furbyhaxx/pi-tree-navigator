@@ -22,6 +22,12 @@ import {
 	usageOf,
 } from "../support/session-messages.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 installHarnessHooks();
 
 /**
@@ -449,11 +455,11 @@ describe("context event handler", () => {
 		appendTurn(sm, "u1", "a1", 100);
 		const handlers = pi.onCalls.get("context");
 		assert.ok(handlers, "factory must register a context handler");
-		const first = handlers[0](
+		const first = at(handlers, 0)(
 			{ type: "context", messages: [] } as never,
 			{ sessionManager: sm } as never,
 		);
-		const second = handlers[0](
+		const second = at(handlers, 0)(
 			{ type: "context", messages: [] } as never,
 			{ sessionManager: sm } as never,
 		);
@@ -475,7 +481,7 @@ describe("context event handler", () => {
 
 		const handlers = f.pi.onCalls.get("context");
 		assert.ok(handlers, "factory must register a context handler");
-		const outcome = handlers[0](
+		const outcome = at(handlers, 0)(
 			{ type: "context", messages: [] } as never,
 			{ sessionManager: f.sm } as never,
 		) as {
@@ -490,8 +496,8 @@ describe("context event handler", () => {
 		const json = JSON.stringify(messages);
 
 		// Ends with branch_summary then the continuation.
-		const last = messages[messages.length - 1];
-		const prev = messages[messages.length - 2];
+		const last = at(messages, messages.length - 1);
+		const prev = at(messages, messages.length - 2);
 		assert.equal(prev.role, "custom");
 		assert.equal(prev.customType, "navigate-tree-handoff");
 		assert.equal(
@@ -519,7 +525,7 @@ describe("context event handler", () => {
 		);
 
 		// idempotent: a second invocation with no tree change returns the same.
-		const again = handlers[0](
+		const again = at(handlers, 0)(
 			{ type: "context", messages: [] } as never,
 			{ sessionManager: f.sm } as never,
 		);
@@ -551,7 +557,7 @@ describe("before_agent_start anchor mandate", () => {
 		const { pi } = setup();
 		const handlers = pi.onCalls.get("before_agent_start");
 		assert.ok(handlers, "factory must register a before_agent_start handler");
-		const out = await handlers[0](
+		const out = await at(handlers, 0)(
 			{
 				type: "before_agent_start",
 				prompt: "do the thing",
@@ -572,7 +578,7 @@ describe("before_agent_start anchor mandate", () => {
 		const { pi } = setup();
 		const handlers = pi.onCalls.get("before_agent_start");
 		assert.ok(handlers, "factory must register a before_agent_start handler");
-		const out = await handlers[0](
+		const out = await at(handlers, 0)(
 			{
 				type: "before_agent_start",
 				prompt: "do the thing",
@@ -588,7 +594,7 @@ describe("before_agent_start anchor mandate", () => {
 		const { pi } = setup();
 		const handlers = pi.onCalls.get("before_agent_start");
 		assert.ok(handlers, "factory must register a before_agent_start handler");
-		const out = await handlers[0](
+		const out = await at(handlers, 0)(
 			{
 				type: "before_agent_start",
 				prompt: "do the thing",
@@ -612,10 +618,10 @@ describe("before_agent_start anchor mandate", () => {
 				selectedTools: ["read", "bash", "navigate_tree"],
 			},
 		} as never;
-		const first = (await handlers[0](event, {} as never)) as {
+		const first = (await at(handlers, 0)(event, {} as never)) as {
 			systemPrompt: string;
 		};
-		const second = (await handlers[0](event, {} as never)) as {
+		const second = (await at(handlers, 0)(event, {} as never)) as {
 			systemPrompt: string;
 		};
 		assert.deepEqual(first, second);

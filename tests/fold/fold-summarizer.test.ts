@@ -26,6 +26,12 @@ import {
 	extractSummaryText,
 } from "../../src/fold/summary-prompt.ts";
 
+function at<T>(xs: readonly T[], index: number): T {
+	const value = xs[index];
+	assert.ok(value !== undefined, `Expected an element at index ${index}`);
+	return value;
+}
+
 type Completion = Awaited<ReturnType<FoldSummaryRunner["complete"]>>;
 type Request = Parameters<FoldSummaryRunner["complete"]>[0];
 
@@ -239,7 +245,7 @@ describe("summarizeFold chunked strategy", () => {
 		const order = final.messages.slice(1, -1).flatMap((message) => {
 			const consolidated = /CONSOLIDATED (\d+)/.exec(text(message))?.[1];
 			const source = consolidated
-				? text(requests[Number(consolidated)].messages[0])
+				? text(at(requests, Number(consolidated)).messages[0])
 				: text(message);
 			return [...source.matchAll(/NOTE (\d+) /g)].map((m) => Number(m[1]));
 		});
@@ -316,6 +322,8 @@ describe("summarizeFold chunked strategy", () => {
 		const result = await summarizeFold(options(runner));
 		assert.ok(result.ok, JSON.stringify(result));
 		const [cut, retry] = [requests[0], requests[1]];
+		assert.ok(cut);
+		assert.ok(retry);
 		assert.equal(cut.reasoning, undefined);
 		assert.equal(retry.reasoning, "off");
 		assert.equal(text(retry.messages[0]), text(cut.messages[0]));
@@ -377,6 +385,7 @@ describe("summarizeFold in-context strategy", () => {
 		assert.equal(result.calls, 1);
 		assert.equal(result.text, extractSummaryText(SUMMARY));
 		const [request] = requests;
+		assert.ok(request);
 		assert.equal(request.systemPrompt, SYSTEM);
 		assert.equal(request.tools, TOOLS);
 		assert.equal(request.maxTokens, 400);
@@ -406,6 +415,7 @@ describe("summarizeFold in-context strategy", () => {
 		assert.ok(result.ok);
 		assert.equal(result.strategy, "in-context");
 		const [request] = requests;
+		assert.ok(request);
 		assert.equal(request.systemPrompt, undefined);
 		assert.equal(request.tools, undefined);
 		assert.equal(request.messages.length, 3);
@@ -585,7 +595,7 @@ describe("createFoldSummaryRunner", () => {
 		provider: model.provider,
 		model: model.id,
 		stopReason,
-		errorMessage,
+		...(errorMessage === undefined ? {} : { errorMessage }),
 		timestamp: 1,
 		usage,
 	});
@@ -694,8 +704,8 @@ describe("summarizeFold instruction override", () => {
 		);
 		assert.equal(result.ok, true);
 		assert.equal(requests.length, 1);
-		assert.equal(lastText(requests[0]), buildConsolidationRequestText(1));
-		assert.ok(!lastText(requests[0]).includes(FOCUS));
+		assert.equal(lastText(at(requests, 0)), buildConsolidationRequestText(1));
+		assert.ok(!lastText(at(requests, 0)).includes(FOCUS));
 	});
 
 	it("sends the override in the chunked final reduce", async () => {
@@ -705,7 +715,7 @@ describe("summarizeFold instruction override", () => {
 		assert.equal(result.ok && result.strategy, "chunked");
 		const finals = requests.filter((request) => lastText(request).startsWith("[navigate_tree"));
 		assert.equal(finals.length, 1);
-		assert.equal(lastText(finals[0]), buildConsolidationRequestText(2));
+		assert.equal(lastText(at(finals, 0)), buildConsolidationRequestText(2));
 		assert.ok(!requests.some(isFinal));
 	});
 });
