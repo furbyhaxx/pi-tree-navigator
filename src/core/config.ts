@@ -1,68 +1,4 @@
-/**
- * tree-navigator.json — two-layer config loader for the navigate-tree
- * extension.
- *
- * Pure parse/merge functions plus a thin loader with an injectable
- * `readFile`. No pi runtime imports: the caller computes `projectPath` from
- * `CONFIG_DIR_NAME` (so `.pi` stays rebrandable and `PI_CODING_AGENT_DIR`
- * stays honored), and the loader stays unit-testable without a session.
- *
- * Layers, in application order:
- *   - global:  join(agentDir, "tree-navigator.json")
- *   - project: join(cwd, CONFIG_DIR_NAME, "tree-navigator.json"), read only
- *     when the project is trusted (untrusted → ignored silently).
- *
- * Fields (each parsed and merged independently):
- *   - `rewindHintReserveTokens` (issues #44/#84): opt-in context-pressure
- *     hint, fired when the tokens left in the window drop to the reserve,
- *     or a disable sentinel. Replaces `rewindHintAtPercent` (removed in
- *     0.3.0): a present legacy key only warns and is otherwise ignored.
- *   - `anchorStartAfterTurns` (issue #55): turn bound for the automatic
- *     `anchor:start` write. Non-optional — an absent key still fires.
- *   - `parentHandoffMode`: child reports in parent context: `full` reports,
- *     `digest` index or `synthesized` parent only. Invalid values fall through like
- *     `anchorStartAfterTurns`, defaulting to `digest`.
- *   - `continuity` (`capture`, `intentClassifier`/`intent_classifier`): the
- *     session continuity ledger's capture of user intent. `capture` defaults to
- *     true; `intentClassifier` is `"recommended"` (the benchmarked preset of
- *     `intent-policy.ts`), an object policy that overrides the preset (strictly
- *     validated; the effective value is its canonical JSON text), a `provider/id`
- *     classifier model or a disable sentinel and defaults to off (heuristics
- *     only). Each key is parsed and
- *     merged on its own and, like `parentHandoffMode`, an invalid value warns
- *     and falls through to the other layer's valid value, else the default.
- *   - `modelOverrides` (issue #86): per-model `rewindHintReserveTokens`,
- *     keyed by exact `provider/modelId`, mirroring pi's
- *     `compaction.modelOverrides`. Layers merge per key (project entry over
- *     global entry), then a matching entry beats the base value — so a
- *     global model entry beats a project-wide base, as in pi. Entry values
- *     follow the base field's rules; an invalid entry disables the hint for
- *     that model. A non-object `modelOverrides` or entry warns and is
- *     ignored; an entry without `rewindHintReserveTokens` is ignored.
- *
- * Failure semantics (issues #44/#55; authoritative):
- *   - File-level problems (non-ENOENT read failure, invalid JSON, non-object
- *     root) make that layer contribute nothing — every field falls through
- *     to the OTHER layer, which still applies.
- *   - HINT field-level problems (`rewindHintReserveTokens` present but unusable)
- *     disable the hint for the session with NO cross-layer fallback: the
- *     user touched the field, so firing at the other layer's threshold would
- *     be an unintended rewind.
- *   - START-ANCHOR and parent-handoff field-level problems present but
- *     unusable warn and fall through to the other layer's valid value, else
- *     their defaults. An invalid parent handoff mode must not strand the
- *     session without a valid mode.
- *   - `modelOverrides` problems (#86) are scoped to the entry: an invalid
- *     entry value disables the hint for that model only (no fallback to the
- *     base, same reasoning as the base field); shape problems warn and drop
- *     the entry or the whole object, leaving the base value in force.
- *   - A missing file is the normal "not configured" state → silent. Warning
- *     on it would toast every session of every user without a config.
- *
- * Each invalid field emits its own warning, scoped to that field. These
- * helpers do not import pi or log: warnings are returned as strings so
- * `index.ts` can route them through `ctx.ui.notify` (gated on `hasUI`).
- */
+/** Layered config catalog, parsing entry point, loading and effective model resolution. */
 
 import { readFile as fsReadFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -75,17 +11,25 @@ import {
 	modelPatternSpecificity,
 	parseAutoNavigatePartial,
 } from "../auto/auto-navigate-config.ts";
-import {
-	parseClassifierModel,
-	parseIntentPolicyObject,
-	RECOMMENDED_INTENT_CLASSIFIER,
-} from "../continuity/intent-policy.ts";
 import type { HandoffMode } from "../fold/handoff.ts";
+import type { ProposalOptions } from "../retrospective/proposal-options.ts";
 import {
-	mergeProposalOptions,
-	type ProposalOptions,
-	parseProposalOptions,
-} from "../retrospective/proposal-options.ts";
+	type ConsolidationLayer,
+	type ContinuityLayer,
+	DISABLE_SENTINELS,
+	type HintField,
+	isPlainObject,
+	type ModelOverridesProblems,
+	noModelOverridesProblems,
+	type ParentHandoffModeField,
+	parseAutoNavigateField,
+	parseConsolidationField,
+	parseContinuityField,
+	parseProposalField,
+	type StartAnchorField,
+} from "./config-fields.ts";
+import { configFieldWarnings, type LayerLoadResult, loadLayer } from "./config-layers.ts";
+import { absentLayer, mergeTreeNavigatorConfig } from "./config-merge.ts";
 
 export const TREE_NAVIGATOR_CONFIG_FILENAME = "tree-navigator.json";
 export const REWIND_HINT_MIN_RESERVE = 1_000;
@@ -100,37 +44,6 @@ export const CONTINUITY_CAPTURE_DEFAULT = true;
  * anchor is non-optional: a missing config file still fires at this default.
  */
 export const START_ANCHOR_DEFAULT_TURNS = 2;
-
-/**
- * Per-field parse outcome for `rewindHintReserveTokens`.
- *
- *   - `absent`:   no key — contributes nothing (falls through).
- *   - `disabled`: explicit sentinel — wins the merge.
- *   - `ok`:       valid reserve — wins the merge.
- *   - `invalid`:  key present, value unusable — wins the merge (disables
- *                 the session; no cross-layer fallback).
- */
-export type HintField =
-	| { kind: "absent" }
-	| { kind: "disabled" }
-	| { kind: "ok"; value: number }
-	| { kind: "invalid" };
-
-/**
- * Per-field parse outcome for `anchorStartAfterTurns`.
- *
- *   - `absent`:   no key — contributes nothing (falls through to the other
- *                 layer, then the default).
- *   - `ok`:       valid turn bound — wins the merge.
- *   - `invalid`:  key present, value unusable — falls through to the other
- *                 layer's valid value, else the default (see merge/resolve).
- */
-type FallbackField<T> = { kind: "absent" } | { kind: "ok"; value: T } | { kind: "invalid" };
-
-export type StartAnchorField = FallbackField<number>;
-
-/** Per-field parse outcome for `parentHandoffMode`. */
-export type ParentHandoffModeField = FallbackField<HandoffMode>;
 
 /** Controls background consolidation of older fold handoffs. */
 export interface ConsolidationConfig {
@@ -147,22 +60,6 @@ export const CONSOLIDATION_DEFAULTS: ConsolidationConfig = {
 	maxWindowShare: 0.1,
 	keepNewest: 2,
 };
-
-type ConsolidationLayer = {
-	[K in keyof ConsolidationConfig]: FallbackField<ConsolidationConfig[K]>;
-} & { notObject: boolean };
-
-/** Per-field parse outcomes for the `continuity` block. */
-export interface ContinuityLayer {
-	capture: FallbackField<boolean>;
-	/**
-	 * `ok` with `null` is an explicit "off"; an object policy arrives as its
-	 * canonical JSON text. An invalid object lists what is wrong with it.
-	 */
-	intentClassifier: FallbackField<string | null> | { kind: "invalid"; problems: readonly string[] };
-	/** `continuity` is present but not an object; the loader warns and ignores it. */
-	notObject: boolean;
-}
 
 /** One config layer's parsed fields (file-level failures are all-absent). */
 export interface ParsedLayer {
@@ -196,9 +93,6 @@ export interface ParsedLayer {
  */
 export type ParsedRoot = { kind: "unusable" } | { kind: "fields"; layer: ParsedLayer };
 
-/** Case-insensitive string sentinels that explicitly disable the hint. */
-const DISABLE_SENTINELS = new Set(["off", "disabled"]);
-
 function parseHintReserve(n: number): HintField {
 	return Number.isInteger(n) && n >= REWIND_HINT_MIN_RESERVE && n <= REWIND_HINT_MAX_RESERVE
 		? { kind: "ok", value: n }
@@ -209,20 +103,6 @@ function parseStartTurns(n: number): StartAnchorField {
 	return Number.isInteger(n) && n >= START_ANCHOR_MIN_TURNS && n <= START_ANCHOR_MAX_TURNS
 		? { kind: "ok", value: n }
 		: { kind: "invalid" };
-}
-
-/** `modelOverrides` shape problems; each one warns and is ignored. */
-export interface ModelOverridesProblems {
-	notObject: boolean;
-	nonObjectEntries: string[];
-}
-
-function noModelOverridesProblems(): ModelOverridesProblems {
-	return { notObject: false, nonObjectEntries: [] };
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseModelOverrides(
@@ -321,98 +201,6 @@ function parseParentHandoffModeField(record: Record<string, unknown>): ParentHan
 		: { kind: "invalid" };
 }
 
-function parseCaptureField(block: Record<string, unknown>): ContinuityLayer["capture"] {
-	if (!("capture" in block)) return { kind: "absent" };
-	return typeof block.capture === "boolean"
-		? { kind: "ok", value: block.capture }
-		: { kind: "invalid" };
-}
-
-function parseIntentClassifierField(
-	block: Record<string, unknown>,
-): ContinuityLayer["intentClassifier"] {
-	const hasSnake = "intent_classifier" in block;
-	if (!hasSnake && !("intentClassifier" in block)) return { kind: "absent" };
-	const value = hasSnake ? block.intent_classifier : block.intentClassifier;
-	if (value === null || value === false) return { kind: "ok", value: null };
-	if (isPlainObject(value)) {
-		const checked = parseIntentPolicyObject(value);
-		return checked.ok
-			? { kind: "ok", value: checked.canonical }
-			: { kind: "invalid", problems: checked.problems };
-	}
-	if (typeof value !== "string") return { kind: "invalid" };
-	const trimmed = value.trim();
-	if (DISABLE_SENTINELS.has(trimmed.toLowerCase())) {
-		return { kind: "ok", value: null };
-	}
-	if (trimmed.toLowerCase() === RECOMMENDED_INTENT_CLASSIFIER) {
-		return { kind: "ok", value: RECOMMENDED_INTENT_CLASSIFIER };
-	}
-	return parseClassifierModel(trimmed) && !trimmed.startsWith("{")
-		? { kind: "ok", value: trimmed }
-		: { kind: "invalid" };
-}
-
-function parseConsolidationField(
-	record: Record<string, unknown>,
-): Pick<ParsedLayer, "consolidation"> {
-	if (!("consolidation" in record)) return {};
-	const block = record.consolidation;
-	const object = isPlainObject(block);
-	const read = <T>(
-		snake: string,
-		camel: string,
-		accepts: (value: unknown) => value is T,
-	): FallbackField<T> => {
-		if (!object || (!(snake in block) && !(camel in block))) return { kind: "absent" };
-		const value = snake in block ? block[snake] : block[camel];
-		return accepts(value) ? { kind: "ok", value } : { kind: "invalid" };
-	};
-	return {
-		consolidation: {
-			enabled: read("enabled", "enabled", (v): v is boolean => typeof v === "boolean"),
-			maxHandoffs: read(
-				"max_handoffs",
-				"maxHandoffs",
-				(v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 100,
-			),
-			maxWindowShare: read(
-				"max_window_share",
-				"maxWindowShare",
-				(v): v is number => typeof v === "number" && v > 0 && v <= 1,
-			),
-			keepNewest: read(
-				"keep_newest",
-				"keepNewest",
-				(v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 20,
-			),
-			notObject: !object,
-		},
-	};
-}
-
-function parseContinuityField(record: Record<string, unknown>): Pick<ParsedLayer, "continuity"> {
-	if (!("continuity" in record)) return {};
-	const block = record.continuity;
-	if (!isPlainObject(block)) {
-		return {
-			continuity: {
-				capture: { kind: "absent" },
-				intentClassifier: { kind: "absent" },
-				notObject: true,
-			},
-		};
-	}
-	return {
-		continuity: {
-			capture: parseCaptureField(block),
-			intentClassifier: parseIntentClassifierField(block),
-			notObject: false,
-		},
-	};
-}
-
 /**
  * Parse one already-JSON.parsed config root. A non-object root (null, array,
  * primitive) is `unusable` — a file-level failure so the other layer can
@@ -436,198 +224,6 @@ export function parseTreeNavigatorConfig(raw: unknown): ParsedRoot {
 			...parseConsolidationField(record),
 			...parseAutoNavigateField(record),
 		},
-	};
-}
-
-function parseProposalField(record: Record<string, unknown>): Pick<ParsedLayer, "proposal"> {
-	const hasSnake = "tree_proposal" in record;
-	if (!hasSnake && !("treeProposal" in record)) return {};
-	try {
-		return {
-			proposal: {
-				kind: "ok",
-				value: parseProposalOptions(hasSnake ? record.tree_proposal : record.treeProposal),
-			},
-		};
-	} catch (error) {
-		return {
-			proposal: {
-				kind: "invalid",
-				error: error instanceof Error ? error.message : String(error),
-			},
-		};
-	}
-}
-
-function parseAutoNavigateField(
-	record: Record<string, unknown>,
-): Pick<ParsedLayer, "autoNavigate"> {
-	const hasSnake = "auto_navigate" in record;
-	if (!hasSnake && !("autoNavigate" in record)) return {};
-	try {
-		return {
-			autoNavigate: {
-				kind: "ok",
-				value: parseAutoNavigatePartial(hasSnake ? record.auto_navigate : record.autoNavigate),
-			},
-		};
-	} catch (error) {
-		return {
-			autoNavigate: {
-				kind: "invalid",
-				error: error instanceof Error ? error.message : String(error),
-			},
-		};
-	}
-}
-
-function mergeAutoNavigateField(
-	globalLayer: ParsedLayer,
-	projectLayer: ParsedLayer,
-): Pick<ParsedLayer, "autoNavigate" | "modelAutoNavigate"> {
-	const global = globalLayer.autoNavigate;
-	const project = projectLayer.autoNavigate;
-	let autoNavigate: ParsedLayer["autoNavigate"];
-	if (project?.kind === "invalid") autoNavigate = project;
-	else if (global?.kind === "invalid") autoNavigate = global;
-	else if (global?.kind === "ok" || project?.kind === "ok") {
-		const merged = mergeAutoNavigatePartial(global?.value, project?.value);
-		if (merged) autoNavigate = { kind: "ok", value: merged };
-	}
-	const mergedByModel = new Map<
-		string,
-		{ kind: "ok"; value: AutoNavigatePartial } | { kind: "invalid"; error: string }
-	>();
-	for (const [key, entry] of globalLayer.modelAutoNavigate ?? []) {
-		mergedByModel.set(key, entry);
-	}
-	for (const [key, entry] of projectLayer.modelAutoNavigate ?? []) {
-		const prev = mergedByModel.get(key);
-		if (entry.kind === "invalid") {
-			mergedByModel.set(key, entry);
-		} else if (prev?.kind === "invalid") {
-			mergedByModel.set(key, entry);
-		} else if (prev?.kind === "ok") {
-			const merged = mergeAutoNavigatePartial(prev.value, entry.value);
-			if (merged) mergedByModel.set(key, { kind: "ok", value: merged });
-		} else {
-			mergedByModel.set(key, entry);
-		}
-	}
-	return {
-		...(autoNavigate ? { autoNavigate } : {}),
-		...(mergedByModel.size > 0 ? { modelAutoNavigate: mergedByModel } : {}),
-	};
-}
-
-function mergeProposalField(
-	globalLayer: ParsedLayer,
-	projectLayer: ParsedLayer,
-): Pick<ParsedLayer, "proposal"> {
-	const global = globalLayer.proposal;
-	const project = projectLayer.proposal;
-	if (project?.kind === "invalid") return { proposal: project };
-	if (global?.kind === "invalid") return { proposal: global };
-	if (!global && !project) return {};
-	return {
-		proposal: {
-			kind: "ok",
-			value: mergeProposalOptions(global?.value ?? { tools: {} }, project?.value ?? {}),
-		},
-	};
-}
-
-function mergeConsolidationField(
-	globalLayer: ParsedLayer,
-	projectLayer: ParsedLayer,
-): Pick<ParsedLayer, "consolidation"> {
-	const global = globalLayer.consolidation;
-	const project = projectLayer.consolidation;
-	if (!global && !project) return {};
-	const absent = { kind: "absent" } as const;
-	return {
-		consolidation: {
-			enabled: mergeFallbackField(global?.enabled ?? absent, project?.enabled ?? absent),
-			maxHandoffs: mergeFallbackField(
-				global?.maxHandoffs ?? absent,
-				project?.maxHandoffs ?? absent,
-			),
-			maxWindowShare: mergeFallbackField(
-				global?.maxWindowShare ?? absent,
-				project?.maxWindowShare ?? absent,
-			),
-			keepNewest: mergeFallbackField(global?.keepNewest ?? absent, project?.keepNewest ?? absent),
-			notObject: false,
-		},
-	};
-}
-
-function mergeContinuityField(
-	globalLayer: ParsedLayer,
-	projectLayer: ParsedLayer,
-): Pick<ParsedLayer, "continuity"> {
-	const global = globalLayer.continuity;
-	const project = projectLayer.continuity;
-	if (!global && !project) return {};
-	const absent = { kind: "absent" } as const;
-	return {
-		continuity: {
-			capture: mergeFallbackField(global?.capture ?? absent, project?.capture ?? absent),
-			intentClassifier: mergeFallbackField(
-				global?.intentClassifier ?? absent,
-				project?.intentClassifier ?? absent,
-			),
-			notObject: false,
-		},
-	};
-}
-
-/**
- * Merge a single field. For the hint, `absent` is the only value that falls
- * through: a project layer that is absent (or file-level unusable, which
- * leaves every field absent) contributes nothing, while `ok`, `disabled`,
- * and field-level `invalid` all win — a present project key is the user's
- * explicit intent for this project.
- */
-function mergeHintField(globalField: HintField, projectField: HintField): HintField {
-	return projectField.kind === "absent" ? globalField : projectField;
-}
-
-/** Merge fields where invalid values fall through to the other valid layer. */
-function mergeFallbackField<F extends { kind: "absent" | "ok" | "invalid" }>(
-	globalField: F,
-	projectField: F,
-): F {
-	if (projectField.kind === "ok") return projectField;
-	if (projectField.kind === "invalid") {
-		return globalField.kind === "ok" ? globalField : projectField;
-	}
-	return globalField;
-}
-
-/**
- * Merge the two layers field by field. File-level failures arrive as
- * all-absent layers (loadLayer maps them that way), so each field's
- * documented precedence applies independently.
- */
-export function mergeTreeNavigatorConfig(
-	globalLayer: ParsedLayer,
-	projectLayer: ParsedLayer,
-): ParsedLayer {
-	return {
-		hint: mergeHintField(globalLayer.hint, projectLayer.hint),
-		startAnchor: mergeFallbackField(globalLayer.startAnchor, projectLayer.startAnchor),
-		parentHandoffMode: mergeFallbackField(
-			globalLayer.parentHandoffMode,
-			projectLayer.parentHandoffMode,
-		),
-		// Per key, like the base hint field: a project entry wins.
-		modelHints: new Map([...globalLayer.modelHints, ...projectLayer.modelHints]),
-		modelOverridesProblems: noModelOverridesProblems(),
-		...mergeProposalField(globalLayer, projectLayer),
-		...mergeContinuityField(globalLayer, projectLayer),
-		...mergeConsolidationField(globalLayer, projectLayer),
-		...mergeAutoNavigateField(globalLayer, projectLayer),
 	};
 }
 
@@ -717,57 +313,6 @@ export function resolveAutoNavigateConfig(
 	return materializeAutoNavigateConfig(effective, config.proposal);
 }
 
-type LayerName = "global" | "project";
-
-/** A fresh empty layer per use: `modelHints` is a mutable Map. */
-function absentLayer(): ParsedLayer {
-	return {
-		hint: { kind: "absent" },
-		startAnchor: { kind: "absent" },
-		parentHandoffMode: { kind: "absent" },
-		modelHints: new Map(),
-		modelOverridesProblems: noModelOverridesProblems(),
-	};
-}
-
-interface LayerLoadResult {
-	layer: ParsedLayer;
-	warnings: string[];
-}
-
-function isEnoent(err: unknown): boolean {
-	return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "ENOENT";
-}
-
-async function loadLayer(
-	layer: LayerName,
-	path: string,
-	readFile: (path: string) => Promise<string>,
-): Promise<LayerLoadResult> {
-	const fileWarning = (message: string): LayerLoadResult => ({
-		layer: absentLayer(),
-		warnings: [message],
-	});
-	let text: string;
-	try {
-		text = await readFile(path);
-	} catch (err) {
-		if (isEnoent(err)) return { layer: absentLayer(), warnings: [] };
-		return fileWarning(
-			`navigate_tree: could not read ${layer} config at ${path} — that layer was ignored.`,
-		);
-	}
-	let root: unknown;
-	try {
-		root = JSON.parse(text);
-	} catch {
-		return fileWarning(
-			`navigate_tree: invalid JSON in ${layer} config at ${path} — that layer was ignored.`,
-		);
-	}
-	return parseLayerRoot(`${layer} config at ${path}`, root);
-}
-
 /** Parse one layer's root and describe every field-level problem; `where` names the layer in warnings. */
 function parseLayerRoot(where: string, root: unknown): LayerLoadResult {
 	const parsed = parseTreeNavigatorConfig(root);
@@ -777,114 +322,19 @@ function parseLayerRoot(where: string, root: unknown): LayerLoadResult {
 			warnings: [`navigate_tree: ${where} must be a JSON object — that layer was ignored.`],
 		};
 	}
-	const warnings: string[] = [];
-	if ("rewindHintAtPercent" in (root as Record<string, unknown>)) {
-		warnings.push(
-			`navigate_tree: rewindHintAtPercent in ${where} was removed in 0.3.0 and is ignored — use rewindHintReserveTokens (tokens left in the window when the hint fires, e.g. 50000).`,
-		);
-	}
-	const hintExpectation = `expected integer ${REWIND_HINT_MIN_RESERVE}-${REWIND_HINT_MAX_RESERVE} or a disable sentinel (null, false, "off", "disabled")`;
-	if (parsed.layer.hint.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid rewindHintReserveTokens in ${where} — ${hintExpectation}; rewind hint disabled for this session.`,
-		);
-	}
-	if (parsed.layer.modelOverridesProblems.notObject) {
-		warnings.push(
-			`navigate_tree: modelOverrides in ${where} must be an object keyed by "provider/modelId" — ignored.`,
-		);
-	}
-	for (const key of parsed.layer.modelOverridesProblems.nonObjectEntries) {
-		warnings.push(
-			`navigate_tree: modelOverrides[${JSON.stringify(key)}] in ${where} must be an object — ignored.`,
-		);
-	}
-	for (const [key, field] of parsed.layer.modelHints) {
-		if (field.kind !== "invalid") continue;
-		warnings.push(
-			`navigate_tree: invalid modelOverrides[${JSON.stringify(key)}].rewindHintReserveTokens in ${where} — ${hintExpectation}; rewind hint disabled for that model.`,
-		);
-	}
-	if (parsed.layer.startAnchor.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid anchorStartAfterTurns in ${where} — expected integer ${START_ANCHOR_MIN_TURNS}-${START_ANCHOR_MAX_TURNS}; falling back to the other layer's valid value, else the default ${START_ANCHOR_DEFAULT_TURNS}.`,
-		);
-	}
-	if (parsed.layer.parentHandoffMode.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid parentHandoffMode in ${where} — expected "full", "synthesized" or "digest"; falling back to the other layer's valid value, else the default "${PARENT_HANDOFF_MODE_DEFAULT}".`,
-		);
-	}
-	const consolidation = parsed.layer.consolidation;
-	if (consolidation?.notObject)
-		warnings.push(`navigate_tree: consolidation in ${where} must be an object — ignored.`);
-	if (consolidation?.enabled.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid consolidation.enabled in ${where} — expected true or false; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.enabled}.`,
-		);
-	}
-	if (consolidation?.maxHandoffs.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid consolidation.max_handoffs in ${where} — expected integer 1-100; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.maxHandoffs}.`,
-		);
-	}
-	if (consolidation?.maxWindowShare.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid consolidation.max_window_share in ${where} — expected number greater than 0 and at most 1; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.maxWindowShare}.`,
-		);
-	}
-	if (consolidation?.keepNewest.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid consolidation.keep_newest in ${where} — expected integer 1-20; falling back to the other layer's valid value, else the default ${CONSOLIDATION_DEFAULTS.keepNewest}.`,
-		);
-	}
-	const continuity = parsed.layer.continuity;
-	if (continuity?.notObject) {
-		warnings.push(`navigate_tree: continuity in ${where} must be an object — ignored.`);
-	}
-	if (continuity?.capture.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid continuity.capture in ${where} — expected true or false; falling back to the other layer's valid value, else the default ${CONTINUITY_CAPTURE_DEFAULT}.`,
-		);
-	}
-	const classifier = continuity?.intentClassifier;
-	if (classifier?.kind === "invalid") {
-		const expected =
-			"problems" in classifier
-				? classifier.problems.join("; ")
-				: 'expected "recommended", "provider/id" of a classifier model, an object policy or a disable sentinel (null, false, "off", "disabled")';
-		warnings.push(
-			`navigate_tree: invalid continuity.intentClassifier in ${where} — ${expected}; falling back to the other layer's valid value, else off (heuristics only).`,
-		);
-	}
-	if (parsed.layer.proposal?.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid treeProposal in ${where} — ${parsed.layer.proposal.error}; model proposals are blocked until this is corrected.`,
-		);
-	}
-	const autoRoot =
-		(root as Record<string, unknown>).auto_navigate ??
-		(root as Record<string, unknown>).autoNavigate;
-	if (
-		typeof autoRoot === "object" &&
-		autoRoot !== null &&
-		"controller_model" in (autoRoot as Record<string, unknown>)
-	)
-		warnings.push(
-			`navigate_tree: auto_navigate.controller_model in ${where} was removed and is ignored — set auto_navigate.milestone to "recommended" or explicit classifier/confirmer stages.`,
-		);
-	if (parsed.layer.autoNavigate?.kind === "invalid") {
-		warnings.push(
-			`navigate_tree: invalid auto_navigate in ${where} — ${parsed.layer.autoNavigate.error}; auto_navigate is disabled for this session.`,
-		);
-	}
-	for (const [key, field] of parsed.layer.modelAutoNavigate ?? []) {
-		if (field.kind !== "invalid") continue;
-		warnings.push(
-			`navigate_tree: invalid modelOverrides[${JSON.stringify(key)}].auto_navigate in ${where} — ${field.error}; auto_navigate is disabled for that model pattern.`,
-		);
-	}
-	return { layer: parsed.layer, warnings };
+	return {
+		layer: parsed.layer,
+		warnings: configFieldWarnings(where, root, parsed, {
+			REWIND_HINT_MIN_RESERVE,
+			REWIND_HINT_MAX_RESERVE,
+			START_ANCHOR_MIN_TURNS,
+			START_ANCHOR_MAX_TURNS,
+			START_ANCHOR_DEFAULT_TURNS,
+			PARENT_HANDOFF_MODE_DEFAULT,
+			CONTINUITY_CAPTURE_DEFAULT,
+			CONSOLIDATION_DEFAULTS,
+		}),
+	};
 }
 
 /**
@@ -934,12 +384,13 @@ export async function loadTreeNavigatorConfig(opts: {
 		"global",
 		join(opts.agentDir, TREE_NAVIGATOR_CONFIG_FILENAME),
 		readFile,
+		parseLayerRoot,
 	);
 	warnings.push(...globalResult.warnings);
 
 	let projectLayer: ParsedLayer = absentLayer();
 	if (opts.projectTrusted) {
-		const projectResult = await loadLayer("project", opts.projectPath, readFile);
+		const projectResult = await loadLayer("project", opts.projectPath, readFile, parseLayerRoot);
 		warnings.push(...projectResult.warnings);
 		projectLayer = projectResult.layer;
 	}
