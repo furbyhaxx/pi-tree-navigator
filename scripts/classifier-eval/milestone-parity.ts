@@ -344,22 +344,22 @@ function parseOptions(argv: readonly string[]): Options | "help" {
 	} catch (error) {
 		throw new UsageError(error instanceof Error ? error.message : String(error));
 	}
-	if (values.help) return "help";
+	if (values["help"]) return "help";
 	const positive = (name: string) => {
 		const value = Number(values[name]);
 		if (!Number.isFinite(value) || value <= 0)
 			throw new UsageError(`--${name} must be a positive number`);
 		return value;
 	};
-	if (values.out === undefined && values["dry-run"] !== true)
+	if (values["out"] === undefined && values["dry-run"] !== true)
 		throw new UsageError("--out is required");
 	return {
-		out: String(values.out ?? ""),
-		ledger: String(values.ledger),
+		out: String(values["out"] ?? ""),
+		ledger: String(values["ledger"]),
 		cap: positive("cap"),
 		maxUsd: positive("max-usd"),
 		waitMinutes: positive("wait-minutes"),
-		benchmark: String(values.benchmark),
+		benchmark: String(values["benchmark"]),
 		perTask: Math.floor(positive("per-task")),
 		dryRun: values["dry-run"] === true,
 	};

@@ -97,7 +97,8 @@ const isNano = (value: unknown): value is number =>
 const messageOf = (error: unknown): string =>
 	error instanceof Error ? error.message : String(error);
 
-const isErrno = (error: unknown, code: string): boolean => isRecord(error) && error.code === code;
+const isErrno = (error: unknown, code: string): boolean =>
+	isRecord(error) && error["code"] === code;
 
 const ioError = (action: string, cause: unknown): BudgetError =>
 	new BudgetError("io_error", `${action}: ${messageOf(cause)}`, cause);
@@ -135,38 +136,38 @@ function parseEvent(line: string): LedgerEvent {
 	} catch (error) {
 		throw new BudgetError("corrupt_log", "line is not valid JSON", error);
 	}
-	if (!isRecord(value) || typeof value.at !== "string") {
+	if (!isRecord(value) || typeof value["at"] !== "string") {
 		throw corrupt("line is not an event object with a timestamp");
 	}
-	const at = value.at;
-	if (value.event === "cap") {
-		if (value.version !== LOG_VERSION) throw corrupt("unsupported log version");
-		if (!isNano(value.limitNanoUsd)) throw corrupt("invalid cap amount");
+	const at = value["at"];
+	if (value["event"] === "cap") {
+		if (value["version"] !== LOG_VERSION) throw corrupt("unsupported log version");
+		if (!isNano(value["limitNanoUsd"])) throw corrupt("invalid cap amount");
 		return {
 			event: "cap",
 			version: LOG_VERSION,
-			limitNanoUsd: value.limitNanoUsd,
+			limitNanoUsd: value["limitNanoUsd"],
 			at,
 		};
 	}
-	if (typeof value.id !== "string") throw corrupt("event id is not a string");
-	if (value.event === "reserve") {
-		if (!isNano(value.worstCaseNanoUsd)) throw corrupt("invalid reserve amount");
+	if (typeof value["id"] !== "string") throw corrupt("event id is not a string");
+	if (value["event"] === "reserve") {
+		if (!isNano(value["worstCaseNanoUsd"])) throw corrupt("invalid reserve amount");
 		return {
 			event: "reserve",
-			id: value.id,
-			worstCaseNanoUsd: value.worstCaseNanoUsd,
+			id: value["id"],
+			worstCaseNanoUsd: value["worstCaseNanoUsd"],
 			at,
 		};
 	}
-	if (value.event === "settle") {
-		if (value.actualNanoUsd !== null && !isNano(value.actualNanoUsd)) {
+	if (value["event"] === "settle") {
+		if (value["actualNanoUsd"] !== null && !isNano(value["actualNanoUsd"])) {
 			throw corrupt("invalid settle amount");
 		}
 		return {
 			event: "settle",
-			id: value.id,
-			actualNanoUsd: value.actualNanoUsd,
+			id: value["id"],
+			actualNanoUsd: value["actualNanoUsd"],
 			at,
 		};
 	}
@@ -204,7 +205,7 @@ function acquireLock(lockPath: string): string {
 function releaseLock(lockPath: string, token: string): void {
 	try {
 		const owner: unknown = JSON.parse(readFileSync(lockPath, "utf8"));
-		if (isRecord(owner) && owner.token === token) unlinkSync(lockPath);
+		if (isRecord(owner) && owner["token"] === token) unlinkSync(lockPath);
 	} catch (error) {
 		if (isErrno(error, "ENOENT") || error instanceof SyntaxError) return;
 		throw ioError(`cannot remove lock ${lockPath}`, error);

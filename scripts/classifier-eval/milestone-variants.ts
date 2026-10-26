@@ -288,7 +288,7 @@ export function variantCase(
 		},
 		variant.instructions ? INSTRUCTED_WORDING : undefined,
 	);
-	const boundary = context.questions.boundary;
+	const boundary = context.questions["boundary"];
 	const previews = boundary?.type === "choice" ? boundary.criteria : {};
 	const requested = variant.granular
 		? { ...context, questions: granularQuestions(records, previews) }
@@ -391,19 +391,19 @@ export function parseStructure(
 	}
 	const given = (parsed ?? {}) as Record<string, unknown>;
 	const objective =
-		typeof given.objective === "string" ? clean(given.objective, LIMITS.objective) : "";
+		typeof given["objective"] === "string" ? clean(given["objective"], LIMITS.objective) : "";
 	const problems = [
 		...(objective === "" ? ["no objective"] : []),
-		...(Array.isArray(given.goals) ? [] : ["goals is not a list"]),
-		...(Array.isArray(given.anchors) ? [] : ["anchors is not a list"]),
+		...(Array.isArray(given["goals"]) ? [] : ["goals is not a list"]),
+		...(Array.isArray(given["anchors"]) ? [] : ["anchors is not a list"]),
 	];
 	if (problems.length > 0) return { problems };
-	const goals = (given.goals as unknown[])
+	const goals = (given["goals"] as unknown[])
 		.filter((goal): goal is string => typeof goal === "string")
 		.map((goal) => clean(goal, LIMITS.goal))
 		.filter((goal) => goal !== "")
 		.slice(0, LIMITS.goals);
-	const anchors = (given.anchors as unknown[])
+	const anchors = (given["anchors"] as unknown[])
 		.flatMap((anchor) => {
 			const { name, afterRecordId } = (anchor ?? {}) as Record<string, unknown>;
 			const label = typeof name === "string" ? clean(name, LIMITS.anchorName) : "";

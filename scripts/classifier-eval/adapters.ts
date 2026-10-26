@@ -268,9 +268,9 @@ export function planRequest(prepared: PreparedCase, candidate: Candidate): Reque
 
 interface Captured {
 	generationId?: string;
-	costUsd?: number;
-	inputTokens?: number;
-	outputTokens?: number;
+	costUsd?: number | undefined;
+	inputTokens?: number | undefined;
+	outputTokens?: number | undefined;
 }
 
 const count = (value: unknown): number | undefined =>
@@ -278,14 +278,19 @@ const count = (value: unknown): number | undefined =>
 
 function mergeBody(into: Captured, body: unknown): void {
 	if (!isRecord(body)) return;
-	if (typeof body.id === "string" && GENERATION_ID.test(body.id) && into.generationId === undefined)
-		into.generationId = body.id;
-	if (!isRecord(body.usage)) return;
-	const usage = body.usage;
-	into.costUsd = count(usage.cost) ?? into.costUsd;
-	into.inputTokens = count(usage.input_tokens) ?? count(usage.prompt_tokens) ?? into.inputTokens;
+	if (
+		typeof body["id"] === "string" &&
+		GENERATION_ID.test(body["id"]) &&
+		into.generationId === undefined
+	)
+		into.generationId = body["id"];
+	if (!isRecord(body["usage"])) return;
+	const usage = body["usage"];
+	into.costUsd = count(usage["cost"]) ?? into.costUsd;
+	into.inputTokens =
+		count(usage["input_tokens"]) ?? count(usage["prompt_tokens"]) ?? into.inputTokens;
 	into.outputTokens =
-		count(usage.output_tokens) ?? count(usage.completion_tokens) ?? into.outputTokens;
+		count(usage["output_tokens"]) ?? count(usage["completion_tokens"]) ?? into.outputTokens;
 }
 
 /** Reads the generation id and billed usage from a JSON or event-stream body. */
@@ -401,7 +406,7 @@ async function answerHeuristic(prepared: PreparedCase, base: Base): Promise<Adap
 	const answers: Record<string, EvalAnswer> = {
 		kind: { choice: verdict.kind },
 	};
-	if ("contradicts" in prepared.questions) answers.contradicts = { choice: "none" };
+	if ("contradicts" in prepared.questions) answers["contradicts"] = { choice: "none" };
 	return {
 		observation: {
 			...base,
@@ -522,13 +527,13 @@ export function parseChatAnswers(
 	} catch {
 		return { answers, problems: ["output is not valid JSON"] };
 	}
-	const raw = isRecord(parsed) ? parsed.answers : undefined;
+	const raw = isRecord(parsed) ? parsed["answers"] : undefined;
 	if (!isRecord(raw)) return { answers, problems: ["output has no answers object"] };
 	const problems: string[] = [];
 	for (const [id, value] of Object.entries(raw)) {
-		const choice = isRecord(value) && typeof value.choice === "string" ? value.choice : "";
+		const choice = isRecord(value) && typeof value["choice"] === "string" ? value["choice"] : "";
 		const confidence =
-			isRecord(value) && typeof value.confidence === "number" ? value.confidence : undefined;
+			isRecord(value) && typeof value["confidence"] === "number" ? value["confidence"] : undefined;
 		answers[id] = confidence === undefined ? { choice } : { choice, confidence };
 		if (!Object.hasOwn(questions, id)) problems.push(`unknown question ${id}`);
 	}

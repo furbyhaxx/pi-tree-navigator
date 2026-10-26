@@ -211,13 +211,13 @@ function readCap(value: unknown): number | undefined {
 
 function chatOutputCap(body: Record<string, unknown>): number {
 	const present = (value: unknown) => value !== undefined && value !== null;
-	const completion = present(body.max_completion_tokens)
-		? readCap(body.max_completion_tokens)
+	const completion = present(body["max_completion_tokens"])
+		? readCap(body["max_completion_tokens"])
 		: undefined;
-	const legacy = present(body.max_tokens) ? readCap(body.max_tokens) : undefined;
-	if (present(body.max_completion_tokens) && completion === undefined)
+	const legacy = present(body["max_tokens"]) ? readCap(body["max_tokens"]) : undefined;
+	if (present(body["max_completion_tokens"]) && completion === undefined)
 		fail("refused a chat request without a finite output cap");
-	if (present(body.max_tokens) && legacy === undefined)
+	if (present(body["max_tokens"]) && legacy === undefined)
 		fail("refused a chat request without a finite output cap");
 	if (completion === undefined && legacy === undefined)
 		fail("refused a chat request without a finite output cap");
@@ -229,9 +229,9 @@ function chatOutputCap(body: Record<string, unknown>): number {
 }
 
 function shapeProvider(body: Record<string, unknown>, rates: ModelRates): Record<string, unknown> {
-	if (body.provider !== undefined && !isRecord(body.provider))
+	if (body["provider"] !== undefined && !isRecord(body["provider"]))
 		fail("refused an unsupported request");
-	const provider = isRecord(body.provider) ? { ...body.provider } : {};
+	const provider = isRecord(body["provider"]) ? { ...body["provider"] } : {};
 	return { ...body, provider: { ...provider, max_price: maxPriceOf(rates) } };
 }
 
@@ -252,23 +252,27 @@ function shapeBody(
 	} catch {
 		fail("refused an unsupported request");
 	}
-	if (!isRecord(parsed) || typeof parsed.model !== "string" || parsed.model === "")
+	if (!isRecord(parsed) || typeof parsed["model"] !== "string" || parsed["model"] === "")
 		fail("refused an unsupported request");
-	if (parsed.models !== undefined || parsed.route !== undefined || parsed.plugins !== undefined)
+	if (
+		parsed["models"] !== undefined ||
+		parsed["route"] !== undefined ||
+		parsed["plugins"] !== undefined
+	)
 		fail("refused an unsupported request");
 	const kind = endpoint === "systemone" ? "decisions" : "chat";
-	const entry = models.get(parsed.model);
-	if (!entry) fail(`refused unknown model ${parsed.model}`);
-	if (entry.kind !== kind) fail(`refused ${parsed.model} on a ${endpoint} endpoint`);
+	const entry = models.get(parsed["model"]);
+	if (!entry) fail(`refused unknown model ${parsed["model"]}`);
+	if (entry.kind !== kind) fail(`refused ${parsed["model"]} on a ${endpoint} endpoint`);
 	const pricing = pricingFor(entry, routes, kind);
 	if (pricing.refusal !== undefined)
-		fail(`refused unpriced model ${parsed.model}: ${pricing.refusal}`);
+		fail(`refused unpriced model ${parsed["model"]}: ${pricing.refusal}`);
 	if (endpoint === "responses") {
 		validateResponsesRequest(parsed);
 		const maxOutputTokens = responsesOutputCap(parsed, entry.maxOutputTokens);
 		return {
 			body: JSON.stringify(parsed),
-			model: parsed.model,
+			model: parsed["model"],
 			maxOutputTokens,
 			rates: pricing.rates,
 		};
@@ -277,14 +281,14 @@ function shapeBody(
 		validateTextRequest(parsed, endpoint);
 		const maxOutputTokens = chatOutputCap(parsed);
 		const body = JSON.stringify(shapeProvider(parsed, pricing.rates));
-		return { body, model: parsed.model, maxOutputTokens, rates: pricing.rates };
+		return { body, model: parsed["model"], maxOutputTokens, rates: pricing.rates };
 	}
-	if (parsed.state === undefined || !isRecord(parsed.questions))
+	if (parsed["state"] === undefined || !isRecord(parsed["questions"]))
 		fail("refused an unsupported request");
 	const body = JSON.stringify(shapeProvider(parsed, pricing.rates));
 	return {
 		body,
-		model: parsed.model,
+		model: parsed["model"],
 		maxOutputTokens: DECISION_MAX_OUTPUT_TOKENS,
 		rates: pricing.rates,
 	};
@@ -297,13 +301,13 @@ function textContent(value: unknown): boolean {
 		value.every((block) => {
 			if (!isRecord(block)) return false;
 			if (
-				block.type === "text" ||
-				block.type === "thinking" ||
-				block.type === "redacted_thinking" ||
-				block.type === "tool_use"
+				block["type"] === "text" ||
+				block["type"] === "thinking" ||
+				block["type"] === "redacted_thinking" ||
+				block["type"] === "tool_use"
 			)
 				return true;
-			return block.type === "tool_result" && textContent(block.content);
+			return block["type"] === "tool_result" && textContent(block["content"]);
 		})
 	);
 }
@@ -313,30 +317,30 @@ function textContent(value: unknown): boolean {
  * must stay text-only and locally capped.
  */
 function validateResponsesRequest(body: Record<string, unknown>): void {
-	if (body.store !== false) fail("refused a stateful request");
+	if (body["store"] !== false) fail("refused a stateful request");
 	if (
-		body.previous_response_id !== undefined ||
-		body.conversation !== undefined ||
-		body.background !== undefined
+		body["previous_response_id"] !== undefined ||
+		body["conversation"] !== undefined ||
+		body["background"] !== undefined
 	)
 		fail("refused a stateful request");
-	if (body.input === undefined) fail("refused an unsupported request");
-	if (typeof body.input !== "string" && !Array.isArray(body.input))
+	if (body["input"] === undefined) fail("refused an unsupported request");
+	if (typeof body["input"] !== "string" && !Array.isArray(body["input"]))
 		fail("refused an unsupported request");
 	if (
-		body.modalities !== undefined &&
-		(!Array.isArray(body.modalities) || body.modalities.some((value) => value !== "text"))
+		body["modalities"] !== undefined &&
+		(!Array.isArray(body["modalities"]) || body["modalities"].some((value) => value !== "text"))
 	)
 		fail("refused non-text generation");
 	if (
-		body.tools !== undefined &&
-		(!Array.isArray(body.tools) ||
-			!body.tools.every(
+		body["tools"] !== undefined &&
+		(!Array.isArray(body["tools"]) ||
+			!body["tools"].every(
 				(tool) =>
 					isRecord(tool) &&
-					tool.type === "function" &&
-					typeof tool.name === "string" &&
-					isRecord(tool.parameters),
+					tool["type"] === "function" &&
+					typeof tool["name"] === "string" &&
+					isRecord(tool["parameters"]),
 			))
 	)
 		fail("refused unbudgeted server tools");
@@ -347,8 +351,8 @@ function validateResponsesRequest(body: Record<string, unknown>): void {
  * falls back to the catalog cap; a request may never be left uncapped.
  */
 function responsesOutputCap(body: Record<string, unknown>, fallback: number | undefined): number {
-	if (body.max_output_tokens !== undefined) {
-		const cap = readCap(body.max_output_tokens);
+	if (body["max_output_tokens"] !== undefined) {
+		const cap = readCap(body["max_output_tokens"]);
 		if (cap === undefined) fail("refused a chat request without a finite output cap");
 		return cap;
 	}
@@ -359,36 +363,37 @@ function responsesOutputCap(body: Record<string, unknown>, fallback: number | un
 function validateTextRequest(body: Record<string, unknown>, endpoint: TransportEndpoint): void {
 	const single = (value: unknown) => value === undefined || value === 1;
 	if (
-		!single(body.n) ||
-		!single(body.best_of) ||
-		body.web_search_options !== undefined ||
-		body.audio !== undefined
+		!single(body["n"]) ||
+		!single(body["best_of"]) ||
+		body["web_search_options"] !== undefined ||
+		body["audio"] !== undefined
 	)
 		fail("refused unbudgeted generation options");
 	if (
-		body.modalities !== undefined &&
-		(!Array.isArray(body.modalities) || body.modalities.some((value) => value !== "text"))
+		body["modalities"] !== undefined &&
+		(!Array.isArray(body["modalities"]) || body["modalities"].some((value) => value !== "text"))
 	)
 		fail("refused non-text generation");
 	if (
-		!textContent(body.system) ||
-		!Array.isArray(body.messages) ||
-		!body.messages.every(
-			(message) => isRecord(message) && message.audio === undefined && textContent(message.content),
+		!textContent(body["system"]) ||
+		!Array.isArray(body["messages"]) ||
+		!body["messages"].every(
+			(message) =>
+				isRecord(message) && message["audio"] === undefined && textContent(message["content"]),
 		)
 	)
 		fail("refused non-text input");
 	if (
-		body.tools !== undefined &&
-		(!Array.isArray(body.tools) ||
-			!body.tools.every(
+		body["tools"] !== undefined &&
+		(!Array.isArray(body["tools"]) ||
+			!body["tools"].every(
 				(tool) =>
 					isRecord(tool) &&
 					(endpoint === "messages"
-						? (tool.type === undefined || tool.type === "custom") &&
-							typeof tool.name === "string" &&
-							isRecord(tool.input_schema)
-						: tool.type === "function" && isRecord(tool.function)),
+						? (tool["type"] === undefined || tool["type"] === "custom") &&
+							typeof tool["name"] === "string" &&
+							isRecord(tool["input_schema"])
+						: tool["type"] === "function" && isRecord(tool["function"])),
 			))
 	)
 		fail("refused unbudgeted server tools");
@@ -422,13 +427,14 @@ function mergeObserved(into: Observed, value: unknown): void {
 	if (!isRecord(value)) return;
 	if (
 		into.generationId === undefined &&
-		typeof value.id === "string" &&
-		GENERATION_ID.test(value.id)
+		typeof value["id"] === "string" &&
+		GENERATION_ID.test(value["id"])
 	)
-		into.generationId = value.id;
-	if (isRecord(value.usage) && isUsd(value.usage.cost)) into.responseCostUsd = value.usage.cost;
-	if (isRecord(value.message)) mergeObserved(into, value.message);
-	if (isRecord(value.response)) mergeObserved(into, value.response);
+		into.generationId = value["id"];
+	if (isRecord(value["usage"]) && isUsd(value["usage"]["cost"]))
+		into.responseCostUsd = value["usage"]["cost"];
+	if (isRecord(value["message"])) mergeObserved(into, value["message"]);
+	if (isRecord(value["response"])) mergeObserved(into, value["response"]);
 }
 
 function parseProviderBody(text: string): Observed {

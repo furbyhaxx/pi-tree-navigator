@@ -96,29 +96,29 @@ function parseObservation(value: unknown, where: string): EvalObservation {
 	};
 	if (!isRecord(value)) return fail("observation is not an object");
 	const finite = (key: string) => typeof value[key] === "number" && Number.isFinite(value[key]);
-	if (typeof value.caseId !== "string" || value.caseId === "")
+	if (typeof value["caseId"] !== "string" || value["caseId"] === "")
 		fail("caseId must be a non-empty string");
-	if (typeof value.model !== "string" || value.model === "")
+	if (typeof value["model"] !== "string" || value["model"] === "")
 		fail("model must be a non-empty string");
-	if (typeof value.adapter !== "string" || !ADAPTERS.includes(value.adapter))
+	if (typeof value["adapter"] !== "string" || !ADAPTERS.includes(value["adapter"]))
 		fail("adapter must be decisions, chat or heuristic");
-	if (!Number.isInteger(value.repetition) || (value.repetition as number) < 0)
+	if (!Number.isInteger(value["repetition"]) || (value["repetition"] as number) < 0)
 		fail("repetition must be a nonnegative integer");
-	if (typeof value.status !== "string" || !STATUSES.includes(value.status))
+	if (typeof value["status"] !== "string" || !STATUSES.includes(value["status"]))
 		fail("status must be ok, error or unsupported");
-	if (!finite("durationMs") || (value.durationMs as number) < 0)
+	if (!finite("durationMs") || (value["durationMs"] as number) < 0)
 		fail("durationMs must be a nonnegative number");
-	if (value.costUsd !== null && !finite("costUsd")) fail("costUsd must be a number or null");
+	if (value["costUsd"] !== null && !finite("costUsd")) fail("costUsd must be a number or null");
 	if (
-		typeof value.costSource !== "string" ||
-		!COST_SOURCES.includes(value.costSource as CostSource)
+		typeof value["costSource"] !== "string" ||
+		!COST_SOURCES.includes(value["costSource"] as CostSource)
 	)
 		fail("costSource is not recognised");
-	if (!finite("costBoundUsd") || (value.costBoundUsd as number) < 0)
+	if (!finite("costBoundUsd") || (value["costBoundUsd"] as number) < 0)
 		fail("costBoundUsd must be a nonnegative number");
-	if (!isRecord(value.answers)) fail("answers must be an object");
-	for (const [question, answer] of Object.entries(value.answers as Record<string, unknown>))
-		if (!isRecord(answer) || typeof answer.choice !== "string")
+	if (!isRecord(value["answers"])) fail("answers must be an object");
+	for (const [question, answer] of Object.entries(value["answers"] as Record<string, unknown>))
+		if (!isRecord(answer) || typeof answer["choice"] !== "string")
 			fail(`answer ${question} has no string choice`);
 	return value as unknown as EvalObservation;
 }
@@ -298,7 +298,7 @@ interface Vote {
 	accepted: boolean;
 	correct: boolean;
 	unsafe: boolean;
-	choice?: string;
+	choice?: string | undefined;
 }
 
 interface Call {
@@ -454,6 +454,7 @@ const chain = (first: string, second: string): Policy => ({
 	members: [first, second],
 	latency: "sum",
 	combine: ([a, b], questions) => {
+		if (a === undefined || b === undefined) throw new TypeError("Policy requires two attempts");
 		const escalation = whyNotAccepted(a, questions);
 		return {
 			finals: questions.map((q) => {
@@ -475,6 +476,7 @@ const confirm = (first: string, second: string): Policy => ({
 	members: [first, second],
 	latency: "sum",
 	combine: ([a, b], questions) => {
+		if (a === undefined || b === undefined) throw new TypeError("Policy requires two attempts");
 		if (!questions.some((q) => vote(a, q).accepted))
 			return {
 				finals: questions.map((q) => withhold(q, vote(a, q).valid)),
@@ -585,7 +587,9 @@ function runPolicy(
 		calls: 0,
 		escalationReasons: noReasons(),
 	};
-	const lead = attempts.get(policy.members[0]);
+	const firstMember = policy.members[0];
+	if (firstMember === undefined) return run;
+	const lead = attempts.get(firstMember);
 	if (!lead) return run;
 	for (const prepared of cases) {
 		const questions = Object.keys(prepared.expected);
@@ -595,7 +599,11 @@ function runPolicy(
 			if (members.some((m) => m === undefined)) continue;
 			const chosen = members as Attempt[];
 			const outcome = policy.combine(chosen, questions);
-			const calls = outcome.consulted.map((index) => chosen[index].call);
+			const calls = outcome.consulted.map((index) => {
+				const attempt = chosen[index];
+				if (attempt === undefined) throw new TypeError("Consulted attempt is missing");
+				return attempt.call;
+			});
 			const repetition = Number(key.slice(prepared.id.length + 1));
 			run.scores.push(policyScore(prepared, policy, repetition, outcome.finals, calls));
 			run.calls += calls.length;
@@ -834,13 +842,14 @@ function consistency(items: readonly Scored[]): Consistency {
 					: "\u0000invalid",
 			),
 		);
-		if (signatures.every((s) => s.join("\u0001") === signatures[0].join("\u0001")))
-			fullyAgreeingCases++;
-		for (let i = 0; i < signatures.length; i++)
-			for (let j = i + 1; j < signatures.length; j++)
-				signatures[i].forEach((choice, q) => {
+		const first = signatures[0];
+		if (first === undefined) continue;
+		if (signatures.every((s) => s.join("\u0001") === first.join("\u0001"))) fullyAgreeingCases++;
+		for (const [i, signature] of signatures.entries())
+			for (const other of signatures.slice(i + 1))
+				signature.forEach((choice, q) => {
 					pairs++;
-					if (choice === signatures[j][q]) agreeing++;
+					if (choice === other[q]) agreeing++;
 				});
 	}
 	return {
@@ -1091,11 +1100,12 @@ function recommend(rows: readonly RankRow[]): Recommendation {
 					note: `No sufficient row has zero unsafe accepted on holdout; fewest is ${unsafe}.`,
 				};
 	}
-	return rows.length === 0
+	const first = rows[0];
+	return first === undefined
 		? { status: "no-data", id: null, note: "No observations for this task." }
 		: {
 				status: "insufficient-evidence",
-				id: rows[0].id,
+				id: first.id,
 				note: "Every row has too few holdout cases; the first row is provisional.",
 			};
 }
@@ -1200,9 +1210,9 @@ function selectModels(
 
 function triples<T>(items: readonly T[]): T[][] {
 	const out: T[][] = [];
-	for (let i = 0; i < items.length; i++)
-		for (let j = i + 1; j < items.length; j++)
-			for (let k = j + 1; k < items.length; k++) out.push([items[i], items[j], items[k]]);
+	for (const [i, first] of items.entries())
+		for (const [j, second] of items.slice(i + 1).entries())
+			for (const third of items.slice(i + j + 2)) out.push([first, second, third]);
 	return out;
 }
 
@@ -1332,10 +1342,10 @@ export async function analyze(
 				info: policy,
 				run: async (cases) => runPolicy(policy, cases, attempts),
 			});
-		for (let i = 0; i < cheapFirst.length; i++)
-			for (let j = i + 1; j < cheapFirst.length; j++) {
-				combined(chain(cheapFirst[i], cheapFirst[j]));
-				combined(confirm(cheapFirst[i], cheapFirst[j]));
+		for (const [i, first] of cheapFirst.entries())
+			for (const second of cheapFirst.slice(i + 1)) {
+				combined(chain(first, second));
+				combined(confirm(first, second));
 			}
 		for (const members of triples(cheapFirst)) combined(majority(members));
 		const notes: string[] = [

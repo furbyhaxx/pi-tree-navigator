@@ -28,7 +28,7 @@ export function parseTuiOptions(args: string[]): TuiOptions {
 			ledger: { type: "string" },
 			"auth-dir": {
 				type: "string",
-				default: process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent"),
+				default: process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent"),
 			},
 			model: { type: "string", default: "openai/gpt-6-luna" },
 			target: { type: "string", default: "fold-native-acceptance" },

@@ -134,8 +134,11 @@ function milestoneCase(spec: MilestoneSpec): EvalCase {
 		text,
 	}));
 	const ids = records.map((r) => r.id);
-	for (const index of spec.end)
-		if (!ids[index]) throw new Error(`${spec.id}: no record at ${index}`);
+	const endIds = spec.end.map((index) => {
+		const id = ids[index];
+		if (!id) throw new Error(`${spec.id}: no record at ${index}`);
+		return id;
+	});
 	const structure: MilestoneStructure = {
 		objective: spec.structure.objective,
 		goals: spec.structure.goals,
@@ -156,7 +159,7 @@ function milestoneCase(spec: MilestoneSpec): EvalCase {
 		spec.end.length === 0
 			? { choices: ["none"], unsafeChoices: ids, rationale: spec.boundaryWhy }
 			: {
-					choices: spec.end.map((index) => ids[index]),
+					choices: endIds,
 					unsafeChoices: ids.slice(Math.max(...spec.end) + 1),
 					rationale: spec.boundaryWhy,
 				};
@@ -4298,7 +4301,7 @@ const BOUNDARY: EvalCase[] = [
 		family: "ci-workflows",
 		lang: "en",
 		task: "milestone-boundary",
-		rows: [...CI_PHASE_ONE, CI_PHASE_TWO[0]],
+		rows: [...CI_PHASE_ONE, ...CI_PHASE_TWO.slice(0, 1)],
 		status: "continue",
 		statusWhy: "The first part is reported done and the agent has just started the second part.",
 		end: [4],

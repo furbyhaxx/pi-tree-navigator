@@ -140,7 +140,9 @@ export function verifyPressureCompaction(
 				?.pressure === "object",
 	);
 	assert.ok(at >= 0, "pressure relief must write a native compaction");
-	assert.match(getLabel(branch[at].id) ?? "", /^anchor:compacted/);
+	const compaction = branch[at];
+	assert.ok(compaction, "pressure relief must write a native compaction");
+	assert.match(getLabel(compaction.id) ?? "", /^anchor:compacted/);
 	assert.ok(
 		!branch.some((entry) => entry.type === "branch_summary"),
 		"pressure compaction must not fold",
@@ -191,11 +193,12 @@ export function verifyRecoveryCompaction(branch: readonly SessionEntry[], reques
 	);
 	assert.ok(
 		receiptsOf(branch.slice(at + 1), PRESSURE_COMPACTION_CUSTOM_TYPE).some(
-			(details) => details.origin === "recovery",
+			(details) => details["origin"] === "recovery",
 		),
 		"the recovery compaction must leave a receipt with origin recovery",
 	);
 	const compaction = branch[at];
+	assert.ok(compaction, "recovery without an anchor must write a compaction");
 	const keptFrom = branch.findIndex(
 		(entry) => compaction.type === "compaction" && entry.id === compaction.firstKeptEntryId,
 	);
@@ -237,13 +240,15 @@ export function verifyRepeatedRecovery(
 	const recoveries = [
 		...receiptsOf(entries, REWIND_CUSTOM_TYPE),
 		...receiptsOf(entries, PRESSURE_COMPACTION_CUSTOM_TYPE),
-	].filter((details) => details.origin === "recovery");
+	].filter((details) => details["origin"] === "recovery");
 	assert.ok(
-		!recoveries.some((details) => details.status === "failed"),
+		!recoveries.some((details) => details["status"] === "failed"),
 		"no recovery may be refused or fail",
 	);
 	assert.ok(
-		!receiptsOf(entries, REWIND_CUSTOM_TYPE).some((details) => details.providerOverflow === true),
+		!receiptsOf(entries, REWIND_CUSTOM_TYPE).some(
+			(details) => details["providerOverflow"] === true,
+		),
 		"the run must not end in a request-budget failure",
 	);
 	assert.ok(
@@ -299,7 +304,7 @@ export function parseOptions(args: string[]): RunOptions {
 			},
 			"auth-dir": {
 				type: "string",
-				default: process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent"),
+				default: process.env["PI_CODING_AGENT_DIR"] ?? join(homedir(), ".pi", "agent"),
 			},
 			"dry-run": { type: "boolean", default: false },
 		},
@@ -486,10 +491,10 @@ export async function runAcceptance(
 	mkdirSync(cwd);
 	if (navigatorConfig)
 		writeFileSync(join(agentDir, "tree-navigator.json"), JSON.stringify(navigatorConfig));
-	const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-	const previousOffline = process.env.PI_OFFLINE;
-	process.env.PI_CODING_AGENT_DIR = agentDir;
-	process.env.PI_OFFLINE = "1";
+	const previousAgentDir = process.env["PI_CODING_AGENT_DIR"];
+	const previousOffline = process.env["PI_OFFLINE"];
+	process.env["PI_CODING_AGENT_DIR"] = agentDir;
+	process.env["PI_OFFLINE"] = "1";
 	let ledger: BudgetLedger | undefined;
 	let transport: ReturnType<typeof createBudgetedTransport> | undefined;
 	let dispose: (() => void) | undefined;
@@ -875,10 +880,10 @@ export async function runAcceptance(
 			ledger?.close();
 			rmSync(scratch, { recursive: true, force: true });
 		}
-		if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
-		else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
-		if (previousOffline === undefined) delete process.env.PI_OFFLINE;
-		else process.env.PI_OFFLINE = previousOffline;
+		if (previousAgentDir === undefined) delete process.env["PI_CODING_AGENT_DIR"];
+		else process.env["PI_CODING_AGENT_DIR"] = previousAgentDir;
+		if (previousOffline === undefined) delete process.env["PI_OFFLINE"];
+		else process.env["PI_OFFLINE"] = previousOffline;
 	}
 	if (failure) throw failure;
 }
