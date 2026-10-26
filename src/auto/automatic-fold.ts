@@ -102,9 +102,13 @@ export function createAutomaticFoldController({
 		const currentConfig = () =>
 			resolveAutoNavigateConfig(
 				{
-					autoNavigate: state.config.autoNavigateBase,
+					...(state.config.autoNavigateBase === undefined
+						? {}
+						: { autoNavigate: state.config.autoNavigateBase }),
 					autoNavigateByModel: state.config.autoNavigateByModel,
-					proposal: state.config.proposalConfig,
+					...(state.config.proposalConfig === undefined
+						? {}
+						: { proposal: state.config.proposalConfig }),
 				},
 				modelKey,
 			);
@@ -324,8 +328,8 @@ export function createAutomaticFoldController({
 				const done = foldDoneDraft(request, outcome);
 				if (!selected.withinBudget) {
 					done.content += `\n\n[${TOOL_NAME} auto_navigate] No anchor lands under the ~${formatWindow(budget)} pressure target (half of rewind_at_tokens), so this fold used the oldest valid anchor; it still relieves context, and the next pressure fold waits for the retry runway.`;
-					done.details.aboveTarget = true;
-					done.details.target = budget;
+					done.details["aboveTarget"] = true;
+					done.details["target"] = budget;
 				}
 				return deliver(done, true);
 			}

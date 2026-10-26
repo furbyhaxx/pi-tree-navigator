@@ -178,6 +178,7 @@ export function buildAutoMilestoneEvidence(options: {
 				]
 			: [];
 	});
+	const objective = active.find((item) => item.kind === "objective")?.text;
 	const warnings = [...new Set(ledger.warnings)];
 	const notices = [...new Set([...disclosure.warnings, ...filtered.warnings])];
 	if (records.length > capped.length)
@@ -187,7 +188,7 @@ export function buildAutoMilestoneEvidence(options: {
 			records: capped,
 			...(newest && { lastAnchor: newest.name }),
 			structure: {
-				objective: active.find((item) => item.kind === "objective")?.text,
+				...(objective === undefined ? {} : { objective }),
 				goals: active.filter((item) => item.kind === "sub-goal").map((item) => item.text),
 				folds,
 				anchors: anchors.map((anchor) => ({

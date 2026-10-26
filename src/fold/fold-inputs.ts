@@ -178,17 +178,17 @@ function isProviderVisible(message: Message): boolean {
 	for (const block of content as unknown[]) {
 		if (typeof block !== "object" || block === null) continue;
 		const entry = block as { [key: string]: unknown };
-		if (entry.type === "text") {
-			if (typeof entry.text === "string" && entry.text.trim().length > 0) return true;
-		} else if (entry.type === "thinking") {
+		if (entry["type"] === "text") {
+			if (typeof entry["text"] === "string" && entry["text"].trim().length > 0) return true;
+		} else if (entry["type"] === "thinking") {
 			const { thinking, thinkingSignature } = entry;
 			if (
 				(typeof thinking === "string" && thinking.trim().length > 0) ||
 				(typeof thinkingSignature === "string" && thinkingSignature.trim().length > 0) ||
-				entry.redacted === true
+				entry["redacted"] === true
 			)
 				return true;
-		} else if (entry.type !== undefined) {
+		} else if (entry["type"] !== undefined) {
 			return true;
 		}
 	}

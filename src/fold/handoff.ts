@@ -109,14 +109,17 @@ const OUTCOME_HEADINGS = [
 
 function section(report: string, headings: readonly string[]): string {
 	const lines = report.split("\n");
-	for (let i = 0; i < lines.length; i++) {
-		const heading = lines[i]
+	for (const [i, line] of lines.entries()) {
+		const heading = line
 			.replace(/^#+\s*/, "")
 			.trim()
 			.toLowerCase();
 		if (!headings.includes(heading)) continue;
 		const body: string[] = [];
-		for (let j = i + 1; j < lines.length && !/^#+\s/.test(lines[j]); j++) body.push(lines[j]);
+		for (const line of lines.slice(i + 1)) {
+			if (/^#+\s/.test(line)) break;
+			body.push(line);
+		}
 		const text = body
 			.join(" ")
 			.replace(/\s+/g, " ")
@@ -157,7 +160,11 @@ export function makeHandoff(options: {
 	};
 }
 
-function digestLine(child: { id: string; summary: string; handoff?: HandoffData }): string {
+function digestLine(child: {
+	id: string;
+	summary: string;
+	handoff?: HandoffData | undefined;
+}): string {
 	const bounded = (value: string, limit: number): string => {
 		const clean = value
 			.replace(/\p{Cc}/gu, " ")
@@ -165,9 +172,10 @@ function digestLine(child: { id: string; summary: string; handoff?: HandoffData 
 			.trim();
 		return clean.length > limit ? `${clean.slice(0, limit - 1)}…` : clean;
 	};
-	const own = stripHandoffPreamble(child.summary).split(
-		/^## (?:Child handoffs in chronological order|Earlier handoffs in this span \(digest\))/m,
-	)[0];
+	const own =
+		stripHandoffPreamble(child.summary).split(
+			/^## (?:Child handoffs in chronological order|Earlier handoffs in this span \(digest\))/m,
+		)[0] ?? "";
 	const title = child.handoff?.title ?? own.match(/^# Work handoff:\s*(.+)$/m)?.[1] ?? "";
 	const goal = child.handoff?.goal ?? section(own, ["goal", "goal/scope"]);
 	const outcome = child.handoff?.outcome ?? section(own, OUTCOME_HEADINGS);
@@ -189,7 +197,7 @@ function digestLine(child: { id: string; summary: string; handoff?: HandoffData 
 /** Materialize a frozen context policy; each child is inserted once in supplied chronological order. */
 export function materializeHandoff(
 	data: HandoffData,
-	children: readonly { id: string; summary: string; handoff?: HandoffData }[],
+	children: readonly { id: string; summary: string; handoff?: HandoffData | undefined }[],
 ): string {
 	const own = `# Work handoff: ${data.title}\n\n${data.report}`;
 	if (data.mode === "synthesized" || !children.length) return own;
@@ -208,18 +216,18 @@ function record(value: unknown): value is Record<string, unknown> {
 function validHandoff(value: unknown): value is HandoffData {
 	if (
 		!record(value) ||
-		value.version !== 1 ||
-		(value.mode !== "full" && value.mode !== "synthesized" && value.mode !== "digest")
+		value["version"] !== 1 ||
+		(value["mode"] !== "full" && value["mode"] !== "synthesized" && value["mode"] !== "digest")
 	)
 		return false;
 	for (const key of ["name", "title", "goal", "outcome", "report"])
 		if (typeof value[key] !== "string") return false;
 	if (
-		!Array.isArray(value.children) ||
-		!value.children.every((id) => typeof id === "string") ||
-		!Array.isArray(value.sourceIds) ||
-		!value.sourceIds.every((id) => typeof id === "string") ||
-		!record(value.stats)
+		!Array.isArray(value["children"]) ||
+		!value["children"].every((id) => typeof id === "string") ||
+		!Array.isArray(value["sourceIds"]) ||
+		!value["sourceIds"].every((id) => typeof id === "string") ||
+		!record(value["stats"])
 	)
 		return false;
 	for (const key of [
@@ -232,14 +240,15 @@ function validHandoff(value: unknown): value is HandoffData {
 		"cost",
 		"usageRecords",
 	])
-		if (typeof value.stats[key] !== "number" || !Number.isFinite(value.stats[key])) return false;
+		if (typeof value["stats"][key] !== "number" || !Number.isFinite(value["stats"][key]))
+			return false;
 	return true;
 }
 
 /** Read extension-owned metadata; unknown or malformed versions are left to native rendering. */
 export function getHandoff(entry: SessionEntry): HandoffData | undefined {
 	if (entry.type !== "branch_summary" || !record(entry.details)) return undefined;
-	return validHandoff(entry.details.treeNavigator) ? entry.details.treeNavigator : undefined;
+	return validHandoff(entry.details["treeNavigator"]) ? entry.details["treeNavigator"] : undefined;
 }
 
 /** Change only projected navigator handoffs, preserving omissions and message ordering. */

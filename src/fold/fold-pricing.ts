@@ -211,8 +211,8 @@ function previewStrategy(
 	if (!inContext) return "chunked";
 	const admitted = foldAdmission(contextWindow, factor)(
 		{
-			systemPrompt: inContext.systemPrompt,
-			tools: inContext.tools,
+			...(inContext.systemPrompt === undefined ? {} : { systemPrompt: inContext.systemPrompt }),
+			...(inContext.tools === undefined ? {} : { tools: inContext.tools }),
 			messages: [
 				...inContext.messages,
 				{
@@ -272,14 +272,16 @@ export function defaultFoldFocus(sm: SessionManager): string {
 export function priceFoldCandidates(
 	sm: SessionManager,
 	input: {
-		model?: {
-			provider: string;
-			id: string;
-			contextWindow?: number;
-			maxTokens?: number;
-		};
+		model?:
+			| {
+					provider: string;
+					id: string;
+					contextWindow?: number;
+					maxTokens?: number;
+			  }
+			| undefined;
 		handoffMode: HandoffMode;
-		captured?: { modelKey: string; messages: Message[] };
+		captured?: { modelKey: string; messages: Message[] } | undefined;
 		focus: string;
 		suggestLabel(anchorName: string): string;
 		/** Last folded entry. Later user and custom input is priced as late, not subtracted. */

@@ -58,14 +58,16 @@ function editedBeforeApplied(entries: readonly UsageEntry[], order: readonly num
 		const target = position.get(sourceEntry.targetId);
 		if (target === undefined) continue;
 		const from = rank[target];
-		const to = Math.max(rank[index], from + 1);
-		delta[from]++;
-		delta[to]--;
+		const applied = rank[index];
+		if (from === undefined || applied === undefined) continue;
+		const to = Math.max(applied, from + 1);
+		delta[from] = (delta[from] ?? 0) + 1;
+		delta[to] = (delta[to] ?? 0) - 1;
 	}
 	let open = 0;
 	const stale = entries.map(() => false);
 	for (const [at, index] of order.entries()) {
-		open += delta[at];
+		open += delta[at] ?? 0;
 		stale[index] = open > 0;
 	}
 	return stale;
@@ -89,11 +91,13 @@ export function invalidateStaleUsage<T extends UsageEntry>(
 	let boundaryFollows = false;
 	for (const index of order.reverse()) {
 		const entry = entries[index];
+		if (!entry) continue;
 		const source = entry.sourceEntry;
 		if (source && BOUNDARY_ENTRIES.has(source.type)) boundaryFollows = true;
 		let messages: AgentMessage[] | undefined;
 		for (let i = entry.messages.length - 1; i >= 0; i--) {
 			const message = entry.messages[i];
+			if (!message) continue;
 			if (message.role === "system") boundaryFollows = true;
 			else if (
 				message.role === "assistant" &&

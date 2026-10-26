@@ -46,7 +46,7 @@ export interface FoldSummaryRunner {
 		text: string;
 		stopReason: StopReason;
 		usage?: Usage;
-		errorMessage?: string;
+		errorMessage?: string | undefined;
 	}>;
 }
 
@@ -68,16 +68,16 @@ export function createFoldSummaryRunner(options: {
 				.streamSimple(
 					model,
 					{
-						systemPrompt: request.systemPrompt,
+						...(request.systemPrompt === undefined ? {} : { systemPrompt: request.systemPrompt }),
 						messages: request.messages,
-						tools: request.tools,
+						...(request.tools === undefined ? {} : { tools: request.tools }),
 					},
 					{
-						signal: request.signal,
-						reasoning: thinking === "off" || request.reasoning === "off" ? undefined : thinking,
+						...(request.signal === undefined ? {} : { signal: request.signal }),
+						...(thinking === "off" || request.reasoning === "off" ? {} : { reasoning: thinking }),
 						maxTokens: request.maxTokens,
 						toolChoice: "none",
-						sessionId,
+						...(sessionId === undefined ? {} : { sessionId }),
 					},
 				)
 				.result();
@@ -111,8 +111,8 @@ export type FoldSummaryProgress = {
 export interface SummarizeFoldOptions {
 	runner: FoldSummaryRunner;
 	focus: string;
-	parent?: { mode: "full" | "synthesized" | "digest"; childCount: number };
-	continuitySection?: string;
+	parent?: { mode: "full" | "synthesized" | "digest"; childCount: number } | undefined;
+	continuitySection?: string | undefined;
 	/**
 	 * Replaces the r5d fold instruction in the in-context request and the final reduce;
 	 * `first` is the 1-based first summarized message. The answer must still start at `## Goal`.
@@ -122,12 +122,14 @@ export interface SummarizeFoldOptions {
 	 * Strategy A candidate: the projected live request up to the leaf; `first` is the 1-based first collapsed message.
 	 * pi 1.3 carries the system prompt and tools as system messages inside `messages`; the separate fields are optional.
 	 */
-	inContext?: {
-		messages: Message[];
-		first: number;
-		systemPrompt?: string;
-		tools?: Tool[];
-	};
+	inContext?:
+		| {
+				messages: Message[];
+				first: number;
+				systemPrompt?: string;
+				tools?: Tool[];
+		  }
+		| undefined;
 	/** Strategy B evidence: background text (may be empty) and the anchor-to-leaf records in order. */
 	segment: { background: string; records: FoldSegmentRecord[] };
 	/** Shared admission policy: input estimate of the complete request, system prompt and tools included. */
@@ -135,14 +137,16 @@ export interface SummarizeFoldOptions {
 		request: { systemPrompt?: string; tools?: Tool[]; messages: Message[] },
 		maxOutputTokens: number,
 	): { fits: boolean; inputEstimate: number };
-	limits?: {
-		maxCalls?: number;
-		mapOutputTokens?: number;
-		reduceOutputTokens?: number;
-		chunkInputTokens?: number;
-	};
-	signal?: AbortSignal;
-	onProgress?(progress: FoldSummaryProgress): void;
+	limits?:
+		| {
+				maxCalls?: number;
+				mapOutputTokens?: number;
+				reduceOutputTokens?: number;
+				chunkInputTokens?: number;
+		  }
+		| undefined;
+	signal?: AbortSignal | undefined;
+	onProgress?: ((progress: FoldSummaryProgress) => void) | undefined;
 }
 
 export type SummarizeFoldResult =
@@ -175,7 +179,7 @@ export const DEFAULT_REDUCE_OUTPUT_TOKENS = 8000;
 const DEFAULT_CHUNK_INPUT_TOKENS = 120_000;
 const HEADROOM_TOKENS = 4096;
 
-const REASONING_ALLOWANCE: Readonly<Record<string, number>> = {
+const REASONING_ALLOWANCE: Readonly<Record<ThinkingLevel | "off", number>> = {
 	off: 0,
 	minimal: 1024,
 	low: 4096,
@@ -191,7 +195,7 @@ const REASONING_ALLOWANCE: Readonly<Record<string, number>> = {
  * ceiling as the answer, so an answer-sized cap ends in `length`.
  */
 export function reasoningAllowance(thinking: ThinkingLevel | "off"): number {
-	return REASONING_ALLOWANCE[thinking] ?? REASONING_ALLOWANCE.xhigh;
+	return REASONING_ALLOWANCE[thinking] ?? REASONING_ALLOWANCE["xhigh"];
 }
 
 const FINAL_RETRIES = 1;
@@ -251,7 +255,7 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 		options.onProgress?.({ phase, call: calls, plannedCalls });
 		let response: Completion;
 		try {
-			response = await runner.complete({ ...request, signal });
+			response = await runner.complete({ ...request, ...(signal === undefined ? {} : { signal }) });
 		} catch (error) {
 			if (signal?.aborted || isAbort(error))
 				return { failure: fail("aborted", "cancelled during the request") };
@@ -301,8 +305,8 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 	const inContext = options.inContext;
 	if (inContext) {
 		const request = {
-			systemPrompt: inContext.systemPrompt,
-			tools: inContext.tools,
+			...(inContext.systemPrompt === undefined ? {} : { systemPrompt: inContext.systemPrompt }),
+			...(inContext.tools === undefined ? {} : { tools: inContext.tools }),
 			messages: [...inContext.messages, userMessage(requestText(inContext.first))],
 		};
 		const { fits, inputEstimate } = options.admit(request, reduceCeiling);
@@ -386,6 +390,7 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 	const coverage: string[][] = [];
 	let notes: Note[] = [];
 	for (const [index, chunk] of chunks.entries()) {
+		const firstId = chunk.ids[0];
 		const label = `Evidence records ${index + 1}/${chunks.length} (records ${chunk.ids[0]} to ${chunk.ids.at(-1)}):`;
 		const attempt = await invokeWithRetry(
 			"map",
@@ -405,8 +410,8 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 		coverage.push(chunk.ids);
 		notes.push({
 			text,
-			first: chunk.ids[0],
-			last: chunk.ids.at(-1) ?? chunk.ids[0],
+			first: firstId,
+			last: chunk.ids.at(-1) ?? firstId,
 		});
 	}
 
@@ -425,9 +430,16 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 			);
 		const next: Note[] = [];
 		for (const group of groups) {
-			const members = group.map((index) => notes[index]);
+			const members = group.map((index) => {
+				const note = notes[index];
+				if (!note) throw new TypeError("Missing consolidation note");
+				return note;
+			});
+			const firstMember = members[0];
+			const lastMember = members.at(-1);
+			if (!firstMember || !lastMember) throw new TypeError("Missing consolidation members");
 			if (members.length === 1) {
-				next.push(members[0]);
+				next.push(firstMember);
 				continue;
 			}
 			const body = members.map((note, index) => noteText(note, index, members.length)).join("\n\n");
@@ -457,8 +469,8 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 				);
 			next.push({
 				text,
-				first: members[0].first,
-				last: members[members.length - 1].last,
+				first: firstMember.first,
+				last: lastMember.last,
 			});
 		}
 		notes = next;
