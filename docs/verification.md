@@ -7,17 +7,15 @@ the others.
 
 ## Offline gates
 
-From a dependency-installed checkout:
+From a dependency-installed checkout (`just install`):
 
 ```sh
-node_modules/.bin/tsc --noEmit
-node_modules/.bin/biome check extensions/ scripts/
-node --test extensions/navigate-tree/*.test.ts scripts/classifier-eval/*.test.ts scripts/fold-acceptance/*.test.ts
-node scripts/pi-upstream-probe.mjs
+just check        # tsc --noEmit, biome check, bun test
+just probe        # Pi internals the extension relies on
+just rpc-verify   # load the extension in a real Pi RPC session
 ```
 
-The npm scripts also support `pnpm test`, `pnpm run lint` and `pnpm run typecheck` when
-pnpm is available. Do not change the package version outside a release.
+Run a single file with `bun test tests/<area>/<module>.test.ts`.
 Run focused tests during implementation, then the combined gate before delivery.
 
 Tests must protect behavior, not obsolete implementation details. Historical in-band
@@ -182,3 +180,23 @@ switch. Model-created summaries remain untrusted semantic output even after grap
 - Only task-owned files are committed; credentials/private sessions remain excluded.
 - Repository-authorized integration/push is complete. Installation and configuration
   migration are reported separately and performed only with authorization.
+
+## Live verification checklist
+
+Use a disposable synthetic session and the extension under test. Keep raw safe
+request/response evidence, usage and original failed runs. Never copy credentials
+or send private sessions for testing.
+
+- **Independent execution:** manual and preflight folds make summary side calls
+  before any main-agent turn. Agent and automatic folds execute at their safe
+  boundary without another model turn to initiate the operation.
+- **Continuation:** the post-fold model receives the reduced projection, still-open
+  user request and new input, then fulfills that request without a driver follow-up.
+- **Budget:** distinguish projected estimates, provider-measured input, cache reads
+  and cumulative traffic. Inspect Strategy A cache reuse; Strategy B may use a
+  different prefix and does not promise the same cache hit.
+- **Preservation:** check required facts, constraints and remaining work against the
+  source. `node scripts/summary-quality-check.mjs <session.jsonl> --all` is structural
+  smoke, not a semantic completeness proof.
+- **TUI:** drive the plan, progress/cancellation and result cards at 60 and 130
+  columns. Verify the footer updates and Ctrl+O/mouse interactions work.

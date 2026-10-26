@@ -1,10 +1,10 @@
 /**
  * navigate-tree — agent-callable session tree navigation.
  *
- * See README “Implementation notes” for the user-facing narrative
+ * See docs/how-it-works.md for the user-facing narrative
  * (independent fold engine, same-loop context refresh, reflection
  * bootstrap). This file-level JSDoc carries only source-internal facts
- * the README doesn't.
+ * the docs don't.
  *
  * `/tree`-visible artifacts (empirical):
  *   • The abandoned branch of every rewind ends with the rewind tool

@@ -7650,8 +7650,8 @@ describe("automatic start anchor (#55)", () => {
 	});
 });
 
-describe("README: history-mirroring providers", () => {
-	const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+describe("docs: history-mirroring providers", () => {
+	const readme = readFileSync(new URL("../docs/how-it-works.md", import.meta.url), "utf8");
 
 	it("does not claim the summary is the paused Claude Code query", () => {
 		assert.doesNotMatch(readme, /paused Claude Code query/);
@@ -7665,8 +7665,8 @@ describe("README: history-mirroring providers", () => {
 	});
 });
 
-describe("README: independent overflow recovery", () => {
-	const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+describe("docs: independent overflow recovery", () => {
+	const readme = readFileSync(new URL("../docs/configuration.md", import.meta.url), "utf8");
 
 	it("documents recovery without forced rewinds or withheld tool results", () => {
 		assert.match(readme, /### Independent overflow recovery/);
