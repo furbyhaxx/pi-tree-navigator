@@ -29,6 +29,11 @@ import { REWIND_ARGS, requestRewind, rewindMessages } from "../support/rewind-dr
 import { setupRewindable } from "../support/session-fakes.ts";
 import { appendTurn, assistantMessage } from "../support/session-messages.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 installHarnessHooks();
 
 function globalConfigPath(fixture: ConfigFixture): string {
@@ -38,8 +43,8 @@ function globalConfigPath(fixture: ConfigFixture): string {
 describe("settings live application", () => {
 	it("runtime capture save immediately blocks pin without writing config, and reload restores file settings", async () => {
 		const fixture = makeConfigFixture();
-		const previous = process.env.PI_CODING_AGENT_DIR;
-		process.env.PI_CODING_AGENT_DIR = fixture.agentDir;
+		const previous = process.env["PI_CODING_AGENT_DIR"];
+		process.env["PI_CODING_AGENT_DIR"] = fixture.agentDir;
 		try {
 			writeGlobalConfig(fixture, JSON.stringify({ continuity: { capture: true } }));
 			const before = readFileSync(globalConfigPath(fixture), "utf8");
@@ -92,7 +97,7 @@ describe("settings live application", () => {
 				f.ctx,
 			);
 			assert.equal(refused.isError, true);
-			assert.match(refused.content[0].text, /disabled by config/);
+			assert.match(defined(refused.content[0]).text, /disabled by config/);
 			assert.equal(readFileSync(globalConfigPath(fixture), "utf8"), before);
 			await runSessionStart(f.pi, f.ctx, fixture, "reload");
 			const allowed = await f.tool.execute(
@@ -104,8 +109,8 @@ describe("settings live application", () => {
 			);
 			assert.equal(allowed.isError, undefined);
 		} finally {
-			if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
-			else process.env.PI_CODING_AGENT_DIR = previous;
+			if (previous === undefined) delete process.env["PI_CODING_AGENT_DIR"];
+			else process.env["PI_CODING_AGENT_DIR"] = previous;
 			cleanupConfigFixture(fixture);
 		}
 	});
@@ -129,7 +134,7 @@ describe("rewind hint: session_start config wiring (#44)", () => {
 			fireTurnEnd(pi, ctx);
 			assert.equal(pi.sendMessageCalls.length, 1);
 			// Real call arity: exactly one argument (no options bag).
-			assert.equal(pi.sendMessageCalls[0].length, 1);
+			assert.equal(defined(pi.sendMessageCalls[0]).length, 1);
 			assert.deepEqual(pi.sendMessageCalls[0], [
 				{
 					customType: REWIND_HINT_CUSTOM_TYPE,
@@ -139,7 +144,7 @@ describe("rewind hint: session_start config wiring (#44)", () => {
 			]);
 			// Byte-exact pin: the anchors are named, so no `list` call is needed.
 			assert.equal(
-				pi.sendMessageCalls[0][0].content,
+				defined(defined(pi.sendMessageCalls[0])[0]).content,
 				"[navigate_tree hint] Context is at 90.0% of 1.0M — 100.0k tokens left, within the 100.0k reserve. Persist what matters to files now, then rewind to the oldest appropriate anchor.\nActive anchors (root → leaf, % of 1.0M):\n   0.0%  start",
 			);
 		} finally {
@@ -445,7 +450,7 @@ describe("rewind hint: turn_end handler (#44)", () => {
 			fireTurnEnd(pi, ctx);
 			assert.equal(pi.sendMessageCalls.length, 1);
 			assert.equal(
-				(pi.sendMessageCalls[0][0] as { content: string }).content,
+				(defined(pi.sendMessageCalls[0])[0] as { content: string }).content,
 				"[navigate_tree hint] Context is at 105.0% of 1.0M — 0.0k tokens left, within the 100.0k reserve. Persist what matters to files now, then rewind to the oldest appropriate anchor.\nActive anchors (root → leaf, % of 1.0M):\n   0.0%  start",
 			);
 		} finally {
@@ -566,7 +571,7 @@ describe("rewind hint: turn_end handler (#44)", () => {
 			ctx.setContextUsage(usageAt(95));
 			fireTurnEnd(pi, ctx);
 			assert.equal(pi.sendMessageCalls.length, 1);
-			const text = String((pi.sendMessageCalls[0][0] as { content: unknown }).content);
+			const text = String((defined(pi.sendMessageCalls[0])[0] as { content: unknown }).content);
 			assert.match(text, /\nActive anchors \(root → leaf, % of 1\.0M\):\n +[\d.]+% {2}start$/);
 		} finally {
 			cleanupConfigFixture(fixture);
@@ -825,7 +830,7 @@ describe("rewind hint: turn_end handler (#44)", () => {
 			sm.appendCustomMessageEntry(REWIND_HINT_CUSTOM_TYPE, text, true);
 			const contextHandlers = pi.onCalls.get("context");
 			assert.ok(contextHandlers, "factory must register a context handler");
-			const projected = contextHandlers[0](
+			const projected = defined(contextHandlers[0])(
 				{ type: "context", messages: [] } as never,
 				{ sessionManager: sm } as never,
 			) as { messages: unknown[] };
@@ -897,7 +902,7 @@ describe("rewind hint: suppressed on turns a rewind owns (#80)", () => {
 			f.ctx.setContextUsage(usageAt(95));
 
 			await requestRewind(f);
-			assert.equal(rewindMessages(f.pi)[0].message.details.status, "done");
+			assert.equal(defined(rewindMessages(f.pi)[0]).message.details["status"], "done");
 			assert.equal(hintCalls(f.pi).length, 0, "the rewind call's turn");
 
 			// The crossing stayed unspent: the next normal turn fires it once.
@@ -938,7 +943,7 @@ describe("rewind hint: suppressed on turns a rewind owns (#80)", () => {
 			await requestRewind(f, { ...REWIND_ARGS, rewindTo: "a" }, "tc-rewind", undefined, {
 				turnIndex: 1,
 			});
-			assert.equal(rewindMessages(f.pi)[0].message.details.status, "done");
+			assert.equal(defined(rewindMessages(f.pi)[0]).message.details["status"], "done");
 			assert.equal(hintCalls(f.pi).length, 0);
 			assert.ok(
 				!f.sm.getEntries().some((e) => e.type === "label" && e.label === START_ANCHOR_LABEL),
@@ -977,7 +982,7 @@ describe("rewind hint: per-model modelOverrides (#86)", () => {
 			fireTurnEnd(pi, ctx);
 			assert.equal(pi.sendMessageCalls.length, 1);
 			assert.match(
-				String((pi.sendMessageCalls[0][0] as { content: unknown }).content),
+				String((defined(pi.sendMessageCalls[0])[0] as { content: unknown }).content),
 				/within the 100\.0k reserve/,
 			);
 		} finally {
@@ -999,7 +1004,7 @@ describe("rewind hint: per-model modelOverrides (#86)", () => {
 			fireTurnEnd(pi, ctx);
 			assert.equal(pi.sendMessageCalls.length, 1);
 			assert.match(
-				String((pi.sendMessageCalls[0][0] as { content: unknown }).content),
+				String((defined(pi.sendMessageCalls[0])[0] as { content: unknown }).content),
 				/within the 100\.0k reserve/,
 			);
 		} finally {

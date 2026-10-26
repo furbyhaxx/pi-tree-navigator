@@ -6,6 +6,11 @@ import navigateTree from "../src/index.ts";
 import { makeCtx, makeFakePi, setup } from "./support/extension-harness.ts";
 import { installHarnessHooks } from "./support/harness-hooks.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 installHarnessHooks();
 
 describe("factory registration", () => {
@@ -17,6 +22,7 @@ describe("factory registration", () => {
 		navigateTree(fakePi.pi);
 		assert.equal(fakePi.registered.length, 1);
 		const tool = fakePi.registered[0];
+		assert.ok(tool);
 		const ctx = makeCtx(sm);
 		const result = await tool.execute("tc-1", { action: "list" }, undefined, undefined, ctx);
 		assert.equal(result.isError, undefined);
@@ -30,8 +36,8 @@ describe("factory registration", () => {
 		const handlers = pi.onCalls.get("turn_end");
 		assert.ok(handlers);
 		assert.equal(handlers.length, 2);
-		assert.equal(handlers[0].constructor.name, "AsyncFunction");
-		assert.notEqual(handlers[1].constructor.name, "AsyncFunction");
+		assert.equal(defined(handlers[0]).constructor.name, "AsyncFunction");
+		assert.notEqual(defined(handlers[1]).constructor.name, "AsyncFunction");
 		assert.equal(pi.onCalls.has("tool_call"), false);
 	});
 });

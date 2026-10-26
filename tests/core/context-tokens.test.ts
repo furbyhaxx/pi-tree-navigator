@@ -19,6 +19,11 @@ import {
 	fixedOverheadNote,
 } from "../../src/core/context-tokens.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 // -----------------------------------------------------------------------------
 // Fixtures — chars/4 means every token value below is an exact multiple of 4
 // chars per token, so the expectations stay readable.
@@ -86,7 +91,9 @@ describe("estimateContextTokens", () => {
 		];
 		assert.equal(
 			estimateContextTokens(chain),
-			estimateTokens(chain[0]) + estimateTokens(chain[1]) + estimateTokens(chain[2]),
+			estimateTokens(defined(chain[0])) +
+				estimateTokens(defined(chain[1])) +
+				estimateTokens(defined(chain[2])),
 		);
 		assert.equal(estimateContextTokens(chain), 103);
 	});
@@ -197,7 +204,7 @@ describe("estimateContextTokens", () => {
 
 	it("circular toolCall arguments throw (plain JSON.stringify — no safeJsonStringify guard)", () => {
 		const circular: Record<string, unknown> = {};
-		circular.self = circular;
+		circular["self"] = circular;
 		const message = assistant(4, { totalTokens: 0 });
 		(message as unknown as { content: unknown }).content = [
 			{ type: "toolCall", id: "tc", name: "x", arguments: circular },

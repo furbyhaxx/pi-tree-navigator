@@ -20,12 +20,18 @@ import {
 	assistantMessage,
 } from "../support/session-messages.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 installHarnessHooks();
 
 describe("rewind: completion", () => {
 	it("branches from the anchor with a work handoff, labels it, and moves the leaf", async () => {
 		const f = await rewindFixture();
-		const summaryId = f.done.message.details.summaryId as string;
+		assert.ok(f.done);
+		const summaryId = f.done.message.details["summaryId"] as string;
 		const entry = f.sm.getEntry(summaryId);
 		assert.ok(entry && entry.type === "branch_summary");
 		assert.equal(entry.parentId, f.anchorId, "child of the anchor entry");
@@ -46,9 +52,9 @@ describe("rewind: completion", () => {
 		// own `/tree` label write) and then the committed continuation.
 		const branch = f.sm.getBranch();
 		const at = branch.findIndex((e) => e.id === summaryId);
-		assert.equal(branch[at + 1].type, "label");
-		assert.equal(branch[at + 2].type, "custom_message");
-		assert.equal(f.sm.getLeafId(), branch[at + 2].id);
+		assert.equal(defined(branch[at + 1]).type, "label");
+		assert.equal(defined(branch[at + 2]).type, "custom_message");
+		assert.equal(f.sm.getLeafId(), defined(branch[at + 2]).id);
 		// The abandoned branch keeps the rewind call and its result, marked as
 		// finished.
 		assert.equal(f.sm.getLabel(f.leafBeforeFold), "branch:end");
@@ -60,8 +66,8 @@ describe("rewind: completion", () => {
 		const f = await rewindFixture();
 		const calls = rewindMessages(f.pi);
 		assert.equal(calls.length, 1);
-		const { message } = calls[0];
-		assert.equal(calls[0].continue, true);
+		const { message } = defined(calls[0]);
+		assert.equal(defined(calls[0]).continue, true);
 		assert.equal(message.type, "custom_message");
 		assert.equal(message.customType, REWIND_CUSTOM_TYPE);
 		assert.equal(message.display, true);
@@ -72,10 +78,10 @@ describe("rewind: completion", () => {
 				{
 					rewindTo: "start",
 					newLabel: "end",
-					beforeTokens: d.contextBefore as number,
+					beforeTokens: d["contextBefore"] as number,
 					contextWindow: 1_000_000,
 				},
-				d.contextAfter as number,
+				d["contextAfter"] as number,
 			),
 		);
 		assert.deepEqual(d, {
@@ -83,16 +89,16 @@ describe("rewind: completion", () => {
 			rewindTo: "start",
 			newLabel: "end",
 			targetId: f.anchorId,
-			summaryId: d.summaryId,
-			collapsedEntries: d.collapsedEntries,
-			contextBefore: d.contextBefore,
-			contextAfter: d.contextAfter,
+			summaryId: d["summaryId"],
+			collapsedEntries: d["collapsedEntries"],
+			contextBefore: d["contextBefore"],
+			contextAfter: d["contextAfter"],
 			contextWindow: 1_000_000,
 			origin: "agent",
 			summaryStrategy: "chunked",
-			summaryCalls: d.summaryCalls,
-			foldEstimateBefore: d.foldEstimateBefore,
-			foldEstimateAfter: d.foldEstimateAfter,
+			summaryCalls: d["summaryCalls"],
+			foldEstimateBefore: d["foldEstimateBefore"],
+			foldEstimateAfter: d["foldEstimateAfter"],
 			agentMessagesRefreshed: true,
 			historyRewriteNotified: false,
 			readFiles: [],
@@ -117,6 +123,7 @@ describe("rewind: completion", () => {
 
 	it("continuation prose: [rewind] header + pending-work guidance", async () => {
 		const f = await rewindFixture();
+		assert.ok(f.done);
 		const text = f.done.message.content;
 		assert.match(text, /^\[rewind to 'start' · collapsed as 'end'\] · /);
 		assert.match(text, /### Done/);
@@ -130,6 +137,7 @@ describe("rewind: completion", () => {
 
 	it("continuation prose: the authority order outranks the summary, and retained messages keep their standing instructions", async () => {
 		const f = await rewindFixture();
+		assert.ok(f.done);
 		const text = f.done.message.content;
 		assert.match(text, /A branch_summary marks a milestone, not the end of the task/);
 		assert.match(
@@ -147,8 +155,9 @@ describe("rewind: completion", () => {
 
 	it("refreshes agent.state.messages to the rewound chain", async () => {
 		const f = await rewindFixture();
+		assert.ok(f.done);
 		assert.ok(f.fake);
-		assert.equal(f.done.message.details.agentMessagesRefreshed, true);
+		assert.equal(f.done.message.details["agentMessagesRefreshed"], true);
 		// pi commits the receipt after the handlers, once the state is refreshed.
 		const chain = f.sm.buildSessionContext().messages;
 		assert.deepEqual(f.fake.agent.state.messages, chain.slice(0, -1));
@@ -157,8 +166,9 @@ describe("rewind: completion", () => {
 
 	it("bootstrap-missing: continuation carries the rewind warning and refreshed=false", async () => {
 		const f = await rewindFixture({ capture: false });
-		assert.equal(f.done.message.details.status, "done");
-		assert.equal(f.done.message.details.agentMessagesRefreshed, false);
+		assert.ok(f.done);
+		assert.equal(f.done.message.details["status"], "done");
+		assert.equal(f.done.message.details["agentMessagesRefreshed"], false);
 		assert.ok(
 			f.done.message.content.endsWith(`\n\n${__testHooks.REFLECTION_BOOTSTRAP_WARNING_REWIND}`),
 		);
@@ -168,7 +178,8 @@ describe("rewind: completion", () => {
 		const f = await rewindFixture({
 			summary: `Sure — here is the summary.\n\n${SUMMARY_TEXT}\n\n`,
 		});
-		const entry = f.sm.getEntry(f.done.message.details.summaryId as string);
+		assert.ok(f.done);
+		const entry = f.sm.getEntry(f.done.message.details["summaryId"] as string);
 		assert.ok(entry && entry.type === "branch_summary");
 		assert.equal(entry.summary, `# Work handoff: end\n\n${SUMMARY_TEXT}`);
 	});
@@ -192,10 +203,10 @@ describe("rewind: completion", () => {
 		}
 		appendTurn(f.sm, "u3", "a3", 24_000, true);
 		await requestRewind(f);
-		const { details } = rewindMessages(f.pi)[0].message;
-		assert.deepEqual(details.readFiles, ["src/a.ts"]);
-		assert.deepEqual(details.modifiedFiles, ["src/b.ts", "src/c.ts"]);
-		const entry = f.sm.getEntry(details.summaryId as string);
+		const { details } = defined(rewindMessages(f.pi)[0]).message;
+		assert.deepEqual(details["readFiles"], ["src/a.ts"]);
+		assert.deepEqual(details["modifiedFiles"], ["src/b.ts", "src/c.ts"]);
+		const entry = f.sm.getEntry(details["summaryId"] as string);
 		assert.ok(entry && entry.type === "branch_summary");
 		assert.equal(
 			entry.summary,
@@ -231,24 +242,32 @@ describe("rewind: completion", () => {
 		__testHooks.captureSession(fake as unknown as AgentSession);
 		const { leafBeforeFold } = await requestRewind(f);
 
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.historyRewriteNotified, true);
+		const done = defined(rewindMessages(f.pi)[0]).message;
+		assert.equal(done.details["historyRewriteNotified"], true);
 		assert.equal(events.length, 1);
 		const event = events[0];
-		assert.equal(event.type, "session_tree");
-		assert.equal(event.oldLeafId, leafBeforeFold, "old leaf = the abandoned branch's last entry");
+		assert.ok(event);
+		assert.equal(event["type"], "session_tree");
+		assert.equal(
+			event["oldLeafId"],
+			leafBeforeFold,
+			"old leaf = the abandoned branch's last entry",
+		);
 		assert.equal(
 			f.sm.getEntry(f.sm.getLeafId() as string)?.parentId,
-			event.newLeafId,
+			event["newLeafId"],
 			"the receipt follows the new leaf",
 		);
 		assert.equal(
-			f.sm.getEntry(event.newLeafId as string)?.parentId,
-			done.details.summaryId,
+			f.sm.getEntry(event["newLeafId"] as string)?.parentId,
+			done.details["summaryId"],
 			"new leaf = the label entry on the summary",
 		);
-		assert.equal((event.summaryEntry as { id?: string } | undefined)?.id, done.details.summaryId);
-		assert.equal(event.fromExtension, true);
+		assert.equal(
+			(event["summaryEntry"] as { id?: string } | undefined)?.id,
+			done.details["summaryId"],
+		);
+		assert.equal(event["fromExtension"], true);
 		assert.deepEqual(
 			messagesAtEmit,
 			f.sm.buildSessionContext().messages.slice(0, -1),
@@ -259,8 +278,9 @@ describe("rewind: completion", () => {
 
 	it("reports historyRewriteNotified=false without a reachable runner (#79)", async () => {
 		const f = await rewindFixture();
-		assert.equal(f.done.message.details.agentMessagesRefreshed, true);
-		assert.equal(f.done.message.details.historyRewriteNotified, false);
+		assert.ok(f.done);
+		assert.equal(f.done.message.details["agentMessagesRefreshed"], true);
+		assert.equal(f.done.message.details["historyRewriteNotified"], false);
 	});
 
 	it("a throwing session_tree handler does not fail the rewind (#79)", async () => {
@@ -274,9 +294,9 @@ describe("rewind: completion", () => {
 		};
 		__testHooks.captureSession(fake as unknown as AgentSession);
 		await requestRewind(f);
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.status, "done");
-		assert.equal(done.details.historyRewriteNotified, false);
+		const done = defined(rewindMessages(f.pi)[0]).message;
+		assert.equal(done.details["status"], "done");
+		assert.equal(done.details["historyRewriteNotified"], false);
 		assert.match(done.content, /^\[rewind to 'start'/);
 	});
 
@@ -289,7 +309,7 @@ describe("rewind: completion", () => {
 		const { boundary } = await requestRewind(f);
 		assert.equal(boundary.continue, true);
 		assert.equal(boundary.entries.length, 1);
-		assert.equal(boundary.entries[0].details.status, "done");
+		assert.equal(defined(boundary.entries[0]).details["status"], "done");
 		// Committed by pi (replicated by `fireTurnEndAll`) after the branch_summary.
 		const leaf = f.sm.getEntry(f.sm.getLeafId() as string);
 		assert.ok(leaf && leaf.type === "custom_message");
@@ -309,9 +329,9 @@ describe("rewind: completion", () => {
 			throw new Error("stale session runtime");
 		};
 		const { leafBeforeFold } = await requestRewind(f);
-		const done = rewindMessages(f.pi)[0].message;
-		assert.equal(done.details.status, "done");
-		assert.equal(f.sm.getLabel(done.details.summaryId as string), "anchor:end");
+		const done = defined(rewindMessages(f.pi)[0]).message;
+		assert.equal(done.details["status"], "done");
+		assert.equal(f.sm.getLabel(done.details["summaryId"] as string), "anchor:end");
 		assert.equal(f.sm.getLabel(leafBeforeFold), "branch:end");
 	});
 
@@ -324,9 +344,9 @@ describe("rewind: completion", () => {
 		__testHooks.captureSession(makeFakeSession(f.sm) as unknown as AgentSession);
 
 		await requestRewind(f, { ...REWIND_ARGS, rewindTo: "a", newLabel: "b" });
-		const first = rewindMessages(f.pi)[0].message;
-		assert.equal(first.details.status, "done");
-		const sumB = first.details.summaryId as string;
+		const first = defined(rewindMessages(f.pi)[0]).message;
+		assert.equal(first.details["status"], "done");
+		const sumB = first.details["summaryId"] as string;
 
 		appendTurn(f.sm, "u4", "a4", 24_000, true);
 		appendTurn(f.sm, "u5", "a5", 30_000, true);
@@ -340,10 +360,10 @@ describe("rewind: completion", () => {
 			},
 			"tc-2",
 		);
-		assert.equal(r2.details.targetId, sumB);
-		const second = rewindMessages(f.pi)[1].message;
-		assert.equal(second.details.status, "done");
-		const sumC = second.details.summaryId as string;
+		assert.equal(r2.details["targetId"], sumB);
+		const second = defined(rewindMessages(f.pi)[1]).message;
+		assert.equal(second.details["status"], "done");
+		const sumC = second.details["summaryId"] as string;
 		assert.equal(f.sm.getEntry(sumC)?.parentId, sumB);
 		assert.equal(f.sm.getLabel(sumC), "anchor:c");
 		assert.equal(
@@ -371,9 +391,12 @@ describe("rewind: completion", () => {
 		assert.equal(f.sm.getLabel(leafBeforeFold), undefined);
 		assert.ok(!f.sm.getBranch().some((entry) => f.sm.getLabel(entry.id) === "anchor:end"));
 		assert.equal(boundary.continue, false, "commit-stage refusals stop the run");
-		assert.equal(boundary.entries[0].details.status, "failed");
-		assert.equal(boundary.entries[0].details.stage, "commit");
-		assert.match(String(boundary.entries[0].details.detail), /does not reduce projected context/);
+		assert.equal(defined(boundary.entries[0]).details["status"], "failed");
+		assert.equal(defined(boundary.entries[0]).details["stage"], "commit");
+		assert.match(
+			String(defined(boundary.entries[0]).details["detail"]),
+			/does not reduce projected context/,
+		);
 		assert.equal(fireToolCall(f.pi, f.ctx), undefined);
 	});
 
@@ -385,8 +408,10 @@ describe("rewind: completion", () => {
 		).registry;
 		await requestRewind(f);
 		const done = rewindMessages(f.pi).at(-1)?.message;
-		assert.equal(done?.details.status, "done");
-		assert.ok(Number(done?.details.foldEstimateAfter) < Number(done?.details.foldEstimateBefore));
+		assert.equal(done?.details["status"], "done");
+		assert.ok(
+			Number(done?.details["foldEstimateAfter"]) < Number(done?.details["foldEstimateBefore"]),
+		);
 	});
 
 	it("checks the currently edited view rather than the old pre-withholding measurement", async () => {
@@ -404,7 +429,10 @@ describe("rewind: completion", () => {
 		}).registry;
 		const { boundary } = await requestRewind(f);
 		assert.equal(f.sm.getEntries().filter((entry) => entry.type === "branch_summary").length, 0);
-		assert.match(String(boundary.entries[0].details.detail), /does not reduce projected context/);
+		assert.match(
+			String(defined(boundary.entries[0]).details["detail"]),
+			/does not reduce projected context/,
+		);
 	});
 
 	it("includes full child reports in the net-fold check", async () => {
@@ -423,12 +451,16 @@ describe("rewind: completion", () => {
 			f.sm.getEntries().filter((entry) => entry.type === "branch_summary").length,
 			beforeCount,
 		);
-		assert.match(String(boundary.entries[0].details.detail), /does not reduce projected context/);
+		assert.match(
+			String(defined(boundary.entries[0]).details["detail"]),
+			/does not reduce projected context/,
+		);
 	});
 
 	it("folds an earlier child handoff into a parent once and projects honest work context", async () => {
 		const f = await rewindFixture({ mode: "full" });
-		const childId = f.done.message.details.summaryId as string;
+		assert.ok(f.done);
+		const childId = f.done.message.details["summaryId"] as string;
 		appendTurn(f.sm, "parent-work", "parent-delivery", 24000, true);
 		appendTurn(f.sm, "parent-verification", "parent-result", 30000, true);
 		const parentReport =
@@ -440,7 +472,7 @@ describe("rewind: completion", () => {
 		assert.match(JSON.stringify(instruction), /no fixed 4000-character cap/);
 		const latest = rewindMessages(f.pi).at(-1);
 		assert.ok(latest);
-		const parent = f.sm.getEntry(latest.message.details.summaryId as string);
+		const parent = f.sm.getEntry(latest.message.details["summaryId"] as string);
 		assert.ok(parent?.type === "branch_summary");
 		assert.equal(parent.summary.split("Test the rewind happy path.").length - 1, 1);
 		assert.match(parent.summary, /Parent final outcome/);
@@ -467,7 +499,8 @@ describe("rewind: completion", () => {
 
 	it("defaults parent folds to a digest while retaining full child evidence for synthesis", async () => {
 		const f = await rewindFixture();
-		const childId = f.done.message.details.summaryId as string;
+		assert.ok(f.done);
+		const childId = f.done.message.details["summaryId"] as string;
 		const child = f.sm.getEntry(childId);
 		assert.ok(child?.type === "branch_summary");
 		appendTurn(f.sm, "parent-work", "parent-delivery", 24000, true);
@@ -482,7 +515,7 @@ describe("rewind: completion", () => {
 		);
 		const latest = rewindMessages(f.pi).at(-1);
 		assert.ok(latest);
-		const parent = f.sm.getEntry(latest.message.details.summaryId as string);
+		const parent = f.sm.getEntry(latest.message.details["summaryId"] as string);
 		assert.ok(parent?.type === "branch_summary");
 		const handoff = getHandoff(parent);
 		assert.ok(handoff);
@@ -517,7 +550,7 @@ describe("rewind: completion", () => {
 		await requestRewind(f, { ...REWIND_ARGS, newLabel: "parent" });
 		const done = rewindMessages(f.pi).at(-1);
 		assert.ok(done);
-		const entry = f.sm.getEntry(done.message.details.summaryId as string);
+		const entry = f.sm.getEntry(done.message.details["summaryId"] as string);
 		assert.ok(entry?.type === "branch_summary");
 		const details = entry.details as {
 			treeNavigator: { sourceIds: string[]; stats: { cost: number } };
@@ -534,14 +567,15 @@ describe("rewind: completion", () => {
 			"tc-2",
 		);
 		assert.equal(result.isError, true);
-		assert.equal(result.details.rejected, "min-savings");
+		assert.equal(result.details["rejected"], "min-savings");
 		assert.equal(boundary.entries.length, 0);
 		assert.equal(fireToolCall(f.pi, f.ctx), undefined);
 	});
 
 	it("never calls pi.sendMessage / sendUserMessage for rewind messages", async () => {
 		const f = await rewindFixture();
-		assert.equal(f.done.message.details.status, "done");
+		assert.ok(f.done);
+		assert.equal(f.done.message.details["status"], "done");
 		assert.deepEqual(f.pi.sendMessageCalls, []);
 		assert.deepEqual(f.pi.sendUserMessageCalls, []);
 	});
@@ -562,8 +596,8 @@ describe("rewind: completion", () => {
 		assert.equal(boundary.continue, true);
 		assert.equal(boundary.entries.length, 2);
 		assert.equal(boundary.entries[0], foreign, "the foreign draft, untouched");
-		assert.equal(boundary.entries[1].customType, REWIND_CUSTOM_TYPE);
-		assert.equal(boundary.entries[1].details.status, "done");
+		assert.equal(defined(boundary.entries[1]).customType, REWIND_CUSTOM_TYPE);
+		assert.equal(defined(boundary.entries[1]).details["status"], "done");
 	});
 
 	it("drops earlier context_edit drafts the rewind made stale, keeps the rest (compactions included)", async () => {
@@ -578,7 +612,7 @@ describe("rewind: completion", () => {
 			{ id: "tc-rewind", name: TOOL_NAME, arguments: REWIND_ARGS },
 		]);
 		const result = await f.tool.execute("tc-rewind", REWIND_ARGS, undefined, undefined, f.ctx);
-		appendToolResult(f.sm, "tc-rewind", TOOL_NAME, result.content[0].text);
+		appendToolResult(f.sm, "tc-rewind", TOOL_NAME, defined(result.content[0]).text);
 		const staleEdit = {
 			type: "context_edit",
 			targetId: call.id,
@@ -625,7 +659,7 @@ describe("rewind: completion", () => {
 		setupRewindable(f.sm, f.pi);
 		const handlers = f.pi.onCalls.get("turn_end");
 		assert.ok(handlers);
-		const result = await handlers[0](
+		const result = await defined(handlers[0])(
 			{
 				type: "turn_end",
 				turnIndex: 0,

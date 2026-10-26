@@ -45,7 +45,7 @@ describe("runtime config store", () => {
 		written.treeProposal.tools.read = "full";
 		const first = readRuntimeConfig("runtime-clone");
 		assert.deepEqual(first, { treeProposal: { tools: { read: "omit" } } });
-		(first.treeProposal as { tools: Record<string, string> }).tools.bash = "full";
+		(first.treeProposal as { tools: Record<string, string> }).tools["bash"] = "full";
 		assert.deepEqual(readRuntimeConfig("runtime-clone"), {
 			treeProposal: { tools: { read: "omit" } },
 		});

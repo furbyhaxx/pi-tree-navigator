@@ -19,6 +19,11 @@ import {
 	assistantMessage,
 } from "../support/session-messages.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 installHarnessHooks();
 
 describe("dispatch: rewind validation guards", () => {
@@ -110,7 +115,7 @@ describe("dispatch: rewind validation guards", () => {
 			appendTurn(sm, "u", "a");
 			const result = await tool.execute("tc-1", c.params, undefined, undefined, ctx);
 			assert.equal(result.isError, true);
-			assert.match(result.content[0].text, c.want);
+			assert.match(defined(result.content[0]).text, c.want);
 		});
 	}
 
@@ -182,7 +187,7 @@ describe("dispatch: rewind validation guards", () => {
 		);
 		assert.equal(result.isError, true);
 		// Past the focus guard, into the label-existence guard.
-		assert.match(result.content[0].text, /No label 'missing'/);
+		assert.match(defined(result.content[0]).text, /No label 'missing'/);
 	});
 });
 
@@ -207,17 +212,17 @@ describe("dispatch: rewind queues an engine fold", () => {
 		assert.equal(result.isError, undefined);
 		assert.equal(result.content.length, 1);
 		assert.equal(
-			result.content[0].text,
+			defined(result.content[0]).text,
 			"[navigate_tree] Rewind to 'start' accepted (collapse as 'end'). The fold runs after this turn's tool results; the continuation follows in the same run.",
 		);
-		assert.equal(result.content[0].text, buildRewindAcceptedText("start", "end"));
+		assert.equal(defined(result.content[0]).text, buildRewindAcceptedText("start", "end"));
 		assert.deepEqual(result.details, {
 			status: "queued",
 			rewindTo: "start",
 			newLabel: "end",
 			targetId: anchorId,
-			contextBefore: result.details.contextBefore,
-			tokensAtTarget: result.details.tokensAtTarget,
+			contextBefore: result.details["contextBefore"],
+			tokensAtTarget: result.details["tokensAtTarget"],
 			contextWindow: 1_000_000,
 		});
 		assert.equal(typeof result.details.contextBefore, "number");
@@ -231,10 +236,11 @@ describe("dispatch: rewind queues an engine fold", () => {
 		assert.equal(boundary.continue, true);
 		assert.equal(boundary.entries.length, 1);
 		const draft = boundary.entries[0];
+		assert.ok(draft);
 		assert.equal(draft.type, "custom_message");
 		assert.equal(draft.customType, REWIND_CUSTOM_TYPE);
-		assert.equal(draft.details.status, "done");
-		assert.equal(draft.details.origin, "agent");
+		assert.equal(draft.details["status"], "done");
+		assert.equal(draft.details["origin"], "agent");
 		assert.ok(f.ctx.registryCalls.length > 0, "summarized by side calls");
 		for (const call of f.ctx.registryCalls) {
 			assert.equal(call.options.toolChoice, "none");
@@ -266,8 +272,8 @@ describe("dispatch: rewind queues an engine fold", () => {
 		const { boundary } = await requestRewind(f);
 		assert.equal(boundary.continue, false);
 		assert.equal(boundary.entries.length, 1);
-		assert.equal(boundary.entries[0].details.status, "failed");
-		assert.equal(boundary.entries[0].details.reason, "cancelled");
+		assert.equal(defined(boundary.entries[0]).details["status"], "failed");
+		assert.equal(defined(boundary.entries[0]).details["reason"], "cancelled");
 		assert.equal(f.ctx.registryCalls.length, 0);
 		assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
 		assert.ok(
@@ -303,13 +309,13 @@ describe("dispatch: rewind queues an engine fold", () => {
 		const before = f.sm.getEntries().length;
 		const { result, boundary } = await requestRewind(f);
 		assert.equal(result.isError, undefined);
-		assert.equal(result.details.status, "queued");
-		assert.equal(result.details.contextWindow, 0);
+		assert.equal(result.details["status"], "queued");
+		assert.equal(result.details["contextWindow"], 0);
 		assert.equal(boundary.continue, true, "the model hears about it");
-		assert.equal(boundary.entries[0].details.status, "failed");
-		assert.equal(boundary.entries[0].details.stage, "gate");
-		assert.match(boundary.entries[0].content, /no model is selected/);
-		assert.match(boundary.entries[0].content, /Nothing was collapsed/);
+		assert.equal(defined(boundary.entries[0]).details["status"], "failed");
+		assert.equal(defined(boundary.entries[0]).details["stage"], "gate");
+		assert.match(defined(boundary.entries[0]).content, /no model is selected/);
+		assert.match(defined(boundary.entries[0]).content, /Nothing was collapsed/);
 		assert.ok(!f.sm.getEntries().some((e) => e.type === "branch_summary"));
 		assert.equal(f.sm.getEntries().length, before + 3);
 	});
@@ -340,7 +346,7 @@ describe("dispatch: rewind queues an engine fold", () => {
 		setupRewindable(f.sm, f.pi, { rewindToName: "start" });
 		const second = await requestRewind(f, REWIND_ARGS, "tc-2");
 		assert.equal(second.result.isError, undefined);
-		assert.equal(second.boundary.entries[0].details.status, "done");
+		assert.equal(defined(second.boundary.entries[0]).details["status"], "done");
 	});
 
 	it("refuses a second rewind while one is queued, with the engine's reason", async () => {
@@ -364,8 +370,8 @@ describe("dispatch: rewind queues an engine fold", () => {
 		);
 		assert.equal(first.isError, undefined);
 		assert.equal(second.isError, true);
-		assert.equal(second.details.refusal, true);
-		assert.match(second.content[0].text, /already queued or running/);
+		assert.equal(second.details["refusal"], true);
+		assert.match(defined(second.content[0]).text, /already queued or running/);
 	});
 
 	it("a rewind may share its message with other tool calls: all run, and their results are in the folded segment", async () => {
@@ -380,7 +386,7 @@ describe("dispatch: rewind queues an engine fold", () => {
 		appendToolResult(f.sm, "tc-read", "read", "READ-RESULT-MARKER");
 		const result = await f.tool.execute("tc-rewind", REWIND_ARGS, undefined, undefined, f.ctx);
 		assert.equal(result.isError, undefined);
-		appendToolResult(f.sm, "tc-rewind", TOOL_NAME, result.content[0].text);
+		appendToolResult(f.sm, "tc-rewind", TOOL_NAME, defined(result.content[0]).text);
 		appendToolResult(f.sm, "tc-bash", "bash", "BASH-RESULT-MARKER");
 		const leafBeforeFold = f.sm.getLeafId() as string;
 		assert.equal(f.sm.getLabel(leafBeforeFold), undefined);
@@ -388,13 +394,13 @@ describe("dispatch: rewind queues an engine fold", () => {
 		const boundary = await fireTurnEndAll(f.pi, f.ctx, call.message);
 
 		assert.equal(boundary.continue, true);
-		assert.equal(boundary.entries[0].details.status, "done");
+		assert.equal(defined(boundary.entries[0]).details["status"], "done");
 		assert.equal(f.sm.getLabel(leafBeforeFold), "branch:end");
 		assert.ok(!f.sm.getBranch().some((e) => e.id === leafBeforeFold));
 		const summarized = JSON.stringify(f.ctx.registryCalls.map((c) => c.context.messages));
 		assert.match(summarized, /READ-RESULT-MARKER/);
 		assert.match(summarized, /BASH-RESULT-MARKER/);
-		assert.deepEqual(boundary.entries[0].details.readFiles, ["src/a.ts"]);
+		assert.deepEqual(defined(boundary.entries[0]).details["readFiles"], ["src/a.ts"]);
 	});
 
 	it("accepts a codemode script's rewind at any position among its nested calls", async () => {
@@ -421,14 +427,14 @@ describe("dispatch: rewind queues an engine fold", () => {
 		assert.equal(nested("tc-code/2", "rewind"), undefined);
 		const result = await f.tool.execute("tc-code/2", REWIND_ARGS, undefined, undefined, f.ctx);
 		assert.equal(result.isError, undefined);
-		assert.equal(result.details.status, "queued");
+		assert.equal(result.details["status"], "queued");
 		appendToolResult(f.sm, "tc-code", "codemode", "script finished");
 		const leafBeforeFold = f.sm.getLeafId() as string;
 
 		const boundary = await fireTurnEndAll(f.pi, f.ctx, call.message);
 
 		assert.equal(boundary.continue, true);
-		assert.equal(boundary.entries[0].details.status, "done");
+		assert.equal(defined(boundary.entries[0]).details["status"], "done");
 		assert.equal(f.sm.getLabel(leafBeforeFold), "branch:end");
 		assert.ok(f.sm.getBranch().some((e) => e.type === "branch_summary"));
 	});
@@ -468,7 +474,7 @@ describe("dispatch: rewind queues an engine fold", () => {
 		const message = assistantMessage([{ type: "text", text: "next" }], "stop");
 		f.sm.appendMessage(message as never);
 		const boundary = await fireTurnEndAll(f.pi, f.ctx, message);
-		assert.equal(boundary.entries[0].details.status, "done");
+		assert.equal(defined(boundary.entries[0]).details["status"], "done");
 	});
 });
 
@@ -511,10 +517,13 @@ describe("dispatch: rewind newLabel uniqueness", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.equal(result.details.refusal, true);
-		assert.match(result.content[0].text, /A label 'b' already exists on the active branch/);
-		assert.match(result.content[0].text, /fresh `newLabel`/);
-		assert.match(result.content[0].text, /stays addressable via `rewindTo`/);
+		assert.equal(result.details["refusal"], true);
+		assert.match(
+			defined(result.content[0]).text,
+			/A label 'b' already exists on the active branch/,
+		);
+		assert.match(defined(result.content[0]).text, /fresh `newLabel`/);
+		assert.match(defined(result.content[0]).text, /stays addressable via `rewindTo`/);
 		// Refusal before the fold is queued: nothing is pending.
 		assert.equal(
 			fireToolCall(pi, ctx),
@@ -559,8 +568,8 @@ describe("dispatch: rewind newLabel uniqueness", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.match(result.content[0].text, /already names a stored handoff/);
-		assert.match(result.content[0].text, /continue from the newest handoff/);
+		assert.match(defined(result.content[0]).text, /already names a stored handoff/);
+		assert.match(defined(result.content[0]).text, /continue from the newest handoff/);
 		assert.deepEqual(sm.getEntries(), before);
 		assert.equal(sm.getLeafId(), leaf);
 		assert.equal(fireToolCall(pi, ctx), undefined);
@@ -585,7 +594,7 @@ describe("dispatch: rewind newLabel uniqueness", () => {
 		);
 		assert.equal(result.isError, true);
 		assert.equal(
-			result.content[0].text,
+			defined(result.content[0]).text,
 			"A label 'taken' already exists on the active branch — labels are unique and immutable once written, so rewind requires a fresh `newLabel`. The existing 'taken' label stays addressable via `rewindTo`. Use action='list' to review the active labels, then pick a fresh newLabel.",
 		);
 	});
@@ -620,7 +629,7 @@ describe("dispatch: rewind error branches", () => {
 			ctx,
 		);
 		assert.equal(result.isError, true);
-		assert.match(result.content[0].text, /Already at 'here' \u2014 nothing to summarize/);
+		assert.match(defined(result.content[0]).text, /Already at 'here' \u2014 nothing to summarize/);
 	});
 });
 
@@ -670,9 +679,9 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 		);
 
 		assert.equal(r.isError, true);
-		assert.equal(r.details.rejected, "min-savings");
-		assert.ok(typeof r.details.apparentSavings === "number");
-		const text = r.content[0].text;
+		assert.equal(r.details["rejected"], "min-savings");
+		assert.ok(typeof r.details["apparentSavings"] === "number");
+		const text = defined(r.content[0]).text;
 		assert.match(text, /would free only/);
 		// Movement-order copy (#43): rewind TO the anchor, collapsed AS the new
 		// label. An arrow reading `'impl-start' → 'done'` inverts the operation.
@@ -723,8 +732,8 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 		);
 
 		assert.equal(r.isError, true);
-		assert.equal(r.details.rejected, "min-savings");
-		const text = r.content[0].text;
+		assert.equal(r.details["rejected"], "min-savings");
+		const text = defined(r.content[0]).text;
 		assert.match(text, /would free only/);
 		assert.match(
 			text,
@@ -757,9 +766,9 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 			undefined,
 			ctx,
 		);
-		assert.equal(r.details.rejected, "min-savings");
+		assert.equal(r.details["rejected"], "min-savings");
 		assert.equal(
-			r.content[0].text,
+			defined(r.content[0]).text,
 			"Rewinding to 'start' (as 'done') would free only ~0.0k tokens. No earlier anchors — keep working and rewind later once more has accumulated above it.\nActive anchors (root → leaf):\n   6.0k  start",
 		);
 	});
@@ -783,14 +792,14 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 			undefined,
 			ctx,
 		);
-		assert.equal(r.details.rejected, "min-savings");
+		assert.equal(r.details["rejected"], "min-savings");
 		assert.match(
-			r.content[0].text,
+			defined(r.content[0]).text,
 			/No earlier anchors — keep working and rewind later once more has accumulated above it\./,
 		);
 		// The rejection lists only names rewindTo accepts (no `''`).
 		assert.match(
-			r.content[0].text,
+			defined(r.content[0]).text,
 			/\nActive anchors \(root → leaf, % of 1\.0M\):\n +[\d.]+% {2}start$/,
 		);
 	});
@@ -816,9 +825,9 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 		);
 
 		assert.equal(r.isError, undefined);
-		assert.equal(r.details.status, "queued");
+		assert.equal(r.details["status"], "queued");
 		// Apparent savings = contextBefore − anchor-time total (6_000).
-		const before = r.details.contextBefore as number;
+		const before = r.details["contextBefore"] as number;
 		assert.ok(before - 6_000 >= 20_000, `expected ≥20k apparent savings; got ${before - 6_000}`);
 		assert.equal(fireToolCall(pi, ctx), undefined, "a queued fold gates no sibling call");
 	});
@@ -848,8 +857,8 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 		const under = await floorFixture(5_000 + MIN_REWIND_SAVINGS_TOKENS - 3);
 		const ru = await under.tool.execute("tc-under", rewindArgs, undefined, undefined, under.ctx);
 		assert.equal(ru.isError, true);
-		assert.equal(ru.details.rejected, "min-savings");
-		assert.equal(ru.details.apparentSavings, MIN_REWIND_SAVINGS_TOKENS - 1);
+		assert.equal(ru.details["rejected"], "min-savings");
+		assert.equal(ru.details["apparentSavings"], MIN_REWIND_SAVINGS_TOKENS - 1);
 		assert.equal(fireToolCall(under.pi, under.ctx), undefined);
 
 		// AT the floor: savings = MIN exactly (the guard is strict `<`, so this
@@ -857,7 +866,7 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 		const at = await floorFixture(5_000 + MIN_REWIND_SAVINGS_TOKENS - 2);
 		const ra = await at.tool.execute("tc-at", rewindArgs, undefined, undefined, at.ctx);
 		assert.equal(ra.isError, undefined);
-		assert.equal(ra.details.status, "queued");
+		assert.equal(ra.details["status"], "queued");
 	});
 
 	it("anchor response tells the agent to wait for accumulated work (#21 copy)", async () => {
@@ -872,7 +881,7 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 			ctx,
 		);
 		assert.equal(r.isError, undefined);
-		const text = r.content[0].text;
+		const text = defined(r.content[0]).text;
 		assert.ok(
 			text.includes("Once real work has accumulated after this anchor"),
 			`anchor copy must steer toward accumulating work; got: ${text}`,
@@ -889,7 +898,7 @@ describe("dispatch: rewind min-savings floor (#21)", () => {
 		// the array at registration, so every active-tool session carries them
 		// (and pays the one-time prompt-cache prefix invalidation on upgrade).
 		const { tool } = setup();
-		const guidelines = tool.promptGuidelines as string[] | undefined;
+		const guidelines = tool["promptGuidelines"] as string[] | undefined;
 		assert.ok(Array.isArray(guidelines), "promptGuidelines must be registered");
 		const expected = [
 			"navigate_tree: when rewinding, prefer the oldest anchor that keeps what you'd otherwise re-read or re-derive; persist durable findings to files first.",
@@ -961,7 +970,7 @@ describe("dispatch: rewind beforeTokens fallback", () => {
 			ctx,
 		);
 		assert.equal(result.isError, undefined);
-		const before = result.details.contextBefore as number;
+		const before = result.details["contextBefore"] as number;
 		assert.ok(
 			typeof before === "number" && before > 0,
 			`expected non-zero contextBefore; got ${before}`,

@@ -29,6 +29,11 @@ import {
 	appendTurn,
 } from "../support/session-messages.ts";
 
+function defined<T>(value: T | undefined): T {
+	assert.ok(value !== undefined, "Expected a defined test value");
+	return value;
+}
+
 installHarnessHooks();
 
 describe("dispatch: pin action", () => {
@@ -48,7 +53,7 @@ describe("dispatch: pin action", () => {
 			undefined,
 			f.ctx,
 		);
-		appendToolResult(f.sm, id, TOOL_NAME, result.content[0].text, result.details);
+		appendToolResult(f.sm, id, TOOL_NAME, defined(result.content[0]).text, result.details);
 		return result;
 	}
 
@@ -71,7 +76,7 @@ describe("dispatch: pin action", () => {
 			text: "Use sqlite for the index",
 		});
 		assert.equal(result.isError, undefined);
-		assert.equal(result.content[0].text, "[pin] D1 decision recorded");
+		assert.equal(defined(result.content[0]).text, "[pin] D1 decision recorded");
 		assert.deepEqual(result.details, {
 			id: "D1",
 			kind: "decision",
@@ -96,6 +101,7 @@ describe("dispatch: pin action", () => {
 			],
 		]);
 		const [decision, ...rest] = items(f);
+		assert.ok(decision);
 		assert.equal(rest.length, 0);
 		assert.equal(decision.kind, "decision");
 		assert.equal(decision.status, "active");
@@ -107,7 +113,7 @@ describe("dispatch: pin action", () => {
 		await requestRewind(f);
 		const done = rewindMessages(f.pi).at(-1);
 		assert.ok(done, "a continuation was delivered");
-		const entry = f.sm.getEntry(done.message.details.summaryId as string);
+		const entry = f.sm.getEntry(done.message.details["summaryId"] as string);
 		assert.ok(entry && entry.type === "branch_summary");
 		const snapshot = parseLedger((entry.details as Record<string, unknown>)[LEDGER_DETAILS_KEY]);
 		assert.deepEqual(
@@ -115,7 +121,7 @@ describe("dispatch: pin action", () => {
 			[["D1", "active", "agent"]],
 		);
 		assert.deepEqual(readBranchLedger(f.sm.getBranch()).ledger, snapshot);
-		assert.deepEqual(done.message.details.continuity, {
+		assert.deepEqual(done.message.details["continuity"], {
 			rev: snapshot.rev,
 			applied: 0,
 			rejected: [],
@@ -132,12 +138,12 @@ describe("dispatch: pin action", () => {
 		for (const kind of ["rule", "objective", "nonsense", undefined]) {
 			const result = await pin(f, { kind, text: "Always use tabs" });
 			assert.equal(result.isError, true, `kind ${String(kind)}`);
-			assert.equal(result.details.refusal, true);
+			assert.equal(result.details["refusal"], true);
 		}
 		const rule = await pin(f, { kind: "rule", text: "Always use tabs" });
-		assert.match(rule.content[0].text, /captured automatically/);
+		assert.match(defined(rule.content[0]).text, /captured automatically/);
 		const unknown = await pin(f, { kind: "nonsense", text: "x" });
-		assert.match(unknown.content[0].text, /sub-goal, decision, fact, file, steering/);
+		assert.match(defined(unknown.content[0]).text, /sub-goal, decision, fact, file, steering/);
 		assert.equal(opsWritten(f).length, 0);
 		assert.deepEqual(items(f), []);
 	});
@@ -155,7 +161,7 @@ describe("dispatch: pin action", () => {
 		for (const [params, message] of refused) {
 			const result = await pin(f, params);
 			assert.equal(result.isError, true, JSON.stringify(params));
-			assert.match(result.content[0].text, message);
+			assert.match(defined(result.content[0]).text, message);
 		}
 		assert.equal(opsWritten(f).length, 0);
 	});
@@ -192,7 +198,7 @@ describe("dispatch: pin action", () => {
 			scopeAnchor: "no-such-anchor",
 		});
 		assert.equal(unknown.isError, true);
-		assert.match(unknown.content[0].text, /No label 'no-such-anchor'/);
+		assert.match(defined(unknown.content[0]).text, /No label 'no-such-anchor'/);
 		assert.equal(items(f).length, 4);
 	});
 
@@ -218,8 +224,9 @@ describe("dispatch: pin action", () => {
 					lines: "3-9",
 					why: "design notes",
 				});
-				assert.equal(result.content[0].text, "[pin] P1 file recorded");
+				assert.equal(defined(result.content[0]).text, "[pin] P1 file recorded");
 				const [item] = items(f);
+				assert.ok(item);
 				assert.equal(item.kind, "file");
 				assert.equal(item.text, "notes.md:3-9");
 				assert.equal(item.source.origin, "agent");
@@ -261,8 +268,8 @@ describe("dispatch: pin action", () => {
 			await runSessionStart(f.pi, f.ctx, fixture);
 			const result = await pin(f, { kind: "decision", text: "Use sqlite" });
 			assert.equal(result.isError, true);
-			assert.equal(result.details.refusal, true);
-			assert.equal(result.content[0].text, "continuity ledger is disabled by config");
+			assert.equal(result.details["refusal"], true);
+			assert.equal(defined(result.content[0]).text, "continuity ledger is disabled by config");
 			assert.equal(f.pi.appendEntryCalls.length, 0);
 			assert.deepEqual(items(f), []);
 		} finally {
@@ -286,17 +293,20 @@ describe("dispatch: pin action", () => {
 			text: "the parser is  in src/parse.ts",
 		});
 		assert.equal(again.isError, undefined);
-		assert.equal(again.content[0].text, "[pin] F2 already records this fact; nothing added.");
-		assert.equal(again.details.id, "F2");
-		assert.equal(again.details.effect, "duplicate");
+		assert.equal(
+			defined(again.content[0]).text,
+			"[pin] F2 already records this fact; nothing added.",
+		);
+		assert.equal(again.details["id"], "F2");
+		assert.equal(again.details["effect"], "duplicate");
 
 		const userOwned = await pin(f, {
 			kind: "decision",
 			text: "Use postgres for billing",
 		});
 		assert.equal(userOwned.isError, undefined);
-		assert.equal(userOwned.details.id, "D1");
-		assert.equal(userOwned.details.effect, "duplicate");
+		assert.equal(userOwned.details["id"], "D1");
+		assert.equal(userOwned.details["effect"], "duplicate");
 
 		assert.equal(opsWritten(f).length, before, "no second ops entry");
 		assert.deepEqual(
@@ -312,8 +322,10 @@ describe("dispatch: pin action", () => {
 		const f = setup();
 		anchored(f);
 		const text = async () =>
-			(await f.tool.execute("tc-list", { action: "list" }, undefined, undefined, f.ctx)).content[0]
-				.text;
+			defined(
+				(await f.tool.execute("tc-list", { action: "list" }, undefined, undefined, f.ctx))
+					.content[0],
+			).text;
 		assert.ok(!(await text()).includes("continuity ledger"));
 		await pin(f, { kind: "decision", text: "Use sqlite for the index" });
 		await pin(f, { kind: "fact", text: "The parser is in src/parse.ts" });
