@@ -1,0 +1,1354 @@
+[
+ {
+  "ts": "2026-10-21T17:01:39.396Z",
+  "auto": true,
+  "seg": 41,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects"
+ },
+ {
+  "ts": "2026-10-21T17:04:17.630Z",
+  "auto": true,
+  "seg": 35,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects"
+ },
+ {
+  "ts": "2026-10-21T17:13:25.555Z",
+  "auto": true,
+  "seg": 11,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects"
+ },
+ {
+  "ts": "2026-10-21T10:51:16.721Z",
+  "auto": true,
+  "seg": 2,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T12:14:23.119Z",
+  "auto": true,
+  "seg": 210,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T12:27:41.807Z",
+  "auto": false,
+  "seg": 158,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T12:37:31.964Z",
+  "auto": false,
+  "seg": 124,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T12:53:03.854Z",
+  "auto": false,
+  "seg": 74,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T13:13:09.555Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T17:58:30.884Z",
+  "auto": false,
+  "seg": 141,
+  "reportish": false,
+  "model": "hf:deepseek-ai/DeepSeek-V4.1-Flash-1017",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T18:03:40.106Z",
+  "auto": true,
+  "seg": 125,
+  "reportish": false,
+  "model": "deepseek-flash",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T18:05:51.072Z",
+  "auto": true,
+  "seg": 110,
+  "reportish": false,
+  "model": "deepseek-flash",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T18:06:37.188Z",
+  "auto": true,
+  "seg": 101,
+  "reportish": false,
+  "model": "deepseek-flash",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T18:09:22.960Z",
+  "auto": true,
+  "seg": 68,
+  "reportish": false,
+  "model": "deepseek-flash",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T18:57:11.535Z",
+  "auto": false,
+  "seg": 441,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T19:12:11.572Z",
+  "auto": false,
+  "seg": 389,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T19:28:36.297Z",
+  "auto": false,
+  "seg": 335,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T19:33:04.630Z",
+  "auto": false,
+  "seg": 317,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T19:47:23.896Z",
+  "auto": false,
+  "seg": 263,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T20:00:37.679Z",
+  "auto": false,
+  "seg": 214,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T20:20:42.817Z",
+  "auto": false,
+  "seg": 147,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T20:47:46.386Z",
+  "auto": false,
+  "seg": 48,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T20:52:30.299Z",
+  "auto": false,
+  "seg": 31,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T21:05:30.768Z",
+  "auto": false,
+  "seg": 6,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T22:23:51.596Z",
+  "auto": false,
+  "seg": 5,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-22T13:31:53.976Z",
+  "auto": true,
+  "seg": 35,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-22T13:40:26.685Z",
+  "auto": true,
+  "seg": 10,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/agentd-ts"
+ },
+ {
+  "ts": "2026-10-21T10:48:47.726Z",
+  "auto": true,
+  "seg": 4,
+  "reportish": true,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T11:11:06.815Z",
+  "auto": true,
+  "seg": 17,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T11:17:29.492Z",
+  "auto": true,
+  "seg": 10,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T11:34:54.213Z",
+  "auto": true,
+  "seg": 294,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T11:42:03.396Z",
+  "auto": true,
+  "seg": 287,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T12:48:36.119Z",
+  "auto": false,
+  "seg": 194,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T13:16:29.419Z",
+  "auto": false,
+  "seg": 118,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T13:37:34.542Z",
+  "auto": false,
+  "seg": 73,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T13:55:18.417Z",
+  "auto": false,
+  "seg": 22,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T14:21:55.911Z",
+  "auto": false,
+  "seg": 94,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T14:44:17.827Z",
+  "auto": false,
+  "seg": 18,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T15:04:01.927Z",
+  "auto": false,
+  "seg": 5,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T15:34:39.162Z",
+  "auto": false,
+  "seg": 76,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T15:53:26.434Z",
+  "auto": false,
+  "seg": 4,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T16:41:31.309Z",
+  "auto": true,
+  "seg": 73,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T16:56:33.418Z",
+  "auto": true,
+  "seg": 52,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T17:43:41.236Z",
+  "auto": true,
+  "seg": 43,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T17:47:20.194Z",
+  "auto": true,
+  "seg": 37,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T18:39:48.180Z",
+  "auto": true,
+  "seg": 19,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T19:15:45.308Z",
+  "auto": true,
+  "seg": 90,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T19:19:21.888Z",
+  "auto": true,
+  "seg": 84,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T19:22:45.001Z",
+  "auto": true,
+  "seg": 78,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T19:32:23.851Z",
+  "auto": true,
+  "seg": 56,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T19:46:25.302Z",
+  "auto": false,
+  "seg": 21,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T19:51:14.663Z",
+  "auto": true,
+  "seg": 7,
+  "reportish": true,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T21:24:21.302Z",
+  "auto": true,
+  "seg": 52,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T21:27:19.892Z",
+  "auto": true,
+  "seg": 42,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T21:36:17.142Z",
+  "auto": false,
+  "seg": 24,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T22:38:52.335Z",
+  "auto": false,
+  "seg": 20,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-22T04:51:21.259Z",
+  "auto": false,
+  "seg": 57,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-22T05:09:41.068Z",
+  "auto": false,
+  "seg": 3,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-22T14:53:54.621Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "claude-sonnet-5-5",
+  "cwd": "/mnt/Projects/furbyhaxx/in-core-ai"
+ },
+ {
+  "ts": "2026-10-21T07:12:31.438Z",
+  "auto": true,
+  "seg": 36,
+  "reportish": false,
+  "model": "hf:deepseek-ai/DeepSeek-V4.1-Flash-1017",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:16:35.579Z",
+  "auto": false,
+  "seg": 85,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:20:57.890Z",
+  "auto": false,
+  "seg": 72,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:28:34.091Z",
+  "auto": false,
+  "seg": 60,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:32:19.310Z",
+  "auto": false,
+  "seg": 52,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:44:04.422Z",
+  "auto": false,
+  "seg": 32,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:46:19.871Z",
+  "auto": false,
+  "seg": 26,
+  "reportish": true,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:51:14.603Z",
+  "auto": false,
+  "seg": 16,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:52:33.876Z",
+  "auto": false,
+  "seg": 12,
+  "reportish": true,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T07:56:26.676Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-claude-auth"
+ },
+ {
+  "ts": "2026-10-21T12:03:38.029Z",
+  "auto": false,
+  "seg": 105,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-me"
+ },
+ {
+  "ts": "2026-10-21T12:29:51.014Z",
+  "auto": false,
+  "seg": 42,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-me"
+ },
+ {
+  "ts": "2026-10-21T13:16:46.918Z",
+  "auto": false,
+  "seg": 44,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-me"
+ },
+ {
+  "ts": "2026-10-21T14:39:53.377Z",
+  "auto": false,
+  "seg": 13,
+  "reportish": true,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-me"
+ },
+ {
+  "ts": "2026-10-22T14:48:54.666Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-me"
+ },
+ {
+  "ts": "2026-10-21T21:03:32.256Z",
+  "auto": false,
+  "seg": 61,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tldr"
+ },
+ {
+  "ts": "2026-10-21T21:08:04.325Z",
+  "auto": false,
+  "seg": 47,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tldr"
+ },
+ {
+  "ts": "2026-10-21T21:12:59.694Z",
+  "auto": false,
+  "seg": 32,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tldr"
+ },
+ {
+  "ts": "2026-10-21T21:18:45.537Z",
+  "auto": false,
+  "seg": 9,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tldr"
+ },
+ {
+  "ts": "2026-10-20T11:49:36.706Z",
+  "auto": false,
+  "seg": 53,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-20T21:24:37.419Z",
+  "auto": true,
+  "seg": 19,
+  "reportish": false,
+  "model": "google/gemini-4-argon",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T14:05:58.663Z",
+  "auto": false,
+  "seg": 115,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T14:34:54.957Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T18:07:17.534Z",
+  "auto": false,
+  "seg": 41,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T18:23:47.425Z",
+  "auto": false,
+  "seg": 10,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T18:27:11.509Z",
+  "auto": false,
+  "seg": 1,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T21:22:28.999Z",
+  "auto": false,
+  "seg": 45,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T21:36:44.915Z",
+  "auto": false,
+  "seg": 1,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-22T07:17:13.595Z",
+  "auto": false,
+  "seg": 6,
+  "reportish": true,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-22T13:58:54.028Z",
+  "auto": false,
+  "seg": 74,
+  "reportish": false,
+  "model": "claude-sonnet-5-5",
+  "cwd": "/mnt/Projects/furbyhaxx/pi-tree-navigator"
+ },
+ {
+  "ts": "2026-10-21T18:05:02.521Z",
+  "auto": false,
+  "seg": 44,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/hosts/devlap05"
+ },
+ {
+  "ts": "2026-10-22T12:44:38.926Z",
+  "auto": false,
+  "seg": 16,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/hosts/devlap05"
+ },
+ {
+  "ts": "2026-10-22T13:12:06.483Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/hosts/devlap05"
+ },
+ {
+  "ts": "2026-10-22T12:48:13.032Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/hosts/devlap05"
+ },
+ {
+  "ts": "2026-10-22T12:52:31.047Z",
+  "auto": false,
+  "seg": 4,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/hosts/devlap05"
+ },
+ {
+  "ts": "2026-10-20T10:04:56.007Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-20T10:47:50.751Z",
+  "auto": false,
+  "seg": 5,
+  "reportish": true,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-20T12:22:38.070Z",
+  "auto": false,
+  "seg": 192,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-20T12:30:02.713Z",
+  "auto": false,
+  "seg": 159,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-20T13:28:11.300Z",
+  "auto": false,
+  "seg": 81,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-20T13:59:03.438Z",
+  "auto": false,
+  "seg": 26,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-20T21:00:15.627Z",
+  "auto": false,
+  "seg": 769,
+  "reportish": true,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T07:26:08.777Z",
+  "auto": false,
+  "seg": 686,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T10:42:50.850Z",
+  "auto": false,
+  "seg": 524,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T11:45:15.603Z",
+  "auto": false,
+  "seg": 464,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T12:36:51.240Z",
+  "auto": false,
+  "seg": 365,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T12:44:15.554Z",
+  "auto": false,
+  "seg": 335,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T12:50:51.832Z",
+  "auto": false,
+  "seg": 306,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T12:57:10.598Z",
+  "auto": false,
+  "seg": 281,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T13:03:06.762Z",
+  "auto": false,
+  "seg": 258,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T13:25:23.681Z",
+  "auto": false,
+  "seg": 202,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T13:39:44.165Z",
+  "auto": false,
+  "seg": 159,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T14:03:25.290Z",
+  "auto": false,
+  "seg": 126,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T14:10:19.196Z",
+  "auto": false,
+  "seg": 105,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T14:20:10.369Z",
+  "auto": false,
+  "seg": 79,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T14:32:07.104Z",
+  "auto": false,
+  "seg": 45,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T14:58:31.181Z",
+  "auto": false,
+  "seg": 4,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T15:21:31.153Z",
+  "auto": false,
+  "seg": 585,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T15:32:24.439Z",
+  "auto": false,
+  "seg": 545,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T15:58:22.744Z",
+  "auto": false,
+  "seg": 520,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T16:06:28.035Z",
+  "auto": false,
+  "seg": 488,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T16:41:19.114Z",
+  "auto": false,
+  "seg": 455,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T16:50:10.377Z",
+  "auto": false,
+  "seg": 432,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T16:55:10.095Z",
+  "auto": false,
+  "seg": 412,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T17:38:48.265Z",
+  "auto": false,
+  "seg": 381,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T18:04:26.421Z",
+  "auto": false,
+  "seg": 329,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T18:21:19.659Z",
+  "auto": false,
+  "seg": 272,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T18:50:17.156Z",
+  "auto": false,
+  "seg": 235,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T19:00:48.009Z",
+  "auto": false,
+  "seg": 197,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T19:19:47.760Z",
+  "auto": false,
+  "seg": 128,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T21:07:36.320Z",
+  "auto": false,
+  "seg": 99,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T21:26:23.362Z",
+  "auto": false,
+  "seg": 58,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T21:50:46.329Z",
+  "auto": false,
+  "seg": 25,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T21:56:28.776Z",
+  "auto": false,
+  "seg": 1,
+  "reportish": false,
+  "model": null,
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T22:05:08.365Z",
+  "auto": false,
+  "seg": 178,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T22:12:47.184Z",
+  "auto": false,
+  "seg": 151,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-21T22:24:53.541Z",
+  "auto": false,
+  "seg": 101,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-22T13:40:00.351Z",
+  "auto": false,
+  "seg": 20,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-22T13:57:36.331Z",
+  "auto": false,
+  "seg": 93,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-22T14:08:02.280Z",
+  "auto": false,
+  "seg": 66,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-22T14:55:41.649Z",
+  "auto": false,
+  "seg": 23,
+  "reportish": false,
+  "model": "gpt-6.1-sol",
+  "cwd": "/mnt/Projects/nukular/experiments/spike-memory"
+ },
+ {
+  "ts": "2026-10-20T08:54:09.096Z",
+  "auto": false,
+  "seg": 13,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T08:58:08.459Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T09:28:32.724Z",
+  "auto": false,
+  "seg": 13,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T09:32:20.197Z",
+  "auto": false,
+  "seg": 1,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T11:24:20.722Z",
+  "auto": false,
+  "seg": 5,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T12:59:16.862Z",
+  "auto": false,
+  "seg": 22,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T16:42:10.773Z",
+  "auto": false,
+  "seg": 157,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T17:03:29.308Z",
+  "auto": false,
+  "seg": 102,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T17:46:12.930Z",
+  "auto": false,
+  "seg": 52,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-20T21:24:28.382Z",
+  "auto": false,
+  "seg": 36,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T08:26:59.823Z",
+  "auto": false,
+  "seg": 38,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T08:28:34.773Z",
+  "auto": false,
+  "seg": 32,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T08:33:14.723Z",
+  "auto": false,
+  "seg": 22,
+  "reportish": false,
+  "model": "gpt-6-luna",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T09:02:57.152Z",
+  "auto": false,
+  "seg": 4,
+  "reportish": true,
+  "model": "deepseek-flash",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T10:32:53.115Z",
+  "auto": false,
+  "seg": 32,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T10:54:44.043Z",
+  "auto": false,
+  "seg": 3,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T11:49:31.211Z",
+  "auto": false,
+  "seg": 168,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T11:56:20.542Z",
+  "auto": false,
+  "seg": 143,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T12:06:49.292Z",
+  "auto": false,
+  "seg": 106,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T12:34:56.626Z",
+  "auto": false,
+  "seg": 47,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T13:00:02.524Z",
+  "auto": false,
+  "seg": 2,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T14:25:59.120Z",
+  "auto": false,
+  "seg": 19,
+  "reportish": false,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T14:33:02.352Z",
+  "auto": false,
+  "seg": 3,
+  "reportish": true,
+  "model": "gpt-6-astra",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T19:08:04.570Z",
+  "auto": false,
+  "seg": 28,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T21:05:20.847Z",
+  "auto": false,
+  "seg": 237,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T21:41:27.019Z",
+  "auto": false,
+  "seg": 177,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T21:55:42.806Z",
+  "auto": false,
+  "seg": 137,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T22:27:42.281Z",
+  "auto": false,
+  "seg": 76,
+  "reportish": false,
+  "model": "claude-opus-5-5",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ },
+ {
+  "ts": "2026-10-21T12:43:18.436Z",
+  "auto": true,
+  "seg": 6,
+  "reportish": false,
+  "model": "deepseek-flash",
+  "cwd": "/mnt/Projects/nukular/nukular-ai"
+ }
+]
