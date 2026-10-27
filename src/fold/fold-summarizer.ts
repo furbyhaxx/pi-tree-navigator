@@ -71,55 +71,82 @@ export function createFoldSummaryRunner(options: {
 			const controller = new AbortController();
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			let cancel: (() => void) | undefined;
+			let observe: ((delta?: string) => void) | undefined;
 			const cancelled = new Promise<Completion>((resolve) => {
+				const fail = (errorMessage: string) => {
+					controller.abort();
+					resolve({ text: "", stopReason: "error", errorMessage, retryable: true });
+				};
+				let outputBytes = 0;
+				let events = 0;
+				const byteLimit = request.maxTokens * OUTPUT_BYTES_PER_TOKEN_LIMIT;
+				const eventLimit = request.maxTokens * OUTPUT_EVENTS_PER_TOKEN_LIMIT + 64;
+				const resetIdle = () => {
+					clearTimeout(timer);
+					timer = setTimeout(() => {
+						fail(`Fold summary stream idle for ${SUMMARY_STREAM_IDLE_TIMEOUT_MS}ms`);
+					}, SUMMARY_STREAM_IDLE_TIMEOUT_MS);
+				};
+				observe = (delta) => {
+					if (delta !== undefined) outputBytes += Buffer.byteLength(delta, "utf8");
+					events++;
+					if (outputBytes > byteLimit || events > eventLimit) {
+						clearTimeout(timer);
+						fail(
+							`Fold summary stream exceeded its output guard (${byteLimit} bytes or ${eventLimit} events for ${request.maxTokens} output tokens)`,
+						);
+						return;
+					}
+					resetIdle();
+				};
 				cancel = () => {
 					controller.abort();
 					resolve({ text: "", stopReason: "aborted" });
 				};
 				request.signal?.addEventListener("abort", cancel, { once: true });
-				timer = setTimeout(() => {
-					controller.abort();
-					resolve({
-						text: "",
-						stopReason: "error",
-						errorMessage: `Fold summary request timed out after ${SUMMARY_REQUEST_TIMEOUT_MS}ms`,
-						retryable: true,
-					});
-				}, SUMMARY_REQUEST_TIMEOUT_MS);
+				resetIdle();
 				if (request.signal?.aborted) cancel();
 			});
 			try {
 				if (controller.signal.aborted) return await cancelled;
-				const completed = registry
-					.streamSimple(
-						model,
-						{
-							...(request.systemPrompt === undefined ? {} : { systemPrompt: request.systemPrompt }),
-							messages: request.messages,
-							...(request.tools === undefined ? {} : { tools: request.tools }),
-						},
-						{
-							signal: controller.signal,
-							...(thinking === "off" || request.reasoning === "off" ? {} : { reasoning: thinking }),
-							maxTokens: request.maxTokens,
-							toolChoice: "none",
-							...(sessionId === undefined ? {} : { sessionId }),
-						},
-					)
-					.result()
-					.then(
-						(response): Completion => ({
-							text: response.content
-								.filter((block) => block.type === "text")
-								.map((block) => block.text)
-								.join("\n"),
-							stopReason: response.stopReason,
-							usage: response.usage,
-							errorMessage: response.errorMessage,
-							retryable: isRetryableAssistantError(response),
-						}),
-					);
-				return await Promise.race([completed, cancelled]);
+				const stream = registry.streamSimple(
+					model,
+					{
+						...(request.systemPrompt === undefined ? {} : { systemPrompt: request.systemPrompt }),
+						messages: request.messages,
+						...(request.tools === undefined ? {} : { tools: request.tools }),
+					},
+					{
+						signal: controller.signal,
+						...(thinking === "off" || request.reasoning === "off" ? {} : { reasoning: thinking }),
+						maxTokens: request.maxTokens,
+						toolChoice: "none",
+						...(sessionId === undefined ? {} : { sessionId }),
+					},
+				);
+				const completed = async (): Promise<Completion> => {
+					for await (const event of stream) {
+						if (controller.signal.aborted) break;
+						observe?.(
+							event.type === "text_delta" || event.type === "thinking_delta"
+								? event.delta
+								: undefined,
+						);
+						if (controller.signal.aborted) break;
+					}
+					const response = await stream.result();
+					return {
+						text: response.content
+							.filter((block) => block.type === "text")
+							.map((block) => block.text)
+							.join("\n"),
+						stopReason: response.stopReason,
+						usage: response.usage,
+						errorMessage: response.errorMessage,
+						retryable: isRetryableAssistantError(response),
+					};
+				};
+				return await Promise.race([completed(), cancelled]);
 			} finally {
 				clearTimeout(timer);
 				if (cancel) request.signal?.removeEventListener("abort", cancel);
@@ -233,8 +260,10 @@ export function reasoningAllowance(thinking: ThinkingLevel | "off"): number {
 }
 
 const FINAL_RETRIES = 1;
-// A streaming provider can emit endless deltas, so an idle timeout alone cannot bound a call.
-const SUMMARY_REQUEST_TIMEOUT_MS = 180_000;
+const SUMMARY_STREAM_IDLE_TIMEOUT_MS = 300_000;
+// Generous tokenizer/fragmentation slack catches runaway output when providers omit maxTokens.
+const OUTPUT_BYTES_PER_TOKEN_LIMIT = 16;
+const OUTPUT_EVENTS_PER_TOKEN_LIMIT = 16;
 
 function isAbort(error: unknown): boolean {
 	return error instanceof Error && error.name === "AbortError";

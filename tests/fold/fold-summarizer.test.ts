@@ -717,7 +717,7 @@ describe("createFoldSummaryRunner", () => {
 		assert.equal(response.retryable, true);
 	});
 
-	it("bounds a stream that never settles and aborts its provider signal", async () => {
+	it("bounds an idle stream and aborts its provider signal", async () => {
 		let signal: AbortSignal | undefined;
 		const registry: Pick<ModelRegistry, "streamSimple"> = {
 			streamSimple(_model, _context, options) {
@@ -729,7 +729,7 @@ describe("createFoldSummaryRunner", () => {
 		const timer = spyOn(globalThis, "setTimeout").mockImplementation(
 			new Proxy(original, {
 				apply(target, thisArg, args) {
-					if (args[1] === 180_000) args[1] = 0;
+					if (args[1] === 300_000) args[1] = 0;
 					return Reflect.apply(target, thisArg, args);
 				},
 			}),
@@ -740,8 +740,80 @@ describe("createFoldSummaryRunner", () => {
 			);
 			assert.equal(response.stopReason, "error");
 			assert.equal(response.retryable, true);
-			assert.match(response.errorMessage ?? "", /timed out after 180000ms/);
+			assert.match(response.errorMessage ?? "", /idle for 300000ms/);
 			assert.equal(signal?.aborted, true);
+		} finally {
+			timer.mockRestore();
+		}
+	});
+
+	for (const runaway of ["bytes", "events"] as const) {
+		it(`bounds runaway output ${runaway} using the request output budget`, async () => {
+			let signal: AbortSignal | undefined;
+			const registry: Pick<ModelRegistry, "streamSimple"> = {
+				streamSimple(_model, _context, options) {
+					signal = options?.signal;
+					const stream = createAssistantMessageEventStream();
+					const partial = reply("stop");
+					if (runaway === "bytes") {
+						stream.push({ type: "text_delta", contentIndex: 0, delta: "a".repeat(80), partial });
+						stream.push({
+							type: "thinking_delta",
+							contentIndex: 0,
+							delta: "b".repeat(81),
+							partial,
+						});
+					} else {
+						for (let index = 0; index < 225; index++)
+							stream.push({ type: "text_delta", contentIndex: 0, delta: "", partial });
+					}
+					return stream;
+				},
+			};
+			const response = await createFoldSummaryRunner({
+				registry,
+				model,
+				thinking: "high",
+			}).complete({ messages: [], maxTokens: 10 });
+			assert.equal(response.stopReason, "error");
+			assert.equal(response.retryable, true);
+			assert.match(
+				response.errorMessage ?? "",
+				/output guard \(160 bytes or 224 events for 10 output tokens\)/,
+			);
+			assert.equal(signal?.aborted, true);
+		});
+	}
+
+	it("allows output at the byte guard boundary and resets idleness on progress", async () => {
+		const scheduled: number[] = [];
+		const original = globalThis.setTimeout;
+		const timer = spyOn(globalThis, "setTimeout").mockImplementation(
+			new Proxy(original, {
+				apply(target, thisArg, args) {
+					if (typeof args[1] === "number") scheduled.push(args[1]);
+					return Reflect.apply(target, thisArg, args);
+				},
+			}),
+		);
+		const registry: Pick<ModelRegistry, "streamSimple"> = {
+			streamSimple() {
+				const stream = createAssistantMessageEventStream();
+				const partial = reply("stop");
+				stream.push({ type: "thinking_delta", contentIndex: 0, delta: "a".repeat(80), partial });
+				stream.push({ type: "text_delta", contentIndex: 0, delta: "b".repeat(80), partial });
+				stream.end(partial);
+				return stream;
+			},
+		};
+		try {
+			const response = await createFoldSummaryRunner({
+				registry,
+				model,
+				thinking: "high",
+			}).complete({ messages: [], maxTokens: 10 });
+			assert.equal(response.stopReason, "stop");
+			assert.deepEqual(scheduled, [300_000, 300_000, 300_000]);
 		} finally {
 			timer.mockRestore();
 		}
