@@ -1,4 +1,4 @@
-import { describe, it } from "bun:test";
+import { describe, it, spyOn } from "bun:test";
 import * as assert from "node:assert/strict";
 import {
 	type Api,
@@ -524,6 +524,55 @@ describe("summarizeFold in-context strategy", () => {
 });
 
 describe("summarizeFold cancellation and runner failures", () => {
+	it("retries a transient chunk once without changing its request or summary", async () => {
+		const clean = await summarizeFold(options(harness().runner));
+		const { runner, requests } = harness((_request, index) =>
+			index === 0
+				? {
+						stopReason: "error",
+						text: "partial notes must be discarded",
+						errorMessage: "OpenAI Responses stream ended before a terminal response event",
+						retryable: true,
+					}
+				: {},
+		);
+		const result = await summarizeFold(options(runner));
+		assert.ok(clean.ok && result.ok);
+		assert.equal(result.text, clean.text);
+		assert.deepEqual(result.coverage, clean.coverage);
+		assert.equal(result.calls, clean.calls + 1);
+		assert.equal(result.usage.length, result.calls);
+		assert.deepEqual(requests[0], requests[1]);
+	});
+
+	it("bounds transient retries and respects the total call budget", async () => {
+		for (const maxCalls of [16, 2]) {
+			const { runner, requests } = harness(() => ({
+				stopReason: "error",
+				retryable: true,
+			}));
+			const result = await summarizeFold(
+				options(runner, {
+					segment: { background: "", records: [{ id: "u", role: "user", text: "work" }] },
+					limits: { maxCalls, mapOutputTokens: 200, reduceOutputTokens: 400 },
+				}),
+			);
+			assert.equal(result.ok ? null : result.reason, "provider-error");
+			assert.equal(requests.length, maxCalls === 16 ? 2 : 1);
+		}
+	});
+
+	it("does not retry a transient failure after the session aborts", async () => {
+		const controller = new AbortController();
+		const { runner, requests } = harness(() => {
+			controller.abort();
+			return { stopReason: "error", retryable: true };
+		});
+		const result = await summarizeFold(options(runner, { signal: controller.signal }));
+		assert.equal(result.ok ? null : result.reason, "aborted");
+		assert.equal(requests.length, 1);
+	});
+
 	it("does not call the runner when already aborted", async () => {
 		const { runner, requests } = harness();
 		const result = await summarizeFold(options(runner, { signal: AbortSignal.abort() }));
@@ -638,6 +687,7 @@ describe("createFoldSummaryRunner", () => {
 				stopReason: "error",
 				usage: undefined,
 				errorMessage: "overloaded",
+				retryable: true,
 			},
 		);
 		assert.equal(context?.systemPrompt, SYSTEM);
@@ -646,7 +696,146 @@ describe("createFoldSummaryRunner", () => {
 		assert.equal(observed?.reasoning, "high");
 		assert.equal(observed?.maxTokens, 1234);
 		assert.equal(observed?.sessionId, "session-1");
-		assert.equal(observed?.signal, controller.signal);
+		assert.ok(observed?.signal);
+		assert.equal(observed.signal.aborted, false);
+	});
+
+	it("classifies the observed truncated stream error as retryable", async () => {
+		const registry: Pick<ModelRegistry, "streamSimple"> = {
+			streamSimple() {
+				const stream = createAssistantMessageEventStream();
+				stream.end(
+					reply("error", "OpenAI Responses stream ended before a terminal response event"),
+				);
+				return stream;
+			},
+		};
+		const response = await createFoldSummaryRunner({ registry, model, thinking: "off" }).complete({
+			messages: [],
+			maxTokens: 10,
+		});
+		assert.equal(response.retryable, true);
+	});
+
+	it("bounds an idle stream and aborts its provider signal", async () => {
+		let signal: AbortSignal | undefined;
+		const registry: Pick<ModelRegistry, "streamSimple"> = {
+			streamSimple(_model, _context, options) {
+				signal = options?.signal;
+				return createAssistantMessageEventStream();
+			},
+		};
+		const original = globalThis.setTimeout;
+		const timer = spyOn(globalThis, "setTimeout").mockImplementation(
+			new Proxy(original, {
+				apply(target, thisArg, args) {
+					if (args[1] === 300_000) args[1] = 0;
+					return Reflect.apply(target, thisArg, args);
+				},
+			}),
+		);
+		try {
+			const response = await createFoldSummaryRunner({ registry, model, thinking: "off" }).complete(
+				{ messages: [], maxTokens: 10 },
+			);
+			assert.equal(response.stopReason, "error");
+			assert.equal(response.retryable, true);
+			assert.match(response.errorMessage ?? "", /idle for 300000ms/);
+			assert.equal(signal?.aborted, true);
+		} finally {
+			timer.mockRestore();
+		}
+	});
+
+	for (const runaway of ["bytes", "events"] as const) {
+		it(`bounds runaway output ${runaway} using the request output budget`, async () => {
+			let signal: AbortSignal | undefined;
+			const registry: Pick<ModelRegistry, "streamSimple"> = {
+				streamSimple(_model, _context, options) {
+					signal = options?.signal;
+					const stream = createAssistantMessageEventStream();
+					const partial = reply("stop");
+					if (runaway === "bytes") {
+						stream.push({ type: "text_delta", contentIndex: 0, delta: "a".repeat(80), partial });
+						stream.push({
+							type: "thinking_delta",
+							contentIndex: 0,
+							delta: "b".repeat(81),
+							partial,
+						});
+					} else {
+						for (let index = 0; index < 225; index++)
+							stream.push({ type: "text_delta", contentIndex: 0, delta: "", partial });
+					}
+					return stream;
+				},
+			};
+			const response = await createFoldSummaryRunner({
+				registry,
+				model,
+				thinking: "high",
+			}).complete({ messages: [], maxTokens: 10 });
+			assert.equal(response.stopReason, "error");
+			assert.equal(response.retryable, true);
+			assert.match(
+				response.errorMessage ?? "",
+				/output guard \(160 bytes or 224 events for 10 output tokens\)/,
+			);
+			assert.equal(signal?.aborted, true);
+		});
+	}
+
+	it("allows output at the byte guard boundary and resets idleness on progress", async () => {
+		const scheduled: number[] = [];
+		const original = globalThis.setTimeout;
+		const timer = spyOn(globalThis, "setTimeout").mockImplementation(
+			new Proxy(original, {
+				apply(target, thisArg, args) {
+					if (typeof args[1] === "number") scheduled.push(args[1]);
+					return Reflect.apply(target, thisArg, args);
+				},
+			}),
+		);
+		const registry: Pick<ModelRegistry, "streamSimple"> = {
+			streamSimple() {
+				const stream = createAssistantMessageEventStream();
+				const partial = reply("stop");
+				stream.push({ type: "thinking_delta", contentIndex: 0, delta: "a".repeat(80), partial });
+				stream.push({ type: "text_delta", contentIndex: 0, delta: "b".repeat(80), partial });
+				stream.end(partial);
+				return stream;
+			},
+		};
+		try {
+			const response = await createFoldSummaryRunner({
+				registry,
+				model,
+				thinking: "high",
+			}).complete({ messages: [], maxTokens: 10 });
+			assert.equal(response.stopReason, "stop");
+			assert.deepEqual(scheduled, [300_000, 300_000, 300_000]);
+		} finally {
+			timer.mockRestore();
+		}
+	});
+
+	it("settles on session cancellation even when the provider does not", async () => {
+		let signal: AbortSignal | undefined;
+		const registry: Pick<ModelRegistry, "streamSimple"> = {
+			streamSimple(_model, _context, options) {
+				signal = options?.signal;
+				return createAssistantMessageEventStream();
+			},
+		};
+		const controller = new AbortController();
+		const pending = createFoldSummaryRunner({ registry, model, thinking: "off" }).complete({
+			messages: [],
+			maxTokens: 10,
+			signal: controller.signal,
+		});
+		controller.abort();
+		assert.equal((await pending).stopReason, "aborted");
+		assert.equal(signal?.aborted, true);
 	});
 
 	it("omits reasoning when thinking is off", async () => {

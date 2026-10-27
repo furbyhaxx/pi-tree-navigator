@@ -1,5 +1,6 @@
 /** Registry-backed fold summary calls, public contracts and bounded strategy orchestration. */
 
+import { setTimeout as delay } from "node:timers/promises";
 import type {
 	Api,
 	Message,
@@ -9,6 +10,7 @@ import type {
 	Tool,
 	Usage,
 } from "@earendil-works/pi-ai";
+import { isRetryableAssistantError } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import {
 	estimate,
@@ -47,6 +49,8 @@ export interface FoldSummaryRunner {
 		stopReason: StopReason;
 		usage?: Usage;
 		errorMessage?: string | undefined;
+		/** Provider-classified transient error; cancellation is never retryable. */
+		retryable?: boolean;
 	}>;
 }
 
@@ -64,8 +68,48 @@ export function createFoldSummaryRunner(options: {
 		contextWindow: model.contextWindow,
 		maxOutputTokens: Math.min(model.maxTokens, Math.floor(model.contextWindow / 4)),
 		async complete(request) {
-			const response = await registry
-				.streamSimple(
+			const controller = new AbortController();
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			let cancel: (() => void) | undefined;
+			let observe: ((delta?: string) => void) | undefined;
+			const cancelled = new Promise<Completion>((resolve) => {
+				const fail = (errorMessage: string) => {
+					controller.abort();
+					resolve({ text: "", stopReason: "error", errorMessage, retryable: true });
+				};
+				let outputBytes = 0;
+				let events = 0;
+				const byteLimit = request.maxTokens * OUTPUT_BYTES_PER_TOKEN_LIMIT;
+				const eventLimit = request.maxTokens * OUTPUT_EVENTS_PER_TOKEN_LIMIT + 64;
+				const resetIdle = () => {
+					clearTimeout(timer);
+					timer = setTimeout(() => {
+						fail(`Fold summary stream idle for ${SUMMARY_STREAM_IDLE_TIMEOUT_MS}ms`);
+					}, SUMMARY_STREAM_IDLE_TIMEOUT_MS);
+				};
+				observe = (delta) => {
+					if (delta !== undefined) outputBytes += Buffer.byteLength(delta, "utf8");
+					events++;
+					if (outputBytes > byteLimit || events > eventLimit) {
+						clearTimeout(timer);
+						fail(
+							`Fold summary stream exceeded its output guard (${byteLimit} bytes or ${eventLimit} events for ${request.maxTokens} output tokens)`,
+						);
+						return;
+					}
+					resetIdle();
+				};
+				cancel = () => {
+					controller.abort();
+					resolve({ text: "", stopReason: "aborted" });
+				};
+				request.signal?.addEventListener("abort", cancel, { once: true });
+				resetIdle();
+				if (request.signal?.aborted) cancel();
+			});
+			try {
+				if (controller.signal.aborted) return await cancelled;
+				const stream = registry.streamSimple(
 					model,
 					{
 						...(request.systemPrompt === undefined ? {} : { systemPrompt: request.systemPrompt }),
@@ -73,23 +117,40 @@ export function createFoldSummaryRunner(options: {
 						...(request.tools === undefined ? {} : { tools: request.tools }),
 					},
 					{
-						...(request.signal === undefined ? {} : { signal: request.signal }),
+						signal: controller.signal,
 						...(thinking === "off" || request.reasoning === "off" ? {} : { reasoning: thinking }),
 						maxTokens: request.maxTokens,
 						toolChoice: "none",
 						...(sessionId === undefined ? {} : { sessionId }),
 					},
-				)
-				.result();
-			return {
-				text: response.content
-					.filter((block) => block.type === "text")
-					.map((block) => block.text)
-					.join("\n"),
-				stopReason: response.stopReason,
-				usage: response.usage,
-				errorMessage: response.errorMessage,
-			};
+				);
+				const completed = async (): Promise<Completion> => {
+					for await (const event of stream) {
+						if (controller.signal.aborted) break;
+						observe?.(
+							event.type === "text_delta" || event.type === "thinking_delta"
+								? event.delta
+								: undefined,
+						);
+						if (controller.signal.aborted) break;
+					}
+					const response = await stream.result();
+					return {
+						text: response.content
+							.filter((block) => block.type === "text")
+							.map((block) => block.text)
+							.join("\n"),
+						stopReason: response.stopReason,
+						usage: response.usage,
+						errorMessage: response.errorMessage,
+						retryable: isRetryableAssistantError(response),
+					};
+				};
+				return await Promise.race([completed(), cancelled]);
+			} finally {
+				clearTimeout(timer);
+				if (cancel) request.signal?.removeEventListener("abort", cancel);
+			}
 		},
 	};
 }
@@ -199,6 +260,10 @@ export function reasoningAllowance(thinking: ThinkingLevel | "off"): number {
 }
 
 const FINAL_RETRIES = 1;
+const SUMMARY_STREAM_IDLE_TIMEOUT_MS = 300_000;
+// Generous tokenizer/fragmentation slack catches runaway output when providers omit maxTokens.
+const OUTPUT_BYTES_PER_TOKEN_LIMIT = 16;
+const OUTPUT_EVENTS_PER_TOKEN_LIMIT = 16;
 
 function isAbort(error: unknown): boolean {
 	return error instanceof Error && error.name === "AbortError";
@@ -246,11 +311,13 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 		usage,
 	});
 
-	const invoke = async (
+	const invokeOnce = async (
 		phase: FoldSummaryProgress["phase"],
 		request: Omit<Request, "signal">,
 	): Promise<{ response: Completion } | { failure: Failure }> => {
 		if (signal?.aborted) return { failure: fail("aborted", "cancelled before the request") };
+		if (calls >= maxCalls)
+			return { failure: fail("over-call-budget", `reached the limit of ${maxCalls} calls`) };
 		calls++;
 		options.onProgress?.({ phase, call: calls, plannedCalls });
 		let response: Completion;
@@ -266,11 +333,34 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 		if (response.usage) usage.push(response.usage);
 		if (signal?.aborted || response.stopReason === "aborted")
 			return { failure: fail("aborted", "cancelled during the request") };
-		if (response.stopReason === "error")
-			return {
-				failure: fail("provider-error", response.errorMessage ?? "provider error"),
-			};
 		return { response };
+	};
+
+	const invoke = async (
+		phase: FoldSummaryProgress["phase"],
+		request: Omit<Request, "signal">,
+	): Promise<{ response: Completion } | { failure: Failure }> => {
+		let result = await invokeOnce(phase, request);
+		if (
+			"response" in result &&
+			result.response.stopReason === "error" &&
+			result.response.retryable &&
+			plannedCalls < maxCalls &&
+			calls < maxCalls
+		) {
+			try {
+				await delay(1000, undefined, { signal });
+			} catch (error) {
+				if (signal?.aborted || isAbort(error))
+					return { failure: fail("aborted", "cancelled before retrying the request") };
+				throw error;
+			}
+			plannedCalls++;
+			result = await invokeOnce(phase, request);
+		}
+		if ("response" in result && result.response.stopReason === "error")
+			return { failure: fail("provider-error", result.response.errorMessage ?? "provider error") };
+		return result;
 	};
 
 	/**
