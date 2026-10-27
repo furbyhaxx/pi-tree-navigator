@@ -305,7 +305,7 @@ describe("tree screen", () => {
 			at,
 			[...at].sort((a, b) => a - b),
 		);
-		assert.match(required(required(h.rendered[0])[0]), /1 fold · 1 anchor · ctx 12\.3% of/);
+		assert.match(required(required(h.rendered[0])[0]), /1 fold · 1 anchor · ctx 12\.3% ─$/);
 		assert.match(text, /→ ● \[current\]/);
 		for (const lines of h.rendered) fits(lines);
 	});

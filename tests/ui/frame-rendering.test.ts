@@ -11,6 +11,32 @@ function required<T>(value: T | undefined): T {
 }
 
 describe("renderFrame", () => {
+	for (const width of [36, 57, 80, 140]) {
+		it(`preserves anchor identity and context at ${width} columns`, () => {
+			const rows = ["qa-milestone-folded", "qa-milestone-folded-folded"].map((name) => ({
+				label: `◆ ${name}`,
+				value: "0.4% · 4k · −20k savable",
+			}));
+			const lines = plain(
+				renderFrame(
+					options(rows, width, {
+						rightBadge: "2 folds · 2 anchors · ctx 0.4% of 1.0M",
+						breadcrumbs: ["Anchor", "Tree"],
+					}),
+				),
+			);
+			assert.match(required(lines[0]), /Anchor\/Tree/);
+			assert.match(required(lines[0]), /ctx 0\.4%/);
+			const anchors = lines.filter((line) => line.includes("◆"));
+			assert.equal(anchors.length, 2);
+			const labels = anchors.map((line) => /◆ (.*?) {2}/.exec(line)?.[1]);
+			assert.ok(labels.every((label) => label !== undefined));
+			assert.notEqual(labels[0], labels[1]);
+			for (const line of anchors) assert.match(line, /0\.4%/);
+			for (const line of lines) assert.ok(visibleWidth(line) <= width, line);
+		});
+	}
+
 	for (const width of [60, 130]) {
 		it(`bounds every line to ${width} columns and renders exactly the measured height`, () => {
 			const rows = makeRows(30);
@@ -83,6 +109,34 @@ describe("renderFrame", () => {
 		assert.match(top.at(-1) ?? "", /↓ \d+ more/);
 		const scrolled = plain(renderFrame({ ...opts, layout, scrollOffset: 5, cursor: 5 }));
 		assert.match(required(scrolled[0]), /↑ 5 more/);
+	});
+
+	it("keeps the breadcrumb root and leaf when middle segments must shrink", () => {
+		const lines = plain(
+			renderFrame(
+				options(makeRows(2), 36, {
+					breadcrumbs: ["Anchor", "an-extremely-long-parent-segment", "Tree"],
+				}),
+			),
+		);
+		assert.match(required(lines[0]), /Anchor\/…\/Tree/);
+	});
+
+	it("preserves context and root when the top scroll indicator competes for space", () => {
+		const lines = plain(
+			renderFrame(
+				options(makeRows(30), 36, {
+					rightBadge: "2 folds · 2 anchors · ctx 0.4% of 1.0M",
+					breadcrumbs: ["Anchor", "Tree"],
+					scrollOffset: 3,
+					cursor: 3,
+				}),
+			),
+		);
+		assert.match(required(lines[0]), /Anchor\/Tree/);
+		assert.match(required(lines[0]), /ctx 0\.4%/);
+		assert.match(lines.at(-1) ?? "", /↓ \d+ more/);
+		for (const line of lines) assert.ok(visibleWidth(line) <= 36, line);
 	});
 
 	it("clips the badge and breadcrumbs instead of overflowing narrow terminals", () => {

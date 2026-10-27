@@ -1,12 +1,8 @@
 /** Frozen frame geometry, row drawing, chrome and mouse hit rows. */
-import {
-	sliceByColumn,
-	truncateToWidth,
-	visibleWidth,
-	wrapTextWithAnsi,
-} from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import type { FrameKeybinding, FrameKeybindingPriority, FrameRow, FrameTheme } from "./frame.ts";
 import { cleanTerminalText, singleLine } from "./frame-text.ts";
+import { contextBadgeText, middleTruncate } from "./styled-lines.ts";
 
 /** Frozen geometry; measured on open and again only when the terminal resizes. */
 export interface FrameLayout {
@@ -78,7 +74,11 @@ export function rowLines(
 	const label = labelText(row, theme);
 	let main = label;
 	if (row.value !== undefined) {
-		const clipped = truncateToWidth(label, Math.max(0, column - CURSOR_PREFIX - 2), "…");
+		const budget = Math.max(0, column - CURSOR_PREFIX - 2);
+		const clipped =
+			row.label.includes("◆") && visibleWidth(label) > budget
+				? middleTruncate(singleLine(row.label), budget)
+				: truncateToWidth(label, budget, "…");
 		const gap = " ".repeat(Math.max(0, column - CURSOR_PREFIX - visibleWidth(clipped)));
 		main = clipped + gap + theme.fg(row.tone ?? "text", singleLine(row.value));
 	}
@@ -121,16 +121,19 @@ export function measureFrame(options: FrameOptions): FrameLayout {
 function breadcrumbText(segments: readonly string[], budget: number, theme: FrameTheme): string {
 	const last = segments.at(-1);
 	if (last === undefined || budget <= 0) return "";
-	const current = theme.bold(singleLine(last));
-	const parents = segments.slice(0, -1).map(singleLine).join("/");
-	if (!parents) return truncateToWidth(current, budget, "…");
-	const remaining = budget - visibleWidth(current) - 1;
-	if (remaining < 2) return truncateToWidth(current, budget, "…");
-	const prefix =
-		visibleWidth(parents) <= remaining
-			? parents
-			: `…${sliceByColumn(parents, visibleWidth(parents) - remaining + 1, remaining - 1)}`;
-	return `${theme.fg("muted", prefix)}/${current}`;
+	const root = singleLine(segments[0] ?? "");
+	const path = segments.map(singleLine).join("/");
+	if (visibleWidth(path) <= budget) {
+		const parents = segments.slice(0, -1).map(singleLine).join("/");
+		return parents
+			? `${theme.fg("muted", parents)}/${theme.bold(singleLine(last))}`
+			: theme.bold(singleLine(last));
+	}
+	const rootWidth = visibleWidth(root);
+	if (budget <= rootWidth + 1) return theme.fg("muted", truncateToWidth(root, budget, "…"));
+	const leafBudget = budget - rootWidth - 1;
+	const leaf = segments.length > 2 ? `…/${singleLine(last)}` : singleLine(last);
+	return `${theme.fg("muted", root)}/${theme.bold(middleTruncate(leaf, leafBudget))}`;
 }
 
 function topRule(
@@ -141,15 +144,24 @@ function topRule(
 	theme: FrameTheme,
 ): string {
 	const rule = (count: number) => theme.fg("borderAccent", "─".repeat(Math.max(0, count)));
-	const indicator = hidden > 0 ? truncateToWidth(` ↑ ${hidden} more `, width, "") : "";
+	const titleRoom = Math.min(
+		visibleWidth(breadcrumbs.map(singleLine).join("/")),
+		Math.floor(width * 0.4),
+	);
+	const indicatorText = hidden > 0 ? truncateToWidth(` ↑ ${hidden} more `, width, "") : "";
+	const indicator =
+		Math.floor((width - visibleWidth(indicatorText)) / 2) >= titleRoom + 3 ? indicatorText : "";
 	const indicatorWidth = visibleWidth(indicator);
 	const indicatorStart = indicator ? Math.floor((width - indicatorWidth) / 2) : width;
 	const indicatorEnd = indicator ? indicatorStart + indicatorWidth : 0;
 
 	// The badge sits right of the indicator, keeping one rule cell on each side of it.
-	const badgeRoom = Math.min(Math.max(0, width - indicatorEnd - 4), Math.floor(width * 0.6));
-	const badgeText =
-		badge && badgeRoom >= 3 ? truncateToWidth(singleLine(badge), badgeRoom, "…") : "";
+	const badgeRoom = Math.min(
+		Math.max(0, width - indicatorEnd - 4),
+		Math.max(0, width - titleRoom - 6),
+		Math.floor(width * 0.6),
+	);
+	const badgeText = badge && badgeRoom >= 3 ? contextBadgeText(singleLine(badge), badgeRoom) : "";
 	const rightWidth = badgeText ? visibleWidth(badgeText) + 3 : 0;
 
 	const leftBudget = (indicator ? indicatorStart : width - rightWidth) - 3;
