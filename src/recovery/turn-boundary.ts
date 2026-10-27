@@ -24,8 +24,56 @@ import {
 } from "../core/request-accounting.ts";
 import type { createConsolidationController } from "../fold/consolidation-runtime.ts";
 import type { createFoldAdaptersController } from "../fold/fold-adapters.ts";
-import { hideDrafts, keepValidDrafts } from "../fold/fold-receipts.ts";
+import { hideDrafts, keepValidDrafts, REWIND_CUSTOM_TYPE } from "../fold/fold-receipts.ts";
 import type { createIndependentRecoveryController } from "./independent-recovery.ts";
+
+function completedAnswer(message: {
+	content?: unknown;
+	stopReason?: string;
+	errorMessage?: string;
+}): boolean {
+	if (message.stopReason !== "stop" || message.errorMessage || !Array.isArray(message.content))
+		return false;
+	const blocks: unknown[] = message.content;
+	return (
+		!blocks.some(
+			(block) =>
+				block !== null && typeof block === "object" && "type" in block && block.type === "toolCall",
+		) &&
+		blocks.some(
+			(block) =>
+				block !== null &&
+				typeof block === "object" &&
+				"type" in block &&
+				block.type === "text" &&
+				"text" in block &&
+				typeof block.text === "string" &&
+				block.text.trim().length > 0,
+		)
+	);
+}
+
+function followsRecovery(sm: SessionManager, messageEntryId: string): boolean {
+	const branch = sm.getBranch();
+	const at = branch.findIndex((entry) => entry.id === messageEntryId);
+	for (let i = at - 1; i >= 0; i--) {
+		const entry = branch[i];
+		if (!entry) continue;
+		if (entry.type === "message" || entry.type === "branch_summary" || entry.type === "compaction")
+			return false;
+		if (entry.type !== "custom_message" || entry.customType !== REWIND_CUSTOM_TYPE) continue;
+		const details: unknown = entry.details;
+		return (
+			details !== null &&
+			typeof details === "object" &&
+			"status" in details &&
+			details.status === "done" &&
+			"origin" in details &&
+			details.origin === "recovery"
+		);
+	}
+	return false;
+}
 
 /** Boundary state and operations for folding, continuity and independent recovery. */
 export interface TurnBoundaryDeps {
@@ -87,6 +135,7 @@ export function createTurnBoundary({
 			role?: string;
 			content?: unknown;
 			stopReason?: string;
+			errorMessage?: string;
 		};
 		if (message?.role !== "assistant") return;
 		const operatingWindow = ctx.model?.contextWindow ?? 0;
@@ -122,9 +171,12 @@ export function createTurnBoundary({
 			if (folded) return folded;
 		}
 		// Another extension's continuation owns this boundary.
+		// Accepted input above a local window is not a failed answer. Recover only
+		// when another request is needed; preflight will guard the next user turn.
+		const answered = completedAnswer(message);
 		if (!event.continue && messageEntryId && overflowed(message, ctx.model)) {
 			state.turns.overflowedTurns.add(message);
-			if (message.stopReason === "error") return;
+			if (answered || message.stopReason === "error") return;
 			if (
 				ctx.signal?.aborted ||
 				state.recovery.nativeRetryOwned.has(sessionId) ||
@@ -172,6 +224,9 @@ export function createTurnBoundary({
 		} catch {
 			return;
 		}
+		// Recovery resumes an interrupted request, not a new milestone. Its old
+		// summary cannot establish that work remains after the request is answered.
+		if (answered && followsRecovery(sm, messageEntryId)) return;
 		const nudge = continueNudgeDraft(sm, sessionId, message, event, signal);
 		return nudge ? deliverRaw([nudge], true) : undefined;
 	}

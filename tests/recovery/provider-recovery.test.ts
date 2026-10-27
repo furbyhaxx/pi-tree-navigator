@@ -78,6 +78,8 @@ function abortedReply(): AssistantMessage {
 async function withSession(
 	mode:
 		| "recover"
+		| "completed-answer"
+		| "completed-after-recovery"
 		| "cancel"
 		| "no-anchor"
 		| "repeat-error"
@@ -144,6 +146,8 @@ async function withSession(
 		const stream = createAssistantMessageEventStream();
 		const mainCount = calls.filter((call) => !call.side).length;
 		let reply = side ? summaryReply() : fauxAssistantMessage("recovered answer");
+		if (side && mode === "completed-after-recovery")
+			reply = fauxAssistantMessage(`${SUMMARY}\n## Next Steps\n1. Answer the request.`);
 		if (side && mode === "side-failure") {
 			reply = fauxAssistantMessage([], {
 				stopReason: "error",
@@ -166,8 +170,13 @@ async function withSession(
 							},
 						);
 		}
+		if (!side && mode === "completed-answer")
+			reply = fauxAssistantMessage("ACCEPTANCE-CONTINUED: the remaining audit work is blocked.");
 		reply = { ...reply, provider: "mock", model: "mock-1", api };
-		if (!side && (mainCount === 1 || mode === "repeat-error")) {
+		if (
+			!side &&
+			(mainCount === 1 || mode === "repeat-error" || mode === "completed-after-recovery")
+		) {
 			reply = {
 				...reply,
 				usage: { ...reply.usage, input: 40_000, totalTokens: 40_000 },
@@ -335,6 +344,37 @@ function userText(entry: {
 	if (entry.type !== "message" || entry.message?.role !== "user") return undefined;
 	return messageText(entry.message);
 }
+
+describe("completed provider answers", () => {
+	it("does not recover a successful text answer merely because measured input exceeds the local window", async () => {
+		await withSession("completed-answer", async ({ sm, prompt, calls }) => {
+			assert.equal(await prompt(REQUEST), undefined);
+			assert.equal(calls.length, 1);
+			assert.equal(
+				sm.getBranch().some((entry) => entry.type === "branch_summary"),
+				false,
+			);
+		});
+	});
+
+	it("settles the completed post-recovery answer without another fold or a stale-work nudge", async () => {
+		await withSession("completed-after-recovery", async ({ sm, prompt, calls }) => {
+			assert.equal(await prompt(REQUEST), undefined);
+			assert.equal(calls.filter((call) => !call.side).length, 2);
+			assert.equal(sm.getBranch().filter((entry) => entry.type === "branch_summary").length, 1);
+			assert.equal(
+				sm
+					.getEntries()
+					.some(
+						(entry) =>
+							entry.type === "custom_message" &&
+							JSON.stringify(entry.details).includes('"continue-nudge"'),
+					),
+				false,
+			);
+		});
+	});
+});
 
 for (const stopReason of ["error", "length", "stop"] as const) {
 	describe(`production provider overflow recovery (${stopReason})`, () => {
