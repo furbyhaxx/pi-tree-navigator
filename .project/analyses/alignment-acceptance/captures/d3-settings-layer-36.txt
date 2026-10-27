@@ -1,0 +1,45 @@
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+
+ [38;2;205;154;34mWarning: Could not restore model
+[39m [38;2;205;154;34mfixture/fixture. Using
+[39m [38;2;205;154;34mopenai/gpt-5.5[39m
+
+ [38;2;205;154;34mWarning: tmux extended-keys is
+[39m [38;2;205;154;34moff. Modified Enter keys may not
+[39m [38;2;205;154;34mwork. Add `set -g extended-keys
+[39m [38;2;205;154;34mon` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mSettings[0m  [38;2;157;165;169mtarget: project[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter settings · file: ./.pi/tr[0m…
+
+   rewindHintReser…  [38;2;157;165;169moff · default[39m
+   anchorStartAfte…  [38;2;157;165;169m2 · default[39m
+   parentHandoffMo…  [38;2;157;165;169mdigest · defau[39m…
+   continuity.capt…  [38;2;157;165;169mtrue · default[39m
+   continuity.inte…  [38;2;157;165;169moff · default[39m
+   treeProposal.mo…  [38;2;157;165;169mcurrent · defa[39m…
+ [38;2;167;152;215m→[39m treeProposal.to…  [38;2;157;165;169mnone · default[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mglobal 0 · project 0 · runt[39m…
+   auto_navigate.e…  [38;2;157;165;169mfalse · default
+[39m   auto_navigate.m…  [38;2;157;165;169manchor-and-rew[39m…
+   auto_navigate.m…  [38;2;157;165;169mrecommended · [39m…
+   auto_navigate.c…  [38;2;157;165;169m6 · default[39m
+   auto_navigate.m…  [38;2;157;165;169m25k · default[39m
+   auto_navigate.r…  [38;2;157;165;169m120k · default[39m
+
+[38;2;126;136;142m   Tools a tree-proposal model may[39m
+[38;2;126;136;142m   see, by exact name. Enter opens…[39m
+ [1mtype[0m [38;2;126;136;142mfilter[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m─────────────[38;2;126;136;142m ↓ 8 more [38;2;160;142;213m─────────────
+[38;2;126;136;142m/tmp/ptn-d3-mmj6Zo/workspace[39m
+[38;2;126;136;142m↑14k ↓1.4k $0.000 (sub) 0.4%/272k  g

@@ -1,0 +1,1773 @@
+bunx tsc --noEmit
+bunx biome check .
+Checked 250 files in 179ms. No fixes applied.
+bun test
+bun test v1.4.3 (c6da4a4d3)
+
+tests/docs.test.ts:
+(pass) docs: history-mirroring providers > does not claim the summary is the paused Claude Code query [0.18ms]
+(pass) docs: history-mirroring providers > marks independent summary calls as untested on mirroring providers [0.04ms]
+(pass) docs: independent overflow recovery > documents recovery without forced rewinds or withheld tool results [0.07ms]
+(pass) docs: independent overflow recovery > documents the failure receipt instead of a forced-rewind gate [0.08ms]
+
+tests/index.test.ts:
+(pass) factory registration > registers with the single pi argument and `list` succeeds [3.46ms]
+(pass) factory registration > registers the rewind fold turn_end handler BEFORE the hint/start-anchor handler [0.25ms]
+
+tests/package.test.ts:
+(pass) package.json dependencies > every package the shipped sources import is a peer dependency [1.70ms]
+(pass) package.json dependencies > @earendil-works peers share one range [0.09ms]
+(pass) package.json dependencies > pi dev copies are pinned to one version (the one pi-coding-agent resolves to) [0.18ms]
+
+tests/auto/auto-fold-planner.test.ts:
+(pass) an older accepted milestone never folds an unfinished exposed suffix [3.88ms]
+(pass) an accepted milestone with a complete tail only places an anchor [0.39ms]
+(pass) crossing rewind_at_tokens folds deterministically without asking a classifier [0.10ms]
+(pass) a navigate_tree call in the turn does not postpone pressure relief [0.07ms]
+(pass) a pressure fold that did not get below the threshold waits for half the threshold of fresh tokens, even after its own new anchor [0.27ms]
+(pass) after a fold reduced the context, the next pressure fold fires on the next crossing [0.11ms]
+(pass) anchor-only mode, a disabled controller and a stale check never pressure-fold [0.30ms]
+(pass) anchor-only mode and below-pressure checks only suggest anchors [0.43ms]
+(pass) disagreement, invalid boundaries and operational errors abstain [0.63ms]
+(pass) stale and aborted checks cannot yield an action, including late input during evaluation [0.39ms]
+(pass) an anchor action waits for fresh work and new anchors do not recount old work [0.53ms]
+(pass) no-decision checks rearm by turn cadence or fresh token delta, not a repeated crossing [0.57ms]
+(pass) navigate_tree turns install counters without semantic calls; effective model/config changes reset cadence [0.33ms]
+(pass) policy changes reset cadence, equivalent settings do not, and previous state stays immutable [0.37ms]
+(pass) new anchors retain the consumed token baseline instead of recounting their old suffix [0.30ms]
+(pass) long readable anchor names stay within forty characters including collision suffix [0.54ms]
+(pass) disabled policies and empty evidence make no requests [0.28ms]
+(pass) disclosure applies before requests and cannot hide an exposed unfinished suffix [0.30ms]
+(pass) anchor names are bounded, readable, deterministic, collision-safe and never overwrite labels [0.62ms]
+
+tests/auto/auto-milestone.test.ts:
+(pass) only active projected readable bodies are evidence, with persisted IDs [0.65ms]
+(pass) tool disclosure covers edited results, mismatched names and native shell [0.67ms]
+(pass) edited excluded tool calls cannot reappear as replacement prose [0.16ms]
+(pass) newest bounded phase retains objective, active goals, anchors and prior fold facts [1.55ms]
+(pass) compacted originals do not return as evidence [0.29ms]
+
+tests/auto/auto-navigate-config.test.ts:
+(pass) wildcard modelOverrides and snake_case auto_navigate > matches *gemini-4-argon* and bare gemini-4-argon across providers [0.16ms]
+(pass) wildcard modelOverrides and snake_case auto_navigate > parses snake_case auto_navigate keys and rejects unknown keys [0.38ms]
+(pass) wildcard modelOverrides and snake_case auto_navigate > defaults auto-navigation off with the recommended milestone policy [0.05ms]
+(pass) wildcard modelOverrides and snake_case auto_navigate > merges pressure settings per model override [1.04ms]
+(pass) wildcard modelOverrides and snake_case auto_navigate > warns on invalid pressure fields without applying their values [0.22ms]
+(pass) wildcard modelOverrides and snake_case auto_navigate > canonicalizes and resolves milestone object settings [0.42ms]
+(pass) wildcard modelOverrides and snake_case auto_navigate > lets wildcard null disable only the milestone policy [0.18ms]
+(pass) wildcard modelOverrides and snake_case auto_navigate > resolves wildcard reserve and auto_navigate with exact > specific > broad precedence [0.28ms]
+
+tests/auto/milestone-classifier.test.ts:
+(pass) milestone classifier context > leaves the request without structure unchanged [0.04ms]
+(pass) milestone classifier context > sends the newest structure items with bounded text [0.14ms]
+(pass) milestone question wording > sends the base wording unless another is given [0.06ms]
+(pass) milestone question wording > changes only the question text, never the state or the offered choices [0.09ms]
+(pass) milestone question wording > replaces the instructions of one question and keeps its criteria [0.03ms]
+
+tests/auto/milestone-policy.test.ts:
+(pass) milestone policy setting > resolves the preset to the benchmarked pair with the 0.7 gate [0.04ms]
+(pass) milestone policy setting > returns undefined for anything but the preset and a valid canonical object [0.05ms]
+(pass) milestone policy setting > overrides the preset field by field and swaps or drops a stage [0.09ms]
+(pass) milestone policy setting > is off without a preset until a classifier model is given [0.02ms]
+(pass) milestone policy setting > names every problem by its field path [0.06ms]
+(pass) evaluateMilestone > decides each question where both models give the same accepted choice [1.85ms]
+(pass) evaluateMilestone > reports the none boundary as its own decision [1.18ms]
+(pass) evaluateMilestone > abstains where the models disagree or either is below the gate, per question [2.31ms]
+(pass) evaluateMilestone > never lets one model decide alone when a confirmer is configured [2.56ms]
+(pass) evaluateMilestone > treats choices that were not offered, unknown questions and malformed output as abstentions with a warning [5.07ms]
+(pass) evaluateMilestone > asks both models at once, with one identical request carrying both questions [151.25ms]
+(pass) evaluateMilestone > sums the usage the stages reported [1.36ms]
+(pass) evaluateMilestone > lets the classifier decide alone only when the confirmer is dropped [1.44ms]
+(pass) evaluateMilestone > asks nothing when the policy is off, the records are empty or the signal is aborted [0.18ms]
+(pass) evaluateMilestone > abstains with one warning, and asks nothing, when a model is not in the catalog [0.18ms]
+(pass) evaluateMilestone > sends the policy's instruction override and keeps the preset criteria [1.36ms]
+
+tests/auto/pressure-compaction.test.ts:
+(pass) planPressureCut > keeps at least the recent budget and cuts at the start of a tool turn inside one long run [0.31ms]
+(pass) planPressureCut > never keeps a tool result whose call would be summarized [0.05ms]
+(pass) planPressureCut > cuts at a user message between runs [0.03ms]
+(pass) planPressureCut > keeps a single oversized tool turn whole instead of cutting inside it [0.02ms]
+(pass) planPressureCut > skips when everything fits the kept budget or no boundary is safe [0.03ms]
+
+tests/continuity/continuity-briefing.test.ts:
+(pass) renderBriefing > renders sections in kind order with quotes, never superseded or archived items [1.09ms]
+(pass) renderBriefing > is deterministic regardless of item order [0.27ms]
+(pass) renderBriefing > drops facts first, oldest first, and says so [0.40ms]
+(pass) renderBriefing > never drops objective, goals, rules or decisions, and flags overBudget [0.44ms]
+(pass) renderBriefing > shows stale file pointers marked and never drops them [0.45ms]
+(pass) renderBriefing > labels rules the user did not author [0.06ms]
+(pass) renderFoldCaptureSection > lists rules, decisions and the folded anchor's steering, and documents a parseable schema [0.71ms]
+(pass) parseContinuityDelta > returns undefined without a block
+(pass) parseContinuityDelta > ignores prose around the block and accepts a fenced body [0.05ms]
+(pass) parseContinuityDelta > rejects invalid JSON [0.04ms]
+(pass) parseContinuityDelta > rejects a non-object body
+(pass) parseContinuityDelta > rejects an unclosed tag
+(pass) parseContinuityDelta > rejects two blocks
+(pass) parseContinuityDelta > rejects an unknown key
+(pass) parseContinuityDelta > rejects a bad id list
+(pass) parseContinuityDelta > rejects an unknown kind
+(pass) parseContinuityDelta > rejects a missing superseding item
+(pass) summarizeLedgerForUi > counts active items into a one-line badge [0.17ms]
+(pass) extractContinuityDelta > strips a complete block and returns the parsed delta [0.08ms]
+(pass) extractContinuityDelta > ignores a stray unclosed tag in prose instead of throwing [0.01ms]
+(pass) extractContinuityDelta > reports malformed JSON, strips the block and applies nothing [0.03ms]
+(pass) extractContinuityDelta > keeps the text intact and reports an error when the block count is ambiguous [0.01ms]
+(pass) renderFoldCaptureSection user entry refs > lists citable user entry ids, newest last, capped [0.09ms]
+(pass) renderFoldCaptureSection user entry refs > omits the in-force header while the ledger has no active items [0.04ms]
+
+tests/continuity/continuity-capture.test.ts:
+(pass) ask_user capture > records each answered question as a decision owned by the user [0.90ms]
+(pass) ask_user capture > keeps a custom 'other' answer verbatim in the quote [0.12ms]
+(pass) ask_user capture > records every chosen label of a multi-select answer [0.08ms]
+(pass) ask_user capture > keeps the answer when a long question hits the text cap [0.09ms]
+(pass) ask_user capture > ignores cancelled, errored, elaborating, unanswered and foreign results [0.10ms]
+(pass) user message capture > keeps the user's exact words as a user-owned rule that agents cannot archive [0.58ms]
+(pass) user message capture > skips short, slash-command, own and empty messages without classifying them [0.16ms]
+(pass) user message capture > scans only after the watermark, or after the last fold when it is unknown [0.19ms]
+(pass) user message capture > hands the classifier the active items and the anchor in force [0.16ms]
+(pass) user message capture > aborting returns no ops and leaves the watermark where it was [0.13ms]
+(pass) repeated ask_user answers > a later answer supersedes the earlier one, citing the new entry [0.37ms]
+(pass) repeated ask_user answers > answers repeated within one scan collapse to the newest [0.15ms]
+(pass) repeated ask_user answers > a lost watermark does not bring back the replaced answer [0.13ms]
+(pass) repeated ask_user answers > leaves answers to other questions alone [0.20ms]
+(pass) repeated ask_user answers > the same answer again changes nothing [0.09ms]
+(pass) repeated ask_user answers > recognizes a question whose stored text was cut to fit [0.53ms]
+(pass) repeated ask_user answers > a user message that replaced the answer is not superseded a second time [0.19ms]
+(pass) fold request messages > matches the /anchor template for any anchor, label and number [0.06ms]
+(pass) fold request messages > does not match text that merely mentions the call [0.02ms]
+(pass) fold request messages > is skipped before any classifier sees it [0.13ms]
+(pass) long message capture > captures the one rule sentence of a 1500-character message verbatim [0.42ms]
+(pass) long message capture > never captures an attached skill body as the user's words [0.13ms]
+(pass) long message capture > keeps sentence order, kinds and a cap of three items [0.13ms]
+(pass) long message capture > takes each line as its own sentence and counts a repeat once [0.11ms]
+(pass) long message capture > restores the original curly apostrophe in the quote [0.23ms]
+(pass) long message capture > never yields an objective or a steering item [0.18ms]
+(pass) long message capture > judges each sentence by the short-message rules [0.37ms]
+(pass) long message capture > ignores bare always, never and prefer inside a long message [0.08ms]
+(pass) long message capture > still captures a rule that follows a question or a code block [0.10ms]
+(pass) long message capture > leaves short messages and marker-free long ones as they were [0.11ms]
+(pass) idempotence > a second scan of the same branch changes nothing [0.16ms]
+(pass) idempotence > ops re-derived without the ledger are duplicates, never double items [0.13ms]
+(pass) idempotence > does not resurrect a superseded rule when the watermark is lost [0.20ms]
+(pass) heuristicClassifier > rule: From now on, always run the full test suite before you commi [0.06ms]
+(pass) heuristicClassifier > rule: Never write to the main checkout.
+(pass) heuristicClassifier > rule: I prefer small commits over big ones.
+(pass) heuristicClassifier > rule: Remember: the build runs on node 22.
+(pass) heuristicClassifier > rule: Don't ever force push to main.
+(pass) heuristicClassifier > decision: Let’s go with option B for the config layout.
+(pass) heuristicClassifier > decision: We decided to keep the ledger in branch summaries.
+(pass) heuristicClassifier > decision: Decision: capture stays heuristic-first.
+(pass) heuristicClassifier > objective: Goal: user intent must survive every fold
+(pass) heuristicClassifier > objective: The goal is endless sessions without losing instructions.
+(pass) heuristicClassifier > ephemeral: drop /tree-clone completely and only keep /anchor clone
+(pass) heuristicClassifier > ephemeral: rename the helper and then rerun the tests
+(pass) heuristicClassifier > ephemeral: Why does the fold always fail on this branch?
+(pass) heuristicClassifier > ephemeral: Should we never fold below the start anchor?
+(pass) heuristicClassifier > ephemeral: never mind, keep going with the current plan
+(pass) heuristicClassifier > ephemeral: ok thanks
+(pass) heuristicClassifier > ephemeral: Logs: always retrying, never succeeding. Logs: always retryi [0.02ms]
+(pass) heuristicClassifier > never proposes a supersession [0.03ms]
+(pass) supersession and objectives > emits a supersede that cites the new message and the ledger accepts it [0.17ms]
+(pass) supersession and objectives > drops named ids that are unknown, inactive or of another kind [0.13ms]
+(pass) supersession and objectives > keeps a single active objective: downgrades to a sub-goal unless the classifier named it [0.23ms]
+(pass) steering > without an anchor on the branch is ephemeral [0.05ms]
+(pass) steering > is scoped to the latest anchor set before the message [0.15ms]
+(pass) steering > ignores cleared, non-anchor and not-yet-set labels [0.08ms]
+(pass) createModelClassifier > asks the kind and the contradicted item, and returns the verdict [0.89ms]
+(pass) createModelClassifier > answers 'none' and unknown ids add no supersession; an ephemeral kind stays ephemeral [0.23ms]
+(pass) createModelClassifier > skips the contradiction question when there are no active items [0.07ms]
+(pass) createModelClassifier > treats a low-confidence answer on marker-free text as ephemeral, without a warning [0.09ms]
+(pass) createModelClassifier > keeps the heuristic rule when the model abstains, and never takes its low-confidence supersession [0.09ms]
+(pass) createModelClassifier > falls back to the heuristic verdict for a missing, non-choice or unknown kind answer [0.17ms]
+(pass) createModelClassifier > returns the heuristic excerpts of a long message the model abstains on [0.13ms]
+(pass) createModelClassifier > a confident ephemeral answer is not an abstention and is kept [0.06ms]
+(pass) createModelClassifier > captures an explicit rule and a long message's rule sentence verbatim when the model abstains, without superseding [0.26ms]
+(pass) createModelClassifier > honors a custom minConfidence [0.07ms]
+(pass) createModelClassifier > a provider error falls back to the heuristic verdict with one warning, and the instance stops calling the model [0.16ms]
+(pass) createModelClassifier > a thrown error is handled like a provider error [0.08ms]
+(pass) createModelClassifier > surfaces the warning once in a capture result and still captures explicit rules [0.17ms]
+(pass) createModelClassifier > resolves undefined and warns for an unknown or malformed model [0.14ms]
+(pass) createModelClassifier > splits provider and id at the first slash [0.04ms]
+(pass) createModelClassifier > bounds what is sent: truncated message, 30 items with rules and decisions first [0.28ms]
+(pass) createModelClassifier > is never asked about a fold request [0.08ms]
+(pass) createModelClassifier > does not call the model once the signal is aborted [0.08ms]
+(pass) createModelClassifier: intent policy > recommended preset > sends the production request to the decisions model and never calls the chat model when it is confident [0.39ms]
+(pass) createModelClassifier: intent policy > recommended preset > asks the chat model only the contradicts question with exactly the offered choices when the decisions model abstains on it [0.57ms]
+(pass) createModelClassifier: intent policy > recommended preset > treats a doubtful, wrong-typed or not offered decisions answer as an abstention [0.30ms]
+(pass) createModelClassifier: intent policy > recommended preset > a chat answer that names a non-offered id, is malformed, doubtful or says none yields no supersession [0.35ms]
+(pass) createModelClassifier: intent policy > recommended preset > a chat failure applies no supersession, warns once and stops asking for the instance [0.23ms]
+(pass) createModelClassifier: intent policy > recommended preset > never escalates the kind: an abstaining or ephemeral kind, or no active items, never reach the chat model [0.20ms]
+(pass) createModelClassifier: intent policy > recommended preset > a decisions failure falls back to the heuristic with one warning and never asks the chat model [0.13ms]
+(pass) createModelClassifier: intent policy > recommended preset > is unavailable, with one warning, unless both models are available with credentials [0.20ms]
+(pass) createModelClassifier: intent policy > recommended preset > keeps the verbatim and supersession invariants: the stored text is the user's words and only an offered item is cited [0.20ms]
+(pass) createModelClassifier: intent policy > object policy > escalation.model null: a doubtful supersession is never escalated [0.27ms]
+(pass) createModelClassifier: intent policy > object policy > supersession.model null: the decisions model judges only the kind and the chat model is the only supersession stage [0.15ms]
+(pass) createModelClassifier: intent policy > object policy > kind.model null: the heuristic judges the kind and the supersession stage still runs for what it finds [0.13ms]
+(pass) createModelClassifier: intent policy > object policy > a policy without any model is heuristics only and resolves to nothing, silently [0.11ms]
+(pass) createModelClassifier: intent policy > object policy > heuristics false: an abstention or an outage captures nothing [0.17ms]
+(pass) createModelClassifier: intent policy > object policy > minConfidence moves the gate of every stage [0.09ms]
+(pass) createModelClassifier: intent policy > object policy > instructions replace the question wording per stage, and the defaults stay the production wording [0.30ms]
+(pass) createModelClassifier: intent policy > object policy > a different model swaps a stage; stages on different models are asked one question each [0.18ms]
+(pass) createModelClassifier: intent policy > object policy > a chat model can answer the kind stage, with that question only [0.11ms]
+(pass) createModelClassifier: intent policy > object policy > is unavailable, with one warning, when any configured stage model is missing [0.10ms]
+(pass) createModelClassifier: intent policy > retirement verification > does not ask the verifier for a primary retirement or an explicit none [0.22ms]
+(pass) createModelClassifier: intent policy > retirement verification > does not ask the verifier when escalation says none [0.13ms]
+(pass) createModelClassifier: intent policy > retirement verification > confirms a true replacement and rejects a wrong one without dropping the new intent [0.33ms]
+(pass) createModelClassifier: intent policy > retirement verification > fails closed on a missing, malformed, low-confidence or unoffered verifier answer [0.27ms]
+(pass) createModelClassifier: intent policy > retirement verification > a verifier error keeps the item, warns once and does not ask again [0.21ms]
+(pass) createModelClassifier: intent policy > retirement verification > a cancelled verifier keeps the captured intent and does not warn [0.15ms]
+(pass) createModelClassifier: intent policy > retirement verification > respects a disabled, swapped or reworded verifier [0.33ms]
+(pass) createModelClassifier: intent policy > retirement verification > uses the policy confidence gate for the confirmation [0.13ms]
+
+tests/continuity/continuity-ledger-parser.test.ts:
+(pass) parseLedger and serialization > round-trips through plain JSON [0.46ms]
+(pass) parseLedger and serialization > refuses undefined [0.05ms]
+(pass) parseLedger and serialization > refuses a string
+(pass) parseLedger and serialization > refuses an array
+(pass) parseLedger and serialization > refuses an empty object
+(pass) parseLedger and serialization > refuses version 2
+(pass) parseLedger and serialization > refuses missing items
+(pass) parseLedger and serialization > refuses a negative rev
+(pass) parseLedger and serialization > refuses an unknown field
+(pass) parseLedger and serialization > refuses a stray item field
+(pass) parseLedger and serialization > refuses an id at nextId [0.02ms]
+(pass) parseLedger and serialization > refuses a kind/id mismatch
+(pass) parseLedger and serialization > refuses duplicate ids
+(pass) parseLedger and serialization > refuses a one-way lineage [0.03ms]
+(pass) parseLedger and serialization > refuses an unknown status
+(pass) parseLedger and serialization > refuses steering without scope [0.01ms]
+(pass) parseLedger and serialization > refuses too many items
+
+tests/continuity/continuity-ledger-reducer.test.ts:
+(pass) protected items > agent ops cannot archive, rewrite or complete a user rule, and the rejection names it [0.13ms]
+(pass) protected items > classifier ops cannot archive, rewrite or complete a user rule, and the rejection names it [0.02ms]
+(pass) protected items > lets the user rewrite their own rule and agents change unprotected items [0.06ms]
+(pass) protected items > protects agent items once the user pins them, and refuses agent pinning [0.05ms]
+(pass) protected items > allows only one active objective; replacing it is a supersession [0.06ms]
+(pass) supersession > accepts a newer cited user entry and records the lineage both ways [0.10ms]
+(pass) supersession > rejects missing, non-user, own-source and not-newer citations [0.08ms]
+(pass) supersession > lets agents supersede unprotected items without a citation [0.03ms]
+(pass) duplicates and caps > reports an equal active item as a duplicate and returns its id without a new revision [0.05ms]
+(pass) duplicates and caps > truncates oversize text and quotes with a visible marker [0.04ms]
+(pass) duplicates and caps > rejects additions with an explicit error once the ledger is full [1.95ms]
+(pass) retention at the item cap > evicts the oldest dead item instead of refusing, and the ledger stays parseable [3.37ms]
+(pass) retention at the item cap > evicts a superseded item and unlinks its active heir so the lineage stays valid [2.95ms]
+(pass) retention at the item cap > still refuses when every item is active [2.27ms]
+
+tests/continuity/continuity-ledger.test.ts:
+(pass) reconcileFold > rejects each invalid delta entry by itself while valid ones still apply [0.21ms]
+(pass) reconcileFold > archives the folded anchor's steering and reports it as applied [0.06ms]
+(pass) archiveSteeringForAnchor > archives unpinned steering of the anchor, keeps pinned and others, and never deletes [0.06ms]
+(pass) ids and rewinds > never reuses an id after rewinding to an earlier snapshot [0.10ms]
+(pass) file pointers > flags pointers whose hash differs or whose file is missing, and leaves unhashed ones alone [0.06ms]
+
+tests/continuity/continuity-runtime.test.ts:
+(pass) rewind: continuity ledger > sends the ledger and the span's user messages with the summary request [10.57ms]
+(pass) rewind: continuity ledger > stores the reconciled snapshot and the briefing; the rule stays active, the steering is archived [1.81ms]
+(pass) rewind: continuity ledger > a summary that ends with a Standing authorization section and a delta block folds: the delta applies, the section is kept [1.62ms]
+(pass) rewind: continuity ledger > rejects a delta that archives a user rule per item, applies the valid ones and says so [1.35ms]
+(pass) rewind: continuity ledger > accepts a supersession that cites a newer user message of the active branch and refuses a bogus citation [2.37ms]
+(pass) rewind: continuity ledger > a malformed delta never fails the fold: reported, nothing applied, block stripped [1.18ms]
+(pass) rewind: continuity ledger > keeps a stray delta tag in the stored prose and reports nothing [0.95ms]
+(pass) rewind: continuity ledger > the pre-fold leaf still reads the pre-fold ledger [1.03ms]
+(pass) rewind: continuity ledger > an empty ledger and a span without user messages change nothing [0.99ms]
+(pass) rewind: continuity ledger > a failed fold applies nothing: the ledger and the branch stay as they were [0.83ms]
+(pass) rewind: continuity ledger > a refused preview writes nothing, and the briefing counts toward the size check [2.31ms]
+(pass) rewind: continuity ledger > a parent fold embeds only its own briefing, not the child's [5.30ms]
+(pass) continuity capture > captures nothing while navigate_tree is not in the active tool set [1.79ms]
+(pass) continuity capture > records the user's rule verbatim after the turn, and nothing more on a turn without new input [0.63ms]
+(pass) continuity capture > writes nothing and never calls the classifier when capture is off [0.87ms]
+(pass) continuity capture > leaves a tool batch without all its results alone, then records after the last result [0.42ms]
+(pass) continuity capture > skips an aborted turn and picks the input up on the next one [0.27ms]
+(pass) continuity capture > fold > carries the rule into the snapshot and the briefing (captured at its turn) [1.25ms]
+(pass) continuity capture > fold > carries the rule into the snapshot and the briefing (captured only at the rewind turn) [0.78ms]
+(pass) continuity capture > fold > puts the span's rule into the summary request when no turn recorded it yet [0.97ms]
+(pass) continuity capture > classifier > asks the configured model and records what it calls a rule [0.94ms]
+(pass) continuity capture > classifier > records a model-classified ephemeral message as seen, so it is not asked again [0.82ms]
+(pass) continuity capture > classifier > warns once about an unknown classifier model and falls back to heuristics [0.98ms]
+(pass) continuity capture > classifier > stays silent headless [0.70ms]
+(pass) continuity capture > classifier > discards an old classifier timeout after configuration reload [1.48ms]
+(pass) continuity capture > classifier > does not let a classifier that never answers stall the turn or dump its policy [0.95ms]
+
+tests/continuity/continuity-store.test.ts:
+(pass) userEntryIndexOf > resolves user message positions on the branch, nothing else [0.11ms]
+(pass) readBranchLedger > replays ops entries root to leaf and reports the last watermark [0.11ms]
+(pass) readBranchLedger > applies consecutive ops with one context as one revision [0.10ms]
+(pass) readBranchLedger > returns an empty ledger for a branch without ledger entries [0.03ms]
+(pass) readBranchLedger > a snapshot on a branch_summary replaces the running ledger; later ops apply on top [0.11ms]
+(pass) readBranchLedger > the watermark of ops before a snapshot does not survive it [0.05ms]
+(pass) readBranchLedger > a branch_summary without a snapshot leaves the ledger as it was [0.04ms]
+(pass) readBranchLedger > a corrupt snapshot yields a warning and keeps the previous ledger [0.14ms]
+(pass) readBranchLedger > a malformed ops entry is skipped with a warning [0.09ms]
+(pass) readBranchLedger > verifies supersession citations against user entries on this branch [0.13ms]
+(pass) readBranchLedger > follows the active leaf: sibling branches have independent ledgers [0.06ms]
+(pass) appendOpsEntry > writes a navigate-tree-continuity-ops entry with serializable contexts only [0.06ms]
+(pass) appendOpsEntry > writes nothing without ops and without a watermark; a bare watermark is kept [0.04ms]
+(pass) spanUserEntryRefs > lists user messages after the anchor as one-line previews [0.06ms]
+(pass) spanUserEntryRefs > is empty when the anchor is not on the branch [0.02ms]
+(pass) reconcileFoldContinuity > leaves an empty ledger and a delta-free summary untouched [0.02ms]
+(pass) reconcileFoldContinuity > archives the anchor's steering, keeps the rule in force and renders the briefing [0.16ms]
+(pass) reconcileFoldContinuity > rejects a delta that archives a user rule per item and still applies the valid ones [0.24ms]
+(pass) reconcileFoldContinuity > reports a malformed delta, applies nothing from it and strips the block [0.11ms]
+(pass) reconcileFoldContinuity > keeps a stray open tag in the prose and reports nothing for it [0.07ms]
+(pass) reconcileFoldContinuity > an unusable delta on an empty ledger is reported, not applied [0.07ms]
+(pass) reconcileFoldContinuity > surfaces replay warnings in the report and keeps the previous ledger [0.07ms]
+(pass) reconcileFoldContinuity > embeds no briefing when nothing in the ledger is in force [0.07ms]
+
+tests/continuity/intent-policy.test.ts:
+(pass) parseIntentPolicyObject > accepts every documented field and returns canonical JSON text [0.19ms]
+(pass) parseIntentPolicyObject > accepts an empty object and a preset alone [0.02ms]
+(pass) parseIntentPolicyObject > names every problem by its field path [0.06ms]
+(pass) parseIntentPolicyObject > rejects wrong shapes and a confidence outside (0, 1] [0.06ms]
+(pass) parseIntentPolicyObject > names a bad verification stage by its field path [0.02ms]
+(pass) parseIntentPolicyObject > rejects a policy with no source for the intent kind [0.04ms]
+(pass) resolveIntentPolicy > resolves the preset: microsoft for both questions, luna to escalate, heuristics on [0.02ms]
+(pass) resolveIntentPolicy > applies object fields over the preset, and over nothing without one [0.10ms]
+(pass) resolveIntentPolicy > a provider/id is one model for both questions with no escalation [0.01ms]
+(pass) resolveIntentPolicy > resolves nothing for malformed text [0.02ms]
+
+tests/continuity/open-user-requests.test.ts:
+(pass) collectOpenUserRequests across a pressure compaction > keeps a request a pressure compaction quoted open while the agent keeps working [0.14ms]
+(pass) collectOpenUserRequests across a pressure compaction > closes it on a final text reply and ignores malformed details [0.03ms]
+
+tests/continuity/retirement-check.test.ts:
+(pass) buildRetirementCheckContext > sends the message, the one item and the others, with a yes/no question [0.11ms]
+(pass) buildRetirementCheckContext > omits otherItems when there are none [0.03ms]
+(pass) buildRetirementCheckContext > flattens and bounds item text and message like the intent request [0.07ms]
+(pass) retirementConfirmed > confirms only a confident yes [0.03ms]
+(pass) call paths of intent-policy.ts > classifierAsk returns the yes/no answer of a decision model [0.11ms]
+(pass) call paths of intent-policy.ts > chatAsk offers only yes and no and reads the chat model's JSON answer [0.19ms]
+(pass) call paths of intent-policy.ts > chatAsk leaves an answer outside yes and no unanswered [0.07ms]
+
+tests/core/config-merge.test.ts:
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > absent + absent stays absent [0.05ms]
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > project absent → global applies
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > global absent → project applies
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > project value wins over global value
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > project disabled sentinel wins
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > global disabled wins when project is absent
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > project invalid wins (no cross-layer fallback)
+(pass) mergeTreeNavigatorConfig > hint field (issue #44 semantics preserved) > global invalid is overridden by a valid project value
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > absent + absent stays absent (resolves to default) [0.01ms]
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > project absent → global applies
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > global absent → project applies
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > project value wins over global value
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > project invalid + valid global → global applies
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > project invalid + absent global → invalid (resolves to default)
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > project invalid + invalid global → invalid (resolves to default)
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > project ok overrides an invalid global
+(pass) mergeTreeNavigatorConfig > start-anchor field (issue #55: invalid falls through) > project absent + invalid global → invalid (resolves to default)
+(pass) mergeTreeNavigatorConfig > parent-handoff mode field (invalid falls through) > absent + absent stays absent [0.01ms]
+(pass) mergeTreeNavigatorConfig > parent-handoff mode field (invalid falls through) > project absent → global applies
+(pass) mergeTreeNavigatorConfig > parent-handoff mode field (invalid falls through) > project mode wins over global mode
+(pass) mergeTreeNavigatorConfig > parent-handoff mode field (invalid falls through) > project invalid + valid global → global applies [0.01ms]
+(pass) mergeTreeNavigatorConfig > parent-handoff mode field (invalid falls through) > project invalid + absent global → invalid (resolves to default)
+(pass) mergeTreeNavigatorConfig > parent-handoff mode field (invalid falls through) > global invalid + valid project → project applies
+(pass) mergeTreeNavigatorConfig > merges the two fields independently [0.03ms]
+(pass) modelOverrides (#86) > merge > merges per key: a project entry wins, others pass through [0.05ms]
+
+tests/core/config.test.ts:
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: accepts integer reserves (number and string forms) > number [0.06ms]
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: accepts integer reserves (number and string forms) > numeric string [0.02ms]
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: accepts integer reserves (number and string forms) > trimmed numeric string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: accepts integer reserves (number and string forms) > min edge number
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: accepts integer reserves (number and string forms) > max edge number
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: accepts integer reserves (number and string forms) > min edge string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: accepts integer reserves (number and string forms) > max edge string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > null [0.01ms]
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > false
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > "off"
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > "OFF"
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > " Off "
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > "disabled"
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > "DISABLED"
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: treats explicit-disable sentinels as disabled > "Disabled"
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > one below min
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > one above max
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > zero
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > negative
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > decimal
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > decimal string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > non-numeric string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > empty string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > whitespace string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > boolean true
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > object
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > array
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > NaN number
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > NaN string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > negative string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > plus-signed string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > decimal-zero string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > exponent string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > plus-signed min string
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > string below min
+(pass) parseTreeNavigatorConfig > rewindHintReserveTokens: rejects unusable field values as invalid > string above max
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > default [0.05ms]
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > numeric string [0.01ms]
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > trimmed numeric string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > min edge number
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > max edge number
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > min edge string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > max edge string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: accepts integer turn bounds (number and string forms) > leading zeroes
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > zero (no turn 0) [0.03ms]
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > one above max
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > negative
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > decimal
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > decimal string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > non-numeric string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > empty string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > whitespace string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > boolean true
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > boolean false (no disable sentinel)
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > null (no disable sentinel)
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > off string (no disable sentinel)
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > disabled string (no sentinel)
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > object
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > array
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > NaN number
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > NaN string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > negative string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > plus-signed string
+(pass) parseTreeNavigatorConfig > anchorStartAfterTurns: rejects unusable field values as invalid > string above max
+(pass) parseTreeNavigatorConfig > parentHandoffMode: accepts exactly the three supported modes > full [0.03ms]
+(pass) parseTreeNavigatorConfig > parentHandoffMode: accepts exactly the three supported modes > synthesized
+(pass) parseTreeNavigatorConfig > parentHandoffMode: accepts exactly the three supported modes > digest
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > "FULL"
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > " Synthesized "
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > ""
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > "other"
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > 1
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > false
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > null
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > {}
+(pass) parseTreeNavigatorConfig > parentHandoffMode: rejects values other than the exact supported modes > []
+(pass) parseTreeNavigatorConfig > parses each field independently (invalid hint leaves start valid) [0.02ms]
+(pass) parseTreeNavigatorConfig > parses each field independently (invalid start leaves hint valid) [0.01ms]
+(pass) parseTreeNavigatorConfig > returns absent for each missing key [0.06ms]
+(pass) parseTreeNavigatorConfig > ignores the removed rewindHintAtPercent key (the loader warns) [0.04ms]
+(pass) parseTreeNavigatorConfig > returns unusable for a non-object root (file-level failure) [0.02ms]
+(pass) consolidation config > defaults when absent and merges partial layers per key [0.29ms]
+(pass) consolidation config > accepts camelCase aliases and runtime overrides without dropping lower keys [0.13ms]
+(pass) consolidation config > warns per invalid field and falls back to valid lower values or defaults [0.17ms]
+(pass) consolidation config > ignores non-object block null [0.10ms]
+(pass) consolidation config > ignores non-object block [] [0.03ms]
+(pass) consolidation config > ignores non-object block false [0.03ms]
+(pass) consolidation config > ignores non-object block 3 [0.02ms]
+(pass) consolidation config > ignores non-object block "on" [0.03ms]
+(pass) loadTreeNavigatorConfig > reads both layers and lets a trusted project override global per field [0.15ms]
+(pass) loadTreeNavigatorConfig > never reads the project layer when the project is untrusted [0.09ms]
+(pass) loadTreeNavigatorConfig > defaults to full parent handoff mode when both files are missing [0.08ms]
+(pass) loadTreeNavigatorConfig > is silent when the file exists but neither field is present [0.06ms]
+(pass) loadTreeNavigatorConfig > warns on the removed rewindHintAtPercent key and leaves the hint off [0.07ms]
+(pass) loadTreeNavigatorConfig > warns on a legacy project key while the global reserve still applies [0.07ms]
+(pass) loadTreeNavigatorConfig > trims and accepts numeric-string values through the loader [0.05ms]
+(pass) loadTreeNavigatorConfig > warns on a non-ENOENT read error and ignores that layer (EACCES) [0.11ms]
+(pass) loadTreeNavigatorConfig > warns on EISDIR and still applies the other layer [0.09ms]
+(pass) loadTreeNavigatorConfig > warns on malformed, empty, and whitespace-only JSON [0.09ms]
+(pass) loadTreeNavigatorConfig > warns when the root is not a JSON object [0.09ms]
+(pass) loadTreeNavigatorConfig > warns once on an invalid hint value and disables the hint (no fallback) [0.05ms]
+(pass) loadTreeNavigatorConfig > an invalid project hint disables despite a valid global (no fallback) [0.05ms]
+(pass) loadTreeNavigatorConfig > a project hint disable sentinel overrides a valid global [0.04ms]
+(pass) loadTreeNavigatorConfig > an invalid project start value falls through to a valid global (issue #55) [0.08ms]
+(pass) loadTreeNavigatorConfig > an invalid global start value falls through to a valid project (issue #55) [0.05ms]
+(pass) loadTreeNavigatorConfig > an invalid start value with no valid layer warns and uses the default [0.04ms]
+(pass) loadTreeNavigatorConfig > an invalid trusted project handoff mode warns and falls back to global [0.06ms]
+(pass) loadTreeNavigatorConfig > an invalid global handoff mode falls through to a valid trusted project [0.05ms]
+(pass) loadTreeNavigatorConfig > an invalid handoff mode with no valid layer warns and defaults to digest [0.04ms]
+(pass) loadTreeNavigatorConfig > both fields invalid in one layer emit one scoped warning each [0.04ms]
+(pass) loadTreeNavigatorConfig > a file-level failure warns once and suppresses per-field warnings [0.05ms]
+(pass) loadTreeNavigatorConfig > orders warnings global-then-project across fields [0.06ms]
+(pass) loadTreeNavigatorConfig > a malformed project file warns but a valid global still applies [0.10ms]
+(pass) loadTreeNavigatorConfig > a malformed project file is silent when the project is untrusted [0.04ms]
+(pass) loadTreeNavigatorConfig > emits the file-level warning then the surviving field warning (per layer) [0.04ms]
+(pass) loadTreeNavigatorConfig > uses the real default readFile when none is injected (ENOENT on a fresh temp dir) [0.10ms]
+(pass) modelOverrides (#86) > parse > parses per-model reserves with the base field's rules [0.05ms]
+(pass) modelOverrides (#86) > parse > records a non-object modelOverrides and non-object entries [0.08ms]
+(pass) modelOverrides (#86) > parse > leaves an absent modelOverrides problem-free [0.01ms]
+(pass) modelOverrides (#86) > resolveRewindHintReserve > prefers a matching entry, including an off entry [0.01ms]
+(pass) modelOverrides (#86) > resolveRewindHintReserve > falls back to the base for an unmatched or unknown model [0.01ms]
+(pass) modelOverrides (#86) > resolveRewindHintReserve > an entry enables a model while the base is off
+(pass) modelOverrides (#86) > resolveRewindHintReserve > matches keys exactly
+(pass) modelOverrides (#86) > loader > loads the approved snippet [0.08ms]
+(pass) modelOverrides (#86) > loader > a global model entry beats a project base (pi precedent) [0.10ms]
+(pass) modelOverrides (#86) > loader > keeps key case as written (no normalization) [0.05ms]
+(pass) modelOverrides (#86) > loader > ignores the untrusted project's entries [0.05ms]
+(pass) modelOverrides (#86) > loader > warns on shape problems and invalid entries; an invalid entry turns that model off [0.11ms]
+(pass) modelOverrides (#86) > loader > a project file-level problem keeps the global entries [0.06ms]
+(pass) continuity config > defaults to capture on and heuristics only [0.10ms]
+(pass) continuity config > reads both keys, camelCase and snake_case [0.12ms]
+(pass) continuity config > a trusted project overrides global per key; an untrusted one is not read [0.10ms]
+(pass) continuity config > "recommended" selects the recommended policy, in either key spelling [0.09ms]
+(pass) continuity config > " Recommended " selects the recommended policy, in either key spelling [0.02ms]
+(pass) continuity config > "RECOMMENDED" selects the recommended policy, in either key spelling [0.02ms]
+(pass) continuity config > the recommended policy layers like a model: project overrides global, off disables it [0.07ms]
+(pass) continuity config > an object policy is validated and carried as canonical JSON text, in either key spelling [0.17ms]
+(pass) continuity config > a project object replaces the global value as a whole, never field by field [0.09ms]
+(pass) continuity config > an invalid object warns once per layer with each field problem, and falls back like any invalid value [0.17ms]
+(pass) continuity config > null disables a classifier set by the other layer [0.06ms]
+(pass) continuity config > false disables a classifier set by the other layer [0.02ms]
+(pass) continuity config > "off" disables a classifier set by the other layer [0.02ms]
+(pass) continuity config > " OFF " disables a classifier set by the other layer [0.02ms]
+(pass) continuity config > "disabled" disables a classifier set by the other layer
+(pass) continuity config > an invalid project value warns and falls back to global, per key [0.09ms]
+(pass) continuity config > an invalid value with no valid layer warns and uses the default [0.05ms]
+(pass) continuity config > rejects intentClassifier "" [0.07ms]
+(pass) continuity config > rejects intentClassifier "provider/" [0.01ms]
+(pass) continuity config > rejects intentClassifier "/id" [0.02ms]
+(pass) continuity config > rejects intentClassifier "has space/id" [0.01ms]
+(pass) continuity config > rejects intentClassifier 5 [0.01ms]
+(pass) continuity config > rejects intentClassifier [] [0.01ms]
+(pass) continuity config > a non-object continuity block warns and is ignored [0.06ms]
+(pass) runtime layer > overrides scalars, maps and tool policy per key without losing lower keys [0.41ms]
+(pass) runtime layer > can disable capture and a classifier set by the files [0.11ms]
+(pass) runtime layer > applies even when the project is untrusted [0.08ms]
+(pass) runtime layer > an empty runtime root resolves like no runtime layer [0.12ms]
+(pass) runtime layer > clearing restores file resolution and sessions stay isolated [0.29ms]
+(pass) runtime layer > invalid runtime values fail closed with runtime-scoped warnings [0.21ms]
+(pass) runtime layer > a valid runtime proposal cannot clear an invalid file proposal [0.14ms]
+(pass) runtime layer > a non-object runtime root is ignored with a warning [0.13ms]
+
+tests/core/context-tokens.test.ts:
+(pass) estimateContextTokens > empty message list is 0 [0.09ms]
+(pass) estimateContextTokens > no usage anywhere: sums estimateTokens over every message [0.14ms]
+(pass) estimateContextTokens > uses the newest valid assistant usage as baseline + trailing estimates [0.02ms]
+(pass) estimateContextTokens > picks the newest valid usage, not the oldest [0.01ms]
+(pass) estimateContextTokens > skips aborted/error/zero-usage baselines and falls through to the previous valid usage [0.02ms]
+(pass) estimateContextTokens > counts toolResult / custom / branchSummary shapes [0.05ms]
+(pass) estimateContextTokens > system message: delegates to the host estimateTokens (0.84.2 scores 0; 1.0.0 counts content+sections+toolsAdded) [0.11ms]
+(pass) estimateContextTokens > counts the effective system state once after section replacement [0.04ms]
+(pass) estimateContextTokens > image blocks are accounted as chars in the trailing estimate [0.03ms]
+(pass) estimateContextTokens > circular toolCall arguments throw (plain JSON.stringify — no safeJsonStringify guard) [2.40ms]
+(pass) estimateContextTokens > image blocks after the baseline are counted in the trailing estimate [0.03ms]
+(pass) estimateRequestTokens > valid baseline: usage plus the SDK-scaled tail, even when a whole-content scan is larger [0.04ms]
+(pass) estimateRequestTokens > no baseline: the whole content, scaled [0.05ms]
+(pass) estimateRequestTokens > an aborted or errored reply is no baseline [0.03ms]
+(pass) fixedOverheadNote > names the tool schemas and the largest MCP server when they alone exceed the limit [6.17ms]
+(pass) fixedOverheadNote > stays silent while the conversation holds enough to fold [0.48ms]
+
+tests/core/helpers.test.ts:
+(pass) isValidName > accepts kebab-case [0.02ms]
+(pass) isValidName > rejects empty, undefined, non-strings [0.03ms]
+(pass) isValidName > rejects leading hyphen, uppercase, underscores, spaces [0.02ms]
+(pass) isValidName > rejects trailing hyphen
+(pass) isValidName > rejects double hyphen
+(pass) isValidName > rejects all-hyphen / hyphen-only
+(pass) isValidName > rejects digit-then-trailing-hyphen
+(pass) isValidName > enforces max length [0.01ms]
+(pass) toOneLine > collapses whitespace [0.04ms]
+(pass) toOneLine > returns null for empty / whitespace-only [0.01ms]
+(pass) toOneLine > truncates with ellipsis [0.02ms]
+(pass) toOneLine > does not truncate when under maxLen
+(pass) toOneLine > handles maxLen <= 1
+(pass) formatPct1 > formats with one decimal when window is known [0.02ms]
+(pass) formatPct1 > falls back to k-tokens when window is unknown
+(pass) formatPct1 > renders 100.0% when tokens === window exactly
+(pass) formatPct1 > renders > 100.0% when tokens overflow the window
+(pass) formatPct1 > rounds tiny fractions down to 0.0%
+(pass) formatPct1 > renders negative tokens with a leading minus [0.01ms]
+(pass) formatWindow > uses M for >=1M
+(pass) formatWindow > uses k below 1M
+(pass) formatWindow > returns empty string when unknown
+(pass) formatContextDelta > renders before → after with window [0.02ms]
+(pass) formatContextDelta > falls back to tokens when no window
+(pass) stripBranchSummaryBoilerplate > strips lead-in up to ## Goal [0.02ms]
+(pass) stripBranchSummaryBoilerplate > returns text unchanged when no early ## Goal
+(pass) stripBranchSummaryBoilerplate > does not strip without sentinel even with late ## Goal
+(pass) stripBranchSummaryBoilerplate > does not strip when ## Goal appears past MAX_BOILERPLATE_LEAD_IN even with sentinel
+(pass) stripBranchSummaryBoilerplate > does not strip when ## Goal is at index 0
+(pass) stripBranchSummaryBoilerplate > does not strip when text lacks the pi boilerplate sentinel
+(pass) stripBranchSummaryBoilerplate > strips when ## Goal is at the boundary - 1 (just inside MAX_BOILERPLATE_LEAD_IN) [0.01ms]
+(pass) stripBranchSummaryBoilerplate > does not strip when ## Goal is at MAX_BOILERPLATE_LEAD_IN (boundary)
+(pass) extractTextContent > returns string content as-is
+(pass) extractTextContent > joins text blocks with spaces [0.03ms]
+(pass) extractTextContent > filters out non-text blocks [0.01ms]
+(pass) extractTextContent > returns empty string for non-string non-array [0.05ms]
+(pass) extractTextContent > ignores text blocks where text isn't a string
+(pass) extractTextContent > ignores tool_result, image, and redactedThinking blocks [0.02ms]
+(pass) extractTextContent > returns empty string for empty array [0.01ms]
+(pass) extractTextContent > preserves empty-string text blocks (joined with surrounding space) [0.02ms]
+(pass) reserved label prefixes > branch: marks a completed rewind's summary turn (#90)
+(pass) formatAnchorTable (#101 D19) > renders the header with the window, then pct and name rows [0.07ms]
+(pass) formatAnchorTable (#101 D19) > drops the window from the header when it is unknown [0.02ms]
+(pass) formatAnchorTable (#101 D19) > widens the pct column for 100.0% so names stay aligned [0.01ms]
+(pass) formatAnchorTable (#101 D19) > pads names only with the after column, capped at MAX_NAME_LENGTH; no trailing spaces [0.06ms]
+(pass) buildFoldRequestText > stays recognizable to continuity capture, and user text does not [0.06ms]
+(pass) buildFoldRequestText > appends the focus after the unchanged request, escaping quotes and backslashes [0.05ms]
+
+tests/core/hint-integration.test.ts:
+(pass) settings live application > runtime capture save immediately blocks pin without writing config, and reload restores file settings [22.51ms]
+(pass) rewind hint: session_start config wiring (#44) > loads the global threshold and fires on the first crossing [2.82ms]
+(pass) rewind hint: session_start config wiring (#44) > project layer overrides global when trusted; untrusted ignores the file [1.17ms]
+(pass) rewind hint: session_start config wiring (#44) > invalid config disables the hint and surfaces one warning per layer [0.55ms]
+(pass) rewind hint: session_start config wiring (#44) > the removed rewindHintAtPercent warns and leaves the hint off [0.45ms]
+(pass) rewind hint: session_start config wiring (#44) > suppresses config warnings when the session has no UI [0.36ms]
+(pass) rewind hint: session_start config wiring (#44) > is default-off when no config exists (ENOENT is silent) [0.30ms]
+(pass) rewind hint: session_start config wiring (#44) > reload resets the tracker and the toolActive gate [0.83ms]
+(pass) rewind hint: turn_end handler (#44) > does not fire when disabled by a sentinel [0.35ms]
+(pass) rewind hint: turn_end handler (#44) > does not fire when the tool is inactive [0.41ms]
+(pass) rewind hint: turn_end handler (#44) > keeps the tool gate per-session (#58): a sibling session must not clear this session's hint [0.68ms]
+(pass) rewind hint: turn_end handler (#44) > no-ops on missing/percent-null/zero-window usage without spending the crossing [0.50ms]
+(pass) rewind hint: turn_end handler (#44) > no-ops on tokens-null usage even when percent is set [0.55ms]
+(pass) rewind hint: turn_end handler (#44) > fires on an overrun window (tokens > contextWindow) with 0.0k left [0.51ms]
+(pass) rewind hint: turn_end handler (#44) > a spent crossing skips the anchor walk entirely [0.71ms]
+(pass) rewind hint: turn_end handler (#44) > fires once per crossing and re-arms only after a drop below the bar [0.64ms]
+(pass) rewind hint: turn_end handler (#44) > with no anchors: TUI notify with the exact copy, no model message [0.58ms]
+(pass) rewind hint: turn_end handler (#44) > lists only names rewindTo accepts [0.59ms]
+(pass) rewind hint: turn_end handler (#44) > an empty-named manual label alone counts as no anchors [0.59ms]
+(pass) rewind hint: turn_end handler (#44) > with no anchors and no UI: silent [0.60ms]
+(pass) rewind hint: turn_end handler (#44) > sendMessage throw falls back to appendCustomMessageEntry(customType, text, true) [0.74ms]
+(pass) rewind hint: turn_end handler (#44) > sendMessage + append double throw: warns with the exact copy, never throws [0.62ms]
+(pass) rewind hint: turn_end handler (#44) > double throw with no UI: silent, no throw, crossing spent [0.66ms]
+(pass) rewind hint: turn_end handler (#44) > a throwing ui.notify in the double-failure path cannot escape [0.52ms]
+(pass) rewind hint: turn_end handler (#44) > captures sessionManager before sendMessage (post-throw ctx reads fail) [0.64ms]
+(pass) rewind hint: turn_end handler (#44) > a throwing anchor collection leaves the crossing unspent for a retry [0.66ms]
+(pass) rewind hint: turn_end handler (#44) > a throwing getEntries leaves the crossing unspent for a retry [0.58ms]
+(pass) rewind hint: turn_end handler (#44) > the fired custom message is projected by the existing context handler [0.60ms]
+(pass) rewind hint: turn_end handler (#44) > fails open when selectedTools is undefined (gate stays on) [0.45ms]
+(pass) rewind hint: turn_end handler (#44) > fires while TOOL_NAME is in the selected set [0.45ms]
+(pass) rewind hint: suppressed on turns a rewind owns (#80) > skips the turn that runs the rewind's fold; the crossing fires on the next normal turn [3.80ms]
+(pass) rewind hint: suppressed on turns a rewind owns (#80) > the start anchor skips the turn that runs the rewind's fold (#90) [3.39ms]
+(pass) rewind hint: per-model modelOverrides (#86) > a matching entry overrides the base reserve [0.81ms]
+(pass) rewind hint: per-model modelOverrides (#86) > an off entry disables the hint for that model only [0.58ms]
+(pass) rewind hint: per-model modelOverrides (#86) > an entry enables a model while the base is off [0.59ms]
+(pass) rewind hint: per-model modelOverrides (#86) > a model switch re-reads the reserve on the next turn [0.59ms]
+(pass) rewind hint: per-model modelOverrides (#86) > no model falls back to the base reserve [0.50ms]
+(pass) rewind hint: per-model modelOverrides (#86) > a throwing ctx.model getter skips the turn without spending the crossing [0.54ms]
+(pass) rewind hint: per-model modelOverrides (#86) > without modelOverrides, ctx.model is never read [0.43ms]
+
+tests/core/pi-internals.test.ts:
+(pass) refreshAgentMessages > returns false when no session was captured [0.04ms]
+(pass) refreshAgentMessages > returns false when agent.state is missing [0.07ms]
+(pass) refreshAgentMessages > mutates agent.state.messages on success [0.07ms]
+(pass) captureSession reaping > deduplicates the same session and bounds growth across many distinct sessions [12.59ms]
+(pass) captureSession reaping > dedupes the same session on repeated capture [0.06ms]
+(pass) captureSession reaping > resetPrototype clears seenSessions so a re-captured identity isn't deduped [0.03ms]
+(pass) captureSession reaping > captureSession tolerates a session with no agent internals [0.10ms]
+(pass) findLabelHint > returns null when no text is found within MAX_HINT_WALK_DEPTH [0.32ms]
+(pass) findLabelHint > returns a preview when text is within the depth limit [0.11ms]
+(pass) findLabelHint > branch_summary entry: returns 'summary: <stripped lead-in>' [0.06ms]
+(pass) findLabelHint > custom_message entry: hint extracts the content text [0.05ms]
+(pass) findLabeledEntry > returns null when the label isn't on the active branch [0.06ms]
+(pass) findLabeledEntry > returns the entry id when the label is set [0.03ms]
+
+tests/core/rewind-completion.test.ts:
+(pass) rewind: completion > branches from the anchor with a work handoff, labels it, and moves the leaf [3.35ms]
+(pass) rewind: completion > delivers the continuation as a boundary entry: buildRewindDoneText content, continue, done details [2.65ms]
+(pass) rewind: completion > continuation prose: [rewind] header + pending-work guidance [2.82ms]
+(pass) rewind: completion > continuation prose: the authority order outranks the summary, and retained messages keep their standing instructions [2.96ms]
+(pass) rewind: completion > refreshes agent.state.messages to the rewound chain [2.66ms]
+(pass) rewind: completion > bootstrap-missing: continuation carries the rewind warning and refreshed=false [2.65ms]
+(pass) rewind: completion > strips any preamble before '## Goal' from the stored summary [2.72ms]
+(pass) rewind: completion > appends read/modified file tags from read/edit/write calls in the collapsed segment [1.45ms]
+(pass) rewind: completion > emits session_tree after the rewind so history mirrors rebuild (#79) [2.96ms]
+(pass) rewind: completion > reports historyRewriteNotified=false without a reachable runner (#79) [2.69ms]
+(pass) rewind: completion > a throwing session_tree handler does not fail the rewind (#79) [2.91ms]
+(pass) rewind: completion > a throwing pi.sendMessage cannot affect delivery (rewind messages never use it) [2.97ms]
+(pass) rewind: completion > setLabel throw falls back to appendLabelChange for both labels [3.05ms]
+(pass) rewind: completion > chained rewinds: a→b then b→c keeps prior labels and re-anchors the new summary [6.73ms]
+(pass) rewind: completion > refuses a growing materialized summary without writing a branch or completion label [3.12ms]
+(pass) rewind: completion > compares fold content on the same heuristic despite low recorded usage [2.72ms]
+(pass) rewind: completion > checks the currently edited view rather than the old pre-withholding measurement [2.83ms]
+(pass) rewind: completion > includes full child reports in the net-fold check [1.89ms]
+(pass) rewind: completion > folds an earlier child handoff into a parent once and projects honest work context [5.07ms]
+(pass) rewind: completion > defaults parent folds to a digest while retaining full child evidence for synthesis [4.87ms]
+(pass) rewind: completion > includes a native child summary’s own generation usage in parent recorded statistics [1.25ms]
+(pass) rewind: completion > immediate re-rewind of a just-landed summary is refused and queues nothing [2.74ms]
+(pass) rewind: completion > never calls pi.sendMessage / sendUserMessage for rewind messages [2.52ms]
+(pass) rewind: completion > keeps entries from a handler earlier in the chain: [foreign, ours] [2.60ms]
+(pass) rewind: completion > drops earlier context_edit drafts the rewind made stale, keeps the rest (compactions included) [4.93ms]
+(pass) rewind: completion > returns nothing on turns without a queued fold [2.34ms]
+
+tests/core/rewind-hint.test.ts:
+(pass) RewindHintTracker > fires on the first observation at or inside the reserve [0.02ms]
+(pass) RewindHintTracker > does not fire outside the reserve
+(pass) RewindHintTracker > does not re-fire while spent and still inside
+(pass) RewindHintTracker > re-arms after the tokens left climb back outside the reserve
+(pass) RewindHintTracker > a null reserve never fires and re-arms (#86) [0.01ms]
+(pass) RewindHintTracker > isSpent() tracks the crossing
+(pass) RewindHintTracker > reset() re-arms a spent tracker [0.02ms]
+(pass) RewindHintTracker > reset() on a fresh tracker is a no-op
+(pass) buildRewindHintText > is byte-exact at 98.6% of a 100k window, naming the anchors [0.02ms]
+(pass) buildRewindHintText > is byte-exact at a 1M window with several anchors [0.03ms]
+(pass) buildRewindHintText > renders tokens at or above 1M in M (the max reserve) [0.08ms]
+(pass) buildRewindHintText > clamps an overrun window to 0.0k tokens left [0.02ms]
+(pass) buildRewindHintText > starts with the TOOL_NAME-derived header (rename-desync pin) [0.01ms]
+(pass) buildRewindHintText > renders the percent with one decimal (toFixed(1)) [0.02ms]
+(pass) buildNoAnchorText > is byte-exact at 91.2% of a 1M window
+(pass) buildNoAnchorText > is byte-exact at a 200k window (k-window formatting)
+(pass) buildNoAnchorText > starts with the TOOL_NAME-derived prefix (rename-desync pin)
+(pass) buildNoAnchorText > renders the LABEL_PREFIX-derived label instructions (rename-desync pin) [0.01ms]
+(pass) REWIND_HINT_CUSTOM_TYPE > is the pinned customType
+
+tests/core/runtime-config.test.ts:
+(pass) runtime config store > returns an empty root for an unknown session [0.01ms]
+(pass) runtime config store > isolates sessions and clears only the named one [0.03ms]
+(pass) runtime config store > replaces the previous root on write [0.03ms]
+(pass) runtime config store > clones on write and on read so callers cannot mutate the store [0.04ms]
+
+tests/core/session-write.test.ts:
+(pass) a failed persisted append cannot become the parent of the next write [0.91ms]
+(pass) a failed append from an empty session restores the null cursor [0.06ms]
+(pass) reports inability to restore the cursor instead of masking it [0.04ms]
+(pass) a substring, a nested id or a truncated record is not a durable write [0.27ms]
+
+tests/core/start-anchor.test.ts:
+(pass) automatic start anchor (#55) > registers exactly one agent_end handler [0.23ms]
+(pass) automatic start anchor (#55) > defaults to X=2 with no config: silent write at the 2nd turn, no model message, no UI [0.39ms]
+(pass) automatic start anchor (#55) > honors a configured X and anchors the X-th turn's persisted tail [0.42ms]
+(pass) automatic start anchor (#55) > project X overrides global when trusted; an untrusted project is ignored [0.83ms]
+(pass) automatic start anchor (#55) > invalid project X warns and falls through to the valid global layer [0.55ms]
+(pass) automatic start anchor (#55) > loads the field for all five session_start reasons [1.13ms]
+(pass) automatic start anchor (#55) > agent_end fallback settles a run shorter than X at the run's end [0.46ms]
+(pass) automatic start anchor (#55) > agent_end after a run with no turns anchors the last persisted entry (user message) [0.23ms]
+(pass) automatic start anchor (#55) > settles after the first write: later turns and a second agent run never re-insert [0.32ms]
+(pass) automatic start anchor (#55) > an existing anchor:start wins (manual /tree label): skip + settle, never write [0.35ms]
+(pass) automatic start anchor (#55) > toolActive gate: inactive tool skips; reactivated tool writes [0.28ms]
+(pass) automatic start anchor (#55) > kill switch is read at write time: =0 skips both triggers; unset retries [0.25ms]
+(pass) automatic start anchor (#55) > setLabel throw falls back to appendLabelChange(leafId, 'anchor:start') and settles [0.40ms]
+(pass) automatic start anchor (#55) > double write failure stays fail-open and unsettled for the next retry [0.40ms]
+(pass) automatic start anchor (#55) > existence-check read failure leaves the session unsettled (retries later) [0.40ms]
+(pass) automatic start anchor (#55) > setLabel throw with a missing appendLabelChange stays unsettled and retries [0.31ms]
+(pass) automatic start anchor (#55) > appendLabelChange fallback preserves the method receiver (this === SessionManager) [0.29ms]
+(pass) automatic start anchor (#55) > per-session config: a later session_start must not retune an earlier session [0.42ms]
+(pass) automatic start anchor (#55) > per-session toolActive: a sibling session's inactive gate must not suppress this one [0.40ms]
+(pass) automatic start anchor (#55) > per-session keying: interleaved sessions settle independently [0.32ms]
+(pass) automatic start anchor (#55) > anchor(name='start') is refused when the automatic label exists (reservation moot) [0.37ms]
+
+tests/fold/consolidation-planner.test.ts:
+(pass) planConsolidation > cuts at the oldest of the newest kept handoffs when the count is exceeded [0.08ms]
+(pass) planConsolidation > fires on window share alone with few but large handoffs [0.02ms]
+(pass) planConsolidation > stays quiet below both limits and when the window is unknown [0.02ms]
+(pass) planConsolidation > refuses when every handoff is within the kept range [0.02ms]
+(pass) planConsolidation > refuses a cut whose prefix would barely shrink, so a fresh compaction does not repeat [0.05ms]
+
+tests/fold/consolidation-runtime.test.ts:
+(pass) background handoff consolidation > merges every handoff before the newest two into one compaction and keeps those two verbatim [1.51ms]
+(pass) background handoff consolidation > keeps anchors after the cut foldable [1.10ms]
+(pass) background handoff consolidation > does nothing below the threshold, after an errored turn or when disabled [0.84ms]
+
+tests/fold/extract-summary-text.test.ts:
+(pass) extractSummaryText > returns the text from the '## Goal' heading on, trimmed [0.02ms]
+(pass) extractSummaryText > drops a preamble before the heading
+(pass) extractSummaryText > returns null without a line-start '## Goal' heading [0.03ms]
+(pass) extractSummaryText > refuses a bare heading line: the body after it must be non-empty [0.02ms]
+
+tests/fold/fold-adapters.test.ts:
+(pass) independent folds through the engine host > folds an idle session whose next main request the guard refuses, with side calls only [2.75ms]
+(pass) independent folds through the engine host > folds at the next turn_end boundary of a running session and continues the run [4.98ms]
+(pass) independent folds through the engine host > preserves the open user request outside an omitting summary at the queued boundary [4.64ms]
+(pass) independent folds through the engine host > replays the captured system head in context (Strategy A) when the request is admitted [1.49ms]
+(pass) independent folds through the engine host > chunks the evidence (Strategy B) without a captured system head, and after a session start [5.54ms]
+(pass) independent folds through the engine host > leaves the history exactly as found when the provider fails, on both paths [5.90ms]
+(pass) independent folds through the engine host > cancels before the commit and leaves the history as found [1.77ms]
+(pass) independent folds through the engine host > re-appends input that arrives during the summary instead of folding it away [1.69ms]
+(pass) independent folds through the engine host > refuses a missing or pre-compaction anchor before any side call [0.90ms]
+(pass) independent folds through the engine host > serializes folds per session [1.44ms]
+(pass) independent folds through the engine host > recommends the newest valid anchor inside the hint budget, else the oldest [0.14ms]
+(pass) independent folds through the engine host > folds an idle session from /anchor fold without a user message, even when the guard would refuse [6.69ms]
+(pass) independent folds through the engine host > queues /anchor fold while the agent is working and does not branch before the boundary [6.96ms]
+(pass) independent folds through the engine host > cancels /anchor fold before the commit and keeps the branch [4.71ms]
+(pass) independent folds through the engine host > refuses a pre-compaction anchor on the plan with the preview reason [3.14ms]
+(pass) independent folds through the engine host > prices a full child handoff as the commit materializes it [2.06ms]
+(pass) independent folds through the engine host > prices a digest child handoff as the commit materializes it [1.70ms]
+(pass) independent folds through the engine host > preselects the anchor chosen with r in the list [4.38ms]
+
+tests/fold/fold-commit.test.ts:
+(pass) commitFold: engine shape > branches from the target, labels both ends and re-appends input after the fold point [0.63ms]
+(pass) commitFold: engine shape > late-input persistence failure restores the original branch without dangling receipt parents [6.16ms]
+(pass) commitFold: engine shape > persistence failures in the branch or mandatory labels refuse and preserve unrelated labels [2.12ms]
+(pass) commitFold: engine shape > persistence label retry and receipt retry never parent failed in-memory entries [3.08ms]
+(pass) commitFold: engine shape > preserves additive requests across a second fold without nesting continuations [0.89ms]
+(pass) commitFold: engine shape > uses current edited user bytes and clears open requests only after a successful final reply [0.66ms]
+(pass) commitFold: engine shape > closes a request once a newer user message follows a response, or a later handoff carried it [0.65ms]
+(pass) commitFold: engine shape > references an attached skill instead of quoting its body, including inherited requests [0.56ms]
+(pass) commitFold: engine shape > does not quote an open user request in the retained prefix [0.29ms]
+(pass) commitFold: engine shape > prices all preserved user bytes and refuses an oversized request without mutation [0.75ms]
+(pass) commitFold: engine shape > counts the folded leaf in the pre-fold estimate when one large turn is folded [0.33ms]
+(pass) commitFold: engine shape > refuses a non-reducing materialization and writes nothing [0.38ms]
+(pass) commitFold: engine shape > refuses a label that became taken and writes nothing [0.17ms]
+
+tests/fold/fold-engine.test.ts:
+(pass) fold engine run > splits a record larger than the chunk budget without truncating it, then commits once with the summary text [1.23ms]
+(pass) fold engine run > returns busy for a concurrent request on the same session without calling anything, while another session runs [0.91ms]
+(pass) fold engine run > releases the lock after a failed gate, a thrown dependency and a thrown commit [0.98ms]
+(pass) fold engine run > fails the gate when no runner can be built, before any model call [0.09ms]
+(pass) fold engine run > returns the usage of a failed summary and never commits [0.57ms]
+(pass) fold engine run > reports a refused commit with the summary's usage [0.58ms]
+(pass) fold engine run > forwards progress and the segment settings to the summarizer [0.66ms]
+(pass) fold engine cancellation > cancels before any work when the signal is already aborted [0.12ms]
+(pass) fold engine cancellation > cancels during summarization without committing and keeps the spent usage [0.44ms]
+(pass) fold engine cancellation > cancels when the signal aborts on the final summary call [0.50ms]
+(pass) fold engine cancellation > finishes a commit that has started even if the signal aborts meanwhile [0.46ms]
+(pass) selectFoldTarget > takes the newest valid anchor that fits the budget [0.05ms]
+(pass) selectFoldTarget > falls back to the oldest valid anchor when none fits [0.02ms]
+(pass) selectFoldTarget > lists every refusal when no anchor is valid [0.04ms]
+(pass) selectFoldTarget > accepts an anchor exactly at the budget [0.01ms]
+
+tests/fold/fold-inputs.test.ts:
+(pass) buildFoldSegment > lists the projected anchor-to-leaf records in order with full text and placeholders [0.58ms]
+(pass) buildFoldSegment > does not truncate a long record and leaves the background empty without an earlier handoff [0.27ms]
+(pass) buildFoldSegment > applies context edits exactly as the model saw them [0.24ms]
+(pass) buildFoldSegment > restricts current edited evidence to the fold ancestry for both strategies [0.21ms]
+(pass) buildFoldSegment > treats every visible message as collapsed when the anchor predates a compaction [0.14ms]
+(pass) buildInContextMessages > puts the captured system messages first and numbers the first collapsed message as the model sees it [0.19ms]
+(pass) buildInContextMessages > numbers from 1 when the anchor is not in the projection and ignores projected system messages [0.09ms]
+
+tests/fold/fold-preview.test.ts:
+(pass) previewFoldCommit > prepares exactly the admission commitFold lands: large full child handoff, ledger and late input [2.97ms]
+(pass) previewFoldCommit > refuses what commitFold refuses, with the same reason, and writes nothing [2.15ms]
+(pass) previewFoldCommit > commitFold refuses with the preview's reason and keeps the original history [2.14ms]
+(pass) previewFoldCommit > turns a session read failing after the target checks into a refusal [2.13ms]
+(pass) previewFoldCommit > gates on the projected request it returns [1.06ms]
+(pass) previewFoldCommit > anchors before a compaction > prices the restored history of a pre-compaction target [0.41ms]
+(pass) previewFoldCommit > anchors before a compaction > refuses a target whose restored history the recorded usage prices low, naming the compaction [1.14ms]
+
+tests/fold/fold-receipts.test.ts:
+(pass) rewind: one-time continue nudge after a fold > nudges once, with continue, when the first post-fold turn is text-only and the summary has open work [5.33ms]
+(pass) rewind: one-time continue nudge after a fold > a second text-only turn is not nudged again [2.64ms]
+(pass) rewind: one-time continue nudge after a fold > is at most once per fold even when pi drops the draft and the same turn ends again [2.73ms]
+(pass) rewind: one-time continue nudge after a fold > a new fold is nudged again [3.83ms]
+(pass) rewind: one-time continue nudge after a fold > does not nudge when the first post-fold turn calls a tool, nor on a later text-only turn [2.62ms]
+(pass) rewind: one-time continue nudge after a fold > nudges on an open '### In Progress' item alone; placeholders are not open work [5.17ms]
+(pass) rewind: one-time continue nudge after a fold > does not nudge after a failed fold [4.48ms]
+(pass) rewind: one-time continue nudge after a fold > does not nudge when a user message sits between the continuation and the turn [2.92ms]
+(pass) rewind: one-time continue nudge after a fold > does not nudge a fold that re-appended late user input: the turn answers it [2.92ms]
+(pass) rewind: one-time continue nudge after a fold > does not nudge an error, aborted or cut-off turn [9.50ms]
+(pass) rewind: one-time continue nudge after a fold > does not nudge while navigate_tree is out of the active tools [2.58ms]
+(pass) rewind: one-time continue nudge after a fold > leaves a turn another handler already continues alone, and keeps the nudge unspent [2.81ms]
+(pass) rewind: one-time continue nudge after a fold > a headless session is nudged too [2.43ms]
+(pass) rewind: one-time continue nudge after a fold > renders as one line, expanding to the full text; the continuation keeps pi's default box [3.01ms]
+(pass) rewind message copy (byte-exact) > buildRewindDoneText [0.03ms]
+(pass) rewind message copy (byte-exact) > buildRewindDoneText without a context window uses the token form [0.02ms]
+(pass) rewind message copy (byte-exact) > buildRewindAcceptedText (#90 S2)
+
+tests/fold/fold-summarizer.test.ts:
+(pass) summarizeFold chunked strategy > covers every record once in order, splitting an oversized record losslessly, and ends with the exact r5d reduce [0.97ms]
+(pass) summarizeFold chunked strategy > starts the evidence at message 1 when there is no background [0.44ms]
+(pass) summarizeFold chunked strategy > consolidates notes in order when they do not fit one reduce request [0.68ms]
+(pass) summarizeFold chunked strategy > fails over-call-budget before any call when the plan exceeds maxCalls [0.29ms]
+(pass) summarizeFold chunked strategy > returns no-evidence without calling when there is nothing to summarize [0.07ms]
+(pass) summarizeFold chunked strategy > rejects an invalid final summary after at most one retry [0.34ms]
+(pass) summarizeFold chunked strategy > does not retry the final reduce past maxCalls [0.64ms]
+(pass) summarizeFold chunked strategy > retries a map call that stops at its output limit once without reasoning, keeping only the complete notes [0.29ms]
+(pass) summarizeFold chunked strategy > fails a map call that still stops at its output limit after the retry, without storing cut-off notes [0.33ms]
+(pass) summarizeFold chunked strategy > leaves reasoning room on top of every answer cap, as adaptive and effort models share the ceiling [0.37ms]
+(pass) summarizeFold in-context strategy > asks once with the live request and tools when it fits [0.16ms]
+(pass) summarizeFold in-context strategy > sends system messages inside messages unchanged, before the summary request, without a separate prompt [0.18ms]
+(pass) summarizeFold in-context strategy > falls back once to chunks on length [0.48ms]
+(pass) summarizeFold in-context strategy > falls back once to chunks on a reply without the summary heading [0.41ms]
+(pass) summarizeFold in-context strategy > counts the in-context call against maxCalls when falling back [0.75ms]
+(pass) summarizeFold in-context strategy > returns a provider error without fallback or retry [0.12ms]
+(pass) summarizeFold in-context strategy > never calls the live request when it does not fit, and reports the evidence gap [0.10ms]
+(pass) summarizeFold in-context strategy > reports an invalid in-context reply when no records remain to fall back on [0.09ms]
+(pass) summarizeFold cancellation and runner failures > does not call the runner when already aborted [0.21ms]
+(pass) summarizeFold cancellation and runner failures > stops between calls once the signal aborts and passes the signal through [0.30ms]
+(pass) summarizeFold cancellation and runner failures > treats an aborted stop reason as cancellation [0.21ms]
+(pass) summarizeFold cancellation and runner failures > maps an unexpected runner throw to provider-error and an AbortError to aborted [0.53ms]
+(pass) createFoldSummaryRunner > forwards the request without tool use and returns stop reasons instead of throwing [0.23ms]
+(pass) createFoldSummaryRunner > omits reasoning when thinking is off [0.08ms]
+(pass) createFoldSummaryRunner > omits reasoning for a request that turns it off [0.05ms]
+(pass) summarizeFold instruction override > sends the override instead of r5d in the in-context request [0.14ms]
+(pass) summarizeFold instruction override > sends the override in the chunked final reduce [0.32ms]
+
+tests/fold/handoff-projection.test.ts:
+(pass) reset removes every stacked installation of the projection patch [0.04ms]
+(pass) native pre-request estimates and model context ignore old usage, while disk accounting and fresh usage survive [0.48ms]
+(pass) an edit of the assistant baseline invalidates its usage in every estimate path [0.39ms]
+(pass) an edit appended after the baseline invalidates it even when it targets older content, and fresh usage then wins [0.18ms]
+(pass) usage measured before the edited entry stays exact [0.10ms]
+(pass) retained pre-compaction assistants stay invalid although the projection lists them after the compaction [0.23ms]
+(pass) edits on an abandoned branch do not invalidate the active branch baseline [0.18ms]
+(pass) a model change or a different active model rejects older usage, while matching fresh usage survives [0.15ms]
+(pass) usage from fixture/fixture is rejected once other/fixture is the active model [0.08ms]
+(pass) usage from fixture/fixture is rejected once fixture/other is the active model [0.06ms]
+(pass) a later system message invalidates earlier usage [0.14ms]
+(pass) invalidateStaleUsage works on flat entries without sources [0.07ms]
+
+tests/fold/handoff.test.ts:
+(pass) work handoffs > carries nested child reports once, while synthesis keeps only its reviewed report [0.16ms]
+(pass) work handoffs > indexes unique children with bounded own metadata and never embeds descendants [0.19ms]
+(pass) work handoffs > counts unique recorded usage without charging nested inclusive totals again [0.05ms]
+(pass) work handoffs > passes the complete projected report to the model without a false branch preamble [0.09ms]
+
+tests/fold/late-entries.test.ts:
+(pass) rewind: multi-block summaries and late entries > joins text blocks with a newline: a preamble block before the summary completes [2.90ms]
+(pass) rewind: multi-block summaries and late entries > a heading split across blocks is joined with a newline, not glued [2.30ms]
+(pass) rewind: multi-block summaries and late entries > re-appends a late user steer and another extension's message, in order, onto the new branch [2.67ms]
+(pass) rewind: multi-block summaries and late entries > the continuation follows the re-appended entries once delivered [2.31ms]
+(pass) rewind: multi-block summaries and late entries > the late note is byte-exact for one message [4.44ms]
+(pass) rewind: multi-block summaries and late entries > does not re-append a rewind-hint message that landed after the rewind call [2.52ms]
+(pass) rewind: multi-block summaries and late entries > a re-appended hidden custom message stays hidden (display: false) [2.41ms]
+(pass) rewind: multi-block summaries and late entries > entries before the rewind call are not re-appended [2.31ms]
+(pass) rewind: multi-block summaries and late entries > a throwing late-input append fails the rewind and stops the late batch [2.69ms]
+(pass) rewind: multi-block summaries and late entries > late-input cursor restoration failure stops without appending a receipt to the uncertain branch [2.43ms]
+(pass) rewind: multi-block summaries and late entries > an estimator throw after the branch still delivers the continuation with contextAfter 0 [2.37ms]
+(pass) rewind: multi-block summaries and late entries > a throwing getBranch during the fold ends the turn without throwing and leaves the history as found [2.44ms]
+
+tests/fold/summary-prompt.test.ts:
+(pass) REWIND_SUMMARY_PROMPT > is byte-equal to the eval-approved r5d prompt [0.01ms]
+(pass) REWIND_SUMMARY_PROMPT > keeps the load-bearing lines the in-band summary turn depends on [0.07ms]
+(pass) buildSummaryInstruction > appends the standing-authorization section after r5d, then the focus like upstream's customInstructions shape, {first} substituted [0.02ms]
+(pass) buildSummaryInstruction > keeps the r5d body byte-identical and the authorization block outside it [0.02ms]
+(pass) buildSummaryInstruction > substitutes every {first} occurrence (replaceAll, not replace) [0.04ms]
+(pass) buildSummaryInstruction > numbers from 1 when every visible message is collapsed evidence [0.03ms]
+(pass) buildSummaryInstruction > ends with the focus as the last paragraph, verbatim
+(pass) buildSummaryInstruction > synthesizes digest parents before reducing children to a one-line index [0.04ms]
+(pass) buildSummaryInstruction > allows relevance-focused parent synthesis to grow beyond the leaf report limit [0.07ms]
+(pass) buildSummaryInstruction > leaves a literal {first} inside the focus verbatim [0.01ms]
+(pass) BRANCH_SUMMARY_PREAMBLE > byte-equals upstream's branch-summarization preamble
+(pass) formatFileOperations > returns the empty string when both lists are empty
+(pass) formatFileOperations > renders read-files only
+(pass) formatFileOperations > renders modified-files only
+(pass) formatFileOperations > renders both sections, read first, separated by a blank line
+(pass) formatFileOperations > preserves the given order (sorting is computeFileLists' job)
+(pass) computeFileLists > splits read-only files from modified (edited ∪ written), both sorted [0.03ms]
+(pass) computeFileLists > dedupes a file both edited and written [0.01ms]
+(pass) computeFileLists > returns empty lists for empty ops
+(pass) buildStoredSummary > is preamble + summary + file tags (upstream generateBranchSummary order) [0.02ms]
+(pass) buildStoredSummary > omits the file tags when no files were touched [0.03ms]
+(pass) buildSummaryRequestText > is a [navigate_tree] source line, then the r5d instruction [0.03ms]
+(pass) continuity section > is appended after the focus line, for both builders and with a parent [0.06ms]
+(pass) continuity section > leaves the request byte-identical when no section is given [0.02ms]
+(pass) standing authorization section and the continuity delta > a delta block after the section is stripped and the section stays [0.12ms]
+(pass) hasOpenWork > is true for a real item under either section [0.03ms]
+(pass) hasOpenWork > is false for placeholders, empty sections and a missing summary body [0.06ms]
+(pass) hasOpenWork > stops at the next heading, the file tags and the continuity ledger [0.03ms]
+(pass) hasOpenWork > ignores the historical sections of embedded child handoffs [0.02ms]
+(pass) appendContinuityBriefing / stripContinuityBriefing > appends the briefing under its own heading as the last section
+(pass) appendContinuityBriefing / stripContinuityBriefing > strips exactly what was appended, and leaves other text alone [0.02ms]
+
+tests/recovery/preflight-recovery.test.ts:
+(pass) production preflight recovery > folds an oversized request in the same run and preserves it [34.95ms]
+(pass) production preflight recovery > recovers again when the run overflows a second time after the recovered request generated [24.68ms]
+(pass) production preflight recovery > uses current edited work and replays unanswered input across later metadata [17.36ms]
+(pass) production preflight recovery > refuses interleaved tool results without rewriting history or calling a model [9.34ms]
+(pass) production preflight recovery > cancels a waiting side call without committing or calling the main model [9.49ms]
+(pass) production preflight recovery > contains candidate-pricing failures without dispatching an oversized request [8.76ms]
+(pass) production preflight recovery > compacts older work and lets the request through when no anchor is valid [15.35ms]
+
+tests/recovery/pressure-compaction-runtime-admission.test.ts:
+(pass) rewind-driven compaction (#101) > one admission estimate > admits a request whose recorded usage plus its tail fits, though a whole-content scan would not [1.77ms]
+(pass) rewind-driven compaction (#101) > one admission estimate > still refuses when the baseline is stale: a model switch or a context edit [4.54ms]
+(pass) rewind-driven compaction (#101) > one admission estimate > counts the anchor mandate once: not when the system message already carries it [1.44ms]
+(pass) rewind-driven compaction (#101) > one admission estimate > derives the hint, the anchor list and the request guard from one number [1.36ms]
+(pass) rewind-driven compaction (#101) > delivers a failure receipt if a later handler invalidates the boundary [1.08ms]
+(pass) rewind-driven compaction (#101) > accounts for the final forced prompt rather than the earlier persisted system view [1.52ms]
+(pass) rewind-driven compaction (#101) > refuses independent recovery when the final forced system prompt cannot fit [1.14ms]
+(pass) rewind-driven compaction (#101) > keeps a feasible complete request and system declarations intact [0.50ms]
+(pass) rewind-driven compaction (#101) > auto_navigate classifies on its cadence below rewind_at_tokens and never folds [4.29ms]
+(pass) rewind-driven compaction (#101) > auto_navigate anchors an older accepted boundary without folding or recounting work [2.22ms]
+(pass) rewind-driven compaction (#101) > auto_navigate folds at rewind_at_tokens through the engine without asking a classifier [3.52ms]
+(pass) rewind-driven compaction (#101) > auto_navigate folds to the oldest valid anchor when none reaches half of rewind_at_tokens, and says so [2.98ms]
+(pass) rewind-driven compaction (#101) > auto_navigate persists a visible warning when a pressure fold has no valid target [1.23ms]
+(pass) rewind-driven compaction (#101) > auto_navigate keeps an unanswered request verbatim through a pressure fold [1.70ms]
+(pass) rewind-driven compaction (#101) > auto_navigate compacts older work at rewind_at_tokens and keeps the newest turns verbatim [11.01ms]
+(pass) rewind-driven compaction (#101) > auto_navigate quotes an open request a pressure compaction summarizes [4.15ms]
+(pass) rewind-driven compaction (#101) > auto_navigate compacts even when the kept work alone exceeds half of rewind_at_tokens, and says so [3.11ms]
+(pass) rewind-driven compaction (#101) > auto_navigate prices a pressure compaction as the request guard does, not as usage minus a content heuristic [3.93ms]
+(pass) rewind-driven compaction (#101) > auto_navigate shrinks the kept tail when the configured share cannot land under the budget [3.63ms]
+(pass) rewind-driven compaction (#101) > auto_navigate keeps the configured tail in calibrated tokens when the tokenizer counts higher [2.68ms]
+(pass) rewind-driven compaction (#101) > auto_navigate prices the system prompt a pressure compaction keeps [13.77ms]
+(pass) rewind-driven compaction (#101) > auto_navigate keeps steering scoped to a retained compaction anchor across the next compaction [19.47ms]
+(pass) rewind-driven compaction (#101) > auto_navigate never partially folds an unsafe pending tool envelope [1.32ms]
+(pass) rewind-driven compaction (#101) > auto_navigate rejects pre-compaction targets and folds to a feasible fresh anchor [6.26ms]
+(pass) rewind-driven compaction (#101) > auto_navigate discards stale input and does not consume its cadence [2.57ms]
+(pass) rewind-driven compaction (#101) > auto_navigate resolves wildcard policy overrides and applies disclosure before classification [1.73ms]
+(pass) rewind-driven compaction (#101) > auto_navigate refuses changed model, window, signal, labels, config and competing folds [6.00ms]
+(pass) rewind-driven compaction (#101) > auto_navigate preserves an unanswered suffix and anchors only the accepted milestone [1.20ms]
+(pass) rewind-driven compaction (#101) > auto_navigate reports summary and commit failures without continuing [3.20ms]
+(pass) rewind-driven compaction (#101) > auto_navigate refuses stale context getters before evaluating [0.47ms]
+(pass) rewind-driven compaction (#101) > auto_navigate stops without a receipt append when a failed commit quarantines the cursor [1.88ms]
+(pass) rewind-driven compaction (#101) > auto_navigate persists bounded operational warnings without claiming completion [4.69ms]
+
+tests/recovery/pressure-compaction-runtime-anchors.test.ts:
+(pass) rewind-driven compaction (#101) > anchors before a compaction > lists a pre-compaction anchor at its un-compacted footprint, not the compaction baseline [0.85ms]
+(pass) rewind-driven compaction (#101) > anchors before a compaction > flags in /anchor list only the pre-compaction anchors a fold cannot free [0.36ms]
+(pass) rewind-driven compaction (#101) > anchors before a compaction > carries the compaction forward when the target lies inside its kept range [5.49ms]
+(pass) rewind-driven compaction (#101) > anchors before a compaction > keeps anchors foldable after a carried fold and still refuses targets before the kept range [5.08ms]
+(pass) rewind-driven compaction (#101) > anchors before a compaction > refuses a fold to a pre-compaction anchor at request time, before any fold is queued [4.76ms]
+(pass) rewind-driven compaction (#101) > anchors before a compaction > prices 'after-cut' by the footprint its fold leaves, so the gate agrees [4.94ms]
+(pass) rewind-driven compaction (#101) > anchors before a compaction > prices 'early' by the footprint its fold leaves, so the gate agrees [4.70ms]
+(pass) rewind-driven compaction (#101) > anchors before a compaction > names the compaction when the gate refuses a pre-compaction target that recorded usage under-priced [4.83ms]
+(pass) rewind-driven compaction (#101) > D9: compaction on → TUI error once per crossing, no hint; headless silent; re-read per crossing [3.39ms]
+(pass) rewind-driven compaction (#101) > D9: project settings count only when the project is trusted [1.23ms]
+(pass) rewind-driven compaction (#101) > D9 (S3): the live session's compaction setting decides, not the disk (#101) [0.88ms]
+(pass) rewind-driven compaction (#101) > warns for the concrete active model rather than treating wildcard patterns as models [0.51ms]
+(pass) rewind-driven compaction (#101) > D10: warns per model when the hint reserve is below pi's, only with compaction off [0.75ms]
+(pass) rewind-driven compaction (#101) > D10: warns when the hint reserve does not exceed what the request guard keeps free [1.12ms]
+(pass) rewind-driven compaction (#101) > D10 (fix 9): one model's invalid pi reserve does not skip the others [0.43ms]
+(pass) rewind-driven compaction (#101) > renders D8 as one error-styled row; the forced message keeps pi's default box [0.51ms]
+
+tests/recovery/pressure-compaction-runtime.test.ts:
+(pass) rewind-driven compaction (#101) > explicit error: independently folds at agent_before_settle without withholding results [2.15ms]
+(pass) rewind-driven compaction (#101) > explicit error: recovers again when the recovered request still overflows, while each attempt shrinks [3.49ms]
+(pass) rewind-driven compaction (#101) > explicit recovery refuses a stale model before committing [1.36ms]
+(pass) rewind-driven compaction (#101) > explicit recovery refuses a stale session before committing [1.15ms]
+(pass) rewind-driven compaction (#101) > squeezed length: recovered at turn_end, the reply and its failed calls hidden [1.60ms]
+(pass) rewind-driven compaction (#101) > length recovery stands down for extension ownership [0.84ms]
+(pass) rewind-driven compaction (#101) > length recovery stands down for native ownership [0.51ms]
+(pass) rewind-driven compaction (#101) > length recovery stands down for native-retry ownership [0.41ms]
+(pass) rewind-driven compaction (#101) > length recovery stands down for cancel ownership [0.36ms]
+(pass) rewind-driven compaction (#101) > stop recovery stands down for extension ownership [0.47ms]
+(pass) rewind-driven compaction (#101) > stop recovery stands down for native ownership [0.42ms]
+(pass) rewind-driven compaction (#101) > stop recovery stands down for native-retry ownership [0.39ms]
+(pass) rewind-driven compaction (#101) > stop recovery stands down for cancel ownership [0.43ms]
+(pass) rewind-driven compaction (#101) > pi compaction on: the overflowed reply gets no start anchor (#101, D14) [0.47ms]
+(pass) rewind-driven compaction (#101) > silent stop overflow: preserves successful evidence and the pending input without withholding [1.64ms]
+(pass) rewind-driven compaction (#101) > does not trigger: another model, a non-overflow error, compaction on, another extension's continue [2.34ms]
+(pass) rewind-driven compaction (#101) > aborts an infeasible complete request before sending a one-token continuation [8.47ms]
+
+tests/recovery/provider-recovery.test.ts:
+(pass) production provider overflow recovery (error) > recovers a genuine overflow in the same SDK prompt with the exact unanswered request [15.60ms]
+(pass) production provider overflow recovery (error) > does not loop when the next main request also overflows [14.02ms]
+(pass) production provider overflow recovery (error) > does not recover unrelated provider results [7.07ms]
+(pass) production provider overflow recovery (error) > does not recover aborted provider results [6.46ms]
+(pass) production provider overflow recovery (error) > honors Esc while the independent summarizer is running [11.78ms]
+(pass) production provider overflow recovery (error) > compacts older work when no anchor is valid (no-anchor) [9.80ms]
+(pass) production provider overflow recovery (error) > compacts older work when no anchor is valid (lost-receipt) [7.90ms]
+(pass) production provider overflow recovery (error) > persists an actionable receipt after side-failure [8.85ms]
+(pass) production provider overflow recovery (length) > recovers a genuine overflow in the same SDK prompt with the exact unanswered request [8.81ms]
+(pass) production provider overflow recovery (length) > does not loop when the next main request also overflows [12.79ms]
+(pass) production provider overflow recovery (length) > does not recover unrelated provider results [6.74ms]
+(pass) production provider overflow recovery (length) > does not recover aborted provider results [6.36ms]
+(pass) production provider overflow recovery (length) > honors Esc while the independent summarizer is running [7.13ms]
+(pass) production provider overflow recovery (length) > compacts older work when no anchor is valid (no-anchor) [11.81ms]
+(pass) production provider overflow recovery (length) > compacts older work when no anchor is valid (lost-receipt) [9.04ms]
+(pass) production provider overflow recovery (length) > persists an actionable receipt after side-failure [9.38ms]
+(pass) production provider overflow recovery (stop) > recovers a genuine overflow in the same SDK prompt with the exact unanswered request [9.22ms]
+(pass) production provider overflow recovery (stop) > does not loop when the next main request also overflows [13.51ms]
+(pass) production provider overflow recovery (stop) > does not recover unrelated provider results [7.21ms]
+(pass) production provider overflow recovery (stop) > does not recover aborted provider results [6.88ms]
+(pass) production provider overflow recovery (stop) > honors Esc while the independent summarizer is running [8.88ms]
+(pass) production provider overflow recovery (stop) > compacts older work when no anchor is valid (no-anchor) [8.38ms]
+(pass) production provider overflow recovery (stop) > compacts older work when no anchor is valid (lost-receipt) [11.94ms]
+(pass) production provider overflow recovery (stop) > persists an actionable receipt after side-failure [9.52ms]
+
+tests/recovery/recovery-cut.test.ts:
+(pass) canonical recovery cuts > ignores metadata and failed assistants after unanswered user/custom input without writes [0.42ms]
+(pass) canonical recovery cuts > accepts completed reused IDs but cannot discharge unresolved reuse with an older result [0.14ms]
+(pass) canonical recovery cuts > fails closed without writes when a result crosses unanswered user or custom input [0.08ms]
+(pass) canonical recovery cuts > fails closed on overlapping IDs and orphan effective results [0.04ms]
+(pass) canonical recovery cuts > uses context-edited envelopes instead of raw tool IDs [0.06ms]
+(pass) canonical recovery cuts > accepts a native summary's real archived completion, including nested summaries [0.34ms]
+(pass) canonical recovery cuts > cannot borrow a real result from a sibling outside summary.fromId ancestry [0.04ms]
+(pass) canonical recovery cuts > does not treat native compaction as an answer to retained input [0.05ms]
+(pass) canonical recovery cuts > keeps native compaction projection and ignores archived incomplete envelopes [0.04ms]
+
+tests/recovery/request-guard.test.ts:
+(pass) context event handler > prices estimated context at the token ratio the model reported for its last request [0.98ms]
+(pass) context event handler > learns the token ratio from a small request the operating window could not hold [0.55ms]
+(pass) context event handler > registers exactly one context handler via pi.on [0.09ms]
+(pass) context event handler > buildContextMessages projects the active branch (leaf-relative, no args) [0.09ms]
+(pass) context event handler > buildContextMessages is conversation-only (Pi re-attaches the head) [0.08ms]
+(pass) context event handler > buildContextMessages applies context_edit omissions (projection beats raw entries) [0.11ms]
+(pass) context event handler > projects active-branch legacy rewind failures and aborts without mutating results [0.23ms]
+(pass) context event handler > ignores legacy rewind outcomes on an abandoned branch [0.11ms]
+(pass) context event handler > withheld results zero the usage of the assistants after them (#101) [0.43ms]
+(pass) context event handler > an assistant produced after the edit keeps its exact usage (#101) [0.24ms]
+(pass) context event handler > without context_edits the projection keeps every assistant's usage (#101) [0.09ms]
+(pass) context event handler > handler returns messages = tree projection on every call (no leaf-gating) [0.09ms]
+(pass) context event handler > post-rewind: handler returns anchor chain + branch_summary + continuation, none of the abandoned segment [3.03ms]
+(pass) before_agent_start anchor mandate > registers exactly one before_agent_start handler via pi.on [0.11ms]
+(pass) before_agent_start anchor mandate > appends the approved mandate to the system prompt when the tool is active [0.13ms]
+(pass) before_agent_start anchor mandate > skips the append when the tool is verifiably absent from selectedTools [0.08ms]
+(pass) before_agent_start anchor mandate > fails open when selectedTools is undefined (mandate still appended) [0.08ms]
+(pass) before_agent_start anchor mandate > is byte-stable across identical calls (prompt-caching contract) [0.09ms]
+
+tests/retrospective/descendant-sessions.test.ts:
+(pass) discovers a two-level path-linked family and plans immutable body copies [5.44ms]
+(pass) rejects selected invalid versions, malformed headers, duplicate IDs and cycles [1.88ms]
+
+tests/retrospective/proposal-command.test.ts:
+(pass) tree proposal command > uses the same session runtime disclosure policy before any model request [2.45ms]
+(pass) tree proposal command > parses quoted paths, model thinking and exact per-tool disclosure overrides [0.16ms]
+(pass) tree proposal command > saves a private new plan, never overwrites a file, and refuses stale sources [2.68ms]
+(pass) tree proposal command > explicitly falls back from unsafe model ranges while retaining observed usage and call count [0.46ms]
+(pass) tree proposal command > a cancelled review writes nothing and never requests a model for heuristic proposals [3.19ms]
+(pass) tree proposal command > shows the proposal as a readable outline and saves it with s [2.50ms]
+(pass) tree proposal command > fits the outline in 60 columns [1.54ms]
+(pass) tree proposal command > e opens the raw JSON plan; an invalid edit is refused and the outline stays [2.07ms]
+(pass) tree proposal command > a valid edit is validated against the source, shown again and then saved [2.57ms]
+(pass) tree proposal command > cancelling the editor returns to the outline, and Escape there writes nothing [1.30ms]
+
+tests/retrospective/proposal-engine.test.ts:
+(pass) refuses unfinished source batches before making a paid model request [0.22ms]
+(pass) returns a deterministic no-model proposal with zero calls [0.15ms]
+(pass) refines a fitting full history in one request without an intermediate summary [0.64ms]
+(pass) supplies branch-parent-safe fold starts and a self-contained report contract [0.23ms]
+(pass) covers every large record across bounded extraction calls before refinement [3.63ms]
+(pass) splits one huge record without losing textual fragments [0.84ms]
+(pass) tool secrets never enter any request, while calls-only preserves arguments alone [0.48ms]
+(pass) falls back for malformed, unknown-key, hallucinated, crossing and missing-tail output [0.50ms]
+(pass) retains failed provider usage and never exposes echoed provider text [0.18ms]
+(pass) propagates caller and provider aborts rather than successful fallback [0.26ms]
+(pass) consolidates extracted evidence hierarchically without dropping the ID inventory [2.68ms]
+(pass) reports budget and non-progress consolidation fallback explicitly [0.63ms]
+(pass) rejects an oversized structural outline before making any model requests [0.49ms]
+(pass) can compress a single evidence report to make room for the final outline [0.30ms]
+(pass) stops costly consolidation that makes only negligible progress [0.60ms]
+
+tests/retrospective/proposal-model.test.ts:
+(pass) proposal model adapter > defaults to current model and thinking, with exact overrides and authentication checks [0.23ms]
+(pass) proposal model adapter > uses provider-neutral thinking and no tools, session mutation or credential extraction [0.29ms]
+(pass) proposal model adapter > does not accept provider errors, truncated plans or aborted replies as success [0.22ms]
+
+tests/retrospective/proposal-options.test.ts:
+(pass) tree proposal options > parses model and thinking independently without guessing a model [0.10ms]
+(pass) tree proposal options > merges disclosure rules per exact tool name and permits an explicit current-model reset [0.10ms]
+(pass) tree proposal options > honors trusted config layers and blocks malformed disclosure rules [0.27ms]
+
+tests/retrospective/proposal-source.test.ts:
+(pass) infers nested rewind intervals from parent/fromId and preserves an honest current tail [0.40ms]
+(pass) serializes every branch without truncation, preserving thinking and textual data but excluding images/signatures [0.12ms]
+(pass) redacts linked context replacements and resolves reused call IDs on their own ancestry [0.21ms]
+(pass) filters exact tools through call IDs, including result details, and counts binary omissions [0.20ms]
+(pass) applies bash disclosure to native shell records and their context replacements [0.10ms]
+(pass) keeps deep existing history inside valid 32-level annotations with an explicit warning [0.35ms]
+
+tests/retrospective/retrospective-command.test.ts:
+(pass) retrospective clone command > names /anchor clone and every propose flag in its usage and errors [0.69ms]
+(pass) retrospective clone command > keeps inspect/preview read-only and shows readable text, not JSON [4.67ms]
+(pass) retrospective clone command > fits every line of both screens in 60 columns [2.18ms]
+(pass) retrospective clone command > opens the raw JSON on j and returns to the screen [2.11ms]
+(pass) retrospective clone command > prompts for a missing preview path when UI is available [6.68ms]
+(pass) retrospective clone command > does not write a clone when confirmation is cancelled [2.22ms]
+(pass) retrospective clone command > writes nothing and asks nothing when the create review is dismissed with Escape [1.38ms]
+(pass) retrospective clone command > creates from the fresh preview without changing the source or active session [4.25ms]
+(pass) retrospective clone command > refuses headless or busy create requests without creating a session [0.40ms]
+(pass) offline restructure CLI > prints the same help for --help, -h, help and no arguments, listing every subcommand and propose flag [991.06ms]
+(pass) offline restructure CLI > names the valid subcommands in a one-line error and exits 2 [621.75ms]
+(pass) offline restructure CLI > still prints the inspection as JSON [211.46ms]
+
+tests/retrospective/retrospective-snapshot.test.ts:
+(pass) native rewinds carry exact occurrence evidence, including transitive summaries [4.08ms]
+(pass) sibling result resolves global unfinished status but leaves cuts branch-local [1.57ms]
+(pass) a reused provider ID completes independently after a rewind [1.61ms]
+(pass) orphan results cannot borrow completion from another branch [1.69ms]
+{"maxRSSKiB":271224,"heapUsed":67407092}
+(pass) 30k completed-history rows inspect inside a 256 MiB isolated heap [422.37ms]
+
+tests/retrospective/retrospective.test.ts:
+(pass) retrospective clone > preserves source bytes and messages, nests summaries, and resumes on the tail [5.23ms]
+(pass) retrospective clone > keeps child facts in full mode and can leave the current branch inside an open phase [5.55ms]
+(pass) retrospective clone > can publish inside the loaded extension with its safe runtime projection installed [1.60ms]
+(pass) retrospective clone > inherits the source parent so the clone is a sibling in session discovery [7.86ms]
+(pass) retrospective clone > refuses a changed source or changed plan after preview without publishing a clone [1.98ms]
+(pass) retrospective clone > refuses overlapping siblings and malformed source records [0.46ms]
+(pass) retrospective clone > rejects a compaction target hidden in an earlier sibling and preserves it when the boundary moves before the target [2.27ms]
+(pass) retrospective clone > refuses context edits crossing either side of a folded range [0.73ms]
+(pass) retrospective clone > keeps an edit wholly inside a folded range effective on its archived branch [1.69ms]
+(pass) retrospective clone > refuses tool-call boundaries inside a batch and accepts a complete batch [7.03ms]
+(pass) retrospective clone > allows open annotations over unchanged active compactions [1.93ms]
+(pass) retrospective clone > preserves model, thinking, system sections, and tools across folded changes [3.51ms]
+(pass) retrospective clone > refuses a folded checkpoint that replaces unreplayable plain system text [0.61ms]
+(pass) retrospective clone > preserves native rewinds, archived edits and root summaries through equal-boundary folds [2.97ms]
+(pass) retrospective clone > refuses unsafe multi-incoming graph cuts [0.36ms]
+(pass) retrospective clone > refuses malformed parents and duplicate entry IDs [0.63ms]
+(pass) retrospective clone > preserves a valid bash execution message without content [1.57ms]
+(pass) retrospective clone > rejects unsupported roles and orphan tool results [0.60ms]
+(pass) retrospective clone > copies descendant histories by default and requires reviewed plans for recursive restructuring [9.01ms]
+(pass) retrospective clone > creates independent session IDs without overwriting earlier clones [3.41ms]
+
+tests/scripts/live-analyzer.test.ts:
+(pass) recognizes text-only summary evidence for Responses, Anthropic and Google [52.25ms]
+(pass) fails when request capture cannot establish a text-only request for every fold [32.78ms]
+(pass) requires matching wire evidence within each fold interval, not aggregate retries [31.94ms]
+(pass) does not correlate a later or aborted same-label request with a completed fold [29.87ms]
+
+tests/scripts/summary-quality-check.test.ts:
+(pass) summary-quality-check > passes a real modern fold whose total exceeds the own-report cap [11.57ms]
+(pass) summary-quality-check > rejects malformed headings, a placeholder and a model preamble in the own report [34.72ms]
+(pass) summary-quality-check > caps a non-parent own report and labels own versus total length [9.77ms]
+(pass) summary-quality-check > applies no fixed cap to a parent, but not its children's headings to the parent's own report [37.50ms]
+(pass) summary-quality-check > rejects malformed metadata and a summary that is not the materialized report [32.04ms]
+(pass) summary-quality-check > keeps the legacy contract: preamble required, whole-summary cap [31.57ms]
+
+tests/tool/navigate-tree-rewind-dispatch.test.ts:
+(pass) dispatch: rewind validation guards > missing rewindTo [0.49ms]
+(pass) dispatch: rewind validation guards > rewindTo present, missing newLabel [0.11ms]
+(pass) dispatch: rewind validation guards > rewindTo and newLabel valid, missing summaryFocus [0.09ms]
+(pass) dispatch: rewind validation guards > summaryFocus shorter than min length [0.08ms]
+(pass) dispatch: rewind validation guards > summaryFocus shorter than min length after trim [0.06ms]
+(pass) dispatch: rewind validation guards > summaryFocus mentions the 20-char threshold in error text [0.07ms]
+(pass) dispatch: rewind validation guards > rewindTo kebab-invalid (uppercase) [0.05ms]
+(pass) dispatch: rewind validation guards > newLabel kebab-invalid (snake_case) [0.04ms]
+(pass) dispatch: rewind validation guards > all valid but no such rewindTo on the active branch [0.07ms]
+(pass) dispatch: rewind validation guards > old-name rewind calls reach execute and are refused by the new-name guards (clean break) [0.36ms]
+(pass) dispatch: rewind validation guards > summaryFocus exactly 20 chars after trim passes the guard [0.15ms]
+(pass) dispatch: rewind queues an engine fold > returns only the byte-exact 'accepted' text and the queued details [0.33ms]
+(pass) dispatch: rewind queues an engine fold > the rewind turn's turn_end folds through side calls, continues the run and writes no summary request [1.26ms]
+(pass) dispatch: rewind queues an engine fold > Esc during the rewind turn cancels the queued fold: a receipt, no side call, no continue [0.40ms]
+(pass) dispatch: rewind queues an engine fold > does not mutate the tree, send a message, or write a label at call time [0.30ms]
+(pass) dispatch: rewind queues an engine fold > is accepted without a model, then fails at the boundary with a receipt the model reads [3.22ms]
+(pass) dispatch: rewind queues an engine fold > hands the focus to the summary request verbatim (no truncation, no {first} left over) [0.98ms]
+(pass) dispatch: rewind queues an engine fold > a refused rewind queues nothing: the next turn_end folds nothing and a later rewind is accepted [3.69ms]
+(pass) dispatch: rewind queues an engine fold > refuses a second rewind while one is queued, with the engine's reason [0.37ms]
+(pass) dispatch: rewind queues an engine fold > a rewind may share its message with other tool calls: all run, and their results are in the folded segment [4.25ms]
+(pass) dispatch: rewind queues an engine fold > accepts a codemode script's rewind at any position among its nested calls [3.82ms]
+(pass) dispatch: rewind queues an engine fold > never blocks a tool call outside a forced rewind, even with a fold queued [0.34ms]
+(pass) dispatch: rewind queues an engine fold > does not run another session's queued fold, and fails open when the session id cannot be read [3.71ms]
+(pass) dispatch: rewind newLabel uniqueness > newLabel collision: rewind refuses before queueing a fold and mutates nothing [0.39ms]
+(pass) dispatch: rewind newLabel uniqueness > identifies an already stored handoff without scheduling a redundant fold [0.24ms]
+(pass) dispatch: rewind newLabel uniqueness > newLabel collision refusal copy is byte-exact [0.15ms]
+(pass) dispatch: rewind error branches > 'Already at <rewindTo>' fires when the rewindTo anchor is on the leaf [0.14ms]
+(pass) dispatch: rewind min-savings floor (#21) > A-pin variant A: anchor→immediate rewind with an earlier anchor present is rejected with the active-anchor list [0.42ms]
+(pass) dispatch: rewind min-savings floor (#21) > A-pin variant B: rewinding the OLDEST anchor is rejected with 'No earlier anchors' [0.26ms]
+(pass) dispatch: rewind min-savings floor (#21) > A-pin variant B at contextWindow 0: k-format percents, no window suffix [0.20ms]
+(pass) dispatch: rewind min-savings floor (#21) > an empty-named manual label never counts as the oldest anchor [0.23ms]
+(pass) dispatch: rewind min-savings floor (#21) > B-pin: healthy stage (≥20k apparent savings) queues the fold [0.20ms]
+(pass) dispatch: rewind min-savings floor (#21) > boundary: apparent savings just under the floor rejects; exactly at the floor accepts [0.31ms]
+(pass) dispatch: rewind min-savings floor (#21) > anchor response tells the agent to wait for accumulated work (#21 copy) [0.20ms]
+(pass) dispatch: rewind min-savings floor (#21) > registers the rewind-hygiene and pin promptGuidelines byte-exactly and in order [0.11ms]
+(pass) dispatch: rewind beforeTokens fallback > non-assistant leaf: beforeTokens uses estimateActiveBranchTokens fallback (smoke) [0.26ms]
+
+tests/tool/navigate-tree-tool.test.ts:
+(pass) schema shape — Kiro compatibility > registers a tool with a flat object root and `action` required [0.13ms]
+(pass) schema shape — Kiro compatibility > offers `pin` and exactly the agent-pinnable kinds: rule and objective stay user-only [0.14ms]
+(pass) schema shape — Kiro compatibility > schema clean break: rewindTo/newLabel registered, legacy names absent (#43) [0.07ms]
+(pass) schema shape — Kiro compatibility > declares executionMode: 'sequential' (concurrency contract) [0.06ms]
+(pass) schema shape — Kiro compatibility > each conditional-required field carries an action-conditional description [0.19ms]
+(pass) tool definition — #22 token-trim pins > description byte-equals the issue-approved trimmed string [0.06ms]
+(pass) tool definition — #22 token-trim pins > each parameter description byte-equals its issue-approved string [0.09ms]
+(pass) tool definition — #22 token-trim pins > re-bloat tripwire: description + param descriptions stay ≤600 tok at chars/4 [0.09ms]
+(pass) dispatch: list action > returns 'No labels' on an empty session [0.16ms]
+(pass) dispatch: list action > renders anchored labels in chronological order [0.24ms]
+(pass) dispatch: list action > pins the per-row line shape: percentage column then label column [0.19ms]
+(pass) dispatch: list action > renders the shared anchor table with an aligned (after:) column for a 40-char name (#101 D19) [0.21ms]
+(pass) dispatch: list action > omits ' of <window>' from the header when contextWindow is 0 [0.14ms]
+(pass) dispatch: list action > includes the reflection-bootstrap warning when no captured session [0.14ms]
+(pass) dispatch: list action > clears the reflection warning when the owning session is captured [0.15ms]
+(pass) dispatch: list action > list and rewind warnings cite their site-specific REFLECTION_BOOTSTRAP_WARNING constants verbatim [3.71ms]
+(pass) dispatch: anchor action > rejects invalid name (uppercase) with kebab-case message [0.25ms]
+(pass) dispatch: anchor action > rejects invalid name (over max length) with kebab-case message [0.06ms]
+(pass) dispatch: anchor action > errors when the session has no entries yet [0.14ms]
+(pass) dispatch: anchor action > happy path: setLabel called with the prefixed label and details surface entryId [0.29ms]
+(pass) dispatch: anchor action > estimate throws before the label write: the error propagates and no label is written (atomic anchor) [0.31ms]
+(pass) dispatch: anchor action > duplicate refusal: re-anchoring an existing name is refused with no write and no prior-clear [0.27ms]
+(pass) dispatch: anchor action > refusal copy names the colliding name and points at list + a fresh name [0.17ms]
+(pass) dispatch: anchor action > manual /tree duplicate labels remain possible and resolve leaf-most [0.09ms]
+(pass) dispatch: anchor action > falls through with a misleading rewind error on unknown `action` [0.11ms]
+(pass) dispatch: refusal results surface as failed tool calls > returns isError:true for a navigate_tree refusal [0.11ms]
+(pass) dispatch: refusal results surface as failed tool calls > leaves successful navigate_tree results untouched [0.06ms]
+(pass) dispatch: refusal results surface as failed tool calls > ignores other tools even with a refusal-shaped payload [0.06ms]
+(pass) dispatch: refusal results surface as failed tool calls > toolError tags every refusal with the marker, keeping caller details [0.13ms]
+(pass) dispatch: adversarial inputs > 100KB summaryFocus passes the length guard and reaches the no-such-label guard [0.24ms]
+(pass) dispatch: adversarial inputs > newLabel === rewindTo passes name validation; surfaces as a 'no such label' error if not pre-anchored [0.13ms]
+
+tests/tool/pin-action.test.ts:
+(pass) dispatch: pin action > records a decision as an agent-origin item and a fold carries it in the snapshot, the report and the briefing [3.46ms]
+(pass) dispatch: pin action > refuses rule, objective and unknown kinds before anything is written [0.36ms]
+(pass) dispatch: pin action > validates the params each kind needs and writes nothing when one is missing [0.69ms]
+(pass) dispatch: pin action > scopes steering to the newest anchor by default and sub-goals only when asked [0.48ms]
+(pass) dispatch: pin action > file pointers > stores the normalized path with the sha256 of the file [0.88ms]
+(pass) dispatch: pin action > file pointers > still pins, without a hash, a file that is missing or over 2 MB [2.20ms]
+(pass) dispatch: pin action > refuses everything and writes nothing when the ledger is disabled by config [0.44ms]
+(pass) dispatch: pin action > reports the existing item for a repeat and for a user decision with the same words, and writes no second item [0.28ms]
+(pass) dispatch: pin action > `list` appends the ledger briefing once something is in force [0.55ms]
+
+tests/ui/anchor-command.test.ts:
+(pass) /anchor registration and completion > registers only the anchor command, with the argument shape first [0.31ms]
+(pass) /anchor registration and completion > completes subcommands fuzzily and keeps earlier tokens when chaining [0.88ms]
+(pass) /anchor dispatch > resolves aliases, singular and plural forms [1.80ms]
+(pass) /anchor dispatch > suggests the closest subcommand within edit distance 2 and prints usage [0.89ms]
+(pass) /anchor dispatch > prints usage without UI, naming clone and --full-tool [0.15ms]
+(pass) /anchor dispatch > runs /anchor clone inspect <path> with the former clone-command semantics [1.68ms]
+(pass) /anchor dispatch > refuses options after inspect/preview paths instead of reading them as the filename [0.78ms]
+(pass) /anchor screens > opens the hub at 60 columns, shows every stub and closes on escape [1.60ms]
+(pass) /anchor screens > opens the hub at 130 columns, shows every stub and closes on escape [0.57ms]
+(pass) /anchor screens > opens current, fold and settings from the hub and returns on Escape [4.48ms]
+(pass) /anchor screens > opens the tree from the hub and returns on Escape [1.35ms]
+(pass) /anchor screens > lists anchors with savings and opens the fold plan for the chosen anchor with r [0.92ms]
+(pass) /anchor screens > explains in the list, the full line and the headless list why a pre-compaction anchor cannot be folded [1.08ms]
+(pass) /anchor screens > ignores r on the new-anchor row [0.63ms]
+(pass) /anchor screens > shows the full anchor line on enter and stays in the list [0.73ms]
+(pass) /anchor screens > validates new anchor names and refuses duplicates before touching the session [1.88ms]
+(pass) /anchor screens > reports a refused setAnchor [0.82ms]
+(pass) /anchor screens > shows the live ledger line in the hub and opens the current screen from it [1.93ms]
+(pass) /anchor screens > opens /anchor current and its aliases straight into the screen [1.45ms]
+(pass) /anchor screens > prints the briefing for /anchor current without a UI, or says the ledger is empty [0.30ms]
+(pass) /anchor screens > offers inspect, propose, preview and create without arguments and runs the chosen flow [2.35ms]
+(pass) /anchor screens > prompts for a plan path from the clone menu like the old command [0.71ms]
+
+tests/ui/clone-screen.test.ts:
+(pass) text screen > asks for lines again at the new width, less the cursor column, and keeps the cursor row [0.54ms]
+(pass) text screen > resolves with the key of the shortcut or Enter that closed it [0.45ms]
+
+tests/ui/clone-views.test.ts:
+(pass) inspect view > states session, entries, branches, folds, anchors, tools and a short hash at 60 columns [0.77ms]
+(pass) inspect view > warns about unfinished tool calls and wraps a long path under its label [0.89ms]
+(pass) inspect view > strips terminal escapes from untrusted names [0.52ms]
+(pass) preview view > shows the groups as an indented tree with state, title, entry counts, handoff mode and descendants [2.29ms]
+(pass) preview view > falls back to humanized names and no counts when the source facts are missing [1.44ms]
+(pass) preview view > counts descendant sessions as copied or restructured [1.37ms]
+(pass) preview view > keeps deeply nested groups inside the width [1.99ms]
+(pass) create confirmation > names the source, the added entries and the untouched original, without JSON [1.45ms]
+(pass) plan outline > shows method, cost and warnings above and below the proposed tree [0.44ms]
+
+tests/ui/current-screen.test.ts:
+(pass) current screen rows > orders live items by kind then id and marks origin, pin and staleness [0.52ms]
+(pass) current screen rows > appends superseded and archived items as read-only history on request [0.17ms]
+(pass) current screen rows > shows one muted row for an empty ledger and a badge that leads with the revision [0.12ms]
+(pass) current screen writes > retracts a captured rule after naming it in a confirmation and keeps it in history [2.09ms]
+(pass) current screen writes > writes nothing when the confirmation is declined [0.95ms]
+(pass) current screen writes > refuses writes while the agent is working, before asking anything [1.19ms]
+(pass) current screen writes > refuses a write at the moment of writing when the agent started during the confirmation [0.12ms]
+(pass) current screen writes > refuses writes when continuity capture is off, before asking anything, but keeps browsing [0.69ms]
+(pass) current screen writes > pinning keeps the agent out: the reducer still rejects its ops afterwards [1.87ms]
+(pass) current screen writes > edits the text and leaves the user's quote untouched [1.05ms]
+(pass) current screen writes > ignores an unchanged or empty edit [0.97ms]
+(pass) current screen writes > completes goals with c and ignores c on rules [1.09ms]
+(pass) current screen writes > adds an item as a pinned user entry and puts the cursor on it [1.21ms]
+(pass) current screen writes > adds through the last row and reports a duplicate without writing [1.02ms]
+(pass) current screen writes > shows the reducer's reason when an op is rejected [0.80ms]
+(pass) current screen writes > shows the full item on enter, with source entry and revisions [0.89ms]
+(pass) current screen writes > toggles history with h and shows retracted items read-only [1.32ms]
+(pass) current screen writes > keeps every line within the width and renders an empty ledger with the add row [0.46ms]
+(pass) current screen briefing > renders the briefing, or a sentence when nothing is in force [0.23ms]
+
+tests/ui/fold-plan-screen-panel.test.ts:
+(pass) fold plan screen > starts the recommended anchor with its suggested label and shows the progress [3.36ms]
+(pass) fold plan screen > aborts the signal on Esc while folding and reports the cancellation [0.97ms]
+(pass) fold plan screen > shows a failed fold's stage and detail, and a start that throws [1.90ms]
+(pass) fold plan screen > queues instead of starting while the agent runs, and says so [1.09ms]
+(pass) fold plan screen > keeps the screen open with the reason when the queue refuses [0.61ms]
+(pass) fold plan screen > does not fold an anchor that is not foldable and explains why [1.00ms]
+(pass) fold plan screen > falls back to the newest valid anchor without a recommendation [0.51ms]
+(pass) fold plan screen > explains how to set an anchor when there are none [0.76ms]
+(pass) fold plan screen > filters anchors and previews; Esc clears the filter and keeps the chosen original anchor [4.11ms]
+(pass) fold plan screen > leaves on the second Esc after clearing the filter [1.26ms]
+(pass) fold plan screen > maps hover, the wheel and clicks onto the filtered rows below the plan rows and folds once [9.42ms]
+(pass) fold plan screen > does not queue twice after a click queued the fold [0.88ms]
+(pass) fold plan screen > edits the anchor clicked in a filtered list and drops the filter [1.50ms]
+(pass) fold plan screen > keeps the height and the width budget while filtering, clicking and folding [11.24ms]
+(pass) fold plan screen > keeps every line within 60 and 130 columns, with long names, in every state [5.82ms]
+
+tests/ui/fold-plan-screen-state.test.ts:
+(pass) fold plan edits > edits the label and the focus; the focus stays across anchors, the label does not [1.72ms]
+(pass) fold plan edits > refuses a label that is taken or not kebab-case, and an empty focus uses the default [0.84ms]
+
+tests/ui/fold-plan-screen.test.ts:
+(pass) foldPlanResult > summarizes every outcome status for the screen [0.06ms]
+(pass) fold without a UI > prints the plan newest first, with the recommendation and refusals, and folds nothing [0.43ms]
+(pass) fold without a UI > folds the recommended or a named anchor with the suggested or a given label [0.19ms]
+(pass) fold without a UI > queues while the agent runs instead of folding now [0.08ms]
+(pass) fold without a UI > refuses unknown, unfoldable and taken targets, bad labels and extra arguments without folding [0.22ms]
+(pass) fold without a UI > reports a failed fold as a warning [0.08ms]
+
+tests/ui/fold-screen.test.ts:
+(pass) fold anchor rows > lists anchors newest first with the savings, and mutes one that frees too little [0.93ms]
+(pass) fold anchor rows > keeps every line within 60 columns [0.54ms]
+(pass) fold anchor rows > says why a pre-compaction anchor cannot be folded, and still folds one that frees enough [0.54ms]
+(pass) fold wizard > requests exactly the picked anchor, label and focus once [0.99ms]
+(pass) fold wizard > takes a typed label in kebab-case and leaves the focus to the agent when the template is untouched [0.35ms]
+(pass) fold wizard > treats an empty focus like the untouched template [0.32ms]
+(pass) fold wizard > cannot pick an anchor that frees too little, and says what to do [0.48ms]
+(pass) fold wizard > goes back one step on Esc and requests nothing [0.53ms]
+(pass) fold wizard > returns from the focus step to the label step with the label kept [0.60ms]
+(pass) fold wizard > reasks the label with a notice that names the valid shape [0.39ms]
+(pass) fold wizard > asks for more when the focus is too short and reopens what was typed [0.29ms]
+(pass) fold wizard > returns to the focus step when the confirmation is declined and keeps the draft [0.44ms]
+(pass) fold wizard > says the request is queued while the agent is working [0.39ms]
+(pass) fold wizard > rechecks the selected anchor after confirmation before sending a request [0.53ms]
+(pass) fold wizard > asks for a new label when confirmation races with another anchor [0.55ms]
+(pass) fold wizard > goes back to the list when the anchor shrank below the minimum during the wizard [0.55ms]
+(pass) fold wizard without anchors > shows one muted row and sets an anchor with a [0.47ms]
+(pass) fold wizard without anchors > explains how to continue when Enter is pressed on the empty row [0.31ms]
+(pass) fold wizard without anchors > shows the reason when the anchor cannot be set [0.34ms]
+(pass) parseFocus > leaves the focus to the agent for an empty or untouched template [0.05ms]
+(pass) parseFocus > counts only the user's own words, not the template labels [0.02ms]
+(pass) parseFocus > keeps the filled lines and drops the blank labels and control characters [0.03ms]
+
+tests/ui/frame-rendering.test.ts:
+(pass) renderFrame > bounds every line to 60 columns and renders exactly the measured height [0.69ms]
+(pass) renderFrame > bounds every line to 130 columns and renders exactly the measured height [0.47ms]
+(pass) renderFrame > lays out search, rows, selected detail, description and hint bar [0.38ms]
+(pass) renderFrame > aligns the value column to the full list, not the visible rows [0.41ms]
+(pass) renderFrame > keeps the height when the filter leaves fewer or no rows [0.75ms]
+(pass) renderFrame > shows overflow counts in both rules [0.67ms]
+(pass) renderFrame > clips the badge and breadcrumbs instead of overflowing narrow terminals [0.32ms]
+(pass) renderFrame > styles through the theme only and strips escape sequences from row text [0.26ms]
+(pass) hint bar > keeps whole hints in display order and drops lowest priority first [0.62ms]
+
+tests/ui/frame.test.ts:
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 60 columns [4.03ms]
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 130 columns [4.38ms]
+(pass) FrameList > focuses search on click and moves selection one row per wheel event [0.97ms]
+(pass) FrameList > ignores hover, non-left clicks, padding, chrome and out-of-bounds cells [0.82ms]
+(pass) FrameList > never changes height while filtering or moving the cursor [6.84ms]
+(pass) FrameList > filters fuzzily and reports original indices [0.60ms]
+(pass) FrameList > clears a non-empty search on the first escape and cancels on the next [0.67ms]
+(pass) FrameList > keeps the selected row selected when the search is cleared [0.32ms]
+(pass) FrameList > does not start a search from control keys [0.86ms]
+(pass) FrameList > cancels on ctrl+c from either focus [0.38ms]
+(pass) FrameList > dispatches shortcuts only on rows where they are enabled and typing otherwise searches [0.72ms]
+(pass) FrameList > re-measures only when the terminal size changes [0.95ms]
+(pass) FrameList > hint bar > keeps esc and search whole at 60 columns and drops optional actions with an ellipsis [0.69ms]
+(pass) FrameList > hint bar > shows every hint without an ellipsis when they fit [0.74ms]
+(pass) FrameList > hint bar > resolves shortcut actions per row [0.59ms]
+
+tests/ui/handoff-renderer.test.ts:
+(pass) real native cards expand, fit narrow/wide widths, fall back, and clean up scoped hooks [7.63ms]
+(pass) legacy anchored handoffs trace archived ancestry and union nested sources [0.32ms]
+(pass) legacy retrospective ranges count physical sources and malformed metadata remains native [0.08ms]
+(pass) registration probes only UI sessions and uses fresh session context after reload [0.37ms]
+(pass) incompatible native shape warns once and preserves original method [0.17ms]
+
+tests/ui/history-outline.test.ts:
+(pass) chronology preserves nested single children, unique originals, open current tail and search paths [0.98ms]
+(pass) invalid manifests fall back [0.14ms]
+(pass) native patch navigates real IDs, supports raw escape and session replacement, restores own methods [4.30ms]
+
+tests/ui/navigator-renderers.test.ts:
+(pass) rewind: TUI renderers > wrapPlainLine word-wraps and hard-breaks long words [0.09ms]
+(pass) rewind: TUI renderers > wrapPlainLine wraps by terminal cells: CJK, emoji and tabs never exceed the width [1.04ms]
+(pass) rewind: TUI renderers > registers compact historical rewind renderers and expands the old instruction [0.99ms]
+(pass) rewind: TUI renderers > renderers never emit a line wider than the terminal (pi-tui crashes on one) [1.35ms]
+
+tests/ui/policy-settings.test.ts:
+(pass) policy summaries > describes policies in words, not canonical JSON [0.36ms]
+(pass) policy editor > shows verification rows and the recommended verifier [1.14ms]
+(pass) policy editor > disables escalation without turning the other preset stages off [2.72ms]
+(pass) policy editor > refuses an unknown policy field without changing the current object [2.32ms]
+(pass) policy editor > returns null for off and discards a cancelled draft [1.35ms]
+(pass) policy editor > refuses an invalid confidence and an overlong prompt [1.93ms]
+(pass) policy editor > keeps the milestone confirmer when only the gate and classifier change [2.13ms]
+(pass) policy editor > warns when milestone confirmation is off [1.23ms]
+(pass) policy editor > stores a verification prompt without dropping the preset [2.24ms]
+
+tests/ui/settings-model-picker.test.ts:
+(pass) settings model picker: results > offers chat and decision models for a policy stage without a thinking step [0.71ms]
+(pass) settings model picker: results > can disable a policy stage without changing other settings [0.26ms]
+(pass) settings model picker: results > returns a parser-valid provider/model:thinking and leaves the session model alone [0.61ms]
+(pass) settings model picker: results > offers only the thinking levels the model supports [1.19ms]
+(pass) settings model picker: results > saves a model without thinking levels as :off without asking [0.33ms]
+(pass) settings model picker: results > puts the configured model first, selects it and preselects its thinking level [0.67ms]
+(pass) settings model picker: results > carries the thinking level of the old model over, clamped to the new one [0.56ms]
+(pass) settings model picker: results > returns null for a classifier that is off, distinct from cancel and from current [0.80ms]
+(pass) settings model picker: results > offers the recommended policy after off, only for a classifier, and starts on it when configured [0.85ms]
+(pass) settings model picker: results > shows a configured object policy as one selected row that cannot be replaced by accident [0.67ms]
+(pass) settings model picker: results > returns a classifier as provider/id from the classifier list, without a thinking step [0.47ms]
+(pass) settings model picker: results > Escape at every level returns undefined and calls nothing [0.44ms]
+(pass) settings model picker: custom string > accepts a provider that is not available, once it parses [0.36ms]
+(pass) settings model picker: custom string > asks again after an invalid string and returns to the list when the input is cancelled [0.43ms]
+(pass) settings model picker: custom string > validates a classifier as provider/id and does not take off or a thinking suffix as special [0.27ms]
+(pass) settings model picker: custom string > still offers off and custom when the classifier list cannot be read [0.38ms]
+(pass) settings model picker: rendering > fuzzy-searches names, ids and providers [2.42ms]
+(pass) settings model picker: rendering > keeps every line within the width and strips escape sequences from names [0.98ms]
+(pass) settings model picker: rendering > shows the thinking step under a Thinking breadcrumb and names the model [0.52ms]
+(pass) settings model picker: rendering > lists a configured model that is not available right after current, and keeps it on Enter [0.36ms]
+
+tests/ui/settings-screen.test.ts:
+(pass) settings screen: saving > lists consolidation settings and saves a staged flag while preserving unknown keys [9.46ms]
+(pass) settings screen: saving > edits consolidation counts and fractional share with validation [19.37ms]
+(pass) settings screen: saving > writes exactly the two staged keys, keeping unknown keys and snake_case spelling [5.79ms]
+(pass) settings screen: saving > creates a missing project file and directory, and leaves the global file alone [5.38ms]
+(pass) settings screen: saving > saves a runtime override without writing files and takes precedence over project values [4.13ms]
+(pass) settings screen: saving > leaves staged changes untouched when the save-scope chooser is cancelled [3.07ms]
+(pass) settings screen: saving > keeps the file unchanged when a parent container changes during confirmation [5.87ms]
+(pass) settings screen: saving > accepts forgiving numbers and writes the off sentinel as null [11.54ms]
+(pass) settings screen: saving > converts the auto_navigate boolean shorthand when a sibling key is edited [6.86ms]
+(pass) settings screen: saving > toggles a global flag from its target value when a project value shadows it [5.20ms]
+(pass) settings screen: saving > toggles a flag and cycles a choice without opening an input [7.61ms]
+(pass) settings screen: saving > resets by removing every spelling of the key and prunes a container it empties [7.69ms]
+(pass) settings screen: saving > warns when a higher layer still overrides what was saved [4.94ms]
+(pass) settings screen: saving > applies saved settings immediately without offering a reload [3.69ms]
+(pass) settings screen: saving > applies immediately while the agent is working without offering a reload [3.60ms]
+(pass) settings screen: saving > warns when a runtime value shadows a lower-scope save [3.35ms]
+(pass) settings screen: saving > resets a runtime value to reveal the trusted project value [5.64ms]
+(pass) settings screen: saving > keeps the staged edits and the file when the write fails [4.01ms]
+(pass) settings screen: saving > steps numeric settings in both directions without crossing their bounds [17.87ms]
+(pass) settings screen: saving > edits automatic pressure and its kept-recent share [11.00ms]
+(pass) settings screen: saving > uses left and right to set flags and cycle choices [8.74ms]
+(pass) settings screen: saving > writes atomically through a symlink and leaves no temp file behind [4.30ms]
+(pass) settings screen: refusals > refuses invalid ranges and custom model selectors [9.19ms]
+(pass) settings screen: refusals > shows a valid staged model when a sibling proposal field is invalid [6.55ms]
+(pass) settings screen: refusals > shows the current value and the valid range in the input prompt [2.31ms]
+(pass) settings screen: refusals > writes nothing when the user cancels with staged edits [2.85ms]
+(pass) settings screen: refusals > writes nothing when the save confirmation is declined [3.27ms]
+(pass) settings screen: refusals > closes without a question when nothing is staged [0.96ms]
+(pass) settings screen: refusals > never overwrites a file that does not parse, and says which file and why [6.49ms]
+(pass) settings screen: refusals > refuses a config whose root is not an object [2.18ms]
+(pass) settings screen: refusals > cycles global, project and runtime targets [7.85ms]
+(pass) settings screen: refusals > does not read or edit the project file when the project is not trusted [2.36ms]
+(pass) settings screen: rows > shows each effective value with the layer it comes from [1.49ms]
+(pass) settings screen: rows > explains an ignored invalid value instead of hiding it [1.33ms]
+(pass) settings screen: rows > stays inside 60 columns and never cuts a description [13.60ms]
+(pass) settings screen: rows > describes effective nested map and runtime settings [1.65ms]
+(pass) settings screen: rows > builds the live deps from pi's agent dir and the session's cwd and trust [0.05ms]
+(pass) settings screen: keyed maps > leaves the original bytes alone when staged map edits are cancelled [15.76ms]
+(pass) settings screen: keyed maps > saves both edits, keeping another model's unknown data and snake_case, and the loader resolves them [17.11ms]
+(pass) settings screen: keyed maps > shows inherited tool modes apart from the target file and stages add, change, remove and unstage [11.67ms]
+(pass) settings screen: keyed maps > confirms removing a non-empty model entry and stages an explicit delete [13.31ms]
+(pass) settings screen: keyed maps > edits nested model settings through the root rules and keeps the camelCase spelling [15.23ms]
+(pass) settings screen: keyed maps > adds a model pattern with a reserve and a tool policy, and the loader applies them [18.08ms]
+(pass) settings screen: keyed maps > resets and unstages a whole map from the top screen [6.25ms]
+(pass) settings screen: keyed maps > shows a map that is not an object as invalid and refuses to replace it silently [5.56ms]
+(pass) settings screen: keyed maps > lists an invalid tool mode as invalid and replaces it only when the user picks a mode [5.13ms]
+(pass) settings screen: classifier policies > disables intent escalation in the editor and saves runtime only [7.70ms]
+(pass) settings screen: classifier policies > changes the escalation model from the editor and saves runtime only [7.20ms]
+(pass) settings screen: classifier policies > discards a policy draft when the editor is cancelled [4.10ms]
+(pass) settings screen: classifier policies > refuses an invalid milestone confidence without staging [8.46ms]
+(pass) settings screen: classifier policies > keeps unspecified milestone stages under a wildcard override [14.83ms]
+
+tests/ui/tool-renderer.test.ts:
+(pass) call rows are one line at every width [0.81ms]
+(pass) call rows read as the brief specifies [0.67ms]
+(pass) streaming and garbage args render without throwing [0.66ms]
+(pass) expanded call wraps the full text and adds detail [0.64ms]
+(pass) result rows summarize each action in one line [0.48ms]
+(pass) an error result shows its first line in the error colour [0.33ms]
+(pass) expanded results show the full text the model received [0.07ms]
+(pass) garbage results render without throwing [0.45ms]
+(pass) ledger entry is one dim row naming kind and text [0.71ms]
+(pass) ledger entry with many ops stays one line and counts the rest [0.30ms]
+(pass) ledger entry keeps '+N more' when the first op alone overflows [0.17ms]
+(pass) expanded ledger entry lists every op with full quotes [0.24ms]
+(pass) watermark-only and malformed ledger entries render nothing and never throw [0.79ms]
+
+tests/ui/tree-screen.test.ts:
+(pass) tree outline rows > lists the active branch chronologically with the archived row and the current position last [0.88ms]
+(pass) tree outline rows > marks an anchored leaf on its own row, looking past label entries [0.17ms]
+(pass) tree outline rows > indents handoffs nested in a fold one level per depth, capped, and lists their archived work [0.27ms]
+(pass) tree outline rows > shows a native branch summary by its heading, without folded accounting [0.08ms]
+(pass) tree screen > renders the outline in order within 60 columns, with the fold badge and context [0.86ms]
+(pass) tree screen > keeps every line within 60 columns on each row, filter and the details view [5.36ms]
+(pass) tree screen > goes to a row with g after a confirmation that says nothing is deleted [2.55ms]
+(pass) tree screen > navigates nothing when the confirmation is declined [0.82ms]
+(pass) tree screen > refuses to navigate while the agent is working, before asking anything [0.96ms]
+(pass) tree screen > does not move when the agent starts working during the confirmation [0.87ms]
+(pass) tree screen > reports a cancelled or failed move and stays on the screen [1.90ms]
+(pass) tree screen > answers g on the current row with a notice instead of moving [0.67ms]
+(pass) tree screen > shows the goal, outcome and stats of a fold with Enter [1.00ms]
+(pass) tree screen > shows a user message in full on Enter [0.71ms]
+(pass) tree screen > cycles the filter with f and searches every row [1.94ms]
+(pass) tree destinations and the current marker > goes before an anchored user message, says so, and drops the anchor from the branch [0.82ms]
+(pass) tree destinations and the current marker > goes before an anchored custom message the same way [0.39ms]
+(pass) tree destinations and the current marker > marks a custom message leaf as current and leaves it alone, since the host does nothing at the leaf [0.42ms]
+(pass) tree destinations and the current marker > allows returning to the last assistant when runtime metadata follows it [0.22ms]
+(pass) tree destinations and the current marker > allows going before the current user message when only metadata follows it [0.32ms]
+(pass) tree destinations and the current marker > says there is nothing to move back from when the user message is the leaf itself [0.36ms]
+(pass) tree destinations and the current marker > marks a compaction leaf as the current position, not the entry before it [0.46ms]
+(pass) tree destinations and the current marker > navigates nothing when going before an anchored message is declined [0.36ms]
+
+tests/scripts/classifier-eval/adapters.test.ts:
+(pass) decisions adapter > records the request hash, status, generation id and billed cost, never headers [2.82ms]
+(pass) decisions adapter > plans exactly the bytes the SDK sends [0.39ms]
+(pass) decisions adapter > caps the route price at the effective rate, above the catalog price [0.24ms]
+(pass) decisions adapter > refuses a model with no positive price before any request [0.15ms]
+(pass) decisions adapter > reports an HTTP rejection as an error with its status and no key [0.18ms]
+(pass) decisions adapter > does not call a model whose context cannot hold the request [0.10ms]
+(pass) decisions adapter > settles an aborted request as dispatched without a status [0.19ms]
+(pass) recording fetch > refuses an oversized body and a second request before sending [0.15ms]
+(pass) chat adapter > asks for strict structured JSON and records the streamed usage [5.53ms]
+(pass) chat adapter > keeps malformed output as an ok observation with no valid answer [0.85ms]
+(pass) chat adapter > records a choice the question never offered [0.06ms]
+(pass) heuristic adapter > answers intent locally from the production heuristic and never supersedes [0.16ms]
+(pass) heuristic adapter > is unsupported for milestone cases [0.04ms]
+(pass) uncatalogued decision models > run through the template's transport [0.21ms]
+(pass) error text > removes the credential literal as well as key-shaped text [0.34ms]
+
+tests/scripts/classifier-eval/analyze.test.ts:
+(pass) chain consults the second model only on abstention, invalid output or error, and adds cost and latency [8.23ms]
+(pass) confirm-chain never accepts when the second model disagrees [1.15ms]
+(pass) majority vote accepts only a strict majority of accepted answers [1.49ms]
+(pass) production replay follows createModelClassifier: abstention keeps the heuristic rule and never supersedes [0.58ms]
+(pass) replay rows score the committed verdict and exist for intent tasks only [1.09ms]
+(pass) the gate chosen on development is not re-tuned on holdout [1.39ms]
+(pass) ranking is lexicographic: unsafe accepted, accepted-exact rate, cost, p95 [2.00ms]
+(pass) results under the minimum case count are insufficient and rank below sufficient ones [0.88ms]
+(pass) unsupported and failing models stay visible in rankings and exclusions [0.86ms]
+(pass) per-question counts, abstention and repetition consistency are reported [0.57ms]
+(pass) observations are loaded strictly and reports are written [2.86ms]
+
+tests/scripts/classifier-eval/billing.test.ts:
+(pass) reservation > doubles the full-body prompt cost plus the full output allowance [0.07ms]
+(pass) reservation > prices at the highest rate the catalog lists [0.04ms]
+(pass) effective price > lifts the catalog price to the highest known route, as for clef [0.05ms]
+(pass) effective price > prices chat at the priority route, above the catalog [0.01ms]
+(pass) effective price > never lowers a rate below the catalog [0.05ms]
+(pass) effective price > refuses zero, unknown and non-finite prices [0.13ms]
+(pass) effective price > allows zero only for a :free id verified in the route table [0.02ms]
+(pass) effective price > validates a route table and keeps the committed one tied to its research [0.51ms]
+(pass) settlement > retries a late generation record and settles its total_cost [0.53ms]
+(pass) settlement > falls back to the response cost, then to an unknown cost [0.10ms]
+(pass) settlement > does not retry a lookup the key may not make [0.05ms]
+(pass) settlement > charges nothing for an unsent or rejected request but holds a timeout [0.06ms]
+(pass) settlement > holds a rejected request that was issued a generation id [0.07ms]
+(pass) settlement > stops waiting for a generation when aborted [0.12ms]
+(pass) key usage > reads only numeric usage fields [0.16ms]
+(pass) key usage > reports a failure without the key [0.11ms]
+
+tests/scripts/classifier-eval/budget.test.ts:
+(pass) amounts > converts USD to nano-USD rounding up from the decimal form [0.73ms]
+(pass) amounts > rejects non-finite, negative and unsafe amounts and bad ids [0.31ms]
+(pass) reservations > lets exactly one of two competing reservations through [0.21ms]
+(pass) reservations > accepts an exact fit and rejects one nano-USD more [0.09ms]
+(pass) reservations > persists a reservation before reserve returns and rejects duplicates [0.09ms]
+(pass) reservations > releases the unused hold on a verified settlement [0.10ms]
+(pass) unknown outcomes > keep the full hold across reopen and reconcile exactly once [0.33ms]
+(pass) overrun > persists an actual above its reservation, reports it and closes reservations [0.25ms]
+(pass) overrun > breaches when an unknown outcome reconciles above its hold, and reports negative remaining past the cap [0.11ms]
+(pass) ownership > allows one owner, removes only its own lock and closes idempotently [0.21ms]
+(pass) ownership > never removes a stale lock on its own [0.08ms]
+(pass) ownership > keeps holds of a crashed owner and admits a single process at a time [15.23ms]
+(pass) corrupt state > rejects empty file and releases the lock [0.13ms]
+(pass) corrupt state > rejects partial last line and releases the lock [0.07ms]
+(pass) corrupt state > rejects missing final newline and releases the lock [0.06ms]
+(pass) corrupt state > rejects garbage line and releases the lock [0.08ms]
+(pass) corrupt state > rejects blank line and releases the lock [0.07ms]
+(pass) corrupt state > rejects no cap header and releases the lock [0.07ms]
+(pass) corrupt state > rejects duplicate cap header and releases the lock [0.08ms]
+(pass) corrupt state > rejects duplicate reservation and releases the lock [0.07ms]
+(pass) corrupt state > rejects settle without reservation and releases the lock [0.09ms]
+(pass) corrupt state > rejects reservation over the cap and releases the lock [0.09ms]
+(pass) corrupt state > rejects negative amount and releases the lock [0.06ms]
+(pass) corrupt state > rejects changed cap and releases the lock [0.07ms]
+(pass) corrupt state > replays an intact log written by an earlier owner [0.11ms]
+
+tests/scripts/classifier-eval/cases.test.ts:
+(pass) case ids are unique and every task uses its own input type [0.18ms]
+(pass) each task has 16 development and 32 holdout cases [0.12ms]
+(pass) holdout cases come from many independent families [0.13ms]
+(pass) no family spans development and holdout [0.08ms]
+(pass) inputs stay inside the limits where truncation would change a reference [0.54ms]
+(pass) prepared requests carry every reference and keep the text unchanged [2.24ms]
+(pass) requests contain no annotator commentary or reference text [4.59ms]
+(pass) every request state stays small [1.85ms]
+(pass) every milestone case carries session structure within the sent limits [0.44ms]
+(pass) structure describes earlier phases and never marks the judged records [1.56ms]
+(pass) every reference has a short rationale [0.16ms]
+(pass) kind references mark lost protection and spurious protection as unsafe [0.23ms]
+(pass) contradicts references mark false supersession as unsafe [0.25ms]
+(pass) status references mark premature folds as unsafe [0.13ms]
+(pass) boundary references mark folding unfinished work as unsafe [0.26ms]
+(pass) every split covers each kind, status, boundary form and language [0.39ms]
+(pass) holdout has several cases for every reference class [0.23ms]
+(pass) intent cases separate marker words from marker-free instructions [0.62ms]
+
+tests/scripts/classifier-eval/milestone-parity.test.ts:
+(pass) recorded holdout v3 observations replayed through the production policy > decides exactly what the benchmark's confirm of the same answers decides, per decision [0.14ms]
+(pass) recorded holdout v3 observations replayed through the production policy > reproduces the accepted, unsafe and accepted-exact counts of analyze.ts for both questions and splits [0.09ms]
+(pass) recorded holdout v3 observations replayed through the production policy > keeps the evidence behind the preset: no unsafe accepted answer, 62 of 96 status and 73 of 96 boundary decisions accepted-exact on holdout [0.03ms]
+(pass) live parity comparison > accepts a decision equal to the benchmark's confirm of the live answers with identical requests [0.60ms]
+(pass) live parity comparison > flags a request that differs from the recorded one, and a decision the benchmark would not make [0.10ms]
+(pass) live parity comparison > counts an accepted unsafe decision as a failure [0.04ms]
+(pass) live parity comparison > selects evenly spaced holdout cases of both milestone tasks [0.18ms]
+
+tests/scripts/classifier-eval/milestone-variants.test.ts:
+(pass) variant ids > canonicalizes parts and rejects combinations that contradict [0.15ms]
+(pass) base variant > sends the production request without structure, byte for byte [0.19ms]
+(pass) base variant > matches the request hash of an earlier live observation for the same cases [2.88ms]
+(pass) benchmark requests > stay byte-identical to what earlier runs sent, for every variant [1.60ms]
+(pass) variant requests > instructions keep the question ids and every record choice [0.05ms]
+(pass) variant requests > granular asks one yes/no question per signal and per assistant record [0.09ms]
+(pass) variant requests > tree-heuristic derives objective, goals and anchor, and keeps a case structure as given [0.11ms]
+(pass) granular combination > never yields milestone unless every signal is answered and only finished is yes [0.69ms]
+(pass) granular combination > states milestone with the lowest confidence of its signals [0.03ms]
+(pass) granular combination > decides a non-milestone status from one answer even when the others are missing [0.03ms]
+(pass) granular combination > takes the newest finished-phase report and the confidence of everything after it [0.05ms]
+(pass) granular combination > leaves the boundary out when a record at or after the report is unanswered [0.02ms]
+(pass) generated structure > keeps only valid, bounded, printable text and known record ids [0.29ms]
+(pass) generated structure > rejects output without an objective or lists [0.02ms]
+(pass) generated structure > is priced for the largest structure the limits allow [0.48ms]
+(pass) generated structure > is generated once through the chat route and recorded with its cost evidence [2.06ms]
+(pass) tree-luna variant > sends the generated structure, keeps the case folds and carries the structure cost and time [0.47ms]
+(pass) tree-luna variant > records an error without a request when the structure is missing [0.19ms]
+(pass) tree-luna variant > adds carried costs and treats an unknown part as unknown [0.06ms]
+
+tests/scripts/classifier-eval/parity.test.ts:
+(pass) metering registry > reserves the worst case before dispatch, forbids retries, caps the route price and settles from billing [1.12ms]
+(pass) metering registry > a chat call keeps the product's payload edits, adds the route ceiling and records the reply text [0.47ms]
+(pass) metering registry > refuses a call that would pass the run ceiling before anything is sent [0.24ms]
+(pass) metering registry > an unknown cost keeps the full hold and is recorded as unknown [0.27ms]
+(pass) comparison with the benchmark > cannot replay a recorded retirement the shipped policy now verifies [1.03ms]
+(pass) comparison with the benchmark > flags a different verdict, a different request and an unsafe live answer [0.23ms]
+(pass) comparison with the benchmark > compares a Luna probe with the recorded Luna answers, and skips an unreadable reply [0.11ms]
+(pass) comparison with the benchmark > summarizes per task and split [0.46ms]
+
+tests/scripts/classifier-eval/retirement-cases.test.ts:
+(pass) one case per supersession case and active item, split and family kept [0.49ms]
+(pass) derivation is deterministic [0.30ms]
+(pass) positives are the replaced items, negatives every other item [0.73ms]
+(pass) only a confirmed negative is unsafe; a missed positive is merely wrong [1.62ms]
+(pass) requests carry no label, id of the case or reference text [3.05ms]
+(pass) the positive and the negatives of one message differ only in the asked item [8.71ms]
+(pass) no family spans development and holdout and each split has every label [0.36ms]
+
+tests/scripts/classifier-eval/retirement-report.test.ts:
+(pass) without verification the pipeline keeps its accepted unsafe retirements [0.50ms]
+(pass) verify escalated checks only retirements proposed after microsoft abstained [0.11ms]
+(pass) verify every retirement also blocks correct and ambiguous retirements the verifier doubts [0.14ms]
+(pass) a failed check keeps the item; a missing pair is reported and excluded [0.23ms]
+(pass) ranking puts zero unsafe first, then positives, cost and p95 [0.07ms]
+
+tests/scripts/classifier-eval/run.test.ts:
+(pass) budget control > fsyncs the reservation before dispatch and settles the billed cost [4.95ms]
+(pass) budget control > uses the response cost when no generation record appears, and holds an unknown one [2.60ms]
+(pass) budget control > stops dispatching once the cap cannot hold another reservation [0.86ms]
+(pass) budget control > settles an interrupted call as unknown and dispatches nothing more [6.17ms]
+(pass) dry run > prices the plan without any request or file [0.76ms]
+(pass) dry run > refuses a plan that exceeds the remaining budget [0.23ms]
+(pass) run directory > resumes without repeating finished work [4.13ms]
+(pass) run directory > keeps one observation per unit of work, errors included [1.12ms]
+(pass) run directory > records metadata and keeps credentials out of every file [3.36ms]
+(pass) usage errors > rejects unknown models, missing destinations and an existing --out [2.43ms]
+(pass) prices > reserves above zero for every live call, clef at its route price [0.38ms]
+(pass) prices > refuses a named model without a positive price, live and in a dry run [0.59ms]
+(pass) prices > accepts a verified free variant at the minimum reservation [0.20ms]
+(pass) prices > expands all-decisions to priced models and reports every exclusion [0.57ms]
+(pass) prices > reads a shortlist file and lets --rates raise but not lower a price [0.42ms]
+(pass) prices > sends the route price ceiling with every live request and redacts the key from errors [0.76ms]
+(pass) milestone variants > runs each model once per variant under its own key and combines granular answers in code [2.42ms]
+(pass) milestone variants > generates one structure per case before the calls that use it and carries its cost [5.96ms]
+(pass) milestone variants > records an error without a request when the structure call fails [1.81ms]
+(pass) milestone variants > lists the structure calls in a dry run without any request [0.49ms]
+(pass) milestone variants > refuses variants outside milestone tasks, unknown variants and the heuristic [0.37ms]
+
+tests/scripts/classifier-eval/scoring.test.ts:
+(pass) separates raw correctness, abstention and unsafe accepted decisions [0.85ms]
+(pass) missing or invalid answers cannot become successful abstentions [0.05ms]
+(pass) unsupported cases remain visible and unknown costs retain their bound [0.07ms]
+(pass) calibration uses raw valid predictions, including abstained answers [3.18ms]
+
+tests/scripts/fold-acceptance/run.test.ts:
+(pass) automatic fixtures reject pressure preemption and admission recovery before dispatch [0.82ms]
+(pass) automatic acceptance requires completed usable policy responses, not dispatch attempts [0.92ms]
+(pass) misconfigured automatic fixtures fail before runtime, ledger or provider access [2.36ms]
+(pass) automatic continuation need not repeat an already fulfilled finalization request [0.23ms]
+Dry run: fixture written; zero provider calls and no ledger changes.
+(pass) dry run writes only synthetic evidence without opening a ledger or contacting providers [4.97ms]
+manual: PASS; 9589 -> 1584 estimated tokens; 3 requests.
+(pass) runs the production manual fold and subsequent main turn through an isolated SDK session [15.06ms]
+Dry run: fixture written; zero provider calls and no ledger changes.
+(pass) automatic dry run records the opt-in policy and finalization fixture without runtime or network [6.57ms]
+(pass) intercepts chat and Decisions runtime calls with the same fetch and zero retries [4.48ms]
+Dry run: fixture written; zero provider calls and no ledger changes.
+(pass) routes an openai selector to the native Responses endpoint, refuses other hosts, and keeps dry runs offline [13.62ms]
+(pass) repeated-recovery acceptance needs two successful recoveries and a final request that fits [0.53ms]
+(pass) rejects malformed scenarios and unsafe fixture sizes before execution [0.17ms]
+
+tests/scripts/fold-acceptance/transport.test.ts:
+(pass) budgeted fold transport > does not fetch when the ledger cannot hold the reservation [0.62ms]
+(pass) budgeted fold transport > gives the caller first bytes before the stream ends, then drain settles [0.74ms]
+(pass) budgeted fold transport > reserves each retry and sidecall before that POST [0.62ms]
+(pass) budgeted fold transport > shapes a Request body, preserves its signal, and drops a stale content-length [0.40ms]
+(pass) budgeted fold transport > rejects unpriced, unknown and uncapped chat before dispatch [0.37ms]
+(pass) budgeted fold transport > holds an aborted dispatch and an unknown response [0.59ms]
+(pass) budgeted fold transport > does not release a 4xx response that carries a generation id [0.54ms]
+(pass) budgeted fold transport > records bodies and status, never request or response headers [0.32ms]
+(pass) budgeted fold transport > passes OpenRouter GET metadata through untouched [0.22ms]
+(pass) budgeted fold transport > clamps System One and Anthropic messages without changing the model or cap [0.66ms]
+(pass) budgeted fold transport > rejects billable server tools and multiple completions before dispatch [0.37ms]
+(pass) budgeted fold transport > surfaces an overspend even when settlement finishes before drain [0.35ms]
+(pass) budgeted fold transport > does not retry a failed POST itself [0.26ms]
+
+tests/scripts/fold-acceptance/tui.test.ts:
+Dry run: zero runtime/provider calls; no CLI, tmux, auth reads or ledger changes. Plan: /tmp/fold-tui-dry-NF0rbO/evidence/launch.json
+(pass) validates a native TUI plan without runtime, network, auth, ledger or terminal calls [6.94ms]
+
+ 1562 pass
+ 0 fail
+Ran 1562 tests across 98 files. [5.26s]

@@ -1,0 +1,96 @@
+{
+  "passed": true,
+  "scenario": "automatic",
+  "outcome": "policy-evaluated-no-fold",
+  "folded": false,
+  "initialTokens": 38328,
+  "afterTokens": 39686,
+  "decisions": {
+    "classifier": {
+      "status": {
+        "type": "choice",
+        "choice": "continue",
+        "probabilities": {
+          "continue": 0.52,
+          "milestone": 0.46,
+          "await-user": 0.01,
+          "blocked": 0.01
+        },
+        "confidence": 0.36
+      },
+      "boundary": {
+        "type": "choice",
+        "choice": "6b539c9e",
+        "probabilities": {
+          "a64b20b1": 0,
+          "22e31532": 0,
+          "8490ef3c": 0,
+          "2d476548": 0,
+          "ca669b1d": 0,
+          "582cf450": 0,
+          "aae42794": 0,
+          "f5fb4e25": 0,
+          "3f4ffe54": 0,
+          "8faac4b2": 0,
+          "37dbaa0c": 0,
+          "84e79e08": 0,
+          "f6bbb01e": 0,
+          "c99fde75": 0,
+          "76d5c208": 0,
+          "6b539c9e": 0.6900000000000001,
+          "3b61fa39": 0.01,
+          "ab6f3553": 0.28,
+          "none": 0.01
+        },
+        "confidence": 0.67
+      }
+    },
+    "confirmer": {
+      "status": {
+        "choice": "continue",
+        "confidence": 0.98
+      },
+      "boundary": {
+        "choice": "6b539c9e",
+        "confidence": 0.97
+      }
+    }
+  },
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 20,
+      "startedAt": "2026-10-27T09:00:51.867Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-27T09:00:55.480Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:00:55.480Z"
+    }
+  ],
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/automatic-fixed/live/sessions/2026-10-27T09-00-51-853Z_01a17c97-490d-72c0-980e-b68976f83462.jsonl",
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.10045769,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633464407
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.100636316,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633285781
+  },
+  "completedAt": "2026-10-27T09:01:26.795Z"
+}

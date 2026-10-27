@@ -1,0 +1,45 @@
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13.
+
+ [38;2;205;154;34mWarning: Could not restore model fixture/fixture. Using openai/gpt-5.5[39m
+
+ [38;2;205;154;34mWarning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mSettings[0m [38;2;160;142;213m───────────────────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169mtarget: global[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m treeProposal.tools[7m [0m
+
+ [38;2;167;152;215m→[39m treeProposal.tools                     [38;2;157;165;169mnone · default[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mglobal 0 · project 0 · runtime 0[39m
+   auto_navigate.tools                    [38;2;157;165;169mnone · default[39m
+   treeProposal.model                     [38;2;157;165;169mcurrent · default[39m
+
+
+
+
+
+
+
+
+
+
+
+
+[38;2;126;136;142m   Tools a tree-proposal model may see, by exact name. Enter opens the list.[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142medit[39m  [1malt+t[0m [38;2;126;136;142mto project[39m  [1mtype[0m [38;2;126;136;142mfilter[39m  [1mesc[0m [38;2;126;136;142mclear[39m
+[38;2;160;142;213m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-d3-mmj6Zo/workspace[39m
+[38;2;126;136;142m↑14k ↓1.4k $0.000 (sub) 0.4%/272k                                                                        (openai) gpt-5.5 • medium

@@ -1,0 +1,43 @@
+{
+  "classifier": {
+    "status": {
+      "type": "choice",
+      "choice": "milestone",
+      "probabilities": {
+        "continue": 0.02,
+        "milestone": 0.98,
+        "await-user": 0,
+        "blocked": 0
+      },
+      "confidence": 0.97
+    },
+    "boundary": {
+      "type": "choice",
+      "choice": "9e7642bd",
+      "probabilities": {
+        "0bc0dec2": 0,
+        "68c546f5": 0,
+        "12f7618a": 0,
+        "732f40d2": 0,
+        "86e819c2": 0,
+        "e5e17b5b": 0.01,
+        "7723eb81": 0,
+        "b3b50f8b": 0.02,
+        "a93ad304": 0,
+        "9e7642bd": 0.96,
+        "none": 0.01
+      },
+      "confidence": 0.96
+    }
+  },
+  "confirmer": {
+    "status": {
+      "choice": "milestone",
+      "confidence": 0.99
+    },
+    "boundary": {
+      "choice": "9e7642bd",
+      "confidence": 0.99
+    }
+  }
+}

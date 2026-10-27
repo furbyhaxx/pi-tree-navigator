@@ -1,0 +1,15 @@
+{
+  "scenario": "automatic",
+  "model": "openai/gpt-6-luna",
+  "window": 96000,
+  "blocks": 8,
+  "out": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/automatic-fixed/dry-run",
+  "ledger": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+  "dryRun": true,
+  "startedAt": "2026-10-27T09:00:51.246Z",
+  "sourceCommit": "7c14c24fbb0abd9b215103c1cbf24af97c084be1",
+  "dirtyPaths": [
+    "M scripts/fold-acceptance/fixture.ts",
+    " M scripts/fold-acceptance/run.ts"
+  ]
+}

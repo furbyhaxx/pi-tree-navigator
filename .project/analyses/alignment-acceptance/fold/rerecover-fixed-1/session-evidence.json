@@ -1,0 +1,191 @@
+{
+  "receipts": [
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[rewind to 'audit-mid' · collapsed as 'audit-mid-folded'] · context 192.0% → 41.5% of 96k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.\n\nThis rewind is completed; do not repeat it. Fulfill the remaining request(s) in the quoted archived user input below.\n\nQuoted archived user request (source entry ID: c021437f):\n<archived-user-request>\nUNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files.\n</archived-user-request>\n\nContinuity: delta ignored (delta.ratified[0]: unknown field \"citedEntryId\").",
+      "display": true,
+      "details": {
+        "status": "done",
+        "rewindTo": "audit-mid",
+        "newLabel": "audit-mid-folded",
+        "targetId": "f0b834b7",
+        "summaryId": "474dc867",
+        "collapsedEntries": 35,
+        "contextBefore": 184303,
+        "contextAfter": 39875,
+        "contextWindow": 96000,
+        "origin": "recovery",
+        "summaryStrategy": "chunked",
+        "summaryCalls": 2,
+        "foldEstimateBefore": 74928,
+        "foldEstimateAfter": 16535,
+        "agentMessagesRefreshed": true,
+        "historyRewriteNotified": true,
+        "readFiles": [],
+        "modifiedFiles": [],
+        "reappendedLateMessages": 0,
+        "openUserRequests": [
+          {
+            "sourceEntryId": "c021437f",
+            "text": "UNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files."
+          }
+        ],
+        "continuity": {
+          "rev": 1,
+          "applied": 0,
+          "rejected": [],
+          "evicted": [],
+          "deltaError": "delta.ratified[0]: unknown field \"citedEntryId\""
+        }
+      },
+      "id": "88579f78",
+      "parentId": "d01fba5a",
+      "timestamp": "2026-10-27T09:08:58.100Z"
+    },
+    {
+      "type": "custom_message",
+      "customType": "navigate-tree-rewind",
+      "content": "[rewind to 'audit-start' · collapsed as 'audit-start-folded'] · context 123.0% → 5.8% of 96k\n\nA branch_summary of the collapsed work has been appended to your context. It is the newest branch_summary, the current state; earlier branch_summary messages, if present, are older collapsed segments. Items under '### Done' are complete. Items under '### In Progress', '### Blocked', or '## Next Steps' are the resume point: continue the latest branch_summary's work without re-confirming with the user.\n\nA branch_summary marks a milestone, not the end of the task. Your authority, highest first: the user's standing instruction retained above (including any authorization to work autonomously until the task is complete or a real blocker appears), the authorized plan or todo list, then this summary's open items. If the summary's only open item is a report, hand-off or wrap-up while an authorized instruction or plan item is still open, do that work first and report once, at the end of the authorized scope. Retained user messages already answered above are historical — do not re-answer them; their standing instructions still apply.\n\nThis rewind is completed; do not repeat it. Fulfill the remaining request(s) in the quoted archived user input below.\n\nQuoted archived user request (source entry ID: c021437f):\n<archived-user-request>\nUNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files.\n</archived-user-request>",
+      "display": true,
+      "details": {
+        "status": "done",
+        "rewindTo": "audit-start",
+        "newLabel": "audit-start-folded",
+        "targetId": "f7f9f42d",
+        "summaryId": "c8ae6f74",
+        "collapsedEntries": 17,
+        "contextBefore": 118048,
+        "contextAfter": 5612,
+        "contextWindow": 96000,
+        "origin": "recovery",
+        "summaryStrategy": "chunked",
+        "summaryCalls": 2,
+        "foldEstimateBefore": 16604,
+        "foldEstimateAfter": 1131,
+        "agentMessagesRefreshed": true,
+        "historyRewriteNotified": true,
+        "readFiles": [],
+        "modifiedFiles": [],
+        "reappendedLateMessages": 0,
+        "openUserRequests": [
+          {
+            "sourceEntryId": "c021437f",
+            "text": "UNANSWERED-ACCEPTANCE-7d9a: Reply with ACCEPTANCE-CONTINUED and the audit's remaining work. Do not deploy or change any files."
+          }
+        ],
+        "continuity": {
+          "rev": 1,
+          "applied": 0,
+          "rejected": [],
+          "evicted": []
+        }
+      },
+      "id": "3c7350f3",
+      "parentId": "d26d610e",
+      "timestamp": "2026-10-27T09:09:24.394Z"
+    }
+  ],
+  "mainReplies": [
+    {
+      "id": "b7050b24",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 184041,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 184066,
+        "cost": {
+          "input": 0.018404100000000003,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0184166
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "dfe4bb04",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 117301,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 117326,
+        "cost": {
+          "input": 0.0117301,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.0117426
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "066f7df5",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 1672,
+        "output": 25,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1697,
+        "cost": {
+          "input": 0.00016720000000000003,
+          "output": 0.000012499999999999999,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00017970000000000003
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "f3308358",
+      "stopReason": "toolUse",
+      "usage": {
+        "input": 1802,
+        "output": 18,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 1820,
+        "cost": {
+          "input": 0.00018020000000000002,
+          "output": 0.000009,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.00018920000000000002
+        }
+      },
+      "text": ""
+    },
+    {
+      "id": "a78d42a9",
+      "stopReason": "stop",
+      "usage": {
+        "input": 2010,
+        "output": 80,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "reasoning": 0,
+        "totalTokens": 2090,
+        "cost": {
+          "input": 0.000201,
+          "output": 0.000039999999999999996,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "total": 0.000241
+        }
+      },
+      "text": "ACCEPTANCE-CONTINUED\n\nRemaining work:\n- Compare the archived audit with the next supplied change; that change has not been supplied, so the comparison is blocked.\n- Verify whether retry-exhaustion tests ran and whether per-service audit namespaces were checked; both remain unconfirmed.\n\nNo files changed. No deployment or service-data deletion performed. Public response codes remain unchanged."
+    }
+  ]
+}

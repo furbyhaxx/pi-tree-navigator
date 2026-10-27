@@ -1,0 +1,86 @@
+{
+  "passed": true,
+  "scenario": "rerecover",
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/rerecover-fixed-1/sessions/2026-10-27T09-08-33-610Z_01a17c9e-54ca-75b9-a380-018acd5f0008.jsonl",
+  "initialTokens": 84486,
+  "afterTokens": 2358,
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 40,
+      "startedAt": "2026-10-27T09:08:33.624Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:08:36.612Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 2,
+      "startedAt": "2026-10-27T09:08:48.812Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 13,
+      "startedAt": "2026-10-27T09:08:58.100Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:09:01.187Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 2,
+      "startedAt": "2026-10-27T09:09:15.434Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 5,
+      "startedAt": "2026-10-27T09:09:24.395Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 7,
+      "startedAt": "2026-10-27T09:09:27.536Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 9,
+      "startedAt": "2026-10-27T09:09:30.559Z"
+    }
+  ],
+  "scratch": "/tmp/independent-fold-acceptance-Joa3Qz",
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.100822544,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633099553
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.100822544,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633099553
+  },
+  "completedAt": "2026-10-27T09:09:34.378Z"
+}

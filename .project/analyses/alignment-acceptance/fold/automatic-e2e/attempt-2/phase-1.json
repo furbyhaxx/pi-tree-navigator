@@ -1,0 +1,512 @@
+{
+  "decisions": {
+    "classifier": {
+      "status": {
+        "type": "choice",
+        "choice": "milestone",
+        "probabilities": {
+          "continue": 0.02,
+          "milestone": 0.98,
+          "await-user": 0,
+          "blocked": 0
+        },
+        "confidence": 0.97
+      },
+      "boundary": {
+        "type": "choice",
+        "choice": "9e7642bd",
+        "probabilities": {
+          "0bc0dec2": 0,
+          "68c546f5": 0,
+          "12f7618a": 0,
+          "732f40d2": 0,
+          "86e819c2": 0,
+          "e5e17b5b": 0.01,
+          "7723eb81": 0,
+          "b3b50f8b": 0.02,
+          "a93ad304": 0,
+          "9e7642bd": 0.96,
+          "none": 0.01
+        },
+        "confidence": 0.96
+      }
+    },
+    "confirmer": {
+      "status": {
+        "choice": "milestone",
+        "confidence": 0.99
+      },
+      "boundary": {
+        "choice": "9e7642bd",
+        "confidence": 0.99
+      }
+    }
+  },
+  "entries": [
+    {
+      "type": "model_change",
+      "id": "1875fc39",
+      "parentId": null,
+      "timestamp": "2026-10-27T09:25:38.284Z",
+      "provider": "openai",
+      "modelId": "gpt-6-luna"
+    },
+    {
+      "type": "thinking_level_change",
+      "id": "d4888dc6",
+      "parentId": "1875fc39",
+      "timestamp": "2026-10-27T09:25:38.285Z",
+      "thinkingLevel": "off"
+    },
+    {
+      "type": "message",
+      "id": "57800b49",
+      "parentId": "d4888dc6",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "user",
+        "content": "Audit the supplied fixed service dataset and produce its verified final report. Preserve response codes 422, 503 and 409. Never deploy or delete service data. Future changes are outside this request.",
+        "timestamp": 1
+      }
+    },
+    {
+      "type": "message",
+      "id": "478938b6",
+      "parentId": "57800b49",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic fixture: audit begins."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "fixture",
+        "model": "synthetic",
+        "stopReason": "stop",
+        "timestamp": 2,
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "label",
+      "id": "5feaf8d7",
+      "parentId": "478938b6",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "targetId": "478938b6",
+      "label": "anchor:start"
+    },
+    {
+      "type": "message",
+      "id": "0bc0dec2",
+      "parentId": "5feaf8d7",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "user",
+        "content": "Synthetic audit block 1\nAcceptance objective: finish the synthetic service audit, not a production rollout.\nNever deploy or delete service data during this audit.\nKeep the existing public response codes unchanged.\nCompleted: audited service configuration and retry boundaries.\nScope ends at the verified final report; no future comparison is requested.\n[\n  {\n    \"service\": \"synthetic-service-0\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10000\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 65536\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-0\",\n      \"retentionDays\": 7\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-0-invalid-input\",\n        \"service-0-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 0 validates input before persistence; verify retry exhaustion leaves namespace audit-0 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-1\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10001\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 65552\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-1\",\n      \"retentionDays\": 8\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-1-invalid-input\",\n        \"service-1-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 1 validates input before persistence; verify retry exhaustion leaves namespace audit-1 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-2\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10002\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 65568\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-2\",\n      \"retentionDays\": 9\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-2-invalid-input\",\n        \"service-2-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 2 validates input before persistence; verify retry exhaustion leaves namespace audit-2 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-3\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10003\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 65584\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-3\",\n      \"retentionDays\": 10\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-3-invalid-input\",\n        \"service-3-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 3 validates input before persistence; verify retry exhaustion leaves namespace audit-3 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-4\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10004\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 65600\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-4\",\n      \"retentionDays\": 11\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-4-invalid-input\",\n        \"service-4-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 4 validates input before persistence; verify retry exhaustion leaves namespace audit-4 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-5\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10005\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 65616\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-5\",\n      \"retentionDays\": 12\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-5-invalid-input\",\n        \"service-5-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 5 validates input before persistence; verify retry exhaustion leaves namespace audit-5 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-6\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10006\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 65632\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-6\",\n      \"retentionDays\": 13\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-6-invalid-input\",\n        \"service-6-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 6 validates input before persistence; verify retry exhaustion leaves namespace audit-6 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-7\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10007\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 65648\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-7\",\n      \"retentionDays\": 14\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-7-invalid-input\",\n        \"service-7-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 7 validates input before persistence; verify retry exhaustion leaves namespace audit-7 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-8\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10008\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 65664\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-8\",\n      \"retentionDays\": 15\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-8-invalid-input\",\n        \"service-8-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 8 validates input before persistence; verify retry exhaustion leaves namespace audit-8 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-9\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10009\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 65680\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-9\",\n      \"retentionDays\": 16\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-9-invalid-input\",\n        \"service-9-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 9 validates input before persistence; verify retry exhaustion leaves namespace audit-9 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-10\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10010\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 65696\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-10\",\n      \"retentionDays\": 17\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-10-invalid-input\",\n        \"service-10-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 10 validates input before persistence; verify retry exhaustion leaves namespace audit-10 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-11\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10011\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 65712\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-11\",\n      \"retentionDays\": 18\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-11-invalid-input\",\n        \"service-11-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 11 validates input before persistence; verify retry exhaustion leaves namespace audit-11 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-12\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10012\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 65728\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-12\",\n      \"retentionDays\": 19\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-12-invalid-input\",\n        \"service-12-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 12 validates input before persistence; verify retry exhaustion leaves namespace audit-12 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-13\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10013\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 65744\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-13\",\n      \"retentionDays\": 20\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-13-invalid-input\",\n        \"service-13-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 13 validates input before persistence; verify retry exhaustion leaves namespace audit-13 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-14\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10014\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 65760\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-14\",\n      \"retentionDays\": 7\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-14-invalid-input\",\n        \"service-14-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 14 validates input before persistence; verify retry exhaustion leaves namespace audit-14 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-15\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10015\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 65776\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-15\",\n      \"retentionDays\": 8\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-15-invalid-input\",\n        \"service-15-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 15 validates input before persistence; verify retry exhaustion leaves namespace audit-15 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-16\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10016\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 65792\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-16\",\n      \"retentionDays\": 9\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-16-invalid-input\",\n        \"service-16-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 16 validates input before persistence; verify retry exhaustion leaves namespace audit-16 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-17\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10017\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 65808\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-17\",\n      \"retentionDays\": 10\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-17-invalid-input\",\n        \"service-17-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 17 validates input before persistence; verify retry exhaustion leaves namespace audit-17 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-18\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10018\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 65824\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-18\",\n      \"retentionDays\": 11\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-18-invalid-input\",\n        \"service-18-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 18 validates input before persistence; verify retry exhaustion leaves namespace audit-18 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-19\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10019\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 65840\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-19\",\n      \"retentionDays\": 12\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-19-invalid-input\",\n        \"service-19-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 19 validates input before persistence; verify retry exhaustion leaves namespace audit-19 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-20\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10020\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 65856\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-20\",\n      \"retentionDays\": 13\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-20-invalid-input\",\n        \"service-20-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 20 validates input before persistence; verify retry exhaustion leaves namespace audit-20 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-21\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10021\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 65872\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-21\",\n      \"retentionDays\": 14\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-21-invalid-input\",\n        \"service-21-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 21 validates input before persistence; verify retry exhaustion leaves namespace audit-21 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-22\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10022\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 65888\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-22\",\n      \"retentionDays\": 15\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-22-invalid-input\",\n        \"service-22-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 22 validates input before persistence; verify retry exhaustion leaves namespace audit-22 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-23\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10023\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 65904\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-23\",\n      \"retentionDays\": 16\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-23-invalid-input\",\n        \"service-23-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 23 validates input before persistence; verify retry exhaustion leaves namespace audit-23 unchanged.\"\n  }\n]",
+        "timestamp": 3
+      }
+    },
+    {
+      "type": "message",
+      "id": "68c546f5",
+      "parentId": "0bc0dec2",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic verification report for block 1: all 48 invalid-input and retry-exhaustion checks PASS, zero failures. Response codes 422, 503 and 409 unchanged; no persistence mutation, deployment or deletion."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "fixture",
+        "model": "synthetic",
+        "stopReason": "stop",
+        "timestamp": 4,
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "message",
+      "id": "12f7618a",
+      "parentId": "68c546f5",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "user",
+        "content": "Synthetic audit block 2\nAcceptance objective: finish the synthetic service audit, not a production rollout.\nNever deploy or delete service data during this audit.\nKeep the existing public response codes unchanged.\nCompleted: audited service configuration and retry boundaries.\nScope ends at the verified final report; no future comparison is requested.\n[\n  {\n    \"service\": \"synthetic-service-24\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10024\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 65920\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-24\",\n      \"retentionDays\": 17\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-24-invalid-input\",\n        \"service-24-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 24 validates input before persistence; verify retry exhaustion leaves namespace audit-24 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-25\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10025\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 65936\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-25\",\n      \"retentionDays\": 18\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-25-invalid-input\",\n        \"service-25-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 25 validates input before persistence; verify retry exhaustion leaves namespace audit-25 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-26\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10026\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 65952\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-26\",\n      \"retentionDays\": 19\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-26-invalid-input\",\n        \"service-26-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 26 validates input before persistence; verify retry exhaustion leaves namespace audit-26 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-27\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10027\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 65968\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-27\",\n      \"retentionDays\": 20\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-27-invalid-input\",\n        \"service-27-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 27 validates input before persistence; verify retry exhaustion leaves namespace audit-27 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-28\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10028\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 65984\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-28\",\n      \"retentionDays\": 7\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-28-invalid-input\",\n        \"service-28-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 28 validates input before persistence; verify retry exhaustion leaves namespace audit-28 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-29\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10029\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 66000\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-29\",\n      \"retentionDays\": 8\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-29-invalid-input\",\n        \"service-29-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 29 validates input before persistence; verify retry exhaustion leaves namespace audit-29 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-30\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10030\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 66016\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-30\",\n      \"retentionDays\": 9\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-30-invalid-input\",\n        \"service-30-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 30 validates input before persistence; verify retry exhaustion leaves namespace audit-30 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-31\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10031\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 66032\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-31\",\n      \"retentionDays\": 10\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-31-invalid-input\",\n        \"service-31-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 31 validates input before persistence; verify retry exhaustion leaves namespace audit-31 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-32\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10032\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 66048\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-32\",\n      \"retentionDays\": 11\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-32-invalid-input\",\n        \"service-32-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 32 validates input before persistence; verify retry exhaustion leaves namespace audit-32 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-33\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10033\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 66064\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-33\",\n      \"retentionDays\": 12\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-33-invalid-input\",\n        \"service-33-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 33 validates input before persistence; verify retry exhaustion leaves namespace audit-33 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-34\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10034\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 66080\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-34\",\n      \"retentionDays\": 13\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-34-invalid-input\",\n        \"service-34-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 34 validates input before persistence; verify retry exhaustion leaves namespace audit-34 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-35\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10035\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 66096\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-35\",\n      \"retentionDays\": 14\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-35-invalid-input\",\n        \"service-35-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 35 validates input before persistence; verify retry exhaustion leaves namespace audit-35 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-36\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10036\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 66112\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-36\",\n      \"retentionDays\": 15\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-36-invalid-input\",\n        \"service-36-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 36 validates input before persistence; verify retry exhaustion leaves namespace audit-36 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-37\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10037\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 66128\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-37\",\n      \"retentionDays\": 16\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-37-invalid-input\",\n        \"service-37-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 37 validates input before persistence; verify retry exhaustion leaves namespace audit-37 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-38\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10038\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 66144\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-38\",\n      \"retentionDays\": 17\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-38-invalid-input\",\n        \"service-38-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 38 validates input before persistence; verify retry exhaustion leaves namespace audit-38 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-39\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10039\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 66160\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-39\",\n      \"retentionDays\": 18\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-39-invalid-input\",\n        \"service-39-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 39 validates input before persistence; verify retry exhaustion leaves namespace audit-39 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-40\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10040\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 66176\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-40\",\n      \"retentionDays\": 19\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-40-invalid-input\",\n        \"service-40-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 40 validates input before persistence; verify retry exhaustion leaves namespace audit-40 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-41\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10041\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 66192\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-41\",\n      \"retentionDays\": 20\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-41-invalid-input\",\n        \"service-41-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 41 validates input before persistence; verify retry exhaustion leaves namespace audit-41 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-42\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10042\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 66208\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-42\",\n      \"retentionDays\": 7\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-42-invalid-input\",\n        \"service-42-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 42 validates input before persistence; verify retry exhaustion leaves namespace audit-42 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-43\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10043\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 66224\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-43\",\n      \"retentionDays\": 8\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-43-invalid-input\",\n        \"service-43-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 43 validates input before persistence; verify retry exhaustion leaves namespace audit-43 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-44\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10044\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 66240\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-44\",\n      \"retentionDays\": 9\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-44-invalid-input\",\n        \"service-44-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 44 validates input before persistence; verify retry exhaustion leaves namespace audit-44 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-45\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10045\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 66256\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-45\",\n      \"retentionDays\": 10\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-45-invalid-input\",\n        \"service-45-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 45 validates input before persistence; verify retry exhaustion leaves namespace audit-45 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-46\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10046\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 66272\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-46\",\n      \"retentionDays\": 11\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-46-invalid-input\",\n        \"service-46-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 46 validates input before persistence; verify retry exhaustion leaves namespace audit-46 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-47\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10047\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 66288\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-47\",\n      \"retentionDays\": 12\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-47-invalid-input\",\n        \"service-47-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 47 validates input before persistence; verify retry exhaustion leaves namespace audit-47 unchanged.\"\n  }\n]",
+        "timestamp": 5
+      }
+    },
+    {
+      "type": "message",
+      "id": "732f40d2",
+      "parentId": "12f7618a",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic verification report for block 2: all 48 invalid-input and retry-exhaustion checks PASS, zero failures. Response codes 422, 503 and 409 unchanged; no persistence mutation, deployment or deletion."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "fixture",
+        "model": "synthetic",
+        "stopReason": "stop",
+        "timestamp": 6,
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "message",
+      "id": "86e819c2",
+      "parentId": "732f40d2",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "user",
+        "content": "Synthetic audit block 3\nAcceptance objective: finish the synthetic service audit, not a production rollout.\nNever deploy or delete service data during this audit.\nKeep the existing public response codes unchanged.\nCompleted: audited service configuration and retry boundaries.\nScope ends at the verified final report; no future comparison is requested.\n[\n  {\n    \"service\": \"synthetic-service-48\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10048\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 66304\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-48\",\n      \"retentionDays\": 13\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-48-invalid-input\",\n        \"service-48-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 48 validates input before persistence; verify retry exhaustion leaves namespace audit-48 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-49\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10049\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 66320\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-49\",\n      \"retentionDays\": 14\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-49-invalid-input\",\n        \"service-49-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 49 validates input before persistence; verify retry exhaustion leaves namespace audit-49 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-50\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10050\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 66336\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-50\",\n      \"retentionDays\": 15\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-50-invalid-input\",\n        \"service-50-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 50 validates input before persistence; verify retry exhaustion leaves namespace audit-50 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-51\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10051\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 66352\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-51\",\n      \"retentionDays\": 16\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-51-invalid-input\",\n        \"service-51-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 51 validates input before persistence; verify retry exhaustion leaves namespace audit-51 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-52\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10052\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 66368\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-52\",\n      \"retentionDays\": 17\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-52-invalid-input\",\n        \"service-52-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 52 validates input before persistence; verify retry exhaustion leaves namespace audit-52 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-53\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10053\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 66384\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-53\",\n      \"retentionDays\": 18\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-53-invalid-input\",\n        \"service-53-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 53 validates input before persistence; verify retry exhaustion leaves namespace audit-53 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-54\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10054\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 66400\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-54\",\n      \"retentionDays\": 19\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-54-invalid-input\",\n        \"service-54-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 54 validates input before persistence; verify retry exhaustion leaves namespace audit-54 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-55\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10055\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 66416\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-55\",\n      \"retentionDays\": 20\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-55-invalid-input\",\n        \"service-55-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 55 validates input before persistence; verify retry exhaustion leaves namespace audit-55 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-56\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10056\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 66432\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-56\",\n      \"retentionDays\": 7\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-56-invalid-input\",\n        \"service-56-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 56 validates input before persistence; verify retry exhaustion leaves namespace audit-56 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-57\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10057\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 66448\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-57\",\n      \"retentionDays\": 8\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-57-invalid-input\",\n        \"service-57-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 57 validates input before persistence; verify retry exhaustion leaves namespace audit-57 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-58\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10058\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 66464\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-58\",\n      \"retentionDays\": 9\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-58-invalid-input\",\n        \"service-58-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 58 validates input before persistence; verify retry exhaustion leaves namespace audit-58 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-59\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10059\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 66480\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-59\",\n      \"retentionDays\": 10\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-59-invalid-input\",\n        \"service-59-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 59 validates input before persistence; verify retry exhaustion leaves namespace audit-59 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-60\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10060\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 66496\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-60\",\n      \"retentionDays\": 11\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-60-invalid-input\",\n        \"service-60-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 60 validates input before persistence; verify retry exhaustion leaves namespace audit-60 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-61\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10061\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 66512\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-61\",\n      \"retentionDays\": 12\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-61-invalid-input\",\n        \"service-61-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 61 validates input before persistence; verify retry exhaustion leaves namespace audit-61 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-62\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10062\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 66528\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-62\",\n      \"retentionDays\": 13\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-62-invalid-input\",\n        \"service-62-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 62 validates input before persistence; verify retry exhaustion leaves namespace audit-62 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-63\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10063\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 66544\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-63\",\n      \"retentionDays\": 14\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-63-invalid-input\",\n        \"service-63-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 63 validates input before persistence; verify retry exhaustion leaves namespace audit-63 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-64\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10064\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 66560\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-64\",\n      \"retentionDays\": 15\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-64-invalid-input\",\n        \"service-64-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 64 validates input before persistence; verify retry exhaustion leaves namespace audit-64 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-65\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10065\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 66576\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-65\",\n      \"retentionDays\": 16\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-65-invalid-input\",\n        \"service-65-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 65 validates input before persistence; verify retry exhaustion leaves namespace audit-65 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-66\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10066\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 66592\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-66\",\n      \"retentionDays\": 17\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-66-invalid-input\",\n        \"service-66-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 66 validates input before persistence; verify retry exhaustion leaves namespace audit-66 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-67\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10067\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 66608\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-67\",\n      \"retentionDays\": 18\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-67-invalid-input\",\n        \"service-67-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 67 validates input before persistence; verify retry exhaustion leaves namespace audit-67 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-68\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10068\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 66624\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-68\",\n      \"retentionDays\": 19\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-68-invalid-input\",\n        \"service-68-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 68 validates input before persistence; verify retry exhaustion leaves namespace audit-68 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-69\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10069\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 66640\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-69\",\n      \"retentionDays\": 20\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-69-invalid-input\",\n        \"service-69-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 69 validates input before persistence; verify retry exhaustion leaves namespace audit-69 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-70\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10070\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 66656\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-70\",\n      \"retentionDays\": 7\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-70-invalid-input\",\n        \"service-70-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 70 validates input before persistence; verify retry exhaustion leaves namespace audit-70 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-71\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10071\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 66672\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-71\",\n      \"retentionDays\": 8\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-71-invalid-input\",\n        \"service-71-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 71 validates input before persistence; verify retry exhaustion leaves namespace audit-71 unchanged.\"\n  }\n]",
+        "timestamp": 7
+      }
+    },
+    {
+      "type": "message",
+      "id": "e5e17b5b",
+      "parentId": "86e819c2",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic verification report for block 3: all 48 invalid-input and retry-exhaustion checks PASS, zero failures. Response codes 422, 503 and 409 unchanged; no persistence mutation, deployment or deletion."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "fixture",
+        "model": "synthetic",
+        "stopReason": "stop",
+        "timestamp": 8,
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "message",
+      "id": "7723eb81",
+      "parentId": "e5e17b5b",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "user",
+        "content": "Synthetic audit block 4\nAcceptance objective: finish the synthetic service audit, not a production rollout.\nNever deploy or delete service data during this audit.\nKeep the existing public response codes unchanged.\nCompleted: audited service configuration and retry boundaries.\nScope ends at the verified final report; no future comparison is requested.\n[\n  {\n    \"service\": \"synthetic-service-72\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10072\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 66688\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-72\",\n      \"retentionDays\": 9\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-72-invalid-input\",\n        \"service-72-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 72 validates input before persistence; verify retry exhaustion leaves namespace audit-72 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-73\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10073\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 66704\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-73\",\n      \"retentionDays\": 10\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-73-invalid-input\",\n        \"service-73-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 73 validates input before persistence; verify retry exhaustion leaves namespace audit-73 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-74\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10074\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 66720\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-74\",\n      \"retentionDays\": 11\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-74-invalid-input\",\n        \"service-74-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 74 validates input before persistence; verify retry exhaustion leaves namespace audit-74 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-75\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10075\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 66736\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-75\",\n      \"retentionDays\": 12\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-75-invalid-input\",\n        \"service-75-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 75 validates input before persistence; verify retry exhaustion leaves namespace audit-75 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-76\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10076\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 66752\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-76\",\n      \"retentionDays\": 13\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-76-invalid-input\",\n        \"service-76-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 76 validates input before persistence; verify retry exhaustion leaves namespace audit-76 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-77\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10077\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 66768\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-77\",\n      \"retentionDays\": 14\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-77-invalid-input\",\n        \"service-77-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 77 validates input before persistence; verify retry exhaustion leaves namespace audit-77 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-78\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10078\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 66784\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-78\",\n      \"retentionDays\": 15\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-78-invalid-input\",\n        \"service-78-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 78 validates input before persistence; verify retry exhaustion leaves namespace audit-78 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-79\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10079\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 66800\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-79\",\n      \"retentionDays\": 16\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-79-invalid-input\",\n        \"service-79-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 79 validates input before persistence; verify retry exhaustion leaves namespace audit-79 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-80\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10080\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 66816\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-80\",\n      \"retentionDays\": 17\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-80-invalid-input\",\n        \"service-80-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 80 validates input before persistence; verify retry exhaustion leaves namespace audit-80 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-81\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10081\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 66832\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-81\",\n      \"retentionDays\": 18\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-81-invalid-input\",\n        \"service-81-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 81 validates input before persistence; verify retry exhaustion leaves namespace audit-81 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-82\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10082\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 66848\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-82\",\n      \"retentionDays\": 19\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-82-invalid-input\",\n        \"service-82-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 82 validates input before persistence; verify retry exhaustion leaves namespace audit-82 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-83\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10083\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 66864\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-83\",\n      \"retentionDays\": 20\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-83-invalid-input\",\n        \"service-83-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 83 validates input before persistence; verify retry exhaustion leaves namespace audit-83 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-84\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10084\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 66880\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-84\",\n      \"retentionDays\": 7\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-84-invalid-input\",\n        \"service-84-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 84 validates input before persistence; verify retry exhaustion leaves namespace audit-84 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-85\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10085\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 66896\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-85\",\n      \"retentionDays\": 8\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-85-invalid-input\",\n        \"service-85-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 85 validates input before persistence; verify retry exhaustion leaves namespace audit-85 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-86\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10086\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 66912\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-86\",\n      \"retentionDays\": 9\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-86-invalid-input\",\n        \"service-86-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 86 validates input before persistence; verify retry exhaustion leaves namespace audit-86 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-87\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10087\n    },\n    \"request\": {\n      \"timeoutMs\": 2500,\n      \"maxBytes\": 66928\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-87\",\n      \"retentionDays\": 10\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-87-invalid-input\",\n        \"service-87-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 87 validates input before persistence; verify retry exhaustion leaves namespace audit-87 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-88\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10088\n    },\n    \"request\": {\n      \"timeoutMs\": 2750,\n      \"maxBytes\": 66944\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-88\",\n      \"retentionDays\": 11\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-88-invalid-input\",\n        \"service-88-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 88 validates input before persistence; verify retry exhaustion leaves namespace audit-88 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-89\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10089\n    },\n    \"request\": {\n      \"timeoutMs\": 3000,\n      \"maxBytes\": 66960\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 175\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-89\",\n      \"retentionDays\": 12\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-89-invalid-input\",\n        \"service-89-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 89 validates input before persistence; verify retry exhaustion leaves namespace audit-89 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-90\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10090\n    },\n    \"request\": {\n      \"timeoutMs\": 1000,\n      \"maxBytes\": 66976\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 200\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-90\",\n      \"retentionDays\": 13\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-90-invalid-input\",\n        \"service-90-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 90 validates input before persistence; verify retry exhaustion leaves namespace audit-90 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-91\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10091\n    },\n    \"request\": {\n      \"timeoutMs\": 1250,\n      \"maxBytes\": 66992\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 50\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-91\",\n      \"retentionDays\": 14\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-91-invalid-input\",\n        \"service-91-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 91 validates input before persistence; verify retry exhaustion leaves namespace audit-91 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-92\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10092\n    },\n    \"request\": {\n      \"timeoutMs\": 1500,\n      \"maxBytes\": 67008\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 75\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-92\",\n      \"retentionDays\": 15\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-92-invalid-input\",\n        \"service-92-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 92 validates input before persistence; verify retry exhaustion leaves namespace audit-92 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-93\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10093\n    },\n    \"request\": {\n      \"timeoutMs\": 1750,\n      \"maxBytes\": 67024\n    },\n    \"retry\": {\n      \"attempts\": 1,\n      \"backoffMs\": 100\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-93\",\n      \"retentionDays\": 16\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-93-invalid-input\",\n        \"service-93-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 93 validates input before persistence; verify retry exhaustion leaves namespace audit-93 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-94\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10094\n    },\n    \"request\": {\n      \"timeoutMs\": 2000,\n      \"maxBytes\": 67040\n    },\n    \"retry\": {\n      \"attempts\": 2,\n      \"backoffMs\": 125\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-94\",\n      \"retentionDays\": 17\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-94-invalid-input\",\n        \"service-94-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 94 validates input before persistence; verify retry exhaustion leaves namespace audit-94 unchanged.\"\n  },\n  {\n    \"service\": \"synthetic-service-95\",\n    \"listener\": {\n      \"host\": \"127.0.0.1\",\n      \"port\": 10095\n    },\n    \"request\": {\n      \"timeoutMs\": 2250,\n      \"maxBytes\": 67056\n    },\n    \"retry\": {\n      \"attempts\": 3,\n      \"backoffMs\": 150\n    },\n    \"persistence\": {\n      \"namespace\": \"audit-95\",\n      \"retentionDays\": 18\n    },\n    \"validation\": {\n      \"invalidInput\": 422,\n      \"unavailable\": 503,\n      \"duplicate\": 409,\n      \"tests\": [\n        \"service-95-invalid-input\",\n        \"service-95-retry-exhausted\"\n      ]\n    },\n    \"finding\": \"Service 95 validates input before persistence; verify retry exhaustion leaves namespace audit-95 unchanged.\"\n  }\n]",
+        "timestamp": 9
+      }
+    },
+    {
+      "type": "message",
+      "id": "b3b50f8b",
+      "parentId": "7723eb81",
+      "timestamp": "2026-10-27T09:25:38.288Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "Synthetic verification output: 96 services inspected; 192 of 192 invalid-input and retry-exhaustion checks PASS, zero failures. Response codes remain 422, 503 and 409. Every retry-exhaustion check confirms unchanged persistence. No deployment or deletion occurred. All measurements are verified. The final requested audit report has not yet been written."
+          }
+        ],
+        "api": "openai-completions",
+        "provider": "fixture",
+        "model": "synthetic",
+        "stopReason": "stop",
+        "timestamp": 10,
+        "usage": {
+          "input": 0,
+          "output": 0,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 0,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        }
+      }
+    },
+    {
+      "type": "message",
+      "id": "79777889",
+      "parentId": "b3b50f8b",
+      "timestamp": "2026-10-27T09:25:38.290Z",
+      "message": {
+        "role": "system",
+        "content": "",
+        "sections": {
+          "preamble": "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. Do not call navigate_tree: anchors and folding are handled automatically.",
+          "cwd": "<cwd>\n/tmp/independent-fold-acceptance-ozNTXK/work\n</cwd>"
+        },
+        "timestamp": 1793093138289,
+        "toolsAdded": [
+          {
+            "name": "navigate_tree",
+            "description": "Long-session context management via the pi session tree. Anchor named milestones, then collapse work between them into a model-generated summary to free context.\n`rewind` does not restore prior state: it forks a sibling branch from the anchor and continues forward from a model-generated summary.\n\nOperations (set `action`):\n  • 'anchor', name='<milestone-name>': label the current point. Anchor at the start of a stage you'll summarize (e.g. 'impl-start').\n  • 'rewind', rewindTo='<existing>', newLabel='<new>': collapse work between rewindTo and the current leaf into a branch_summary labeled newLabel, so rewinds can chain.\n  • 'list': show all anchors on the active branch, oldest first, with cumulative context % at each.\n  • 'pin', kind='sub-goal'|'decision'|'fact'|'file'|'steering', text='<what to keep>': record a durable item that survives folds; `list` shows them. 'file' takes path+why instead of text; 'steering' belongs to an anchor (scopeAnchor, default newest). Refused when the user disabled the continuity ledger (continuity.capture=false).\n\n`name` (anchor) and `newLabel` (rewind) write into one shared anchor namespace: labels are unique on the active branch — both actions refuse a name that already exists — and everything written there is addressable as a future `rewindTo`. Avoid the reserved `anchor:` prefix.",
+            "parameters": {
+              "type": "object",
+              "required": [
+                "action"
+              ],
+              "properties": {
+                "action": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "anchor"
+                    },
+                    {
+                      "type": "string",
+                      "const": "rewind"
+                    },
+                    {
+                      "type": "string",
+                      "const": "list"
+                    },
+                    {
+                      "type": "string",
+                      "const": "pin"
+                    }
+                  ],
+                  "description": "Which operation to perform."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Required when action='anchor'. Kebab-case milestone label, max 40 chars."
+                },
+                "rewindTo": {
+                  "type": "string",
+                  "description": "Required when action='rewind'. Kebab-case name of an existing anchor on the active branch to rewind to."
+                },
+                "newLabel": {
+                  "type": "string",
+                  "description": "Required when action='rewind'. Kebab-case label for the resulting branch_summary entry; reusable as a future rewindTo."
+                },
+                "summaryFocus": {
+                  "type": "string",
+                  "description": "Required when action='rewind'; ≥20 chars after trim. Encode: (1) the user's most recent instruction verbatim, (2) what's done in the collapsed segment, (3) what's left to do as a next action; if the user authorized continuing, name the next work item, not a report or wrap-up."
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "const": "sub-goal"
+                    },
+                    {
+                      "type": "string",
+                      "const": "decision"
+                    },
+                    {
+                      "type": "string",
+                      "const": "fact"
+                    },
+                    {
+                      "type": "string",
+                      "const": "file"
+                    },
+                    {
+                      "type": "string",
+                      "const": "steering"
+                    }
+                  ],
+                  "description": "Required when action='pin'. Your sub-goal, a decision you made, a key fact, a file pointer, or steering that lapses when its anchor is folded."
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Required when action='pin' unless kind='file'. What to remember, max 500 chars."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Required when action='pin' and kind='file'. File path."
+                },
+                "lines": {
+                  "type": "string",
+                  "description": "Optional with kind='file': N or N-M."
+                },
+                "why": {
+                  "type": "string",
+                  "description": "Required when action='pin' and kind='file'. Why the file matters."
+                },
+                "scopeAnchor": {
+                  "type": "string",
+                  "description": "Anchor name for kind='steering' (default: newest anchor); optional for 'sub-goal'."
+                }
+              }
+            }
+          },
+          {
+            "name": "read_acceptance_fixture",
+            "description": "Read page 1 or 2 of the separate synthetic schema-inventory dataset.",
+            "parameters": {
+              "type": "object",
+              "required": [
+                "page"
+              ],
+              "properties": {
+                "page": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 2
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "message",
+      "id": "a93ad304",
+      "parentId": "79777889",
+      "timestamp": "2026-10-27T09:25:38.290Z",
+      "message": {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "I independently verified and accept the passing audit measurements. Deliver the final audit report now: include service and check totals, preserved response codes, unchanged persistence, and no deployment or deletion. This report completes the entire audit; no comparison, next step, approval or missing input remains. Do not modify files."
+          }
+        ],
+        "timestamp": 1793093138289
+      }
+    },
+    {
+      "type": "message",
+      "id": "9e7642bd",
+      "parentId": "a93ad304",
+      "timestamp": "2026-10-27T09:25:42.142Z",
+      "message": {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "## Final synthetic service audit report\n\n- **Services audited:** 96\n- **Checks:** 192 of 192 passed; zero failures\n- **Response codes preserved:** 422, 503 and 409\n- **Persistence:** unchanged across retry-exhaustion checks\n- **Deployment or deletion:** none\n\nThe accepted audit measurements are verified. This report completes the audit.",
+            "textSignature": "{\"v\":1,\"id\":\"msg_03b4256e271667e7016ae06e14654887d28b40c3af2799ebfe\",\"phase\":\"final_answer\"}"
+          }
+        ],
+        "api": "openai-responses",
+        "provider": "openai",
+        "model": "gpt-6-luna",
+        "usage": {
+          "input": 20337,
+          "output": 81,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "reasoning": 0,
+          "totalTokens": 20418,
+          "cost": {
+            "input": 0.0020337000000000003,
+            "output": 0.000040499999999999995,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0.0020742000000000004
+          }
+        },
+        "stopReason": "stop",
+        "timestamp": 1793093138327,
+        "responseId": "resp_03b4256e271667e7016ae06e13516c87d2b182b667e80e7e53",
+        "rawStopReason": "completed",
+        "durationMs": 3816,
+        "thinkingLevel": "off"
+      }
+    },
+    {
+      "type": "custom",
+      "customType": "navigate-tree-continuity-ops",
+      "data": {
+        "ops": [
+          {
+            "op": {
+              "op": "add",
+              "kind": "rule",
+              "text": "Audit the supplied fixed service dataset and produce its verified final report. Preserve response codes 422, 503 and 409. Never deploy or delete service data. Future changes are outside this request.",
+              "quote": "Audit the supplied fixed service dataset and produce its verified final report. Preserve response codes 422, 503 and 409. Never deploy or delete service data. Future changes are outside this request."
+            },
+            "ctx": {
+              "origin": "user",
+              "entryId": "57800b49"
+            }
+          }
+        ],
+        "watermark": "9e7642bd"
+      },
+      "id": "227bc426",
+      "parentId": "9e7642bd",
+      "timestamp": "2026-10-27T09:25:42.146Z"
+    },
+    {
+      "type": "label",
+      "id": "4d42b429",
+      "parentId": "227bc426",
+      "timestamp": "2026-10-27T09:25:45.439Z",
+      "targetId": "9e7642bd",
+      "label": "anchor:final-synthetic-service-audit-report"
+    }
+  ],
+  "tokens": 20464
+}

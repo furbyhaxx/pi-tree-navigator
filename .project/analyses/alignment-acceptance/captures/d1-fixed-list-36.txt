@@ -1,0 +1,45 @@
+[48;2;33;59;73m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context context
+[39m [38;2;222;224;225mcontext context context [39m
+
+
+
+ [38;2;222;224;225mCurrent synthetic acceptance
+[39m [38;2;222;224;225mposition[39m
+
+
+[49m [38;2;205;154;34mWarning: tmux extended-keys is
+[39m [38;2;205;154;34moff. Modified Enter keys may not
+[39m [38;2;205;154;34mwork. Add `set -g extended-keys
+[39m [38;2;205;154;34mon` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mList[0m [38;2;160;142;213m───────────[39m [38;2;157;165;169mctx 0.1%[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter anchors by name or previe[0m…
+
+ [38;2;167;152;215m→[39m ◆ qa-…one-folded  [38;2;222;224;225m0.0% · 336 · −[39m…
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mafter: “Synthetic acceptanc[39m…
+   ◆ qa-…ded-folded  [38;2;222;224;225m0.1% · 627 · −[39m…
+   + Set new anchor at current leaf…
+
+[38;2;126;136;142m   Press r to fold the work since[39m
+[38;2;126;136;142m   'qa-milestone-folded'. Enter…[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1m/[0m [38;2;126;136;142msearch[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-d1-7me2F5/workspace • d1...
+0.1%/1.0M  ~anthropic/claude-haiku-l

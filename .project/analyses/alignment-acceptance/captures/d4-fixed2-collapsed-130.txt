@@ -1,0 +1,71 @@
+---
+version: 1
+id: d4-fixed2-collapsed-130
+title: navigate_tree nonduplicated body acceptance
+description: Pi-Bolt tmux synthetic transcript with list, anchor, queued rewind and refused anchor; no provider calls.
+type: analysis
+created: 2026-10-27T10:16:20+01:00
+updated: 2026-10-27T10:16:20+01:00
+createdBy: worker
+updatedBy: worker
+---
+
+ Synthetic renderer acceptance: list, anchor, rewind, refused anchor.
+
+
+ ● navigate_tree list · 6 labels · ctx 12.0% of 1.0M
+   ⎿   1.0%  qa-1 · after preview-1
+       2.0%  qa-2 · after preview-2
+       3.0%  qa-3 · after preview-3
+       4.0%  qa-4 · after preview-4
+      … 2 more lines · ctrl+o expand
+
+ ● navigate_tree anchor "qa-milestone" · set at 12.0% of 1.0M
+   ⎿  Anchored after "synthetic milestone"
+
+ ● navigate_tree rewind → "qa-milestone" as "qa-fold" · accepted
+   ⎿  Folding after this turn.
+
+ ● navigate_tree anchor "qa-milestone" · refused
+   ⎿  A label 'qa-milestone' already exists.
+      Use action='list' and choose a fresh name.
+
+ Synthetic renderer acceptance complete.
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Warning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart
+ tmux.
+
+ Tool output: collapsed
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/ptn-d4-fixed2-opDupt/workspace
+0.0%/0                                                                                                                     unknown

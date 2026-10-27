@@ -1,0 +1,4 @@
+{
+  "error": "budget ledger is locked by another owner: /mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl.lock (a stale lock must be removed manually)",
+  "at": "2026-10-27T09:09:30.330Z"
+}

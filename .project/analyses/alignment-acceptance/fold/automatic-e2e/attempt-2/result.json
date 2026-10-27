@@ -1,0 +1,229 @@
+{
+  "passed": true,
+  "scenario": "automatic",
+  "folded": true,
+  "classifierAnchor": {
+    "boundaryId": "9e7642bd",
+    "label": "anchor:final-synthetic-service-audit-report"
+  },
+  "automaticFold": {
+    "beforeInput": 48958,
+    "afterInput": 21294,
+    "receipt": {
+      "status": "done",
+      "rewindTo": "final-synthetic-service-audit-report",
+      "newLabel": "final-synthetic-service-audit-rep-folded",
+      "targetId": "9e7642bd",
+      "summaryId": "2f351aa5",
+      "collapsedEntries": 7,
+      "contextBefore": 76654,
+      "contextAfter": 20998,
+      "contextWindow": 96000,
+      "origin": "auto",
+      "summaryStrategy": "in-context",
+      "summaryCalls": 1,
+      "foldEstimateBefore": 66424,
+      "foldEstimateAfter": 18874,
+      "agentMessagesRefreshed": true,
+      "historyRewriteNotified": true,
+      "readFiles": [],
+      "modifiedFiles": [],
+      "reappendedLateMessages": 0,
+      "openUserRequests": [
+        {
+          "sourceEntryId": "981d992c",
+          "text": "Your final audit report is accepted; that work is closed. New unrelated task: inventory the schema of a separate synthetic dataset. Call read_acceptance_fixture for page 1, then in a separate tool turn call it for page 2. Read each page exactly once. After both reads, use the already-read data to report the common top-level field names and include ACCEPTANCE-CONTINUED. Completed reads must not be repeated. Do not call any other tool, modify files, or ask for input."
+        }
+      ],
+      "continuity": {
+        "rev": 1,
+        "applied": 0,
+        "rejected": [],
+        "evicted": []
+      }
+    }
+  },
+  "inventoryReads": 2,
+  "decisions": {
+    "classifier": {
+      "status": {
+        "type": "choice",
+        "choice": "milestone",
+        "probabilities": {
+          "continue": 0.02,
+          "milestone": 0.98,
+          "await-user": 0,
+          "blocked": 0
+        },
+        "confidence": 0.97
+      },
+      "boundary": {
+        "type": "choice",
+        "choice": "9e7642bd",
+        "probabilities": {
+          "0bc0dec2": 0,
+          "68c546f5": 0,
+          "12f7618a": 0,
+          "732f40d2": 0,
+          "86e819c2": 0,
+          "e5e17b5b": 0.01,
+          "7723eb81": 0,
+          "b3b50f8b": 0.02,
+          "a93ad304": 0,
+          "9e7642bd": 0.96,
+          "none": 0.01
+        },
+        "confidence": 0.96
+      }
+    },
+    "confirmer": {
+      "status": {
+        "choice": "milestone",
+        "confidence": 0.99
+      },
+      "boundary": {
+        "choice": "9e7642bd",
+        "confidence": 0.99
+      }
+    }
+  },
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/automatic-e2e/attempt-2/sessions/2026-10-27T09-25-38-279Z_01a17cad-f767-7706-8b57-cdc5696e8771.jsonl",
+  "initialTokens": 19171,
+  "afterTokens": 21479,
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 12,
+      "startedAt": "2026-10-27T09:25:38.292Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-27T09:25:42.153Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:25:42.153Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 14,
+      "startedAt": "2026-10-27T09:25:45.444Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-27T09:25:48.467Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:25:48.467Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 16,
+      "startedAt": "2026-10-27T09:25:52.096Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 19,
+      "startedAt": "2026-10-27T09:25:57.997Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 15,
+      "startedAt": "2026-10-27T09:26:06.785Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-27T09:26:10.349Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:26:10.349Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 17,
+      "startedAt": "2026-10-27T09:26:13.335Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-27T09:26:17.324Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:26:17.324Z"
+    },
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 19,
+      "startedAt": "2026-10-27T09:26:21.385Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-27T09:26:25.103Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:26:25.103Z"
+    }
+  ],
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.101344856,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.632577241
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.101683166,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.632238931
+  },
+  "completedAt": "2026-10-27T09:26:41.336Z",
+  "scratch": "/tmp/independent-fold-acceptance-ozNTXK",
+  "isolatedAgentDir": "/tmp/independent-fold-acceptance-ozNTXK/agent"
+}

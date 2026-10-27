@@ -1,0 +1,4 @@
+{
+  "error": "automatic policy did not accept milestone and boundary: {\"classifier\":{\"status\":{\"type\":\"choice\",\"choice\":\"milestone\",\"probabilities\":{\"continue\":0.09,\"milestone\":0.91,\"await-user\":0,\"blocked\":0},\"confidence\":0.88},\"boundary\":{\"type\":\"choice\",\"choice\":\"e7976f6f\",\"probabilities\":{\"60843034\":0,\"63be2ef0\":0,\"fa5117d5\":0,\"e461568e\":0,\"2d79d8a4\":0,\"fa7d6f56\":0,\"245f4c65\":0,\"29d95d26\":0,\"f8187501\":0,\"bbd4ec5b\":0,\"2acd58f3\":0,\"d75e8bda\":0,\"829bb15f\":0,\"82428e83\":0,\"c638a397\":0,\"e7976f6f\":0.820000000000",
+  "at": "2026-10-27T09:08:12.679Z"
+}

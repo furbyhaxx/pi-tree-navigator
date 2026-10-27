@@ -1,0 +1,45 @@
+[48;2;33;59;73m [38;2;222;224;225mvalidation turn 13: keep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic validation turn 13: keep all
+[39m [38;2;222;224;225manchors. Synthetic validation turn 13: keep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic validation
+[39m [38;2;222;224;225mturn 13: keep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic validation turn 13: keep all anchors.
+[39m [38;2;222;224;225mSynthetic validation turn 13: keep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic validation turn 13:
+[39m [38;2;222;224;225mkeep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic
+[39m [38;2;222;224;225mvalidation turn 13: keep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic validation turn 13: keep all
+[39m [38;2;222;224;225manchors. Synthetic validation turn 13: keep all anchors. [39m
+
+
+[49m Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13.
+
+ [38;2;205;154;34mWarning: Could not restore model fixture/fixture. Using openai/gpt-5.5[39m
+
+ [38;2;205;154;34mWarning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[38;2;95;168;204m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+[39m [38;2;167;152;215mName the summary (kebab-case, at most 40 characters; Enter keeps 'd3-checkpoint-0-folded')[39m
+
+> [7m [0m
+
+ [38;2;126;136;142menter[38;2;157;165;169m submit[39m  [38;2;126;136;142mescape/ctrl+c[38;2;157;165;169m cancel[39m
+
+[38;2;95;168;204m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-d3-mmj6Zo/workspace[39m
+[38;2;126;136;142m↑14k ↓1.4k $0.000 (sub) 0.4%/272k                                                                        (openai) gpt-5.5 • medium

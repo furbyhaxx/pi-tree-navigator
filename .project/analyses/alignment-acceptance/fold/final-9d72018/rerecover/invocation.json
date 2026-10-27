@@ -1,0 +1,12 @@
+{
+  "scenario": "rerecover",
+  "model": "openai/gpt-6-luna",
+  "window": 96000,
+  "blocks": 14,
+  "out": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/final-9d72018/rerecover",
+  "ledger": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+  "dryRun": false,
+  "startedAt": "2026-10-27T09:31:51.140Z",
+  "sourceCommit": "9a96450ca9a80f9ca2385827fc20254c5fdec78a",
+  "dirtyPaths": []
+}

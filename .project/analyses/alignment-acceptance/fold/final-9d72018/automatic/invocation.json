@@ -1,0 +1,12 @@
+{
+  "scenario": "automatic",
+  "model": "openai/gpt-6-luna",
+  "window": 96000,
+  "blocks": 4,
+  "out": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/final-9d72018/automatic",
+  "ledger": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/classifier-eval/budget-ledger.jsonl",
+  "dryRun": false,
+  "startedAt": "2026-10-27T09:30:43.538Z",
+  "sourceCommit": "9d72018c6785958c1aa3ea3e6f0088b68ced8b37",
+  "dirtyPaths": []
+}

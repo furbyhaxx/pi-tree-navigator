@@ -1,0 +1,45 @@
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13.
+
+ [38;2;205;154;34mWarning: Could not restore model fixture/fixture. Using openai/gpt-5.5[39m
+
+ [38;2;205;154;34mWarning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mTree[0m [38;2;160;142;213m───────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169m0 folds · 2 anchors · ctx 0.4% of 272k[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mSearch the outline · showing all rows[0m
+
+ [38;2;167;152;215m→[39m › [38;2;126;136;142mSynthetic validation turn 0: keep all anchors. Synthetic validation turn 0: keep all anchors. Synthetic validation turn…[39m
+   ◆ d3-checkpoint-0                                           [38;2;222;224;225m0.4%[39m
+   › [38;2;126;136;142mSynthetic validation turn 1: keep all anchors. Synthetic validation turn 1: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 2: keep all anchors. Synthetic validation turn 2: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 3: keep all anchors. Synthetic validation turn 3: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 4: keep all anchors. Synthetic validation turn 4: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 5: keep all anchors. Synthetic validation turn 5: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 6: keep all anchors. Synthetic validation turn 6: keep all anchors. Synthetic validation turn…[39m
+   ◆ d3-checkpoint-6                                           [38;2;222;224;225m0.4%[39m
+   › [38;2;126;136;142mSynthetic validation turn 7: keep all anchors. Synthetic validation turn 7: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 8: keep all anchors. Synthetic validation turn 8: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 9: keep all anchors. Synthetic validation turn 9: keep all anchors. Synthetic validation turn…[39m
+   › [38;2;126;136;142mSynthetic validation turn 10: keep all anchors. Synthetic validation turn 10: keep all anchors. Synthetic validation tu…[39m
+   › [38;2;126;136;142mSynthetic validation turn 11: keep all anchors. Synthetic validation turn 11: keep all anchors. Synthetic validation tu…[39m
+   › [38;2;126;136;142mSynthetic validation turn 12: keep all anchors. Synthetic validation turn 12: keep all anchors. Synthetic validation tu…[39m
+   › [38;2;126;136;142mSynthetic validation turn 13: keep all anchors. Synthetic validation turn 13: keep all anchors. Synthetic validation tu…[39m
+   ● [current] [38;2;126;136;142massistant: Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic r[39m…
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142mview[39m  [1malt+g[0m [38;2;126;136;142mgo[39m  [1malt+f[0m [38;2;126;136;142mfilter[39m  [1mtype[0m [38;2;126;136;142mfilter[39m  [1mesc[0m [38;2;126;136;142mback[39m
+[38;2;160;142;213m──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-d3-mmj6Zo/workspace[39m
+[38;2;126;136;142m↑14k ↓1.4k $0.000 (sub) 0.4%/272k                                                                        (openai) gpt-5.5 • medium

@@ -1,0 +1,114 @@
+{
+  "passed": false,
+  "scenario": "automatic",
+  "outcome": "automatic-fold-missing",
+  "folded": false,
+  "initialTokens": 38384,
+  "afterTokens": 39924,
+  "decisions": {
+    "classifier": {
+      "status": {
+        "type": "choice",
+        "choice": "milestone",
+        "probabilities": {
+          "continue": 0.03,
+          "milestone": 0.97,
+          "await-user": 0,
+          "blocked": 0
+        },
+        "confidence": 0.96
+      },
+      "boundary": {
+        "type": "choice",
+        "choice": "4fba8d01",
+        "probabilities": {
+          "cba8c6a0": 0,
+          "cd96ede8": 0,
+          "0f15c06c": 0,
+          "06194f87": 0,
+          "6cfbb483": 0,
+          "dd7b87b1": 0,
+          "ee0654c6": 0,
+          "8824a0df": 0,
+          "9df2544a": 0,
+          "1b7a18fd": 0,
+          "e2b99119": 0,
+          "9e7903ab": 0,
+          "abf59bec": 0,
+          "b9e4c002": 0,
+          "6992d229": 0,
+          "ab343bb0": 0.47000000000000003,
+          "f8d9d11e": 0.01,
+          "4fba8d01": 0.52,
+          "none": 0
+        },
+        "confidence": 0.49
+      }
+    },
+    "confirmer": {
+      "status": {
+        "choice": "milestone",
+        "confidence": 0.99
+      },
+      "boundary": {
+        "choice": "4fba8d01",
+        "confidence": 0.99
+      }
+    }
+  },
+  "anchors": [
+    {
+      "type": "label",
+      "id": "a523b94b",
+      "parentId": "fdaade59",
+      "timestamp": "2026-10-27T09:10:37.048Z",
+      "targetId": "fdaade59",
+      "label": "anchor:audit-start"
+    },
+    {
+      "type": "label",
+      "id": "3598d450",
+      "parentId": "2a943b61",
+      "timestamp": "2026-10-27T09:10:44.721Z",
+      "targetId": "2a943b61",
+      "label": "anchor:start"
+    }
+  ],
+  "calls": [
+    {
+      "api": "chat",
+      "side": false,
+      "model": "openai/gpt-6-luna",
+      "messages": 20,
+      "startedAt": "2026-10-27T09:10:37.052Z"
+    },
+    {
+      "api": "decisions",
+      "side": true,
+      "model": "openrouter/typesafe/jev-1.14",
+      "messages": 0,
+      "startedAt": "2026-10-27T09:10:41.858Z"
+    },
+    {
+      "api": "chat",
+      "side": true,
+      "model": "openai/gpt-6-luna",
+      "messages": 1,
+      "startedAt": "2026-10-27T09:10:41.858Z"
+    }
+  ],
+  "sessionFile": "/mnt/Projects/furbyhaxx/pi-tree-navigator/.project/analyses/alignment-acceptance/fold/automatic-fold/attempt-2-live/sessions/2026-10-27T09-10-37-040Z_01a17ca0-36f0-7120-a7c8-4cfb2c01c5dc.jsonl",
+  "beforeBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.100822544,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.633099553
+  },
+  "afterBudget": {
+    "limitUsd": 25,
+    "spentUsd": 2.101015324,
+    "heldUsd": 0.266077903,
+    "remainingUsd": 22.632906773
+  },
+  "completedAt": "2026-10-27T09:11:13.253Z"
+}

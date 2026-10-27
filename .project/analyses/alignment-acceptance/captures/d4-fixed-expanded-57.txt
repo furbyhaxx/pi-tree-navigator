@@ -1,0 +1,66 @@
+---
+version: 1
+id: d4-fixed-expanded-57
+title: navigate_tree transcript renderer acceptance
+description: Pi-Bolt tmux capture of a synthetic session fixture; no provider calls or private data.
+type: analysis
+created: 2026-10-27T10:10:13+01:00
+updated: 2026-10-27T10:10:13+01:00
+createdBy: worker
+updatedBy: worker
+---
+
+ Synthetic renderer acceptance fixture: list, anchor,
+ rewind. No private data.
+
+
+ ● navigate_tree list · 2 labels · ctx 12.0% of 1.0M
+   ⎿  2 labels · ctx 12.0% of 1.0M
+       4.1%  qa-start
+       9.0%  qa-milestone
+
+ ● navigate_tree anchor "qa-milestone" · set at 12.0% o…
+   ⎿  set at 12.0% of 1.0M (after: “synthetic
+      milestone”)
+      Once real work has accumulated after this anchor,
+      collapse it into a summary.
+
+ ● navigate_tree rewind → "qa-milestone" as "qa-tool-fo…
+   ⎿  summaryFocus: Synthetic fixture only. Preserve the
+      renderer acceptance evidence and next steps.
+   ⎿  accepted · folding after this turn
+
+ Synthetic renderer acceptance complete.
+
+ Warning: No models available. Use /login to log into a
+ provider via OAuth or API key. See:
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/provide
+ rs.md
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.
+ md
+
+ Warning: tmux extended-keys is off. Modified Enter keys
+ may not work. Add `set -g extended-keys on` to
+ ~/.tmux.conf and restart tmux.
+
+ Tool output: expanded
+
+
+
+
+
+
+
+
+
+
+
+
+
+─────────────────────────────────────────────────────────
+
+─────────────────────────────────────────────────────────
+/tmp/ptn-d4-rZHUXb/workspace
+0.0%/0                                            unknown

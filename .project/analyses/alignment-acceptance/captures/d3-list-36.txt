@@ -1,0 +1,45 @@
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+ Synthetic response 13. Synthetic
+ response 13. Synthetic response
+ 13. Synthetic response 13.
+
+ [38;2;205;154;34mWarning: Could not restore model
+[39m [38;2;205;154;34mfixture/fixture. Using
+[39m [38;2;205;154;34mopenai/gpt-5.5[39m
+
+ [38;2;205;154;34mWarning: tmux extended-keys is
+[39m [38;2;205;154;34moff. Modified Enter keys may not
+[39m [38;2;205;154;34mwork. Add `set -g extended-keys
+[39m [38;2;205;154;34mon` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169m…hor[39m/[1mList[0m  [38;2;157;165;169m2 anchors · ctx 0.4%[39m… [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter anchors by name or previe[0m…
+
+ [38;2;167;152;215m→[39m ◆ d3-checkpoint…  [38;2;222;224;225m0.4% · 1.1k · [39m…
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mafter: “Synthetic response [39m…
+   ◆ d3-checkpoint…  [38;2;222;224;225m0.4% · 1.1k · [39m…
+   + Set new anchor at current leaf…
+
+[38;2;126;136;142m   Press r to fold the work since[39m
+[38;2;126;136;142m   'd3-checkpoint-0'. Enter shows…[39m
+ [1mtype[0m [38;2;126;136;142mfilter[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-d3-mmj6Zo/workspace[39m
+[38;2;126;136;142m↑14k ↓1.4k $0.000 (sub) 0.4%/272k  g

@@ -1,0 +1,45 @@
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic
+ response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13. Synthetic response 13.
+ Synthetic response 13.
+
+ [38;2;205;154;34mWarning: Could not restore model fixture/fixture. Using openai/gpt-5.5[39m
+
+ [38;2;205;154;34mWarning: tmux extended-keys is off. Modified Enter keys may not work. Add `set -g extended-keys on` to ~/.tmux.conf and restart
+[39m [38;2;205;154;34mtmux.[39m
+
+[38;2;160;142;213m─ [38;2;157;165;169mAnchor[39m/[1mSettings[0m [38;2;160;142;213m───────────────────────────────────────────────────────────────────────────────────[39m [38;2;157;165;169m1 staged · target: project[39m [38;2;160;142;213m─
+[39m [38;2;167;152;215m❯[39m [3m[38;2;126;136;142mFilter settings · file: ./.pi/tree-navigator.json[0m
+
+   rewindHintReserveTokens                [38;2;157;165;169moff · default[39m
+   anchorStartAfterTurns                  [38;2;157;165;169m2 · default[39m
+   parentHandoffMode                      [38;2;157;165;169mdigest · default[39m
+ [38;2;167;152;215m→[39m continuity.capture                     [38;2;167;152;215mtrue → false[39m
+      [38;2;126;136;142m↳[39m [38;2;157;165;169mglobal unset · project unset · runtime unset[39m
+   continuity.intentClassifier            [38;2;157;165;169moff · default[39m
+   treeProposal.model                     [38;2;157;165;169mcurrent · default[39m
+   treeProposal.tools                     [38;2;157;165;169mnone · default[39m
+   auto_navigate.enabled                  [38;2;157;165;169mfalse · default[39m
+   auto_navigate.mode                     [38;2;157;165;169manchor-and-rewind · default[39m
+   auto_navigate.milestone                [38;2;157;165;169mrecommended · default[39m
+   auto_navigate.check_every_turns        [38;2;157;165;169m6 · default[39m
+   auto_navigate.min_tokens_since_anchor  [38;2;157;165;169m25k · default[39m
+   auto_navigate.rewind_at_tokens         [38;2;157;165;169m120k · default[39m
+   auto_navigate.pressure                 [38;2;157;165;169mcompact · default[39m
+
+[38;2;126;136;142m   Capture your rules and decisions from messages into the continuity ledger. Default true.[39m
+ [1m↑↓[0m [38;2;126;136;142mnavigate[39m  [1menter[0m [38;2;126;136;142medit[39m  [1malt+t[0m [38;2;126;136;142mto runtime[39m  [1mspace[0m [38;2;126;136;142mtoggle[39m  [1mleft[0m [38;2;126;136;142mdecrease[39m  [1mright[0m [38;2;126;136;142mincrease[39m  [1malt+s[0m [38;2;126;136;142msave[39m  [1mtype[0m [38;2;126;136;142mfilter[39m  [1mesc[0m [38;2;126;136;142mback[39m  [38;2;126;136;142m…[39m
+[38;2;160;142;213m────────────────────────────────────────────────────────────[38;2;126;136;142m ↓ 7 more [38;2;160;142;213m────────────────────────────────────────────────────────────
+[38;2;126;136;142m/tmp/ptn-d3-mmj6Zo/workspace[39m
+[38;2;126;136;142m↑14k ↓1.4k $0.000 (sub) 0.4%/272k                                                                        (openai) gpt-5.5 • medium
