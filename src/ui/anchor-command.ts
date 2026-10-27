@@ -10,7 +10,7 @@ import {
 } from "../retrospective/retrospective-command.ts";
 import { briefingText, type CurrentScreenDeps, openCurrentScreen } from "./current-screen.ts";
 import { BEFORE_COMPACTION_NOTE, blockedByCompaction, type FoldScreenDeps } from "./fold-screen.ts";
-import { type FrameRow, selectFrame } from "./frame.ts";
+import { type FrameRow, frameShortcutKey, selectFrame } from "./frame.ts";
 import {
 	createSettingsScreenDeps,
 	describeSettings,
@@ -39,7 +39,7 @@ export interface AnchorCommandDeps extends FoldScreenDeps, CurrentScreenDeps {
 	settings?: SettingsScreenDeps;
 	contextBadge?(ctx: ExtensionCommandContext): string | undefined;
 	/**
-	 * Open the one-screen fold plan. `preselect` is the anchor list `r` chose;
+	 * Open the one-screen fold plan. `preselect` is the anchor chosen by the list's fold shortcut;
 	 * the host wraps its recommendation so that anchor is selected.
 	 */
 	openFoldPlan(ctx: ExtensionCommandContext, preselect?: string): Promise<"back" | "done">;
@@ -263,7 +263,7 @@ function anchorRow(anchor: AnchorRow, deps: AnchorCommandDeps): FrameRow {
 		detail: anchor.afterPreview ? `after: “${anchor.afterPreview}”` : undefined,
 		description: blockedByCompaction(anchor, deps)
 			? `${BEFORE_COMPACTION_NOTE} Enter shows the full line.`
-			: `Press r to fold the work since '${anchor.name}'. Enter shows the full line.`,
+			: `Press ${frameShortcutKey("r")} to fold the work since '${anchor.name}'. Enter shows the full line.`,
 	};
 }
 

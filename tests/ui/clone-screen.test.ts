@@ -75,7 +75,7 @@ describe("text screen", () => {
 					lines: () => ["one line"],
 				},
 			);
-		assert.equal(await screen("\x1bi"), "e");
+		assert.equal(await screen("\x1be"), "e");
 		assert.equal(await screen("\r"), "enter");
 	});
 });

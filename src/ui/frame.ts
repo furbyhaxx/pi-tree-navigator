@@ -80,8 +80,6 @@ export type FrameAction = (row: FrameRow, index: number) => void;
 
 /** Resolve screen mnemonics to left-Alt actions without consuming printable filter text. */
 export function frameShortcutKey(key: KeyId): KeyId {
-	// de-CH reserves AltGr+E for €; use I (inspect) for edit actions.
-	if (key === "e") return Key.alt("i");
 	const mnemonic = (
 		[
 			"a",

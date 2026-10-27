@@ -150,7 +150,7 @@ describe("current screen rows", () => {
 		assert.equal(required(rows[0]).tone, "muted");
 		assert.equal(
 			required(rows[0]).labelHint,
-			'No continuity items yet. Say "from now on …" or press a to add one.',
+			'No continuity items yet. Say "from now on …" or press alt+a to add one.',
 		);
 		assert.equal(currentBadge(createLedger(), false), "rev 0 · empty");
 		assert.equal(
@@ -380,7 +380,7 @@ describe("current screen writes", () => {
 
 	it("edits the text and leaves the user's quote untouched", async () => {
 		const h = harness({ editors: ["From now on answer in French"] });
-		await h.run(press("\x1bi"), press(ESC));
+		await h.run(press("\x1be"), press(ESC));
 		assert.deepEqual(required(required(h.dialogs.editor[0])[1]), WORDS);
 		assert.deepEqual(lastOps(h), [
 			{
@@ -396,7 +396,7 @@ describe("current screen writes", () => {
 	it("ignores an unchanged or empty edit", async () => {
 		const h = harness({ editors: [`  ${WORDS} `, "   "] });
 		const before = h.sm.getEntries().length;
-		await h.run(press("\x1bi"), press("\x1bi"), press(ESC));
+		await h.run(press("\x1be"), press("\x1be"), press(ESC));
 		assert.equal(h.sm.getEntries().length, before);
 		assert.deepEqual(h.notifications, []);
 	});
@@ -482,7 +482,9 @@ describe("current screen writes", () => {
 		const h = harness({}, false);
 		await h.run(press(ESC));
 		const text = required(h.rendered[0]).join("\n");
-		assert.ok(text.includes('No continuity items yet. Say "from now on …" or press a to add one.'));
+		assert.ok(
+			text.includes('No continuity items yet. Say "from now on …" or press alt+a to add one.'),
+		);
 		assert.ok(text.includes("+ Add an item…"));
 		assert.ok(required(required(h.rendered[0])[0]).includes("rev 0 · empty"));
 		for (const line of required(h.rendered[0])) assert.ok(visibleWidth(line) <= 80, line);

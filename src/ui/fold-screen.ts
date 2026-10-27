@@ -7,7 +7,7 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { isValidName, MAX_NAME_LENGTH } from "../core/helpers.ts";
 import type { AnchorRow } from "./anchor-command.ts";
-import { type FrameRow, sanitizeTerminalText, selectFrame } from "./frame.ts";
+import { type FrameRow, frameShortcutKey, sanitizeTerminalText, selectFrame } from "./frame.ts";
 
 /** What the user chose beyond the anchor itself. */
 export interface FoldRequestOptions {
@@ -84,9 +84,9 @@ export function foldRow(anchor: AnchorRow, deps: FoldScreenDeps): FrameRow {
 
 const EMPTY_ROW: FrameRow = {
 	label: "",
-	labelHint: "No anchors yet. Press a to set one at the current leaf.",
+	labelHint: `No anchors yet. Press ${frameShortcutKey("a")} to label the current leaf.`,
 	tone: "muted",
-	description: `A fold collapses the work since an anchor. Press a to label the current leaf (kebab-case, at most ${MAX_NAME_LENGTH} characters), then fold to it once more work has piled up.`,
+	description: `A fold collapses the work since an anchor. Press ${frameShortcutKey("a")} to label the current leaf (kebab-case, at most ${MAX_NAME_LENGTH} characters), then fold to it once more work has piled up.`,
 };
 
 async function setAnchorHere(ctx: ExtensionCommandContext, deps: FoldScreenDeps): Promise<void> {

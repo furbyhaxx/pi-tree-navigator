@@ -350,7 +350,7 @@ export function registerHistoryOutline(pi: ExtensionAPI): void {
 					`  ${keyText("tui.select.up")}/${keyText("tui.select.down")} move · ${keyHint("tui.select.confirm", "toggle / resume")} · Space toggle`,
 				);
 				lines.push(
-					`  alt+r resume AFTER handoff · type to filter · ${keyHint("tui.select.cancel", "clear / close")} · F2 raw`,
+					`  ${frameShortcutKey("r")} resume AFTER handoff · type to filter · ${keyHint("tui.select.cancel", "clear / close")} · F2 raw`,
 				);
 				lines.push(theme.fg("borderAccent", "─".repeat(Math.max(0, width))));
 				return lines.map((line) => truncateToWidth(line, Math.max(0, width)));

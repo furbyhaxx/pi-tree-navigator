@@ -2,8 +2,9 @@
  * `/anchor fold`: one screen with a recommended fold plan.
  *
  * The plan names the target anchor, the summary label, the projected result and the
- * summary strategy. Enter folds, `e` edits label and focus, the arrows, the wheel and
- * a click pick another anchor (a second click folds), `/` filters anchors and previews,
+ * summary strategy. Enter folds; the edit shortcut changes label and focus.
+ * Arrows, the wheel and a click pick another anchor (a second click folds).
+ * Typing filters anchors and previews;
  * Esc clears the filter, then leaves (or cancels a running fold). The host supplies
  * every session and engine access through `FoldPlanDeps`; this module imports neither.
  */

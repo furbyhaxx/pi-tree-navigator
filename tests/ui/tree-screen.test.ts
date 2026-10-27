@@ -433,7 +433,7 @@ describe("tree screen", () => {
 			fold.message,
 			/^Tokenizer implemented \(folded\)\nGoal: Write the tokenizer\nOutcome: Tokenizer passes all tests\n3 messages/,
 		);
-		assert.match(fold.message, /archived as 'impl-done': press g on its row/);
+		assert.match(fold.message, /archived as 'impl-done': press alt\+g on its row/);
 	});
 
 	it("shows a user message in full on Enter", async () => {
@@ -561,7 +561,7 @@ describe("tree destinations and the current marker", () => {
 		assert.equal(await h.run(press("\x1bg"), press(ESC)), "back");
 		assert.equal(
 			required(h.notifications[0]).message,
-			"This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press g to go there.",
+			"This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press alt+g to go there.",
 		);
 		assert.deepEqual(h.navigated, []);
 		assert.equal(sm.getLeafId(), note);

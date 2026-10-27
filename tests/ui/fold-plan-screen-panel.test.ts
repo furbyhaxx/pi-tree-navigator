@@ -158,7 +158,7 @@ describe("fold plan screen", () => {
 			assert.doesNotMatch(plan, /enter fold/);
 			screen.handleInput(ENTER);
 			assert.match(h.view(screen), /✗ Would free only about 0\.9k tok/);
-			screen.handleInput("\x1bi");
+			screen.handleInput("\x1be");
 			assert.equal(h.dialogs.input.length, 0);
 			screen.handleInput(ESC);
 		});
@@ -179,7 +179,10 @@ describe("fold plan screen", () => {
 		const exit = await h.run(async (screen) => {
 			const plan = h.view(screen);
 			assert.match(plan, /No anchors yet\./);
-			assert.match(unwrapped(plan), /\/anchor list and press n/);
+			assert.match(
+				unwrapped(plan),
+				/\/anchor list and select "\+ Set new anchor at current leaf…" with Enter/,
+			);
 			screen.handleInput(ENTER);
 			assert.match(h.view(screen), /no anchor to fold to/);
 			screen.handleInput(ESC);
@@ -191,7 +194,7 @@ describe("fold plan screen", () => {
 	it("filters anchors and previews; Esc clears the filter and keeps the chosen original anchor", async () => {
 		const h = harness({ candidates: searchCandidates(), recommended: 0 });
 		const exit = await h.run(async (screen) => {
-			assert.match(h.view(screen), /Press \/ to search anchors and previews/);
+			assert.match(h.view(screen), /Type to filter anchors and previews/);
 			screen.handleInput("/");
 			assert.match(h.view(screen), /type to filter/);
 			assert.doesNotMatch(h.view(screen), /enter fold/);
@@ -358,7 +361,7 @@ describe("fold plan screen", () => {
 					.findIndex((line) => line.includes("◆ impl-start"));
 				for (const type of ["press", "release", "click"] as const)
 					screen.handleMouse(mouse({ type, y }));
-				screen.handleInput("\x1bi");
+				screen.handleInput("\x1be");
 			},
 			async (screen) => {
 				const view = h.view(screen);
