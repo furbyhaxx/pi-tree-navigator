@@ -16,10 +16,12 @@ export function automaticConfig(initialTokens: number) {
 		auto_navigate: {
 			enabled: true,
 			mode: "anchor-and-rewind",
+			pressure: "fold",
 			milestone: "recommended",
 			check_every_turns: 1,
 			min_tokens_since_anchor: 1000,
-			rewind_at_tokens: Math.ceil(initialTokens + 16384),
+			// Half the threshold must fit the retained review, an 8k summary and 4k continuation.
+			rewind_at_tokens: Math.ceil(2 * (initialTokens + 8192 + 4096)),
 		},
 	};
 }
@@ -42,9 +44,23 @@ export const PRESSURE_CONFIG = {
 export const PRESSURE_REQUEST =
 	"First call navigate_tree with action list. After that result, finalize the audit: state the preserved response-code contract, the no-deployment constraint, and the remaining comparison against the next supplied change. Include ACCEPTANCE-CONTINUED in your final answer. Do not modify files.";
 
-/** A confirmed completed audit followed by an independent, bounded task. */
+/** Finalize the verified review before the unrelated inventory task starts. */
 export const AUTOMATIC_REQUEST =
-	"I independently checked the archived report: all service checks passed and the response-code and no-deployment constraints are satisfied. I accept the review unit as finished; no review work remains and no future-change comparison is requested. Separate final deliverable: write the approved audit acceptance certificate in this reply, with the verified service and check totals, preserved response codes, unchanged persistence, and no deployment or deletion. Explicitly state that the certificate is delivered and all requested work is complete. Include ACCEPTANCE-CONTINUED. There is no next step, approval or input to wait for. Do not modify files.";
+	"I independently verified and accept the passing audit measurements. Deliver the final audit report now: include service and check totals, preserved response codes, unchanged persistence, and no deployment or deletion. This report completes the entire audit; no comparison, next step, approval or missing input remains. Do not modify files.";
+
+/** One new user task; its sequential reads cross pressure between main-model requests. */
+export const AUTOMATIC_INVENTORY_REQUEST =
+	"Your final audit report is accepted; that work is closed. New unrelated task: inventory the schema of a separate synthetic dataset. Call read_acceptance_fixture for page 1, then in a separate tool turn call it for page 2. Read each page exactly once. After both reads, use the already-read data to report the common top-level field names and include ACCEPTANCE-CONTINUED. Completed reads must not be repeated. Do not call any other tool, modify files, or ask for input.";
+
+/** Fixture reads grow the new task while leaving the first read below pressure. */
+export function automaticInventoryPages(blocks: number): string[] {
+	const page = buildCorpus(Math.ceil(blocks * 1.5))
+		.map((block) => block.slice(block.indexOf("[")))
+		.join("\n");
+	const schema =
+		"Top-level schema keys: service, listener, request, retry, persistence, validation, finding.\n";
+	return [schema + page, schema + page.replaceAll("synthetic-service-", "inventory-service-")];
+}
 
 /** Builds varied synthetic configuration evidence; no workspace or user files are read. */
 export function buildCorpus(blocks: number): string[] {
@@ -144,7 +160,8 @@ export function seedCorpus(
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 		},
 	});
-	if (anchored) sm.appendLabelChange(anchor, "anchor:audit-start");
+	if (anchored)
+		sm.appendLabelChange(anchor, completedReview ? "anchor:start" : "anchor:audit-start");
 	for (const [index, text] of corpus.entries()) {
 		sm.appendMessage({
 			role: "user",
@@ -163,7 +180,7 @@ export function seedCorpus(
 					type: "text",
 					text:
 						completedReview && index === corpus.length - 1
-							? `Synthetic completed review phase: final audit report delivered for all ${corpus.length * 24} services. Verification: ${corpus.length * 48} of ${corpus.length * 48} invalid-input and retry-exhaustion checks PASS, zero failures. Response codes remain 422, 503 and 409. Every retry-exhaustion check confirms the namespace is unchanged. No deployment or deletion occurred. The requested audit and its final report are complete; no checks, edits, reporting, decisions or other audit work remain.`
+							? `Synthetic verification output: ${corpus.length * 24} services inspected; ${corpus.length * 48} of ${corpus.length * 48} invalid-input and retry-exhaustion checks PASS, zero failures. Response codes remain 422, 503 and 409. Every retry-exhaustion check confirms unchanged persistence. No deployment or deletion occurred. All measurements are verified. The final requested audit report has not yet been written.`
 							: completedReview
 								? `Synthetic verification report for block ${index + 1}: all 48 invalid-input and retry-exhaustion checks PASS, zero failures. Response codes 422, 503 and 409 unchanged; no persistence mutation, deployment or deletion.`
 								: `Synthetic fixture conclusion for block ${index + 1}: inspected, retain the audit constraints and remaining comparison work.`,

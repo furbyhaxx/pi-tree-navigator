@@ -25,6 +25,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
 import {
 	RECOMMENDED_MILESTONE_POLICY,
 	resolveMilestonePolicy,
@@ -43,8 +44,10 @@ import {
 } from "../classifier-eval/billing.ts";
 import { BudgetLedger } from "../classifier-eval/budget.ts";
 import {
+	AUTOMATIC_INVENTORY_REQUEST,
 	AUTOMATIC_REQUEST,
 	automaticConfig,
+	automaticInventoryPages,
 	buildCorpus,
 	buildDenseCorpus,
 	corpusManifest,
@@ -166,7 +169,7 @@ export function verifyAutomaticPolicy(responses: readonly PolicyResponse[]) {
 }
 
 /** Require agreement above the production confidence gate on a milestone and its boundary. */
-export function verifyAutomaticMilestone(responses: readonly PolicyResponse[]): void {
+export function verifyAutomaticMilestone(responses: readonly PolicyResponse[]): string {
 	const decisions = verifyAutomaticPolicy(responses);
 	const policy = resolveMilestonePolicy("recommended");
 	assert.ok(policy);
@@ -184,6 +187,56 @@ export function verifyAutomaticMilestone(responses: readonly PolicyResponse[]): 
 			decisions.confirmer["boundary"]?.choice === boundary.choice &&
 			decisions.confirmer["boundary"].confidence >= policy.minConfidence,
 		`automatic policy did not accept milestone and boundary: classifier status=${status?.type === "choice" ? status.choice : "missing"} confidence=${status?.type === "choice" ? status.confidence : "missing"}, boundary=${boundary?.type === "choice" ? boundary.choice : "missing"} confidence=${boundary?.type === "choice" ? boundary.confidence : "missing"}; confirmer=${JSON.stringify(decisions.confirmer)}; see policy-decisions.json`,
+	);
+	return boundary.choice;
+}
+
+/** Require a new classifier label at the agreed boundary, never a fixture-authored label. */
+export function verifyAutomaticAnchor(
+	responses: readonly PolicyResponse[],
+	entries: readonly SessionEntry[],
+	previousLabels: ReadonlySet<string>,
+): { boundaryId: string; label: string } {
+	const boundaryId = verifyAutomaticMilestone(responses);
+	const label = entries.find(
+		(entry) =>
+			entry.type === "label" &&
+			entry.targetId === boundaryId &&
+			entry.label?.startsWith("anchor:") &&
+			!previousLabels.has(entry.id),
+	);
+	assert.ok(
+		label?.type === "label" && label.label,
+		"policy must write a new anchor at its agreed boundary",
+	);
+	return { boundaryId, label: label.label };
+}
+
+/** Validate both read boundaries before opening runtime/auth or the shared ledger. */
+export function verifyAutomaticGrowth(
+	initialTokens: number,
+	pageTokens: readonly number[],
+	window: number,
+	threshold: number,
+): void {
+	verifyAutomaticFixture(initialTokens, window, threshold);
+	assert.ok(
+		initialTokens + 8192 + 4096 <= threshold / 2,
+		"classifier anchor needs summary-output and continuation room under the half-threshold fold target",
+	);
+	const [first, second] = pageTokens;
+	assert.ok(first !== undefined && second !== undefined && pageTokens.length === 2);
+	assert.ok(
+		initialTokens + first + 4096 < threshold,
+		"first inventory read must stay below pressure",
+	);
+	assert.ok(
+		initialTokens + first + second > threshold,
+		"second inventory read must cross pressure",
+	);
+	assert.ok(
+		initialTokens + first + second + 16384 < window,
+		"inventory growth must leave admission headroom",
 	);
 }
 
@@ -215,6 +268,57 @@ export function verifyAutomaticContinuation(branch: readonly SessionEntry[]): vo
 			),
 		"main model must answer the marker after the automatic fold",
 	);
+}
+
+/** Require a pressure fold to the classifier label and smaller next provider input. */
+export function verifyAutomaticPressureFold(
+	branch: readonly SessionEntry[],
+	entries: readonly SessionEntry[],
+	anchor: { boundaryId: string; label: string },
+	threshold: number,
+) {
+	verifyAutomaticContinuation(branch);
+	const receipt = receiptsOf(entries, REWIND_CUSTOM_TYPE).find(
+		(receipt) =>
+			receipt["origin"] === "auto" &&
+			receipt["status"] === "done" &&
+			receipt["targetId"] === anchor.boundaryId &&
+			receipt["rewindTo"] === anchor.label.slice("anchor:".length) &&
+			receipt["aboveTarget"] !== true,
+	);
+	assert.ok(receipt, "automatic pressure fold must target the classifier-written anchor");
+	assert.ok(
+		typeof receipt["contextAfter"] === "number" && receipt["contextAfter"] < threshold / 2,
+		"classifier-targeted fold must land under half the pressure threshold",
+	);
+	const summary = branch.find((entry) => entry.type === "branch_summary");
+	const writtenAt = entries.findIndex((entry) => entry.id === summary?.id);
+	const before = entries
+		.slice(0, writtenAt)
+		.findLast(
+			(entry) =>
+				entry.type === "message" &&
+				entry.message.role === "assistant" &&
+				entry.message.provider !== "fixture",
+		);
+	const summaryAt = branch.findIndex((entry) => entry.id === summary?.id);
+	const after = branch
+		.slice(summaryAt + 1)
+		.find(
+			(entry) =>
+				entry.type === "message" &&
+				entry.message.role === "assistant" &&
+				entry.message.provider !== "fixture",
+		);
+	assert.ok(before?.type === "message" && before.message.role === "assistant");
+	assert.ok(after?.type === "message" && after.message.role === "assistant");
+	const beforeInput = before.message.usage.input + before.message.usage.cacheRead;
+	const afterInput = after.message.usage.input + after.message.usage.cacheRead;
+	assert.ok(
+		beforeInput > 0 && afterInput > 0 && afterInput < beforeInput,
+		"next main request after automatic fold must have smaller provider-measured input",
+	);
+	return { beforeInput, afterInput, receipt };
 }
 
 /** Require a tail-keeping compaction mid-run and a final answer written after it. */
@@ -414,7 +518,7 @@ export function parseOptions(args: string[]): RunOptions {
 		blocks = Number(
 			values.blocks ??
 				(values.scenario === "automatic"
-					? "8"
+					? "4"
 					: values.scenario === "pressure"
 						? "16"
 						: values.scenario === "agent"
@@ -547,9 +651,12 @@ export async function runAcceptance(
 			: options.scenario === "pressure"
 				? PRESSURE_CONFIG
 				: undefined;
+	const inventoryPages =
+		options.scenario === "automatic" ? automaticInventoryPages(options.blocks) : [];
 	if (options.scenario === "automatic")
-		verifyAutomaticFixture(
+		verifyAutomaticGrowth(
 			fixtureTokens,
+			inventoryPages.map((text) => Math.ceil(text.length / 4)),
 			options.window,
 			automaticConfig(fixtureTokens).auto_navigate.rewind_at_tokens,
 		);
@@ -557,7 +664,14 @@ export async function runAcceptance(
 	mkdirSync(options.out);
 	const save = (name: string, value: unknown) =>
 		writeFileSync(join(options.out, name), `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
-	save("fixture.json", { facts: FACTS, request, corpus, initialTokens: fixtureTokens });
+	save("fixture.json", {
+		facts: FACTS,
+		request,
+		corpus,
+		inventoryRequest: AUTOMATIC_INVENTORY_REQUEST,
+		inventoryPages,
+		initialTokens: fixtureTokens,
+	});
 	if (navigatorConfig) save("auto-config.json", navigatorConfig);
 	save("manifest.json", corpusManifest(corpus));
 	const { authDir: _authDir, ...publicOptions } = options;
@@ -706,6 +820,9 @@ export async function runAcceptance(
 			defaultThinkingLevel: "off",
 		});
 		const sm = SessionManager.create(cwd, join(options.out, "sessions"));
+		let automaticAnchor: { boundaryId: string; label: string } | undefined;
+		let automaticFold: ReturnType<typeof verifyAutomaticPressureFold> | undefined;
+		let inventoryReads = 0;
 		let pi: ExtensionAPI | undefined;
 		let extensionContext: ExtensionContext | undefined;
 		const loader = new DefaultResourceLoader({
@@ -717,6 +834,25 @@ export async function runAcceptance(
 				(api) => {
 					pi = api;
 					navigateTree(api);
+					if (options.scenario === "automatic")
+						api.registerTool({
+							name: "read_acceptance_fixture",
+							label: "Read synthetic inventory",
+							description: "Read page 1 or 2 of the separate synthetic schema-inventory dataset.",
+							parameters: Type.Object({ page: Type.Integer({ minimum: 1, maximum: 2 }) }),
+							async execute(_id, args) {
+								assert.ok(automaticAnchor, "inventory reads cannot precede the classifier anchor");
+								assert.equal(
+									args.page,
+									inventoryReads + 1,
+									"inventory pages must be read once in order",
+								);
+								const text = inventoryPages[args.page - 1];
+								assert.ok(text);
+								inventoryReads++;
+								return { content: [{ type: "text", text }], details: { page: args.page } };
+							},
+						});
 					api.on("session_start", (_event, ctx) => {
 						extensionContext = ctx;
 					});
@@ -732,7 +868,7 @@ export async function runAcceptance(
 					: options.scenario === "automatic"
 						? // The tool must stay active for automatic folding to run; the model
 							// is told to leave navigation to the controller so the classifier
-							// pair is the only source of anchors and folds.
+							// pair places milestone anchors and pressure later folds to them.
 							"You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. Do not call navigate_tree: anchors and folding are handled automatically."
 						: "You are evaluating a synthetic service audit. Preserve explicit constraints and remaining work. Follow the latest request without modifying files. When asked to fold, invoke navigate_tree rewind, then answer the remaining request after the handoff.",
 		});
@@ -744,7 +880,10 @@ export async function runAcceptance(
 			modelRuntime: runtime,
 			model,
 			thinkingLevel: "off",
-			tools: ["navigate_tree"],
+			tools:
+				options.scenario === "automatic"
+					? ["navigate_tree", "read_acceptance_fixture"]
+					: ["navigate_tree"],
 			resourceLoader: loader,
 			sessionManager: sm,
 			settingsManager: settings,
@@ -812,6 +951,35 @@ export async function runAcceptance(
 			await session.prompt(
 				`Call navigate_tree with action rewind, rewindTo audit-start, newLabel audit-folded, summaryFocus 'Preserve audit constraints and remaining comparison work, then answer the latest request'. After it completes: ${REQUEST}`,
 			);
+		} else if (options.scenario === "automatic") {
+			const previousLabels = new Set(
+				sm
+					.getEntries()
+					.filter((entry) => entry.type === "label")
+					.map((entry) => entry.id),
+			);
+			await session.prompt(request);
+			await session.waitForIdle();
+			save("phase-1.json", {
+				decisions: verifyAutomaticPolicy(policyResponses),
+				entries: sm.getEntries(),
+				tokens: estimateAdmissionTokens(sm),
+			});
+			try {
+				automaticAnchor = verifyAutomaticAnchor(policyResponses, sm.getEntries(), previousLabels);
+			} catch (error) {
+				save("result.json", {
+					passed: false,
+					scenario: options.scenario,
+					phase: "milestone-anchor",
+					folded: false,
+					decisions: verifyAutomaticPolicy(policyResponses),
+					error: error instanceof Error ? error.message : String(error),
+				});
+				throw error;
+			}
+			save("classifier-anchor.json", automaticAnchor);
+			await session.prompt(AUTOMATIC_INVENTORY_REQUEST);
 		} else {
 			await session.prompt(request);
 		}
@@ -901,7 +1069,7 @@ export async function runAcceptance(
 						entry.message.stopReason === "stop" &&
 						textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
 				),
-				"main model must fulfill the automatic finalization request",
+				"main model must fulfill the automatic inventory request",
 			);
 			assert.ok(
 				calls.some(
@@ -963,7 +1131,7 @@ export async function runAcceptance(
 			});
 			verifyAutomaticMilestone(policyResponses);
 			assert.fail(
-				"automatic policy accepted a milestone but the controller did not commit an automatic fold; see policy-decisions.json and result.json",
+				"automatic milestone anchor was written but inventory growth did not produce a pressure fold; see policy-decisions.json and result.json",
 			);
 		}
 		const branch = sm.getBranch();
@@ -971,34 +1139,13 @@ export async function runAcceptance(
 		assert.ok(summaryAt >= 0, "production engine must write a branch summary");
 		if (options.scenario === "automatic") {
 			verifyAutomaticMilestone(policyResponses);
-			verifyAutomaticContinuation(branch);
-			assert.ok(
-				receiptsOf(sm.getEntries(), REWIND_CUSTOM_TYPE).some(
-					(receipt) => receipt["origin"] === "auto" && receipt["status"] === "done",
-				),
-				"automatic fold must commit a successful receipt with origin auto",
-			);
-			const summary = branch[summaryAt];
-			const allEntries = sm.getEntries();
-			const writtenAt = allEntries.findIndex((entry) => entry.id === summary?.id);
-			const before = allEntries
-				.slice(0, writtenAt)
-				.findLast(
-					(entry) =>
-						entry.type === "message" &&
-						entry.message.role === "assistant" &&
-						entry.message.provider !== "fixture",
-				);
-			const after = branch
-				.slice(summaryAt + 1)
-				.find((entry) => entry.type === "message" && entry.message.role === "assistant");
-			assert.ok(before?.type === "message" && before.message.role === "assistant");
-			assert.ok(after?.type === "message" && after.message.role === "assistant");
-			const beforeInput = before.message.usage.input + before.message.usage.cacheRead;
-			const afterInput = after.message.usage.input + after.message.usage.cacheRead;
-			assert.ok(
-				beforeInput > 0 && afterInput > 0 && afterInput < beforeInput,
-				"next main request after automatic fold must have smaller provider-measured input",
+			assert.ok(automaticAnchor);
+			assert.equal(inventoryReads, 2, "both inventory reads must complete");
+			automaticFold = verifyAutomaticPressureFold(
+				branch,
+				sm.getEntries(),
+				automaticAnchor,
+				automaticConfig(fixtureTokens).auto_navigate.rewind_at_tokens,
 			);
 		}
 		const final = branch.findLast(
@@ -1027,13 +1174,17 @@ export async function runAcceptance(
 			);
 		}
 		const afterTokens = estimateAdmissionTokens(sm);
-		assert.ok(afterTokens < initialTokens, "fold must reduce projected context");
+		if (options.scenario !== "automatic")
+			assert.ok(afterTokens < initialTokens, "fold must reduce projected context");
 		await transport.drain();
 		save("result.json", {
 			passed: true,
 			scenario: options.scenario,
 			...(options.scenario === "automatic" && {
 				folded: true,
+				classifierAnchor: automaticAnchor,
+				automaticFold,
+				inventoryReads,
 				decisions: verifyAutomaticPolicy(policyResponses),
 			}),
 			sessionFile: sm.getSessionFile(),

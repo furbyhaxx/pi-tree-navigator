@@ -20,10 +20,13 @@ import {
 	parseModelSelector,
 	parseOptions,
 	runAcceptance,
+	verifyAutomaticAnchor,
 	verifyAutomaticContinuation,
 	verifyAutomaticFixture,
+	verifyAutomaticGrowth,
 	verifyAutomaticMilestone,
 	verifyAutomaticPolicy,
+	verifyAutomaticPressureFold,
 	verifyRepeatedRecovery,
 } from "../../../scripts/fold-acceptance/run.ts";
 import {
@@ -95,7 +98,24 @@ it("automatic acceptance requires completed usable policy responses, not dispatc
 			}),
 		),
 	};
-	verifyAutomaticMilestone([classifier, accepted]);
+	assert.equal(verifyAutomaticMilestone([classifier, accepted]), "record1");
+	const label = {
+		type: "label" as const,
+		id: "label1",
+		parentId: null,
+		timestamp: "2026-10-27T10:00:00+01:00",
+		targetId: "record1",
+		label: "anchor:review-done",
+	};
+	assert.throws(() => verifyAutomaticAnchor([classifier, accepted], [], new Set()), /new anchor/);
+	assert.deepEqual(verifyAutomaticAnchor([classifier, accepted], [label], new Set()), {
+		boundaryId: "record1",
+		label: "anchor:review-done",
+	});
+	assert.throws(
+		() => verifyAutomaticAnchor([classifier, accepted], [label], new Set(["label1"])),
+		/new anchor/,
+	);
 	assert.throws(
 		() =>
 			verifyAutomaticMilestone([
@@ -166,6 +186,56 @@ it("misconfigured automatic fixtures fail before runtime, ledger or provider acc
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
+});
+
+it("automatic growth crosses pressure only on the second read with room for the classifier target", () => {
+	verifyAutomaticGrowth(19000, [24000, 24000], 96000, 62576);
+	assert.throws(() => verifyAutomaticGrowth(19000, [45000, 1000], 96000, 62576), /first inventory/);
+	assert.throws(
+		() => verifyAutomaticGrowth(19000, [10000, 10000], 96000, 62576),
+		/second inventory/,
+	);
+	assert.throws(() => verifyAutomaticGrowth(19000, [24000, 24000], 80000, 62576), /headroom/);
+});
+
+it("automatic pressure acceptance rejects another target and non-reducing provider input", () => {
+	const sm = SessionManager.inMemory();
+	const main = (text: string, input: number) => {
+		const message = fauxAssistantMessage(text);
+		return sm.appendMessage({ ...message, usage: { ...message.usage, input } });
+	};
+	const target = main("Verified audit complete", 19000);
+	main("Read inventory page 2", 39000);
+	sm.branchWithSummary(target, "Inventory work handoff");
+	const receipt = (targetId: string) =>
+		sm.appendCustomMessageEntry("navigate-tree-rewind", "receipt", true, {
+			status: "done",
+			origin: "auto",
+			targetId,
+			rewindTo: "review-done",
+			contextAfter: 22000,
+		});
+	receipt("other-target");
+	main("ACCEPTANCE-CONTINUED", 22000);
+	const anchor = { boundaryId: target, label: "anchor:review-done" };
+	const check = () => verifyAutomaticPressureFold(sm.getBranch(), sm.getEntries(), anchor, 54384);
+	assert.throws(check, /classifier-written anchor/);
+	receipt(target);
+	assert.equal(check().beforeInput, 39000);
+	assert.equal(check().afterInput, 22000);
+	const firstAfter = sm
+		.getBranch()
+		.find(
+			(entry) =>
+				entry.type === "message" &&
+				entry.message.role === "assistant" &&
+				entry.message.content.some(
+					(part) => part.type === "text" && part.text === "ACCEPTANCE-CONTINUED",
+				),
+		);
+	assert.ok(firstAfter?.type === "message" && firstAfter.message.role === "assistant");
+	firstAfter.message.usage.input = 39000;
+	assert.throws(check, /smaller provider-measured input/);
 });
 
 it("automatic continuation must answer the marker after the fold", () => {
@@ -310,7 +380,7 @@ it("automatic dry run records the opt-in policy and finalization fixture without
 			join(root, "ledger.jsonl"),
 			"--dry-run",
 		]);
-		assert.equal(options.blocks, 8);
+		assert.equal(options.blocks, 4);
 		assert.equal(options.window, 96000);
 		assert.equal(options.ledger, join(root, "ledger.jsonl"));
 		await runAcceptance(options, async () => {
@@ -326,7 +396,7 @@ it("automatic dry run records the opt-in policy and finalization fixture without
 		assert.ok(initialTokens < automaticConfig(initialTokens).auto_navigate.rewind_at_tokens);
 		assert.ok(initialTokens > 4000);
 		assert.ok(initialTokens + 16384 < options.window);
-		assert.match(JSON.stringify(sm.getBranch().at(-1)), /Synthetic completed review phase/);
+		assert.match(JSON.stringify(sm.getBranch().at(-1)), /Synthetic verification output/);
 		assert.doesNotMatch(fixture.request, /rewind|navigate_tree|classifier|confidence/i);
 		assert.deepEqual(
 			JSON.parse(readFileSync(join(options.out, "auto-config.json"), "utf8")),
