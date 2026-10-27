@@ -42,9 +42,9 @@ export const PRESSURE_CONFIG = {
 export const PRESSURE_REQUEST =
 	"First call navigate_tree with action list. After that result, finalize the audit: state the preserved response-code contract, the no-deployment constraint, and the remaining comparison against the next supplied change. Include ACCEPTANCE-CONTINUED in your final answer. Do not modify files.";
 
-/** A finalization request, without instructions to navigate or answers to the policy. */
+/** A confirmed completed audit followed by an independent, bounded task. */
 export const AUTOMATIC_REQUEST =
-	"The synthetic configuration and retry-boundary review phase is complete. Finalize that audit now: state the preserved response-code contract, the no-deployment constraint, and the remaining comparison against the next supplied change. Include ACCEPTANCE-CONTINUED in your final answer. Do not modify files.";
+	"I independently checked the archived report: all service checks passed and the response-code and no-deployment constraints are satisfied. I accept the review unit as finished; no review work remains and no future-change comparison is requested. Separate final deliverable: write the approved audit acceptance certificate in this reply, with the verified service and check totals, preserved response codes, unchanged persistence, and no deployment or deletion. Explicitly state that the certificate is delivered and all requested work is complete. Include ACCEPTANCE-CONTINUED. There is no next step, approval or input to wait for. Do not modify files.";
 
 /** Builds varied synthetic configuration evidence; no workspace or user files are read. */
 export function buildCorpus(blocks: number): string[] {
@@ -120,7 +120,13 @@ export function seedCorpus(
 	} = {},
 ): void {
 	const { completedReview = false, anchor: anchored = true } = options;
-	sm.appendMessage({ role: "user", content: FACTS.join("\n"), timestamp: 1 });
+	sm.appendMessage({
+		role: "user",
+		content: completedReview
+			? "Audit the supplied fixed service dataset and produce its verified final report. Preserve response codes 422, 503 and 409. Never deploy or delete service data. Future changes are outside this request."
+			: FACTS.join("\n"),
+		timestamp: 1,
+	});
 	const anchor = sm.appendMessage({
 		role: "assistant",
 		content: [{ type: "text", text: "Synthetic fixture: audit begins." }],
@@ -140,7 +146,16 @@ export function seedCorpus(
 	});
 	if (anchored) sm.appendLabelChange(anchor, "anchor:audit-start");
 	for (const [index, text] of corpus.entries()) {
-		sm.appendMessage({ role: "user", content: text, timestamp: 3 + index * 2 });
+		sm.appendMessage({
+			role: "user",
+			content: completedReview
+				? text.replace(
+						FACTS[4],
+						"Scope ends at the verified final report; no future comparison is requested.",
+					)
+				: text,
+			timestamp: 3 + index * 2,
+		});
 		const reply = sm.appendMessage({
 			role: "assistant",
 			content: [
@@ -148,8 +163,10 @@ export function seedCorpus(
 					type: "text",
 					text:
 						completedReview && index === corpus.length - 1
-							? `Synthetic completed review phase: all ${corpus.length * 24} service configurations have been reviewed. Input validation precedes persistence; invalid input remains 422, unavailable remains 503, duplicate remains 409. Retry exhaustion must not mutate the audit namespace. No deployment or deletion was performed or authorized. Configuration and retry-boundary review is complete with no pending user decision. Remaining work is final reporting and comparison with the next supplied change, which has not been supplied. ${FACTS.join(" ")}`
-							: `Synthetic fixture conclusion for block ${index + 1}: inspected, retain the audit constraints and remaining comparison work.`,
+							? `Synthetic completed review phase: final audit report delivered for all ${corpus.length * 24} services. Verification: ${corpus.length * 48} of ${corpus.length * 48} invalid-input and retry-exhaustion checks PASS, zero failures. Response codes remain 422, 503 and 409. Every retry-exhaustion check confirms the namespace is unchanged. No deployment or deletion occurred. The requested audit and its final report are complete; no checks, edits, reporting, decisions or other audit work remain.`
+							: completedReview
+								? `Synthetic verification report for block ${index + 1}: all 48 invalid-input and retry-exhaustion checks PASS, zero failures. Response codes 422, 503 and 409 unchanged; no persistence mutation, deployment or deletion.`
+								: `Synthetic fixture conclusion for block ${index + 1}: inspected, retain the audit constraints and remaining comparison work.`,
 				},
 			],
 			api: "openai-completions",

@@ -25,7 +25,10 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { RECOMMENDED_MILESTONE_POLICY } from "../../src/auto/milestone-policy.ts";
+import {
+	RECOMMENDED_MILESTONE_POLICY,
+	resolveMilestonePolicy,
+} from "../../src/auto/milestone-policy.ts";
 import { parseClassifierModel } from "../../src/continuity/intent-policy.ts";
 import { parseChatAnswers } from "../../src/continuity/intent-policy-chat.ts";
 import { estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
@@ -162,11 +165,30 @@ export function verifyAutomaticPolicy(responses: readonly PolicyResponse[]) {
 	return { classifier: classifier.result.answers, confirmer: confirmation };
 }
 
+/** Require agreement above the production confidence gate on a milestone and its boundary. */
+export function verifyAutomaticMilestone(responses: readonly PolicyResponse[]): void {
+	const decisions = verifyAutomaticPolicy(responses);
+	const policy = resolveMilestonePolicy("recommended");
+	assert.ok(policy);
+	const status = decisions.classifier["status"];
+	const boundary = decisions.classifier["boundary"];
+	assert.ok(
+		status?.type === "choice" &&
+			status.choice === "milestone" &&
+			status.confidence >= policy.minConfidence &&
+			boundary?.type === "choice" &&
+			boundary.choice !== "none" &&
+			boundary.confidence >= policy.minConfidence &&
+			decisions.confirmer["status"]?.choice === "milestone" &&
+			decisions.confirmer["status"].confidence >= policy.minConfidence &&
+			decisions.confirmer["boundary"]?.choice === boundary.choice &&
+			decisions.confirmer["boundary"].confidence >= policy.minConfidence,
+		`automatic policy did not accept milestone and boundary: classifier status=${status?.type === "choice" ? status.choice : "missing"} confidence=${status?.type === "choice" ? status.confidence : "missing"}, boundary=${boundary?.type === "choice" ? boundary.choice : "missing"} confidence=${boundary?.type === "choice" ? boundary.confidence : "missing"}; confirmer=${JSON.stringify(decisions.confirmer)}; see policy-decisions.json`,
+	);
+}
+
 /** Require successful same-run work after folding and fulfillment of the authored request. */
-export function verifyAutomaticContinuation(
-	branch: readonly SessionEntry[],
-	entries: readonly SessionEntry[],
-): void {
+export function verifyAutomaticContinuation(branch: readonly SessionEntry[]): void {
 	const summaryAt = branch.findIndex((entry) => entry.type === "branch_summary");
 	assert.ok(summaryAt >= 0, "automatic engine must create a handoff");
 	assert.ok(
@@ -182,14 +204,16 @@ export function verifyAutomaticContinuation(
 		"automatic fold must continue in the same prompt run after the handoff",
 	);
 	assert.ok(
-		entries.some(
-			(entry) =>
-				entry.type === "message" &&
-				entry.message.role === "assistant" &&
-				entry.message.stopReason === "stop" &&
-				textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
-		),
-		"main model must fulfill the authored finalization request",
+		branch
+			.slice(summaryAt + 1)
+			.some(
+				(entry) =>
+					entry.type === "message" &&
+					entry.message.role === "assistant" &&
+					entry.message.stopReason === "stop" &&
+					textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
+			),
+		"main model must answer the marker after the automatic fold",
 	);
 }
 
@@ -923,26 +947,60 @@ export async function runAcceptance(
 		if (options.scenario === "automatic" && !branchesFolded(sm)) {
 			await transport.drain();
 			save("result.json", {
-				passed: true,
+				passed: false,
 				scenario: options.scenario,
-				outcome: "policy-evaluated-no-fold",
+				outcome: "automatic-fold-missing",
 				folded: false,
 				initialTokens,
 				afterTokens: estimateAdmissionTokens(sm),
 				decisions: verifyAutomaticPolicy(policyResponses),
+				anchors: sm.getEntries().filter((entry) => entry.type === "label"),
 				calls,
 				sessionFile: sm.getSessionFile(),
 				beforeBudget,
 				afterBudget: ledger.snapshot(),
 				completedAt: new Date().toISOString(),
 			});
-			console.log("automatic: PASS; policy decisions recorded; no fold claimed (see result.json).");
-			return;
+			verifyAutomaticMilestone(policyResponses);
+			assert.fail(
+				"automatic policy accepted a milestone but the controller did not commit an automatic fold; see policy-decisions.json and result.json",
+			);
 		}
 		const branch = sm.getBranch();
 		const summaryAt = branch.findIndex((entry) => entry.type === "branch_summary");
 		assert.ok(summaryAt >= 0, "production engine must write a branch summary");
-		if (options.scenario === "automatic") verifyAutomaticContinuation(branch, sm.getEntries());
+		if (options.scenario === "automatic") {
+			verifyAutomaticMilestone(policyResponses);
+			verifyAutomaticContinuation(branch);
+			assert.ok(
+				receiptsOf(sm.getEntries(), REWIND_CUSTOM_TYPE).some(
+					(receipt) => receipt["origin"] === "auto" && receipt["status"] === "done",
+				),
+				"automatic fold must commit a successful receipt with origin auto",
+			);
+			const summary = branch[summaryAt];
+			const allEntries = sm.getEntries();
+			const writtenAt = allEntries.findIndex((entry) => entry.id === summary?.id);
+			const before = allEntries
+				.slice(0, writtenAt)
+				.findLast(
+					(entry) =>
+						entry.type === "message" &&
+						entry.message.role === "assistant" &&
+						entry.message.provider !== "fixture",
+				);
+			const after = branch
+				.slice(summaryAt + 1)
+				.find((entry) => entry.type === "message" && entry.message.role === "assistant");
+			assert.ok(before?.type === "message" && before.message.role === "assistant");
+			assert.ok(after?.type === "message" && after.message.role === "assistant");
+			const beforeInput = before.message.usage.input + before.message.usage.cacheRead;
+			const afterInput = after.message.usage.input + after.message.usage.cacheRead;
+			assert.ok(
+				beforeInput > 0 && afterInput > 0 && afterInput < beforeInput,
+				"next main request after automatic fold must have smaller provider-measured input",
+			);
+		}
 		const final = branch.findLast(
 			(entry) => entry.type === "message" && entry.message.role === "assistant",
 		);
@@ -974,6 +1032,10 @@ export async function runAcceptance(
 		save("result.json", {
 			passed: true,
 			scenario: options.scenario,
+			...(options.scenario === "automatic" && {
+				folded: true,
+				decisions: verifyAutomaticPolicy(policyResponses),
+			}),
 			sessionFile: sm.getSessionFile(),
 			initialTokens,
 			afterTokens,

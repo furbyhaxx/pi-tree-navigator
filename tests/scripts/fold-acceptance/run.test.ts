@@ -22,6 +22,7 @@ import {
 	runAcceptance,
 	verifyAutomaticContinuation,
 	verifyAutomaticFixture,
+	verifyAutomaticMilestone,
 	verifyAutomaticPolicy,
 	verifyRepeatedRecovery,
 } from "../../../scripts/fold-acceptance/run.ts";
@@ -80,6 +81,39 @@ it("automatic acceptance requires completed usable policy responses, not dispatc
 	const decisions = verifyAutomaticPolicy([classifier, confirmer]);
 	assert.equal(decisions.confirmer["status"]?.choice, "unfinished");
 	assert.throws(
+		() => verifyAutomaticMilestone([classifier, confirmer]),
+		/did not accept milestone/,
+	);
+	const accepted: PolicyResponse = {
+		...confirmer,
+		result: fauxAssistantMessage(
+			JSON.stringify({
+				answers: {
+					status: { choice: "milestone", confidence: 0.99 },
+					boundary: { choice: "record1", confidence: 0.99 },
+				},
+			}),
+		),
+	};
+	verifyAutomaticMilestone([classifier, accepted]);
+	assert.throws(
+		() =>
+			verifyAutomaticMilestone([
+				{
+					...classifier,
+					result: {
+						...classifier.result,
+						answers: {
+							...classifier.result.answers,
+							status: { type: "choice", choice: "milestone", confidence: 0.36, probabilities: {} },
+						},
+					},
+				},
+				accepted,
+			]),
+		/did not accept milestone/,
+	);
+	assert.throws(
 		() =>
 			verifyAutomaticPolicy([
 				{ ...classifier, result: { ...classifier.result, stopReason: "error" } },
@@ -134,7 +168,7 @@ it("misconfigured automatic fixtures fail before runtime, ledger or provider acc
 	}
 });
 
-it("automatic continuation need not repeat an already fulfilled finalization request", () => {
+it("automatic continuation must answer the marker after the fold", () => {
 	const sm = SessionManager.inMemory();
 	const anchor = sm.appendMessage({
 		role: "user",
@@ -143,14 +177,18 @@ it("automatic continuation need not repeat an already fulfilled finalization req
 	});
 	sm.appendMessage(fauxAssistantMessage("ACCEPTANCE-CONTINUED: audit complete"));
 	sm.branchWithSummary(anchor, "Completed audit handoff");
-	assert.throws(() => verifyAutomaticContinuation(sm.getBranch(), sm.getEntries()), /continue/);
-	const afterFold = sm.appendMessage(fauxAssistantMessage("Ready for the next supplied change."));
-	verifyAutomaticContinuation(sm.getBranch(), sm.getEntries());
+	assert.throws(() => verifyAutomaticContinuation(sm.getBranch()), /continue/);
+	sm.appendMessage(fauxAssistantMessage("Ready for the next supplied change."));
+	assert.throws(() => verifyAutomaticContinuation(sm.getBranch()), /marker/);
+	const afterFold = sm.appendMessage(fauxAssistantMessage("ACCEPTANCE-CONTINUED: 437."));
+	verifyAutomaticContinuation(sm.getBranch());
 	const parentId = sm.getEntry(afterFold)?.parentId;
 	assert.ok(parentId);
 	sm.branch(parentId);
-	sm.appendMessage(fauxAssistantMessage("failed partial reply", { stopReason: "error" }));
-	assert.throws(() => verifyAutomaticContinuation(sm.getBranch(), sm.getEntries()), /continue/);
+	sm.appendMessage(
+		fauxAssistantMessage("ACCEPTANCE-CONTINUED: failed partial reply", { stopReason: "error" }),
+	);
+	assert.throws(() => verifyAutomaticContinuation(sm.getBranch()), /marker/);
 });
 
 it("dry run writes only synthetic evidence without opening a ledger or contacting providers", async () => {
