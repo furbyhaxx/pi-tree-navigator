@@ -73,7 +73,9 @@ that the running agent has received it.
 **One-time continuation nudge.** When the first successful post-fold answer is
 text-only while the handoff still lists open work, the extension can request one
 continuation. It does not repeat indefinitely, override cancellation, or treat an
-unanswered user request as permission to continue unrelated work.
+unanswered user request as permission to continue unrelated work. A completed answer after a
+recovery fold is never nudged: recovery resumes the interrupted request, so its older handoff
+cannot prove that work remains.
 
 ### History-mirroring providers (pi-claude-bridge)
 

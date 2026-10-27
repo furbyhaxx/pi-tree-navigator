@@ -43,7 +43,8 @@ replaceable configuration from the state at call time and never import `index.ts
 - `fold-summarizer.ts` (+ `-evidence`): independent registry calls, cache-prefix
   strategy and bounded map-reduce strategy, explicit evidence coverage and call
   limits; reasoning allowance on top of answer caps and one reasoning-off retry
-  after a `length` stop.
+  after a `length` stop; one retry of an SDK-classified transient stream failure, and
+  runaway streams bounded by output bytes, event count and a five-minute idle timeout.
 - `consolidation-planner.ts`, `consolidation-runtime.ts`: pure trigger and cut for
   background handoff consolidation (handoff count or window share, newest handoffs
   kept, minimum saving) and its controller.
