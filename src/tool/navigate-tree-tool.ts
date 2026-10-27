@@ -42,7 +42,7 @@ import { estimateAdmissionTokens, estimateAtEntry } from "../core/request-accoun
 import type { createFoldAdaptersController } from "../fold/fold-adapters.ts";
 import { MIN_SUMMARY_FOCUS_LENGTH } from "../fold/fold-policy.ts";
 import { buildRewindAcceptedText, toolError } from "../fold/fold-receipts.ts";
-import { renderToolCall, renderToolResult } from "../ui/tool-renderer.ts";
+import { renderToolCall, renderToolResult, type ToolRowState } from "../ui/tool-renderer.ts";
 import { createNavigateTreeParameters, isPinKind, PIN_KINDS } from "./navigate-tree-parameters.ts";
 
 /** Token budget of the ledger briefing appended to `list`. */
@@ -67,7 +67,11 @@ export function createNavigateTreeTool({
 	state,
 	queueFold,
 	minRewindSavingsTokens: MIN_REWIND_SAVINGS_TOKENS,
-}: NavigateTreeToolDeps): ToolDefinition<ReturnType<typeof createNavigateTreeParameters>> {
+}: NavigateTreeToolDeps): ToolDefinition<
+	ReturnType<typeof createNavigateTreeParameters>,
+	unknown,
+	ToolRowState
+> {
 	return {
 		name: TOOL_NAME,
 		label: "Navigate Tree",
@@ -92,9 +96,10 @@ Operations (set \`action\`):
 		promptSnippet:
 			"Use to anchor named milestones and rewind the conversation tree to a prior point with a model-generated summary, for token-efficient long autonomous sessions. Also pins durable sub-goals, decisions, facts and file pointers that survive folds.",
 		parameters: createNavigateTreeParameters(),
-		renderCall: (args, theme, context) => renderToolCall(args, theme, context.expanded),
+		renderShell: "self",
+		renderCall: (args, theme, context) => renderToolCall(args, theme, context.expanded, context),
 		renderResult: (result, options, theme, context) =>
-			renderToolResult(result, options, theme, context.isError),
+			renderToolResult(result, options, theme, context.isError, context),
 		execute: async (toolCallId, params, _signal, _onUpdate, ctx) => {
 			const sm = ctx.sessionManager as SessionManager;
 			const p = params as {
