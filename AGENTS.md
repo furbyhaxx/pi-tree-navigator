@@ -158,11 +158,14 @@ README.md, CHANGELOG.md, LICENSE, AGENTS.md
 Panels use `ctx.ui.custom` and the shared frame in `ui/frame.ts`. Do not build a second
 frame or list widget.
 
-- **Keys come from the user's keybindings** (`KeybindingsManager`), never hardcoded. Hint rows
-  show the bound keys.
+- **Keys come from the user's keybindings** (`KeybindingsManager`) for navigation. Row actions
+  are Alt+mnemonic letters mapped centrally in `frame.ts` (`frameShortcutKey`); hint rows and
+  prose show the bound keys, never a hardcoded letter. Pick actions that work on a Swiss German
+  (QWERTZ) keyboard: no AltGr-layer symbols, no Y/Z mnemonics.
 - **Uniform semantics:** Enter confirms, Esc goes back one level (and closes at the root),
-  Ctrl+C dismisses, Tab/Shift+Tab switches sections, arrows move, Space toggles, `/` or typing
-  filters. Esc asks before discarding staged changes.
+  Ctrl+C dismisses, Tab/Shift+Tab switches sections, arrows move, Space toggles (inside an
+  active filter it separates terms), every printable key types into the filter, Alt+letter runs
+  a row action. Esc asks before discarding staged changes.
 - **Lists are searchable** (`fuzzyFilter`) once they can exceed one screen.
 - **Height:** size to content, cap at the terminal height minus Pi's footer, then scroll.
 - **Narrow terminals:** side-by-side layouts fall back to a separate screen; anchor identity

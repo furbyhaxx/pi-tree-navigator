@@ -10,7 +10,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Toolchain**: Bun 1.4, TypeScript 7, Biome 2.5 (tabs, 100 columns) and a Justfile (`just check`, `just probe`, `just rpc-verify`) replace pnpm, `node --test` and npm scripts.
 - **Layout**: the package is `@furbyhaxx/pi-tree-navigator`; sources live in `src/<area>/` with tests mirrored under `tests/`. The Pi entry point is `src/index.ts`, which now only builds the shared `NavigatorState`, constructs controllers (fold runtime and adapters, recovery, request guard, automatic folding, consolidation, continuity, hints, lifecycle) and registers them in the original order; the `navigate_tree` tool lives in `src/tool/`. No behavior change.
 - **Type safety**: `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes` and `noPropertyAccessFromIndexSignature` are enabled; indexed reads are guarded without changing behavior or stored JSON shapes.
+- **Panel keys**: every printable key types into the filter and row actions moved to Alt+letter (for example Alt+r folds, Alt+g goes to a tree row); Space toggles settings.
 - **Docs**: the README keeps install, usage and configuration basics; the reference sections moved to `docs/configuration.md` and `docs/how-it-works.md`, and the changelog uses Keep a Changelog headings.
+
+### Fixed
+
+- **Recovery**: a completed final answer is no longer followed by a continuation nudge or another recovery; a reply whose measured input exceeds the local window settles instead of restarting work, and the next user turn is still guarded by preflight recovery.
+- **Fold summaries**: provider stream failures the SDK marks transient are retried once within the call budget, and runaway streams are bounded by output size, event count and a five-minute idle timeout instead of hanging for many minutes.
+- **Narrow panels**: the context % survives in the panel badge, breadcrumbs keep their root, and anchor names and setting keys are middle-truncated so names sharing a prefix stay distinct.
+- **Tool rows**: `navigate_tree` rows render their own shell with the documented `● navigate_tree <action> · <metrics>` header and an indented body that adds detail instead of repeating the header; expanded `list` shows every label.
+- **Acceptance**: the `automatic` live scenario derives its pressure threshold from the fixture and the runner refuses fixtures whose intended path cannot run.
 
 ### Removed
 
