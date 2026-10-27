@@ -133,6 +133,14 @@ filters, test an accepted latest boundary and a boundary before unfinished work,
 that the controller invokes the engine without writing a rewind steer. Keep classifier
 abstention visible rather than substituting a deterministic success in a live claim.
 
+The runner's `automatic` scenario proves the documented two-phase pipeline: below the
+derived `rewind_at_tokens`, both milestone stages accept one boundary and write an `anchor:`
+label; the grown session then crosses the threshold and the pressure fold (`origin: "auto"`)
+targets that label, the next provider-measured input is smaller, and the marker is answered
+without a driver prompt. Abstention, boundary disagreement or a fold to another anchor fail.
+The runner refuses a fixture whose estimate leaves no runway below the threshold before any
+provider call.
+
 ## Terminal acceptance
 
 Load the extension under test explicitly in an isolated Pi-Bolt session. Exercise 60 and
