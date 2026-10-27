@@ -68,6 +68,7 @@ const join = (...parts: string[]): string => parts.filter(Boolean).join(" ");
 export interface ToolRowState {
 	outcome?: "success" | "error" | "warning";
 	metrics?: string;
+	notes?: readonly string[];
 }
 
 /** Lifecycle facts supplied by Pi for the call slot. */
@@ -94,6 +95,7 @@ export function renderToolCall(
 				return value ? [`${key}: ${value}`] : [];
 			})
 		: [];
+	if (context) context.state.notes = notes;
 	let head: string;
 	switch (a["action"]) {
 		case "anchor":
@@ -137,19 +139,7 @@ export function renderToolCall(
 				join(theme.fg(tone, glyph), title(TOOL_NAME), head) +
 				(metrics ? theme.fg("muted", ` · ${metrics}`) : "");
 			const pad = context?.outputPad ?? 0;
-			const lines = new Lines([header], false, pad).render(width);
-			const inner = Math.max(1, width - 2 * pad - 5);
-			const detail = notes.flatMap((note) => wrapTextWithAnsi(theme.fg("muted", note), inner));
-			for (const [index, line] of detail.entries()) {
-				lines.push(
-					truncateToWidth(
-						" ".repeat(pad) + (index === 0 ? theme.fg("dim", "  ⎿  ") : "     ") + line,
-						width,
-						"…",
-					),
-				);
-			}
-			return lines;
+			return new Lines([header], false, pad).render(width);
 		},
 		invalidate() {},
 	};
@@ -211,6 +201,7 @@ export function renderToolResult(
 	const failed = isError || details["refusal"] === true;
 	const aborted = isError && firstLine(text) === "Operation aborted";
 	const summary = summarize(details, text);
+	const queued = details["status"] === "queued" || details["status"] === "summary-requested";
 	if (context && !options.isPartial) {
 		context.state.outcome = aborted ? "warning" : failed ? "error" : "success";
 		context.state.metrics = aborted
@@ -219,15 +210,29 @@ export function renderToolResult(
 				? details["refusal"] === true
 					? "refused"
 					: "failed"
-				: (summary ?? "complete");
+				: queued
+					? "accepted"
+					: (summary ?? "complete");
 	}
 	const paint = (line: string) =>
 		theme.fg(aborted ? "warning" : failed ? "error" : "toolOutput", line);
-	const queued = details["status"] === "queued" || details["status"] === "summary-requested";
-	const body = queued ? [summary ?? "accepted"] : textLines(text).filter((line) => line.trim());
-	if (!failed && !queued && body[0]?.startsWith("[")) {
-		body[0] = body[0].replace(/^\[[^\]]*\]\s*[·]?\s*/, "");
+	let body = textLines(text);
+	if (!failed) {
+		if (queued) {
+			body = [details["status"] === "queued" ? "Folding after this turn." : "Summarizing."];
+		} else if (typeof details["label"] === "string") {
+			const hint = oneLine(details["labelHint"]);
+			body = [
+				hint ? `Anchored after "${hint}"` : "Milestone anchored.",
+				...(options.expanded ? body.slice(1) : []),
+			];
+		} else if (summary && body[0]?.startsWith("[")) {
+			body = body.slice(1);
+		}
+		if (options.expanded) body.push(...(context?.state.notes ?? []));
 	}
+	while (body[0]?.trim() === "") body.shift();
+	while (body.at(-1)?.trim() === "") body.pop();
 	const cache = new Map<number, string[]>();
 	return {
 		render(width) {

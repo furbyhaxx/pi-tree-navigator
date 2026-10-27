@@ -108,7 +108,7 @@ test("rewind and refused anchor settle lazily with metrics and indented bodies",
 				plain(lines),
 				refused
 					? /^● navigate_tree anchor "impl-start" · refused\n {2}⎿ {2}A label/
-					: /^● navigate_tree rewind → "impl-start" as "impl-done" · accepted · folding after/,
+					: /^● navigate_tree rewind → "impl-start" as "impl-done" · accepted/,
 			);
 			assert.ok(lines.every((line) => visibleWidth(line) <= 80));
 			assert.match(plain(body.render(80)), /^ {2}⎿ {2}/);
@@ -121,8 +121,12 @@ test("expanded list output preserves content and collapsed output offers the bou
 	const result = text(
 		`[list] · 8 labels\n${Array.from({ length: 8 }, (_, i) => `label-${i}`).join("\n")}`,
 	);
-	const small = plain(renderToolResult(result, collapsed, theme, false).render(80));
-	const full = plain(renderToolResult(result, expanded, theme, false).render(80));
+	const small = plain(
+		renderToolResult({ ...result, details: { count: 8 } }, collapsed, theme, false).render(80),
+	);
+	const full = plain(
+		renderToolResult({ ...result, details: { count: 8 } }, expanded, theme, false).render(80),
+	);
 	assert.match(small, /more lines · .*expand/);
 	assert.doesNotMatch(small, /label-7/);
 	assert.match(full, / {5}label-7/);
@@ -158,7 +162,7 @@ for (const [details, expected] of [
 	[{ count: 3, contextTokens: 120000, contextWindow: 1000000 }, "3 labels · ctx 12.0% of 1.0M"],
 	[{ id: "D4", kind: "decision", effect: "added" }, "D4 decision recorded"],
 	[{ id: "D4", kind: "decision", effect: "duplicate" }, "already recorded as D4"],
-	[{ status: "summary-requested" }, "accepted · summarizing"],
+	[{ status: "summary-requested" }, "accepted"],
 ] as const) {
 	test(`reported header metrics: ${expected}`, () => {
 		const state: ToolRowState = {};
@@ -169,8 +173,90 @@ for (const [details, expected] of [
 		});
 		assert.equal(state.metrics, expected);
 		assert.equal(state.outcome, "success");
+		const header = renderToolCall({ action: "list" }, theme, false, {
+			state,
+			executionStarted: true,
+			outputPad: 0,
+		}).render(130);
+		assert.equal(header.length, 1);
+		assert.ok(plain(header).endsWith(` · ${expected}`));
 	});
 }
+
+test("expanded results show the full label text the model received", () => {
+	const rows = Array.from(
+		{ length: 8 },
+		(_, index) => `${index + 1}.0%  label-${index} · after preview-${index}`,
+	);
+	const result = { ...text(`[list] · 8 labels\n\n${rows.join("\n")}`), details: { count: 8 } };
+	for (const width of [57, 130]) {
+		const full = plain(renderToolResult(result, expanded, theme, false).render(width));
+		for (const row of rows) assert.ok(full.includes(row));
+		assert.doesNotMatch(full, /8 labels/);
+		const small = plain(renderToolResult(result, collapsed, theme, false).render(width));
+		assert.doesNotMatch(small, /label-7/);
+		assert.match(small, /more lines · .*expand/);
+	}
+});
+
+test("an error result shows its first line in the error colour", () => {
+	const result = { ...text("Duplicate label.\nUse action='list'."), details: { refusal: true } };
+	for (const options of [collapsed, expanded]) {
+		const lines = renderToolResult(result, options, theme, false).render(80);
+		assert.match(plain(lines), /^ {2}⎿ {2}Duplicate label\./);
+		assert.ok(lines[0]?.includes(theme.getFgAnsi("error")));
+		assert.match(plain(lines), /Use action='list'/);
+	}
+});
+
+test("garbage results render without throwing", () => {
+	for (const result of [
+		null,
+		undefined,
+		7,
+		{},
+		{ content: null },
+		{ content: [null, 3, { type: "text" }] },
+		{ details: "x" },
+		{ details: { count: "3", label: 1 } },
+	]) {
+		for (const options of [collapsed, expanded]) {
+			for (const isError of [false, true]) {
+				const lines = renderToolResult(result, options, theme, isError).render(57);
+				assert.ok(lines.every((line) => visibleWidth(line) <= 57));
+			}
+		}
+	}
+});
+
+test("anchor preview and queued focus add information with one body marker", () => {
+	const anchor = {
+		...text("[anchor 'a'] set at 1.0% of 1.0M"),
+		details: { label: "a", contextTokens: 10000, labelHint: "reviewed parser" },
+	};
+	assert.equal(
+		plain(renderToolResult(anchor, collapsed, theme, false).render(80)),
+		'  ⎿  Anchored after "reviewed parser"',
+	);
+	const context = { state: {}, executionStarted: true, outputPad: 0 };
+	const call = renderToolCall(
+		{ action: "rewind", summaryFocus: "Keep the parser contract." },
+		theme,
+		true,
+		context,
+	);
+	const body = renderToolResult(
+		{ ...text("Rewind accepted"), details: { status: "queued" } },
+		expanded,
+		theme,
+		false,
+		context,
+	);
+	const output = plain([...call.render(80), ...body.render(80)]);
+	assert.equal(output.split("⎿").length - 1, 1);
+	assert.match(output, /Folding after this turn\.\n {5}summaryFocus: Keep the parser contract\./);
+	assert.equal(output.split("accepted").length - 1, 1);
+});
 
 const user = { origin: "user", entryId: "e1" };
 const ledgerOps = [
