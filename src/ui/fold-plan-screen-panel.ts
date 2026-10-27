@@ -2,8 +2,9 @@
  * `/anchor fold`: one screen with a recommended fold plan.
  *
  * The plan names the target anchor, the summary label, the projected result and the
- * summary strategy. Enter folds, `e` edits label and focus, the arrows, the wheel and
- * a click pick another anchor (a second click folds), `/` filters anchors and previews,
+ * summary strategy. Enter folds; the edit shortcut changes label and focus.
+ * Arrows, the wheel and a click pick another anchor (a second click folds).
+ * Typing filters anchors and previews;
  * Esc clears the filter, then leaves (or cancels a running fold). The host supplies
  * every session and engine access through `FoldPlanDeps`; this module imports neither.
  */
@@ -53,6 +54,7 @@ import {
 	type FrameKeybinding,
 	FrameList,
 	type FrameTheme,
+	frameShortcutKey,
 	renderFrame,
 } from "./frame.ts";
 
@@ -324,10 +326,16 @@ export class FoldPlanPanel implements Component, Focusable {
 			action: "choose anchor",
 			priority: "navigation",
 		};
+		const edit: FrameKeybinding = {
+			key: frameShortcutKey("e"),
+			action: "edit label/focus",
+			priority: "navigation",
+		};
 		if (this.list.isSearching) {
 			return [
-				{ key: "type", action: "to filter" },
+				{ key: "type", action: "to filter", priority: "essential" },
 				choose,
+				...(this.selected()?.valid ? [edit] : []),
 				{ key: "esc", action: "clear search", priority: "essential" },
 			];
 		}
@@ -337,8 +345,8 @@ export class FoldPlanPanel implements Component, Focusable {
 			priority: "essential",
 		};
 		const search: FrameKeybinding = {
-			key: "/",
-			action: "search",
+			key: "type",
+			action: "filter",
 			priority: "essential",
 		};
 		if (!this.selected()?.valid) return [choose, search, leave];
@@ -349,7 +357,7 @@ export class FoldPlanPanel implements Component, Focusable {
 				action: this.agentRunning() ? "queue fold" : "fold",
 				priority: "essential",
 			},
-			{ key: "e", action: "edit label/focus", priority: "navigation" },
+			edit,
 			search,
 			leave,
 		];

@@ -150,7 +150,7 @@ describe("current screen rows", () => {
 		assert.equal(required(rows[0]).tone, "muted");
 		assert.equal(
 			required(rows[0]).labelHint,
-			'No continuity items yet. Say "from now on …" or press a to add one.',
+			'No continuity items yet. Say "from now on …" or press alt+a to add one.',
 		);
 		assert.equal(currentBadge(createLedger(), false), "rev 0 · empty");
 		assert.equal(
@@ -290,7 +290,7 @@ describe("current screen writes", () => {
 	it("retracts a captured rule after naming it in a confirmation and keeps it in history", async () => {
 		const h = harness({ confirms: [true] });
 		const before = h.opsEntries().length;
-		await h.run(press("x"), press(ESC));
+		await h.run(press("\x1bx"), press(ESC));
 		assert.equal(h.opsEntries().length, before + 1);
 		assert.deepEqual(lastOps(h), [{ op: { op: "archive", id: "R1" }, ctx: { origin: "user" } }]);
 		assert.equal(h.item("R1")?.status, "archived");
@@ -309,7 +309,7 @@ describe("current screen writes", () => {
 	it("writes nothing when the confirmation is declined", async () => {
 		const h = harness({ confirms: [false] });
 		const before = h.sm.getEntries().length;
-		await h.run(press("x"), press(ESC));
+		await h.run(press("\x1bx"), press(ESC));
 		assert.equal(h.sm.getEntries().length, before);
 		assert.equal(h.item("R1")?.status, "active");
 		assert.deepEqual(h.notifications, []);
@@ -319,7 +319,7 @@ describe("current screen writes", () => {
 		const h = harness({ confirms: [true] });
 		h.state.idle = false;
 		const before = h.sm.getEntries().length;
-		await h.run(press("x"), press("p"), press(ESC));
+		await h.run(press("\x1bx"), press("\x1bp"), press(ESC));
 		assert.equal(h.sm.getEntries().length, before);
 		assert.deepEqual(h.dialogs.confirm, []);
 		assert.deepEqual(h.notifications, [
@@ -341,7 +341,7 @@ describe("current screen writes", () => {
 		const h = harness({ confirms: [true] });
 		h.state.capture = false;
 		const before = h.sm.getEntries().length;
-		await h.run(press("x"), press(ESC));
+		await h.run(press("\x1bx"), press(ESC));
 		assert.equal(h.sm.getEntries().length, before);
 		assert.deepEqual(h.dialogs.confirm, []);
 		assert.match(required(h.notifications[0]).message, /continuity\.capture/);
@@ -360,7 +360,7 @@ describe("current screen writes", () => {
 			1,
 			"an unpinned agent decision is open to the agent",
 		);
-		await h.run(press(DOWN, "p"), press(ESC));
+		await h.run(press(DOWN, "\x1bp"), press(ESC));
 		assert.deepEqual(lastOps(h), [{ op: { op: "pin", id: "D2" }, ctx: { origin: "user" } }]);
 		assert.equal(h.item("D2")?.pinned, true);
 		for (const op of [
@@ -374,13 +374,13 @@ describe("current screen writes", () => {
 				assert.equal(required(result.rejected[0]).reason.code, "protected_item");
 			}
 		}
-		await h.run(press(DOWN, "p"), press(ESC));
+		await h.run(press(DOWN, "\x1bp"), press(ESC));
 		assert.equal(h.item("D2")?.pinned, undefined);
 	});
 
 	it("edits the text and leaves the user's quote untouched", async () => {
 		const h = harness({ editors: ["From now on answer in French"] });
-		await h.run(press("e"), press(ESC));
+		await h.run(press("\x1be"), press(ESC));
 		assert.deepEqual(required(required(h.dialogs.editor[0])[1]), WORDS);
 		assert.deepEqual(lastOps(h), [
 			{
@@ -396,7 +396,7 @@ describe("current screen writes", () => {
 	it("ignores an unchanged or empty edit", async () => {
 		const h = harness({ editors: [`  ${WORDS} `, "   "] });
 		const before = h.sm.getEntries().length;
-		await h.run(press("e"), press("e"), press(ESC));
+		await h.run(press("\x1be"), press("\x1be"), press(ESC));
 		assert.equal(h.sm.getEntries().length, before);
 		assert.deepEqual(h.notifications, []);
 	});
@@ -404,7 +404,7 @@ describe("current screen writes", () => {
 	it("completes goals with c and ignores c on rules", async () => {
 		const h = harness();
 		const before = h.opsEntries().length;
-		await h.run(press("c", DOWN, DOWN, "c"), press(ESC));
+		await h.run(press("\x1bc", DOWN, DOWN, "\x1bc"), press(ESC));
 		assert.equal(h.opsEntries().length, before + 1);
 		assert.deepEqual(lastOps(h), [{ op: { op: "complete", id: "S3" }, ctx: { origin: "user" } }]);
 		assert.equal(h.item("R1")?.status, "active");
@@ -416,7 +416,7 @@ describe("current screen writes", () => {
 			selects: ["fact"],
 			inputs: ["  The CI runs on Node 22  "],
 		});
-		await h.run(press("a"), press(ESC));
+		await h.run(press("\x1ba"), press(ESC));
 		assert.deepEqual(h.dialogs.select[0], ["rule", "decision", "sub-goal", "fact"]);
 		assert.deepEqual(lastOps(h), [
 			{
@@ -453,7 +453,7 @@ describe("current screen writes", () => {
 			applied: [],
 			rejected: [{ op: { op: "archive", id: "R1" }, reason }],
 		});
-		await h.run(press("x"), press(ESC));
+		await h.run(press("\x1bx"), press(ESC));
 		assert.deepEqual(h.notifications, [
 			{ message: "cannot archive R1: it is archived", type: "warning" },
 		]);
@@ -472,7 +472,7 @@ describe("current screen writes", () => {
 
 	it("toggles history with h and shows retracted items read-only", async () => {
 		const h = harness({ confirms: [true] });
-		await h.run(press("x"), press("h"), press(DOWN, DOWN, ENTER), press(ESC));
+		await h.run(press("\x1bx"), press("\x1bh"), press(DOWN, DOWN, ENTER), press(ESC));
 		assert.ok(required(h.rendered[2]).join("\n").includes("history · archived · user"));
 		assert.match(required(required(h.rendered[2])[0]), /\+history/);
 		assert.match(h.notifications.at(-1)?.message ?? "", /^R1 rule · archived/);
@@ -482,7 +482,9 @@ describe("current screen writes", () => {
 		const h = harness({}, false);
 		await h.run(press(ESC));
 		const text = required(h.rendered[0]).join("\n");
-		assert.ok(text.includes('No continuity items yet. Say "from now on …" or press a to add one.'));
+		assert.ok(
+			text.includes('No continuity items yet. Say "from now on …" or press alt+a to add one.'),
+		);
 		assert.ok(text.includes("+ Add an item…"));
 		assert.ok(required(required(h.rendered[0])[0]).includes("rev 0 · empty"));
 		for (const line of required(h.rendered[0])) assert.ok(visibleWidth(line) <= 80, line);

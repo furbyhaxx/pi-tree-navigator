@@ -160,9 +160,8 @@ test("native patch navigates real IDs, supports raw escape and session replaceme
 		assert.ok(lines.some((l: string) => l.includes("chronological")));
 		assert.ok(lines.every((l: string) => visibleWidth(l) <= width));
 	}
-	selector.handleInput("r");
+	selector.handleInput("\x1br");
 	assert.deepEqual(selected, [f.child]);
-	selector.handleInput("/");
 	selector.handleInput("needle");
 	selector.handleInput("\r");
 	selector.handleInput("\u001b[B");
@@ -170,10 +169,9 @@ test("native patch navigates real IDs, supports raw escape and session replaceme
 	selector.handleInput("\r");
 	assert.equal(selected.at(-1), f.b);
 	selector.handleInput("\u001b");
-	selector.handleInput("/");
 	selector.handleInput("Folded");
 	selector.handleInput("\r");
-	selector.handleInput("r");
+	selector.handleInput("\x1br");
 	assert.equal(selected.at(-1), f.summary);
 	selector.handleInput("\r");
 	selector.handleInput("\u001b");

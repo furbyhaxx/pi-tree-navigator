@@ -328,9 +328,9 @@ which is why the default stays local. The evidence, including measured limits, i
 `.project/analyses/classifier-eval/summary.md`.
 
 `/anchor current` (aliases `ledger`, `briefing`) browses and edits the active branch's ledger:
-`x` retracts an item after a confirmation (it stays in the session history), `e` edits its text
-(the original quote is kept), `p` pins or unpins (a pinned item of any kind is out of the agent's
-reach), `c` completes a goal, `a` adds a rule, decision, sub-goal or fact, `h` shows superseded
+`Alt+x` retracts an item after a confirmation (it stays in the session history), `Alt+e` edits its text
+(the original quote is kept), `Alt+p` pins or unpins (a pinned item of any kind is out of the agent's
+reach), `Alt+c` completes a goal, `Alt+a` adds a rule, decision, sub-goal or fact, `Alt+h` shows superseded
 and retracted items, and Enter shows an item's source and revisions. Edits are refused while the
 agent is working or when `continuity.capture` is `false`; browsing always works. Without a UI the
 command prints the briefing.

@@ -178,6 +178,13 @@ describe("policy summaries", () => {
 });
 
 describe("policy editor", () => {
+	it("toggles heuristics with Space and applies with Alt+a", async () => {
+		const h = harness();
+		const result = await h.run("intent", "recommended", until("heuristics", " "), (screen) =>
+			screen.handleInput("\x1ba"),
+		);
+		assert.deepEqual(result, { preset: "recommended", heuristics: false });
+	});
 	it("shows verification rows and the recommended verifier", async () => {
 		const h = harness();
 		const result = await h.run("intent", "recommended", (screen) => {
@@ -201,7 +208,7 @@ describe("policy editor", () => {
 				screen.handleInput(HOME);
 				screen.handleInput(ENTER);
 			},
-			(screen) => screen.handleInput("a"),
+			(screen) => screen.handleInput("\x1ba"),
 		);
 		assert.deepEqual(result, {
 			preset: "recommended",
@@ -230,7 +237,7 @@ describe("policy editor", () => {
 			current,
 			until("kind model"),
 			until("Acme Judge"),
-			(screen) => screen.handleInput("a"),
+			(screen) => screen.handleInput("\x1ba"),
 			(screen) => screen.handleInput(ESC),
 		);
 		assert.deepEqual(current, before);
@@ -252,7 +259,7 @@ describe("policy editor", () => {
 			"milestone",
 			"recommended",
 			(screen) => screen.handleInput(RIGHT),
-			(screen) => screen.handleInput("a"),
+			(screen) => screen.handleInput("\x1ba"),
 		);
 		assert.equal(off, null);
 		assert.deepEqual(h.calls, []);
@@ -264,7 +271,7 @@ describe("policy editor", () => {
 			editors: ["x".repeat(1001), "  "],
 		});
 		const confidence = await h.run("intent", "recommended", until("gate"), (screen) =>
-			screen.handleInput("a"),
+			screen.handleInput("\x1ba"),
 		);
 		assert.equal(confidence, "recommended");
 		assert.match(
@@ -273,7 +280,7 @@ describe("policy editor", () => {
 		);
 
 		const prompt = await h.run("milestone", "recommended", until("status prompt"), (screen) =>
-			screen.handleInput("a"),
+			screen.handleInput("\x1ba"),
 		);
 		assert.equal(prompt, "recommended");
 		assert.match(
@@ -294,7 +301,7 @@ describe("policy editor", () => {
 			until("gate"),
 			until("classifier model"),
 			until("Acme Judge"),
-			(screen) => screen.handleInput("a"),
+			(screen) => screen.handleInput("\x1ba"),
 		);
 		assert.deepEqual(result, {
 			preset: "recommended",
@@ -331,7 +338,7 @@ describe("policy editor", () => {
 	it("stores a verification prompt without dropping the preset", async () => {
 		const h = harness({ editors: ["Confirm the retirement."] });
 		const result = await h.run("intent", "recommended", until("verification prompt"), (screen) =>
-			screen.handleInput("a"),
+			screen.handleInput("\x1ba"),
 		);
 		assert.deepEqual(result, {
 			preset: "recommended",

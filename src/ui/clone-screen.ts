@@ -1,6 +1,6 @@
 /**
  * Text screens of the `/anchor clone` flow: a `FrameList` of plain lines that
- * re-wraps to the terminal width, with `j` opening the raw JSON in the editor.
+ * re-wraps to the terminal width, with the raw shortcut opening the raw JSON in the editor.
  */
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import type {
@@ -25,7 +25,7 @@ export interface LinesScreen {
 	lines(width: number): readonly string[];
 }
 
-/** The unabridged data behind a screen, reachable with `j`. */
+/** The unabridged data behind a screen, reachable with the raw shortcut. */
 export interface RawJson {
 	title: string;
 	value: unknown;
@@ -109,7 +109,7 @@ function showLines(ctx: ExtensionCommandContext, screen: LinesScreen): Promise<s
 
 /**
  * Show a text screen until the user leaves it. Resolves with `"enter"`, the key
- * of a shortcut, or undefined for Escape. With `raw`, `j` opens the JSON in the
+ * of a shortcut, or undefined for Escape. With `raw`, the raw shortcut opens the JSON in the
  * editor (read-only use) and returns to the screen.
  */
 export async function showView(

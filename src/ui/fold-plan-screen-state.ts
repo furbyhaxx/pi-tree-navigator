@@ -10,8 +10,9 @@ export const INDENT = " ".repeat(3);
 const SEPARATOR = " · ";
 export const STATUS_ROWS = 2;
 export const NO_REASON = "This anchor cannot be folded.";
-export const NO_ANCHORS = "There is no anchor to fold to. Run /anchor list and press n to set one.";
-export const SEARCH_PLACEHOLDER = "Press / to search anchors and previews…";
+export const NO_ANCHORS =
+	'There is no anchor to fold to. Run /anchor list and select "+ Set new anchor at current leaf…" with Enter.';
+export const SEARCH_PLACEHOLDER = "Type to filter anchors and previews…";
 export const SEARCH_ENTER =
 	"enter does not fold while searching · esc clears the search, then enter folds the selected anchor";
 
@@ -53,7 +54,7 @@ export const EMPTY_ROW: FrameRow = {
 	labelHint: "No anchors yet.",
 	tone: "muted",
 	description:
-		"Run /anchor list and press n to anchor the current leaf; a fold collapses the work since an anchor.",
+		'Run /anchor list and select "+ Set new anchor at current leaf…" with Enter; a fold collapses the work since an anchor.',
 };
 
 /** Wrapped to `rows` lines; the last one ends in an ellipsis when text is lost. */
@@ -91,7 +92,7 @@ export const padTo = (lines: readonly string[], rows: number): string[] => [
 	...Array<string>(Math.max(0, rows - lines.length)).fill(""),
 ];
 
-/** Screen state that survives the dialogs `e` opens between two renders of the panel. */
+/** Screen state that survives the edit dialogs between two renders of the panel. */
 export interface PlanState {
 	/** Newest first. */
 	candidates: FoldPlanCandidate[];

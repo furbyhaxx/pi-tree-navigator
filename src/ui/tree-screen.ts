@@ -4,7 +4,7 @@
  * `treeItems` turns the session into rows: folded handoffs (with the archived
  * work they replaced and the handoffs they contain), anchors, user turns and
  * the current position. `openTreeScreen` drives the list and moves the session
- * leaf with `g` through the host's `navigateTree`; nothing here ever deletes
+ * leaf with the go shortcut through the host's `navigateTree`; nothing here ever deletes
  * an entry. The host goes to just before a user or custom message (and puts
  * its text back in the editor) and to any other entry itself; rows say which.
  */
@@ -17,7 +17,13 @@ import {
 	toOneLine,
 } from "../core/helpers.ts";
 import type { HandoffData } from "../fold/handoff.ts";
-import { type FrameRow, type FrameScreen, sanitizeTerminalText, selectFrame } from "./frame.ts";
+import {
+	type FrameRow,
+	type FrameScreen,
+	frameShortcutKey,
+	sanitizeTerminalText,
+	selectFrame,
+} from "./frame.ts";
 import { compactCount, handoffUsage, handoffView } from "./handoff-renderer.ts";
 
 type Summary = Extract<SessionEntry, { type: "branch_summary" }>;
@@ -44,7 +50,7 @@ export type TreeDestination = "at" | "before";
 /** One outline row with everything the list, the details and the confirm need. */
 export interface TreeItem {
 	kind: TreeItemKind;
-	/** Entry handed to the host's `navigateTree` by `g`. */
+	/** Entry handed to the host's `navigateTree` by the go shortcut. */
 	targetId: string;
 	/** `before` for user and custom messages: the leaf lands on their parent, so the target leaves the active branch. */
 	destination: TreeDestination;
@@ -61,7 +67,7 @@ export interface TreeItem {
 	detail?: string;
 	/** Shown by Enter. */
 	details: string;
-	/** Where `g` ends up, worded for dialogs and notices. */
+	/** Where the go action ends up, worded for dialogs and notices. */
 	subject: string;
 }
 
@@ -147,7 +153,9 @@ function handoffDetails(
 		lines.push(clip(oneLine(stripBranchSummaryBoilerplate(entry.summary)), FIELD_CHARS));
 	}
 	if (archivedName !== undefined)
-		lines.push(`The full work is archived as '${archivedName}': press g on its row to open it.`);
+		lines.push(
+			`The full work is archived as '${archivedName}': press ${frameShortcutKey("g")} on its row to open it.`,
+		);
 	return lines.join("\n");
 }
 
@@ -207,7 +215,7 @@ export function treeItems(
 				current: false,
 				text: `archived: ${shownName}`,
 				dim: true,
-				details: `Archived work of '${shownName}': the complete branch this fold replaced in the context. Press g to go to its last turn; nothing is deleted.`,
+				details: `Archived work of '${shownName}': the complete branch this fold replaced in the context. Press ${frameShortcutKey("g")} to go to its last turn; nothing is deleted.`,
 				subject: `${destination === "before" ? "just before " : ""}the archived work of '${shownName}'`,
 			});
 		}
@@ -343,8 +351,8 @@ async function goTo(ctx: ExtensionCommandContext, item: TreeItem): Promise<boole
 		if (hostNoop) {
 			ctx.ui.notify(
 				item.destination === "at"
-					? "You are already here. Select another row and press g to go there."
-					: "This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press g to go there.",
+					? `You are already here. Select another row and press ${frameShortcutKey("g")} to go there.`
+					: `This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press ${frameShortcutKey("g")} to go there.`,
 				"info",
 			);
 			return false;

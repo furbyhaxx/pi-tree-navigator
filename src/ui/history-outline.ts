@@ -9,6 +9,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { HistoryGroup, HistoryManifest } from "../fold/handoff.ts";
+import { frameShortcutKey } from "./frame.ts";
+import { printable } from "./frame-text.ts";
 
 interface Row {
 	id: string;
@@ -348,7 +350,7 @@ export function registerHistoryOutline(pi: ExtensionAPI): void {
 					`  ${keyText("tui.select.up")}/${keyText("tui.select.down")} move · ${keyHint("tui.select.confirm", "toggle / resume")} · Space toggle`,
 				);
 				lines.push(
-					`  r resume AFTER handoff · / search · ${keyHint("tui.select.cancel", "clear / close")} · F2 raw`,
+					`  ${frameShortcutKey("r")} resume AFTER handoff · type to filter · ${keyHint("tui.select.cancel", "clear / close")} · F2 raw`,
 				);
 				lines.push(theme.fg("borderAccent", "─".repeat(Math.max(0, width))));
 				return lines.map((line) => truncateToWidth(line, Math.max(0, width)));
@@ -384,25 +386,27 @@ export function registerHistoryOutline(pi: ExtensionAPI): void {
 					state.selected = Math.min(rows.length - 1, state.selected + 1);
 					return;
 				}
-				if (state.searching) {
+				const row = rows[state.selected];
+				if (matchesKey(data, frameShortcutKey("r"))) {
+					if (row?.group) list.onSelect(row.id);
+					return;
+				}
+				if (state.searching && (state.query || data !== " ")) {
 					if (kb.matches(data, "tui.select.confirm")) state.searching = false;
 					else if (matchesKey(data, "backspace"))
 						state.query = [...state.query].slice(0, -1).join("");
-					else if ([...data].every((c) => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127))
-						state.query += data;
+					else state.query += printable(data) ?? "";
 					state.selected = 0;
 					return;
 				}
-				if (data === "/") {
+				const typed = printable(data);
+				if (typed !== undefined && data !== " ") {
 					state.searching = true;
+					state.query += typed;
+					state.selected = 0;
 					return;
 				}
-				const row = rows[state.selected];
 				if (!row) return;
-				if (data === "r" && row.group) {
-					list.onSelect(row.id);
-					return;
-				}
 				if (kb.matches(data, "tui.select.confirm") || data === " ") {
 					if (row.group) {
 						if (state.expanded.has(row.id)) state.expanded.delete(row.id);

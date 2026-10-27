@@ -843,7 +843,7 @@ describe("independent folds through the engine host", () => {
 			const ctx = foldCtx(f, fakeRegistry().registry);
 			await driveAnchor(f, ctx, "list", [
 				async (screen) => {
-					screen.handleInput("r");
+					screen.handleInput("\x1br");
 				},
 				async (screen) => {
 					const text = screen.render(PLAN_WIDTH).join("\n");

@@ -27,9 +27,10 @@ Run `/anchor` for the unified menu: `tree`, `list`, `current`, `fold`, `clone`,
 `settings`. `/tree-clone` no longer exists; use `/anchor clone`.
 
 - **Tree:** browse handoffs, archived work, anchors and user turns. Enter shows
-  details; `g` confirms navigation to the real entry; `f` filters the outline.
+  details; `Alt+g` confirms navigation to the real entry; `Alt+f` filters the outline.
   Pi's native `/tree` remains available for its complete graph.
-- **List:** inspect active anchors, create one with `n`, or request a fold with `r`.
+- **List:** inspect active anchors, create one by selecting `+ Set new anchor at current leaf…`
+  with Enter, or request a fold with `Alt+r`.
 - **Current:** inspect and edit the continuity ledger; pin/unpin, retract, mark
   sub-goals done, or show historical items. Writes are blocked while the agent runs.
 - **Fold:** review one recommended plan, including the target, projected context
@@ -48,9 +49,11 @@ Run `/anchor` for the unified menu: `tree`, `list`, `current`, `fold`, `clone`,
   tool disclosure policies, then save to global, trusted project or runtime scope.
   `/anchor settings show` prints effective settings without opening a panel.
 
-All panels share a breadcrumb frame, fuzzy search (`/`), navigation keys and an
+All panels share a breadcrumb frame, fuzzy search (type to filter), navigation keys and an
 Escape/back path. Filtering keeps the panel height stable; narrow hint bars keep
-Escape and search visible. Destructive or session-moving actions require confirmation.
+Escape and search visible. Row actions use left Alt plus the displayed mnemonic;
+Space toggles boolean rows when the filter is empty and separates search terms otherwise.
+`/` is ordinary filter text. Destructive or session-moving actions require confirmation.
 
 Use `/anchor clone inspect <session.jsonl>`, then `/anchor clone propose <session.jsonl>`
 to derive a local heuristic tree. Add `--llm` to refine it with the current model,

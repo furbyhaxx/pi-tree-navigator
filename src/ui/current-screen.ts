@@ -29,7 +29,13 @@ import {
 	readBranchLedger,
 	userEntryIndexOf,
 } from "../continuity/continuity-store.ts";
-import { type FrameRow, type FrameScreen, sanitizeTerminalText, selectFrame } from "./frame.ts";
+import {
+	type FrameRow,
+	type FrameScreen,
+	frameShortcutKey,
+	sanitizeTerminalText,
+	selectFrame,
+} from "./frame.ts";
 
 /** Origins a user action writes with; both are user origins, so the items are protected. */
 export type UserOpOrigin = Extract<ItemOrigin, "user" | "pin">;
@@ -61,7 +67,7 @@ export const LEDGER_BUSY_NOTICE =
 const LEDGER_OFF_NOTICE =
 	"Continuity is off (continuity.capture is false in tree-navigator.json): the ledger is read-only. Set it to true to edit.";
 const EMPTY_NOTICE = "No continuity items yet.";
-const EMPTY_ROW_TEXT = 'No continuity items yet. Say "from now on …" or press a to add one.';
+const EMPTY_ROW_TEXT = `No continuity items yet. Say "from now on …" or press ${frameShortcutKey("a")} to add one.`;
 const HEADLESS_BRIEFING_TOKENS = 8000;
 const CONFIRM_TEXT_CHARS = 160;
 
@@ -171,8 +177,7 @@ export function currentRows(items: readonly LedgerItem[]): FrameRow[] {
 			label: "",
 			labelHint: EMPTY_ROW_TEXT,
 			tone: "muted",
-			description:
-				"Press a to add a rule, decision, sub-goal or fact. Items here survive every fold.",
+			description: `Press ${frameShortcutKey("a")} to add a rule, decision, sub-goal or fact. Items here survive every fold.`,
 		},
 	];
 }

@@ -229,7 +229,9 @@ function harness(setup: Setup = {}) {
 						const scope = saveScopes.shift();
 						if (scope === "cancel") screen.handleInput(ESC);
 						else if (scope) {
-							screen.handleInput(scope === "global" ? "u" : scope === "project" ? "p" : "r");
+							screen.handleInput(
+								scope === "global" ? "\x1bu" : scope === "project" ? "\x1bp" : "\x1br",
+							);
 						} else screen.handleInput(ENTER);
 						return;
 					}
@@ -320,6 +322,38 @@ const line = (lines: readonly string[], label: string): string =>
 	lines.find((candidate) => candidate.includes(label)) ?? "";
 
 describe("settings screen: saving", () => {
+	it("types setting paths without switching layers, and switches with Alt+t", async () => {
+		const h = harness({ global: json({}), trusted: true, project: json({}) });
+		await h.run(
+			(screen) => {
+				for (const key of "treeProposal.tools") screen.handleInput(key);
+				const filtered = text(screen.render(130));
+				assert.match(filtered, /❯ treeProposal\.tools/);
+				assert.match(filtered, /→ treeProposal\.tools/);
+				assert.match(filtered, /target: global/);
+				screen.handleInput("\x1bt");
+			},
+			(screen) => {
+				assert.match(text(screen.render(130)), /target: project/);
+				screen.handleInput(ESC);
+			},
+		);
+	});
+
+	it("toggles a boolean with Space without opening the filter", async () => {
+		const h = harness({ global: json({}), confirms: [true] });
+		await h.run(
+			at(ROW.autoEnabled, " "),
+			(screen) => {
+				const staged = text(screen.render(130));
+				assert.match(staged, /1 staged/);
+				assert.doesNotMatch(staged, /❯ {2}/);
+				screen.handleInput("\x1bs");
+			},
+			press(ESC),
+		);
+		assert.deepEqual(JSON.parse(h.readGlobal()), { auto_navigate: { enabled: true } });
+	});
 	it("lists consolidation settings and saves a staged flag while preserving unknown keys", async () => {
 		const h = harness({
 			global: json({ custom: 7, consolidation: { unknown: "keep" } }),
@@ -328,7 +362,7 @@ describe("settings screen: saving", () => {
 		const described = await describeSettings(h.ctx, h.deps);
 		for (const key of ["enabled", "max_handoffs", "max_window_share", "keep_newest"])
 			assert.ok(described.includes(`consolidation.${key}`));
-		await h.run(edit(ROW.consolidationEnabled), press("s"), press(ESC));
+		await h.run(edit(ROW.consolidationEnabled), press("\x1bs"), press(ESC));
 		assert.equal(
 			h.readGlobal(),
 			json({ custom: 7, consolidation: { unknown: "keep", enabled: false } }),
@@ -341,7 +375,7 @@ describe("settings screen: saving", () => {
 			edit(ROW.consolidationMax),
 			edit(ROW.consolidationShare),
 			edit(ROW.consolidationKeep),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 		assert.equal(
@@ -367,7 +401,7 @@ describe("settings screen: saving", () => {
 			inputs: ["80k", "5"],
 			confirms: [true, false],
 		});
-		const exit = await h.run(edit(ROW.hint), edit(ROW.startAnchor), press("s"), press(ESC));
+		const exit = await h.run(edit(ROW.hint), edit(ROW.startAnchor), press("\x1bs"), press(ESC));
 		assert.equal(exit, "back");
 		assert.equal(
 			h.readGlobal(),
@@ -411,7 +445,7 @@ describe("settings screen: saving", () => {
 			inputs: ["100k"],
 			confirms: [true, false],
 		});
-		await h.run(press("t"), edit(ROW.hint), press("s"), press(ESC));
+		await h.run(press("\x1bt"), edit(ROW.hint), press("\x1bs"), press(ESC));
 		assert.equal(h.readProject(), json({ rewindHintReserveTokens: 100000 }));
 		assert.ok(!existsSync(h.globalPath));
 		assert.ok(required(required(h.dialogs.confirm[0])[1]).includes(h.projectPath));
@@ -430,7 +464,7 @@ describe("settings screen: saving", () => {
 			saveScopes: ["runtime"],
 			confirms: [true],
 		});
-		await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
+		await h.run(edit(ROW.startAnchor), press("\x1bs"), press(ESC));
 
 		assert.equal(h.readGlobal(), global);
 		assert.equal(h.readProject(), project);
@@ -455,7 +489,7 @@ describe("settings screen: saving", () => {
 			saveScopes: ["cancel"],
 			confirms: [true],
 		});
-		await h.run(edit(ROW.hint), press("s"), press(ESC));
+		await h.run(edit(ROW.hint), press("\x1bs"), press(ESC));
 
 		assert.equal(h.readGlobal(), original);
 		assert.deepEqual(h.writes, []);
@@ -479,7 +513,7 @@ describe("settings screen: saving", () => {
 			confirms: [true, true],
 			confirmEffects: [({ globalPath }) => writeFileSync(globalPath, replaced)],
 		});
-		await h.run(edit(ROW.checkEvery), press("s"), press(ESC));
+		await h.run(edit(ROW.checkEvery), press("\x1bs"), press(ESC));
 
 		assert.equal(h.readGlobal(), replaced);
 		assert.deepEqual(h.writes, []);
@@ -498,7 +532,7 @@ describe("settings screen: saving", () => {
 			inputs: ["OFF", "1 500"],
 			confirms: [true, false],
 		});
-		await h.run(edit(ROW.hint), edit(ROW.minTokens), press("s"), press(ESC));
+		await h.run(edit(ROW.hint), edit(ROW.minTokens), press("\x1bs"), press(ESC));
 		assert.equal(
 			h.readGlobal(),
 			json({
@@ -514,7 +548,7 @@ describe("settings screen: saving", () => {
 			global: json({ auto_navigate: true }),
 			confirms: [true, false],
 		});
-		await h.run(edit(ROW.autoMode), press("s"), press(ESC));
+		await h.run(edit(ROW.autoMode), press("\x1bs"), press(ESC));
 		assert.deepEqual(JSON.parse(h.readGlobal()), {
 			auto_navigate: { enabled: true, mode: "anchor-only" },
 		});
@@ -527,7 +561,7 @@ describe("settings screen: saving", () => {
 			trusted: true,
 			confirms: [true],
 		});
-		await h.run(at(ROW.capture, ENTER), press("s"), press(ESC));
+		await h.run(at(ROW.capture, ENTER), press("\x1bs"), press(ESC));
 
 		assert.deepEqual(JSON.parse(h.readGlobal()), {
 			continuity: { capture: false },
@@ -539,7 +573,7 @@ describe("settings screen: saving", () => {
 
 	it("toggles a flag and cycles a choice without opening an input", async () => {
 		const h = harness({ global: json({}), confirms: [true, false] });
-		await h.run(edit(ROW.parentMode), edit(ROW.capture), press("s"), press(ESC));
+		await h.run(edit(ROW.parentMode), edit(ROW.capture), press("\x1bs"), press(ESC));
 		assert.deepEqual(h.dialogs.input, []);
 		assert.deepEqual(JSON.parse(h.readGlobal()), {
 			parentHandoffMode: "full",
@@ -557,7 +591,12 @@ describe("settings screen: saving", () => {
 			}),
 			confirms: [true, false],
 		});
-		await h.run(at(ROW.startAnchor, "d"), at(ROW.capture, BACKSPACE), press("s"), press(ESC));
+		await h.run(
+			at(ROW.startAnchor, "\x1bd"),
+			at(ROW.capture, BACKSPACE),
+			press("\x1bs"),
+			press(ESC),
+		);
 		assert.equal(h.readGlobal(), json({ keep: 1 }));
 		assert.match(required(required(h.dialogs.confirm[0])[1]), /anchorStartAfterTurns: 6 → removed/);
 		assert.match(text(required(h.rendered[2])), /continuity\.capture\s+false → true/);
@@ -571,7 +610,7 @@ describe("settings screen: saving", () => {
 			inputs: ["80k"],
 			confirms: [true, false],
 		});
-		await h.run(edit(ROW.hint), press("s"), press(ESC));
+		await h.run(edit(ROW.hint), press("\x1bs"), press(ESC));
 		assert.match(text(required(h.rendered[1])), /rewindHintReserveTokens\s+90k · project/);
 		assert.ok(
 			h.notifications.some(
@@ -583,7 +622,7 @@ describe("settings screen: saving", () => {
 
 	it("applies saved settings immediately without offering a reload", async () => {
 		const h = harness({ global: json({}), inputs: ["3"], confirms: [true] });
-		const exit = await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
+		const exit = await h.run(edit(ROW.startAnchor), press("\x1bs"), press(ESC));
 		assert.equal(exit, "back");
 		assert.equal(h.state.applies, 1);
 		assert.equal(h.state.reloads, 0);
@@ -599,7 +638,7 @@ describe("settings screen: saving", () => {
 			confirms: [true],
 			idle: false,
 		});
-		await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
+		await h.run(edit(ROW.startAnchor), press("\x1bs"), press(ESC));
 		assert.equal(h.dialogs.confirm.length, 1);
 		assert.equal(h.state.reloads, 0);
 		assert.equal(h.state.applies, 1);
@@ -613,7 +652,7 @@ describe("settings screen: saving", () => {
 			inputs: ["80k"],
 			confirms: [true],
 		});
-		await h.run(edit(ROW.hint), press("s"), press(ESC));
+		await h.run(edit(ROW.hint), press("\x1bs"), press(ESC));
 
 		assert.equal(h.readGlobal(), json({ rewindHintReserveTokens: 80000 }));
 		assert.deepEqual(h.readRuntime(), { rewindHintReserveTokens: 90000 });
@@ -636,7 +675,13 @@ describe("settings screen: saving", () => {
 			trusted: true,
 			confirms: [true],
 		});
-		await h.run(press("t"), press("t"), at(ROW.startAnchor, "d"), press("s"), press(ESC));
+		await h.run(
+			press("\x1bt"),
+			press("\x1bt"),
+			at(ROW.startAnchor, "\x1bd"),
+			press("\x1bs"),
+			press(ESC),
+		);
 
 		assert.deepEqual(h.readRuntime(), {});
 		assert.equal(h.readGlobal(), global);
@@ -653,7 +698,7 @@ describe("settings screen: saving", () => {
 			confirms: [true, true],
 			writeFails: true,
 		});
-		await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
+		await h.run(edit(ROW.startAnchor), press("\x1bs"), press(ESC));
 		assert.equal(h.readGlobal(), original);
 		assert.ok(
 			h.notifications.some(
@@ -682,7 +727,7 @@ describe("settings screen: saving", () => {
 			at(ROW.startAnchor, LEFT),
 			at(ROW.checkEvery, LEFT),
 			at(ROW.checkEvery, RIGHT),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 
@@ -714,7 +759,7 @@ describe("settings screen: saving", () => {
 			inputs: ["0.3"],
 			confirms: [true],
 		});
-		await h.run(at(ROW.pressure, RIGHT), edit(ROW.keepRecentShare), press("s"), press(ESC));
+		await h.run(at(ROW.pressure, RIGHT), edit(ROW.keepRecentShare), press("\x1bs"), press(ESC));
 
 		assert.deepEqual(JSON.parse(h.readGlobal()), {
 			auto_navigate: { pressure: "fold", keep_recent_share: 0.3 },
@@ -734,7 +779,7 @@ describe("settings screen: saving", () => {
 			at(ROW.parentMode, RIGHT),
 			at(ROW.capture, LEFT),
 			at(ROW.autoEnabled, RIGHT),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 
@@ -755,7 +800,7 @@ describe("settings screen: saving", () => {
 		mkdirSync(dirname(target), { recursive: true });
 		writeFileSync(target, json({ keep: 1 }));
 		symlinkSync(target, h.globalPath);
-		await h.run(edit(ROW.startAnchor), press("s"), press(ESC));
+		await h.run(edit(ROW.startAnchor), press("\x1bs"), press(ESC));
 		assert.ok(lstatSync(h.globalPath).isSymbolicLink());
 		assert.equal(readFileSync(target, "utf8"), json({ keep: 1, anchorStartAfterTurns: 4 }));
 		assert.deepEqual(
@@ -852,7 +897,7 @@ describe("settings screen: refusals", () => {
 			inputs: ["80k"],
 			confirms: [false, true],
 		});
-		await h.run(edit(ROW.hint), press("s"), press(ESC));
+		await h.run(edit(ROW.hint), press("\x1bs"), press(ESC));
 		assert.equal(h.readGlobal(), original);
 		assert.deepEqual(h.writes, []);
 		assert.match(text(required(h.rendered[2])), /1 staged/);
@@ -874,7 +919,14 @@ describe("settings screen: refusals", () => {
 			saveScopes: ["global"],
 			confirms: [true],
 		});
-		await h.run(edit(ROW.hint), press("t"), edit(ROW.hint), press("t"), press("s"), press(ESC));
+		await h.run(
+			edit(ROW.hint),
+			press("\x1bt"),
+			edit(ROW.hint),
+			press("\x1bt"),
+			press("\x1bs"),
+			press(ESC),
+		);
 		assert.equal(readFileSync(h.globalPath, "utf8"), broken);
 		assert.deepEqual(h.writes, []);
 		const warnings = h.notifications
@@ -914,7 +966,7 @@ describe("settings screen: refusals", () => {
 				targets.push(text(screen.render(80)));
 				if (key) screen.handleInput(key);
 			};
-		await h.run(atTarget("t"), atTarget("t"), atTarget("t"), atTarget(ESC));
+		await h.run(atTarget("\x1bt"), atTarget("\x1bt"), atTarget("\x1bt"), atTarget(ESC));
 		assert.match(required(targets[0]), /target: global/);
 		assert.match(required(targets[1]), /target: project/);
 		assert.match(required(targets[2]), /target: runtime/);
@@ -925,7 +977,7 @@ describe("settings screen: refusals", () => {
 		const project = json({ rewindHintReserveTokens: 1000 });
 		const h = harness({ global: json({}), project, trusted: false });
 		let afterT: string[] = [];
-		await h.run(press("t"), (screen) => {
+		await h.run(press("\x1bt"), (screen) => {
 			afterT = screen.render(80);
 			screen.handleInput(ESC);
 		});
@@ -1104,7 +1156,7 @@ describe("settings screen: keyed maps", () => {
 			inputs: ["150k"],
 			confirms: [true, false],
 		});
-		await h.run(...editBoth, press("s"), press(ESC));
+		await h.run(...editBoth, press("\x1bs"), press(ESC));
 
 		const expected = structuredClone(MAPS);
 		expected.tree_proposal.tools.bash = "omit";
@@ -1144,12 +1196,12 @@ describe("settings screen: keyed maps", () => {
 				detail = screen.render(120);
 				screen.handleInput(ENTER);
 			},
-			at(0, "d"),
-			at(0, "u"),
-			press("a"),
-			at(0, "d"),
+			at(0, "\x1bd"),
+			at(0, "\x1bu"),
+			press("\x1ba"),
+			at(0, "\x1bd"),
 			press(ESC),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 		const [, listed, changed, removed, restored, , staged, top] = h.rendered;
@@ -1187,11 +1239,11 @@ describe("settings screen: keyed maps", () => {
 		});
 		await h.run(
 			edit(ROW.overrides),
-			at(0, "d"),
-			at(0, "d"),
+			at(0, "\x1bd"),
+			at(0, "\x1bd"),
 			edit(0),
 			press(ESC),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 		assert.ok(
@@ -1226,7 +1278,7 @@ describe("settings screen: keyed maps", () => {
 			edit(4),
 			press(ESC),
 			press(ESC),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 		const entry = required(h.rendered[2]);
@@ -1259,15 +1311,15 @@ describe("settings screen: keyed maps", () => {
 		});
 		await h.run(
 			edit(ROW.overrides),
-			press("a"),
-			press("a"),
+			press("\x1ba"),
+			press("\x1ba"),
 			edit(0),
 			edit(9),
-			press("a"),
+			press("\x1ba"),
 			press(ESC),
 			press(ESC),
 			press(ESC),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 		assert.match(
@@ -1296,7 +1348,7 @@ describe("settings screen: keyed maps", () => {
 			global: json({ tree_proposal: { tools: { bash: "omit" } } }),
 			confirms: [true],
 		});
-		await h.run(at(ROW.proposalTools, "d"), at(ROW.proposalTools, "u"), press(ESC));
+		await h.run(at(ROW.proposalTools, "\x1bd"), at(ROW.proposalTools, "\x1bu"), press(ESC));
 		assert.match(
 			line(required(h.rendered[1]), "treeProposal.tools"),
 			/1 → none · default · 1 staged/,
@@ -1320,9 +1372,9 @@ describe("settings screen: keyed maps", () => {
 				top = screen.render(80);
 				screen.handleInput(ENTER);
 			},
-			press("a"),
+			press("\x1ba"),
 			press(ESC),
-			press("d"),
+			press("\x1bd"),
 			press(ESC),
 		);
 		assert.match(line(top, "↳"), /global: treeProposal\.tools must map exact tool names/);
@@ -1376,11 +1428,11 @@ describe("settings screen: classifier policies", () => {
 		await h.run(
 			edit(ROW.classifier),
 			until("escalation model"),
-			press("a"),
+			press("\x1ba"),
 			(screen, lines) => {
 				assert.doesNotMatch(line(lines, "continuity.intentClassifier"), /\{/);
 				assert.match(line(lines, "continuity.intentClassifier"), /escalation off/);
-				screen.handleInput("s");
+				screen.handleInput("\x1bs");
 			},
 			press(ESC),
 		);
@@ -1428,8 +1480,8 @@ describe("settings screen: classifier policies", () => {
 		await h.run(
 			edit(ROW.classifier),
 			until("escalation model"),
-			press("a"),
-			press("s"),
+			press("\x1ba"),
+			press("\x1bs"),
 			press(ESC),
 		);
 
@@ -1500,10 +1552,10 @@ describe("settings screen: classifier policies", () => {
 			until("auto_navigate.milestone"),
 			until("gate"),
 			until("classifier model"),
-			press("a"),
+			press("\x1ba"),
 			press(ESC),
 			press(ESC),
-			press("s"),
+			press("\x1bs"),
 			press(ESC),
 		);
 

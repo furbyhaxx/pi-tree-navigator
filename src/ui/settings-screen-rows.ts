@@ -279,6 +279,14 @@ export function buildScreen(
 	const pending = plan ? plan.changes.length : staged.size;
 	const shortcuts: Shortcut[] = [
 		{
+			key: "space",
+			action: "toggle",
+			enabled: (_row, index) => {
+				const item = items[index];
+				return item !== undefined && "def" in item && item.def.kind === "flag";
+			},
+		},
+		{
 			key: "left",
 			action: "decrease",
 			enabled: (_row, index) => items[index] !== undefined && "def" in items[index],

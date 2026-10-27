@@ -260,7 +260,7 @@ describe("tree proposal command", () => {
 
 	it("shows the proposal as a readable outline and saves it with s", async () => {
 		const f = await fixture();
-		const ui = reviewUi(f, [["s"]]);
+		const ui = reviewUi(f, [["\x1bs"]]);
 		await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
 		const text = at(ui.frames, 0).join("\n");
 		assert.doesNotMatch(text, /[{}]|sourceSha256/);
@@ -288,7 +288,7 @@ describe("tree proposal command", () => {
 
 	it("e opens the raw JSON plan; an invalid edit is refused and the outline stays", async () => {
 		const f = await fixture();
-		const ui = reviewUi(f, [["e"], ["s"]], { editors: [() => "{ not json"] });
+		const ui = reviewUi(f, [["\x1be"], ["\x1bs"]], { editors: [() => "{ not json"] });
 		await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
 		assert.equal(ui.editors.length, 1);
 		assert.match(at(ui.editors, 0), /"sourceSha256"/);
@@ -304,7 +304,7 @@ describe("tree proposal command", () => {
 
 	it("a valid edit is validated against the source, shown again and then saved", async () => {
 		const f = await fixture();
-		const ui = reviewUi(f, [["e"], ["e"], ["s"]], {
+		const ui = reviewUi(f, [["\x1be"], ["\x1be"], ["\x1bs"]], {
 			editors: [
 				(text) => JSON.stringify({ ...JSON.parse(text), sourceSha256: "0".repeat(64) }),
 				(text) => JSON.stringify({ ...JSON.parse(text), nameSuffix: " (reviewed)" }),
@@ -319,7 +319,7 @@ describe("tree proposal command", () => {
 
 	it("cancelling the editor returns to the outline, and Escape there writes nothing", async () => {
 		const f = await fixture();
-		const ui = reviewUi(f, [["e"], [ESC]], { editors: [() => undefined] });
+		const ui = reviewUi(f, [["\x1be"], [ESC]], { editors: [() => undefined] });
 		await handleTreeProposal("--output saved.json", ui.ctx, {} as ExtensionAPI);
 		assert.equal(ui.editors.length, 1);
 		assert.deepEqual(await readdir(f.dir), ["source.jsonl"]);

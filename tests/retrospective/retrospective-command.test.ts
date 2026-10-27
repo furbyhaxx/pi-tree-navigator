@@ -299,7 +299,7 @@ describe("retrospective clone command", () => {
 		const command = setup({
 			cwd: files.directory,
 			sessionFile: files.sourcePath,
-			screens: [["j"], [ESC], ["j"], [ESC]],
+			screens: [["\x1bj"], [ESC], ["\x1bj"], [ESC]],
 		});
 
 		await command.run("inspect");

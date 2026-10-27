@@ -283,6 +283,19 @@ describe("tree outline rows", () => {
 });
 
 describe("tree screen", () => {
+	it("filters on a plain action letter without navigating or cycling the outline", async () => {
+		const { sm } = seed();
+		const h = harness(sm);
+		await h.run((screen) => {
+			screen.handleInput("g");
+			assert.match(screen.render(130).join("\n"), /❯ g/);
+			screen.handleInput(ESC);
+			screen.handleInput(ESC);
+		});
+		assert.deepEqual(h.navigated, []);
+		assert.deepEqual(h.confirms, []);
+		assert.equal(h.rendered.length, 1);
+	});
 	it("renders the outline in order within 60 columns, with the fold badge and context", async () => {
 		const { sm } = seed();
 		const h = harness(sm);
@@ -322,7 +335,7 @@ describe("tree screen", () => {
 				}
 				screen.handleInput(leave);
 			};
-		await h.run(sweep("f"), sweep("f"), sweep(ESC));
+		await h.run(sweep("\x1bf"), sweep("\x1bf"), sweep(ESC));
 		assert.equal(h.rendered.length, 3);
 		for (const lines of h.rendered) fits(lines);
 	});
@@ -330,7 +343,7 @@ describe("tree screen", () => {
 	it("goes to a row with g after a confirmation that says nothing is deleted", async () => {
 		const { sm, a1, archived, fold, u3 } = seed();
 		const h = harness(sm, { confirms: [true] });
-		const exit = await h.run(press(UP, UP, "g"));
+		const exit = await h.run(press(UP, UP, "\x1bg"));
 		assert.equal(exit, "done");
 		assert.deepEqual(h.navigated, [archived]);
 		const [title, message] = required(h.confirms[0]);
@@ -343,9 +356,9 @@ describe("tree screen", () => {
 		);
 
 		const second = harness(sm, { confirms: [true, true, true] });
-		await second.run(press(UP, UP, UP, "g"));
-		await second.run(press(UP, UP, UP, UP, "g"));
-		await second.run(press(UP, "g"));
+		await second.run(press(UP, UP, UP, "\x1bg"));
+		await second.run(press(UP, UP, UP, UP, "\x1bg"));
+		await second.run(press(UP, "\x1bg"));
 		assert.deepEqual(second.navigated, [fold, a1, u3]);
 		assert.match(required(required(second.confirms[0])[0]), /fold “Tokenizer implemented”/);
 		assert.match(required(required(second.confirms[1])[0]), /anchor 'impl-start'/);
@@ -355,7 +368,7 @@ describe("tree screen", () => {
 	it("navigates nothing when the confirmation is declined", async () => {
 		const { sm } = seed();
 		const h = harness(sm, { confirms: [false] });
-		const exit = await h.run(press(UP, UP, UP, "g"), press(ESC));
+		const exit = await h.run(press(UP, UP, UP, "\x1bg"), press(ESC));
 		assert.equal(exit, "back");
 		assert.equal(h.confirms.length, 1);
 		assert.deepEqual(h.navigated, []);
@@ -366,7 +379,7 @@ describe("tree screen", () => {
 		const { sm } = seed();
 		const h = harness(sm, { confirms: [true] });
 		h.state.idle = false;
-		await h.run(press(UP, UP, UP, "g"), press(ESC));
+		await h.run(press(UP, UP, UP, "\x1bg"), press(ESC));
 		assert.deepEqual(h.navigated, []);
 		assert.deepEqual(h.confirms, []);
 		assert.deepEqual(h.notifications, [{ message: TREE_BUSY_NOTICE, type: "warning" }]);
@@ -380,7 +393,7 @@ describe("tree screen", () => {
 			h.state.idle = false;
 			return confirm(title, message);
 		};
-		await h.run(press(UP, UP, UP, "g"), press(ESC));
+		await h.run(press(UP, UP, UP, "\x1bg"), press(ESC));
 		assert.deepEqual(h.navigated, []);
 		assert.equal(required(h.notifications[0]).message, TREE_BUSY_NOTICE);
 	});
@@ -389,12 +402,12 @@ describe("tree screen", () => {
 		const { sm } = seed();
 		const h = harness(sm, { confirms: [true, true] });
 		h.state.cancelNavigation = true;
-		await h.run(press(UP, UP, UP, "g"), press(ESC));
+		await h.run(press(UP, UP, UP, "\x1bg"), press(ESC));
 		assert.match(required(h.notifications[0]).message, /cancelled.*stays where it is/);
 		h.ctx.navigateTree = async () => {
 			throw new Error("Entry gone not found");
 		};
-		await h.run(press(UP, UP, UP, "g"), press(ESC));
+		await h.run(press(UP, UP, UP, "\x1bg"), press(ESC));
 		assert.match(
 			required(h.notifications[1]).message,
 			/Could not move there: Entry gone not found/,
@@ -404,7 +417,7 @@ describe("tree screen", () => {
 	it("answers g on the current row with a notice instead of moving", async () => {
 		const { sm } = seed();
 		const h = harness(sm, { confirms: [true] });
-		await h.run(press("g"), press(ESC));
+		await h.run(press("\x1bg"), press(ESC));
 		assert.deepEqual(h.confirms, []);
 		assert.deepEqual(h.navigated, []);
 		assert.match(required(h.notifications[0]).message, /already here/);
@@ -420,7 +433,7 @@ describe("tree screen", () => {
 			fold.message,
 			/^Tokenizer implemented \(folded\)\nGoal: Write the tokenizer\nOutcome: Tokenizer passes all tests\n3 messages/,
 		);
-		assert.match(fold.message, /archived as 'impl-done': press g on its row/);
+		assert.match(fold.message, /archived as 'impl-done': press alt\+g on its row/);
 	});
 
 	it("shows a user message in full on Enter", async () => {
@@ -434,7 +447,7 @@ describe("tree screen", () => {
 		const { sm } = seed();
 		const h = harness(sm);
 		let searched: string[] = [];
-		await h.run(press("f"), press("f"), press("f"), (screen) => {
+		await h.run(press("\x1bf"), press("\x1bf"), press("\x1bf"), (screen) => {
 			screen.handleInput("/");
 			for (const key of "recov") screen.handleInput(key);
 			searched = screen.render(WIDTH);
@@ -496,7 +509,7 @@ describe("tree destinations and the current marker", () => {
 
 		const h = harness(sm, { confirms: [true], native: true });
 		guardConfirm(h);
-		assert.equal(await h.run(press("g")), "done");
+		assert.equal(await h.run(press("\x1bg")), "done");
 		assert.deepEqual(h.navigated, [u2]);
 		const [title, message] = required(h.confirms[0]);
 		assert.match(title, /Go to just before the message at anchor 'lex'/);
@@ -524,7 +537,7 @@ describe("tree destinations and the current marker", () => {
 
 		const h = harness(sm, { confirms: [true], native: true });
 		guardConfirm(h);
-		assert.equal(await h.run(press("g")), "done");
+		assert.equal(await h.run(press("\x1bg")), "done");
 		assert.deepEqual(h.navigated, [note]);
 		assert.match(required(required(h.confirms[0])[1]), /just before this message/);
 		assert.match(required(required(h.confirms[0])[1]), /anchor 'note'.*no longer/);
@@ -545,10 +558,10 @@ describe("tree destinations and the current marker", () => {
 			],
 		);
 		const h = harness(sm, { native: true });
-		assert.equal(await h.run(press("g"), press(ESC)), "back");
+		assert.equal(await h.run(press("\x1bg"), press(ESC)), "back");
 		assert.equal(
 			required(h.notifications[0]).message,
-			"This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press g to go there.",
+			"This message is the last entry of the session, so there is nothing to move back from yet. Select another row and press alt+g to go there.",
 		);
 		assert.deepEqual(h.navigated, []);
 		assert.equal(sm.getLeafId(), note);
@@ -561,7 +574,7 @@ describe("tree destinations and the current marker", () => {
 		const answer = sm.appendMessage(assistant("Project created"));
 		sm.appendThinkingLevelChange("high");
 		const h = harness(sm, { confirms: [true], native: true });
-		await h.run(press("g"));
+		await h.run(press("\x1bg"));
 		assert.deepEqual(h.navigated, [answer]);
 		assert.equal(sm.getLeafId(), answer);
 	});
@@ -582,7 +595,7 @@ describe("tree destinations and the current marker", () => {
 		);
 		const h = harness(sm, { confirms: [true], native: true });
 		guardConfirm(h);
-		assert.equal(await h.run(press("g")), "done");
+		assert.equal(await h.run(press("\x1bg")), "done");
 		assert.deepEqual(h.navigated, [u2]);
 		assert.match(required(required(h.confirms[0])[1]), /just before this message/);
 		assert.ok(!required(required(h.confirms[0])[1]).includes("The anchor"));
@@ -595,7 +608,7 @@ describe("tree destinations and the current marker", () => {
 		sm.appendMessage(assistant("Project created"));
 		const u2 = sm.appendMessage(user("Refactor the lexer"));
 		const h = harness(sm, { confirms: [true], native: true });
-		await h.run(press("g"), press(ESC));
+		await h.run(press("\x1bg"), press(ESC));
 		assert.deepEqual(h.confirms, []);
 		assert.deepEqual(h.navigated, []);
 		assert.match(required(h.notifications[0]).message, /last entry of the session/);
@@ -621,7 +634,7 @@ describe("tree destinations and the current marker", () => {
 		assert.equal(treeRow(required(items[2])).labelHint, "compaction");
 
 		const h = harness(sm, { confirms: [true], native: true });
-		await h.run(press("g"), press(ESC));
+		await h.run(press("\x1bg"), press(ESC));
 		assert.deepEqual(h.confirms, []);
 		assert.deepEqual(h.navigated, []);
 		assert.match(required(h.notifications[0]).message, /already here/);
@@ -636,7 +649,7 @@ describe("tree destinations and the current marker", () => {
 		sm.appendLabelChange(u2, `${LABEL_PREFIX}lex`);
 		const leaf = sm.getLeafId();
 		const h = harness(sm, { confirms: [false], native: true });
-		assert.equal(await h.run(press("g"), press(ESC)), "back");
+		assert.equal(await h.run(press("\x1bg"), press(ESC)), "back");
 		assert.equal(h.confirms.length, 1);
 		assert.deepEqual(h.navigated, []);
 		assert.equal(sm.getLeafId(), leaf);
