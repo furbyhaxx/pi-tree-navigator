@@ -46,6 +46,11 @@ const DEFAULT_PLACEHOLDER = "Type to search…";
 const HINT_ORDER: readonly FrameKeybindingPriority[] = ["essential", "navigation", "optional"];
 const HINT_SEPARATOR = "  ";
 
+/** Anchor names and setting keys keep both ends so suffix-distinct identities stay distinct. */
+function identityLabel(row: FrameRow): boolean {
+	return row.label.includes("◆") || (!row.labelHint && !/\s/.test(singleLine(row.label)));
+}
+
 function labelText(row: FrameRow, theme: FrameTheme): string {
 	const hint = row.labelHint ? ` ${theme.fg("dim", singleLine(row.labelHint))}` : "";
 	return singleLine(row.label) + hint;
@@ -76,7 +81,7 @@ export function rowLines(
 	if (row.value !== undefined) {
 		const budget = Math.max(0, column - CURSOR_PREFIX - 2);
 		const clipped =
-			row.label.includes("◆") && visibleWidth(label) > budget
+			identityLabel(row) && visibleWidth(label) > budget
 				? middleTruncate(singleLine(row.label), budget)
 				: truncateToWidth(label, budget, "…");
 		const gap = " ".repeat(Math.max(0, column - CURSOR_PREFIX - visibleWidth(clipped)));

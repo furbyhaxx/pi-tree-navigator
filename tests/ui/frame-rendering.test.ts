@@ -37,6 +37,18 @@ describe("renderFrame", () => {
 		});
 	}
 
+	it("keeps setting keys that share a prefix distinct at 36 columns", () => {
+		const keys = ["auto_navigate.enabled", "auto_navigate.mode", "auto_navigate.milestone"];
+		const rows = keys.map((label) => ({ label, value: "false · default" }));
+		const lines = plain(renderFrame(options(rows, 36)));
+		const shown = lines
+			.filter((line) => line.includes("auto_"))
+			.map((line) => /(auto_\S*)/.exec(line)?.[1]);
+		assert.equal(shown.length, 3);
+		assert.equal(new Set(shown).size, 3);
+		for (const line of lines) assert.ok(visibleWidth(line) <= 36, line);
+	});
+
 	for (const width of [60, 130]) {
 		it(`bounds every line to ${width} columns and renders exactly the measured height`, () => {
 			const rows = makeRows(30);
