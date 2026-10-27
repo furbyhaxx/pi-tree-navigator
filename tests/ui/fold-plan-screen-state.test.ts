@@ -28,7 +28,7 @@ describe("fold plan edits", () => {
 		});
 		const exit = await h.run(
 			async (screen) => {
-				screen.handleInput("e");
+				screen.handleInput("\x1bi");
 			},
 			async (screen) => {
 				assert.match(h.view(screen), /label my-new-label/);
@@ -67,7 +67,7 @@ describe("fold plan edits", () => {
 		});
 		h.deps.candidates = () => sampleCandidates();
 		await h.run(
-			async (screen) => screen.handleInput("e"),
+			async (screen) => screen.handleInput("\x1bi"),
 			async (screen) => {
 				assert.match(h.view(screen), /label impl-start-folded/);
 				assert.match(h.view(screen), /focus: latest request and open work/);

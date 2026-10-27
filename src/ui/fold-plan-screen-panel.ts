@@ -53,6 +53,7 @@ import {
 	type FrameKeybinding,
 	FrameList,
 	type FrameTheme,
+	frameShortcutKey,
 	renderFrame,
 } from "./frame.ts";
 
@@ -324,10 +325,16 @@ export class FoldPlanPanel implements Component, Focusable {
 			action: "choose anchor",
 			priority: "navigation",
 		};
+		const edit: FrameKeybinding = {
+			key: frameShortcutKey("e"),
+			action: "edit label/focus",
+			priority: "navigation",
+		};
 		if (this.list.isSearching) {
 			return [
-				{ key: "type", action: "to filter" },
+				{ key: "type", action: "to filter", priority: "essential" },
 				choose,
+				...(this.selected()?.valid ? [edit] : []),
 				{ key: "esc", action: "clear search", priority: "essential" },
 			];
 		}
@@ -337,8 +344,8 @@ export class FoldPlanPanel implements Component, Focusable {
 			priority: "essential",
 		};
 		const search: FrameKeybinding = {
-			key: "/",
-			action: "search",
+			key: "type",
+			action: "filter",
 			priority: "essential",
 		};
 		if (!this.selected()?.valid) return [choose, search, leave];
@@ -349,7 +356,7 @@ export class FoldPlanPanel implements Component, Focusable {
 				action: this.agentRunning() ? "queue fold" : "fold",
 				priority: "essential",
 			},
-			{ key: "e", action: "edit label/focus", priority: "navigation" },
+			edit,
 			search,
 			leave,
 		];

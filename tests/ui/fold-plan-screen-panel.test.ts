@@ -158,7 +158,7 @@ describe("fold plan screen", () => {
 			assert.doesNotMatch(plan, /enter fold/);
 			screen.handleInput(ENTER);
 			assert.match(h.view(screen), /✗ Would free only about 0\.9k tok/);
-			screen.handleInput("e");
+			screen.handleInput("\x1bi");
 			assert.equal(h.dialogs.input.length, 0);
 			screen.handleInput(ESC);
 		});
@@ -237,8 +237,8 @@ describe("fold plan screen", () => {
 		const exit = await h.run(async (screen) => {
 			screen.handleInput("/");
 			screen.handleInput("zzz");
-			assert.match(h.view(screen), /No matches for “zzz”/);
-			assert.match(h.view(screen), /No plan: no anchor matches “zzz”/);
+			assert.match(h.view(screen), /No matches for “\/zzz”/);
+			assert.match(h.view(screen), /No plan: no anchor matches “\/zzz”/);
 			screen.handleInput(ENTER);
 			screen.handleInput(ESC);
 			assert.doesNotMatch(h.view(screen), /No matches/);
@@ -358,7 +358,7 @@ describe("fold plan screen", () => {
 					.findIndex((line) => line.includes("◆ impl-start"));
 				for (const type of ["press", "release", "click"] as const)
 					screen.handleMouse(mouse({ type, y }));
-				screen.handleInput("e");
+				screen.handleInput("\x1bi");
 			},
 			async (screen) => {
 				const view = h.view(screen);

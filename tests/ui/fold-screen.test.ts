@@ -402,10 +402,10 @@ describe("fold wizard", () => {
 describe("fold wizard without anchors", () => {
 	it("shows one muted row and sets an anchor with a", async () => {
 		const h = harness({ inputs: ["impl-start"] }, []);
-		await h.run(press("a"), press(ESC));
+		await h.run(press("\x1ba"), press(ESC));
 		const first = required(h.rendered[0]).join("\n");
 		assert.match(first, /No anchors yet\. Press a to set one at the current leaf\./);
-		assert.match(first, /a set anchor/);
+		assert.match(first, /type filter/);
 		assert.deepEqual(h.created, ["impl-start"]);
 		assert.deepEqual(h.notifications, [
 			{ message: "Anchor 'impl-start' set at the current leaf.", type: "info" },
@@ -426,7 +426,7 @@ describe("fold wizard without anchors", () => {
 			ok: false,
 			reason: "Anchor names are lowercase kebab-case.",
 		});
-		await h.run(press("a"), press(ESC));
+		await h.run(press("\x1ba"), press(ESC));
 		assert.deepEqual(h.notifications, [
 			{ message: "Anchor names are lowercase kebab-case.", type: "warning" },
 		]);

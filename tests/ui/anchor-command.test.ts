@@ -471,7 +471,7 @@ describe("/anchor screens", () => {
 	});
 
 	it("lists anchors with savings and opens the fold plan for the chosen anchor with r", async () => {
-		const test = setup({ screens: [press(DOWN, "r"), press(ESC), press(ESC)] });
+		const test = setup({ screens: [press(DOWN, "\x1br"), press(ESC), press(ESC)] });
 		await test.run("list");
 		const text = required(test.rendered[0]).join("\n");
 		assert.ok(text.includes("◆ start (auto)"));
@@ -518,7 +518,7 @@ describe("/anchor screens", () => {
 	});
 
 	it("ignores r on the new-anchor row", async () => {
-		const test = setup({ screens: [press(DOWN, DOWN, "r", ESC)] });
+		const test = setup({ screens: [press(DOWN, DOWN, "\x1br", ESC)] });
 		await test.run("list");
 		assert.deepEqual(test.calls.folds, []);
 		assert.deepEqual(test.calls.plans, []);

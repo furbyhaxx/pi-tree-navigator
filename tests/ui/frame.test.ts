@@ -1,7 +1,12 @@
 import { describe, it } from "bun:test";
 import * as assert from "node:assert/strict";
 import { CURSOR_MARKER, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
-import { FrameList, type FrameListOptions, type FrameRow } from "../../src/ui/frame.ts";
+import {
+	FrameList,
+	type FrameListOptions,
+	type FrameRow,
+	frameShortcutKey,
+} from "../../src/ui/frame.ts";
 import { makeRows, plain, theme } from "./frame-fixtures.ts";
 
 function required<T>(value: T | undefined): T {
@@ -25,6 +30,34 @@ function list(rows: readonly FrameRow[], extra: Partial<FrameListOptions> = {}) 
 }
 
 describe("FrameList", () => {
+	it("filters printable mnemonics and dispatches Alt actions with either terminal encoding", () => {
+		let switches = 0;
+		const { frame } = list([{ label: "treeProposal.tools" }, { label: "other" }], {
+			shortcuts: [{ key: "t", action: "layer", onPress: () => switches++ }],
+		});
+		for (const key of "treeProposal.tools") frame.handleInput(key);
+		assert.equal(frame.search, "treeProposal.tools");
+		assert.equal(frame.cursor, 0);
+		assert.equal(switches, 0);
+		for (const key of ["\x1bt", "\x1b[116;3u"]) frame.handleInput(key);
+		assert.equal(switches, 2);
+		assert.equal(frame.search, "treeProposal.tools");
+	});
+
+	it("toggles on initial Space and keeps spaces and slashes in multi-term filters", () => {
+		let toggles = 0;
+		const { frame } = list([{ label: "alpha beta" }], {
+			shortcuts: [{ key: "space", action: "toggle", onPress: () => toggles++ }],
+		});
+		frame.handleInput(" ");
+		assert.equal(toggles, 1);
+		assert.equal(frame.search, "");
+		assert.equal(frame.isSearching, false);
+		for (const key of "beta alpha/") frame.handleInput(key);
+		assert.equal(frame.search, "beta alpha/");
+		assert.equal(frame.cursor, 0);
+		assert.equal(toggles, 1);
+	});
 	const mouse = (
 		width: number,
 		height: number,
@@ -44,7 +77,7 @@ describe("FrameList", () => {
 		...overrides,
 	});
 
-	for (const width of [60, 130]) {
+	for (const width of [36, 57, 60, 80, 130, 140]) {
 		it(`maps filtered, scrolled clicks and selected detail rows at ${width} columns`, () => {
 			const rows = Array.from({ length: 80 }, (_, index) => ({
 				label: `${index % 2 === 0 ? "keep" : "skip"} ${index}`,
@@ -190,7 +223,7 @@ describe("FrameList", () => {
 		assert.equal(frame.search, "gam");
 		frame.handleInput("\r");
 		assert.deepEqual(events, ["select:gamma:2"]);
-		assert.match(plain(frame.render(80)).join("\n"), /enter select {2}esc clear/);
+		assert.match(plain(frame.render(80)).join("\n"), /enter select {2}type filter {2}esc clear/);
 	});
 
 	it("clears a non-empty search on the first escape and cancels on the next", () => {
@@ -248,11 +281,11 @@ describe("FrameList", () => {
 			],
 		});
 		frame.render(80);
-		assert.match(plain(frame.render(80)).at(-2) ?? "", /r fold/);
-		frame.handleInput("r");
+		assert.match(plain(frame.render(80)).at(-2) ?? "", /alt\+r fold/);
+		frame.handleInput("\x1br");
 		frame.handleInput("\x1b[B");
-		assert.ok(!(plain(frame.render(80)).at(-2) ?? "").includes("r fold"));
-		frame.handleInput("r");
+		assert.ok(!(plain(frame.render(80)).at(-2) ?? "").includes("alt+r fold"));
+		frame.handleInput("\x1br");
 		assert.deepEqual(pressed, ["anchor"]);
 		assert.equal(frame.search, "");
 		frame.handleInput("n");
@@ -285,18 +318,20 @@ describe("FrameList", () => {
 
 		it("keeps esc and search whole at 60 columns and drops optional actions with an ellipsis", () => {
 			const text = footer(60);
-			assert.match(text, /\/ search/);
+			assert.match(text, /type filter/);
 			assert.match(text, /esc back/);
 			assert.match(text, /↑↓ navigate {2}enter select/);
 			assert.ok(text.endsWith("…"), text);
 			const shown = shortcuts.filter(({ action }) => text.includes(action));
-			assert.ok(shown.length > 0 && shown.length < shortcuts.length, text);
-			for (const { key, action } of shown) assert.ok(text.includes(`${key} ${action}`), text);
+			assert.ok(shown.length < shortcuts.length, text);
+			for (const { key, action } of shown)
+				assert.ok(text.includes(`${frameShortcutKey(key)} ${action}`), text);
 		});
 
 		it("shows every hint without an ellipsis when they fit", () => {
 			const text = footer(130);
-			for (const { key, action } of shortcuts) assert.ok(text.includes(`${key} ${action}`), text);
+			for (const { key, action } of shortcuts)
+				assert.ok(text.includes(`${frameShortcutKey(key)} ${action}`), text);
 			assert.ok(!text.includes("…"));
 		});
 

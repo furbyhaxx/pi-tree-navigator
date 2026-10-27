@@ -78,7 +78,44 @@ export interface FrameHost {
 /** Action on a row; `index` addresses the original `rows` array, not the filtered view. */
 export type FrameAction = (row: FrameRow, index: number) => void;
 
-/** A key active while the list (not the search input) has focus. */
+/** Resolve screen mnemonics to left-Alt actions without consuming printable filter text. */
+export function frameShortcutKey(key: KeyId): KeyId {
+	// de-CH reserves AltGr+E for €; use I (inspect) for edit actions.
+	if (key === "e") return Key.alt("i");
+	const mnemonic = (
+		[
+			"a",
+			"b",
+			"c",
+			"d",
+			"e",
+			"f",
+			"g",
+			"h",
+			"i",
+			"j",
+			"k",
+			"l",
+			"m",
+			"n",
+			"o",
+			"p",
+			"q",
+			"r",
+			"s",
+			"t",
+			"u",
+			"v",
+			"w",
+			"x",
+			"y",
+			"z",
+		] as const
+	).find((letter) => letter === key);
+	return mnemonic ? Key.alt(mnemonic) : key;
+}
+
+/** A row action; single-letter mnemonics use Alt and remain active during filtering. */
 export interface FrameShortcut {
 	key: KeyId;
 	priority?: FrameKeybindingPriority | undefined;
@@ -114,9 +151,9 @@ export interface FrameListOptions {
 /**
  * Fixed-height list with a fuzzy search row.
  *
- * Focus is `list` or `search`. In list focus the shortcuts apply, `/` opens the
- * search and any other printable key starts it. Escape clears the search and
- * returns to the list; Escape in list focus cancels.
+ * Printable input, including `/`, filters; Alt mnemonics activate row actions.
+ * Space toggles in list focus, but separates terms in an active filter.
+ * Escape clears the filter first, then cancels.
  */
 export class FrameList implements Component, Focusable {
 	private readonly input = new Input({ prompt: "" });
@@ -238,25 +275,31 @@ export class FrameList implements Component, Focusable {
 		} else if (matches("tui.select.cancel", Key.escape)) {
 			if (this.focus === "search" || this.query) this.leaveSearch();
 			else this.options.onCancel?.();
+		} else if (this.handleShortcut(data, row)) {
+			// Row actions remain available while narrowing the list.
+		} else if (matchesKey(data, Key.space) && !this.query) {
+			return;
 		} else if (this.focus === "search") {
 			this.input.handleInput(data);
 			this.setQuery(this.input.getValue());
 		} else if (matchesKey(data, Key.home)) this.move(0);
 		else if (matchesKey(data, Key.end)) this.move(this.visible.length - 1);
-		else this.handleListKey(data, row);
+		else this.handleListKey(data);
 		this.options.tui.requestRender();
 	}
 
-	private handleListKey(data: string, row: FrameRow | undefined): void {
-		const shortcut = this.options.shortcuts?.find((candidate) => matchesKey(data, candidate.key));
-		if (shortcut) {
-			if (row && (shortcut.enabled?.(row, this.cursor) ?? true)) shortcut.onPress(row, this.cursor);
-			return;
-		}
-		if (data === "/") {
-			this.enterSearch();
-			return;
-		}
+	private handleShortcut(data: string, row: FrameRow | undefined): boolean {
+		if (this.query && matchesKey(data, Key.space)) return false;
+		if (this.focus === "search" && matchesKey(data, Key.backspace)) return false;
+		const shortcut = this.options.shortcuts?.find((candidate) =>
+			matchesKey(data, frameShortcutKey(candidate.key)),
+		);
+		if (!shortcut) return false;
+		if (row && (shortcut.enabled?.(row, this.cursor) ?? true)) shortcut.onPress(row, this.cursor);
+		return true;
+	}
+
+	private handleListKey(data: string): void {
 		if (printable(data) !== undefined) {
 			this.enterSearch();
 			this.input.handleInput(data);
@@ -313,20 +356,17 @@ export class FrameList implements Component, Focusable {
 			action: "navigate",
 			priority: "navigation" as const,
 		};
-		if (this.focus === "search") {
-			return [
-				{ key: "type", action: "to filter" },
-				navigate,
-				enter,
-				{ key: "esc", action: "clear", priority: "essential" },
-			];
-		}
 		const row = this.options.rows[this.cursor];
 		const shortcuts = row
 			? (this.options.shortcuts ?? [])
-					.filter((shortcut) => shortcut.enabled?.(row, this.cursor) ?? true)
+					.filter(
+						(shortcut) =>
+							!(shortcut.key === "space" && this.query) &&
+							!(shortcut.key === "backspace" && this.focus === "search") &&
+							(shortcut.enabled?.(row, this.cursor) ?? true),
+					)
 					.map(({ key, action, priority }) => ({
-						key,
+						key: frameShortcutKey(key),
 						priority,
 						action: typeof action === "function" ? action(row, this.cursor) : action,
 					}))
@@ -335,10 +375,11 @@ export class FrameList implements Component, Focusable {
 			navigate,
 			enter,
 			...shortcuts,
-			{ key: "/", action: "search", priority: "essential" },
+			{ key: "type", action: "filter", priority: "essential" },
 			{
 				key: "esc",
-				action: this.query ? "clear" : (this.options.cancelAction ?? "back"),
+				action:
+					this.focus === "search" || this.query ? "clear" : (this.options.cancelAction ?? "back"),
 				priority: "essential",
 			},
 		];

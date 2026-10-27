@@ -152,6 +152,11 @@ export async function editPolicy(
 			...(singleModel(kind, state) ? { rightBadge: "⚠ single model" } : {}),
 			shortcuts: [
 				{
+					key: "space",
+					action: "toggle",
+					enabled: (_row, index) => rows[index]?.kind === "heuristics",
+				},
+				{
 					key: "left",
 					action: "decrease",
 					enabled: (_row, index) => adjustable(rows[index]),
