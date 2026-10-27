@@ -1,5 +1,6 @@
 /** Registry-backed fold summary calls, public contracts and bounded strategy orchestration. */
 
+import { setTimeout as delay } from "node:timers/promises";
 import type {
 	Api,
 	Message,
@@ -9,6 +10,7 @@ import type {
 	Tool,
 	Usage,
 } from "@earendil-works/pi-ai";
+import { isRetryableAssistantError } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import {
 	estimate,
@@ -47,6 +49,8 @@ export interface FoldSummaryRunner {
 		stopReason: StopReason;
 		usage?: Usage;
 		errorMessage?: string | undefined;
+		/** Provider-classified transient error; cancellation is never retryable. */
+		retryable?: boolean;
 	}>;
 }
 
@@ -64,32 +68,62 @@ export function createFoldSummaryRunner(options: {
 		contextWindow: model.contextWindow,
 		maxOutputTokens: Math.min(model.maxTokens, Math.floor(model.contextWindow / 4)),
 		async complete(request) {
-			const response = await registry
-				.streamSimple(
-					model,
-					{
-						...(request.systemPrompt === undefined ? {} : { systemPrompt: request.systemPrompt }),
-						messages: request.messages,
-						...(request.tools === undefined ? {} : { tools: request.tools }),
-					},
-					{
-						...(request.signal === undefined ? {} : { signal: request.signal }),
-						...(thinking === "off" || request.reasoning === "off" ? {} : { reasoning: thinking }),
-						maxTokens: request.maxTokens,
-						toolChoice: "none",
-						...(sessionId === undefined ? {} : { sessionId }),
-					},
-				)
-				.result();
-			return {
-				text: response.content
-					.filter((block) => block.type === "text")
-					.map((block) => block.text)
-					.join("\n"),
-				stopReason: response.stopReason,
-				usage: response.usage,
-				errorMessage: response.errorMessage,
-			};
+			const controller = new AbortController();
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			let cancel: (() => void) | undefined;
+			const cancelled = new Promise<Completion>((resolve) => {
+				cancel = () => {
+					controller.abort();
+					resolve({ text: "", stopReason: "aborted" });
+				};
+				request.signal?.addEventListener("abort", cancel, { once: true });
+				timer = setTimeout(() => {
+					controller.abort();
+					resolve({
+						text: "",
+						stopReason: "error",
+						errorMessage: `Fold summary request timed out after ${SUMMARY_REQUEST_TIMEOUT_MS}ms`,
+						retryable: true,
+					});
+				}, SUMMARY_REQUEST_TIMEOUT_MS);
+				if (request.signal?.aborted) cancel();
+			});
+			try {
+				if (controller.signal.aborted) return await cancelled;
+				const completed = registry
+					.streamSimple(
+						model,
+						{
+							...(request.systemPrompt === undefined ? {} : { systemPrompt: request.systemPrompt }),
+							messages: request.messages,
+							...(request.tools === undefined ? {} : { tools: request.tools }),
+						},
+						{
+							signal: controller.signal,
+							...(thinking === "off" || request.reasoning === "off" ? {} : { reasoning: thinking }),
+							maxTokens: request.maxTokens,
+							toolChoice: "none",
+							...(sessionId === undefined ? {} : { sessionId }),
+						},
+					)
+					.result()
+					.then(
+						(response): Completion => ({
+							text: response.content
+								.filter((block) => block.type === "text")
+								.map((block) => block.text)
+								.join("\n"),
+							stopReason: response.stopReason,
+							usage: response.usage,
+							errorMessage: response.errorMessage,
+							retryable: isRetryableAssistantError(response),
+						}),
+					);
+				return await Promise.race([completed, cancelled]);
+			} finally {
+				clearTimeout(timer);
+				if (cancel) request.signal?.removeEventListener("abort", cancel);
+			}
 		},
 	};
 }
@@ -199,6 +233,8 @@ export function reasoningAllowance(thinking: ThinkingLevel | "off"): number {
 }
 
 const FINAL_RETRIES = 1;
+// A streaming provider can emit endless deltas, so an idle timeout alone cannot bound a call.
+const SUMMARY_REQUEST_TIMEOUT_MS = 180_000;
 
 function isAbort(error: unknown): boolean {
 	return error instanceof Error && error.name === "AbortError";
@@ -246,11 +282,13 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 		usage,
 	});
 
-	const invoke = async (
+	const invokeOnce = async (
 		phase: FoldSummaryProgress["phase"],
 		request: Omit<Request, "signal">,
 	): Promise<{ response: Completion } | { failure: Failure }> => {
 		if (signal?.aborted) return { failure: fail("aborted", "cancelled before the request") };
+		if (calls >= maxCalls)
+			return { failure: fail("over-call-budget", `reached the limit of ${maxCalls} calls`) };
 		calls++;
 		options.onProgress?.({ phase, call: calls, plannedCalls });
 		let response: Completion;
@@ -266,11 +304,34 @@ export async function summarizeFold(options: SummarizeFoldOptions): Promise<Summ
 		if (response.usage) usage.push(response.usage);
 		if (signal?.aborted || response.stopReason === "aborted")
 			return { failure: fail("aborted", "cancelled during the request") };
-		if (response.stopReason === "error")
-			return {
-				failure: fail("provider-error", response.errorMessage ?? "provider error"),
-			};
 		return { response };
+	};
+
+	const invoke = async (
+		phase: FoldSummaryProgress["phase"],
+		request: Omit<Request, "signal">,
+	): Promise<{ response: Completion } | { failure: Failure }> => {
+		let result = await invokeOnce(phase, request);
+		if (
+			"response" in result &&
+			result.response.stopReason === "error" &&
+			result.response.retryable &&
+			plannedCalls < maxCalls &&
+			calls < maxCalls
+		) {
+			try {
+				await delay(1000, undefined, { signal });
+			} catch (error) {
+				if (signal?.aborted || isAbort(error))
+					return { failure: fail("aborted", "cancelled before retrying the request") };
+				throw error;
+			}
+			plannedCalls++;
+			result = await invokeOnce(phase, request);
+		}
+		if ("response" in result && result.response.stopReason === "error")
+			return { failure: fail("provider-error", result.response.errorMessage ?? "provider error") };
+		return result;
 	};
 
 	/**
