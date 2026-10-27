@@ -11,16 +11,18 @@ export const FACTS = [
 ] as const;
 
 /** Opt-in policy in the isolated agent directory, never the user's configuration. */
-export const AUTOMATIC_CONFIG = {
-	auto_navigate: {
-		enabled: true,
-		mode: "anchor-and-rewind",
-		milestone: "recommended",
-		check_every_turns: 1,
-		min_tokens_since_anchor: 1000,
-		rewind_at_tokens: 8000,
-	},
-};
+export function automaticConfig(initialTokens: number) {
+	return {
+		auto_navigate: {
+			enabled: true,
+			mode: "anchor-and-rewind",
+			milestone: "recommended",
+			check_every_turns: 1,
+			min_tokens_since_anchor: 1000,
+			rewind_at_tokens: Math.ceil(initialTokens + 16384),
+		},
+	};
+}
 
 /** Tail-keeping pressure compaction without classifier anchors, in the isolated agent directory. */
 export const PRESSURE_CONFIG = {

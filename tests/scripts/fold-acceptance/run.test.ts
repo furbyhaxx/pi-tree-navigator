@@ -9,17 +9,20 @@ import { ModelRegistry, ModelRuntime, SessionManager } from "@earendil-works/pi-
 import { BudgetLedger } from "../../../scripts/classifier-eval/budget.ts";
 import { asFetch } from "../../../scripts/fetch.ts";
 import {
-	AUTOMATIC_CONFIG,
 	AUTOMATIC_REQUEST,
+	automaticConfig,
 	seedCorpus,
 } from "../../../scripts/fold-acceptance/fixture.ts";
 import {
 	interceptRuntime,
 	nativeBilling,
+	type PolicyResponse,
 	parseModelSelector,
 	parseOptions,
 	runAcceptance,
 	verifyAutomaticContinuation,
+	verifyAutomaticFixture,
+	verifyAutomaticPolicy,
 	verifyRepeatedRecovery,
 } from "../../../scripts/fold-acceptance/run.ts";
 import {
@@ -27,7 +30,109 @@ import {
 	type ModelPricingTable,
 	type TransportRecord,
 } from "../../../scripts/fold-acceptance/transport.ts";
+import { RECOMMENDED_MILESTONE_POLICY } from "../../../src/auto/milestone-policy.ts";
 import { estimateAdmissionTokens } from "../../../src/core/request-accounting.ts";
+
+it("automatic fixtures reject pressure preemption and admission recovery before dispatch", () => {
+	assert.throws(() => verifyAutomaticFixture(39600, 96000, 8000), /pressure.*preempt/);
+	assert.throws(() => verifyAutomaticFixture(39600, 96000, 39600), /pressure.*preempt/);
+	assert.throws(() => verifyAutomaticFixture(39600, 48000, 56000), /window/);
+	verifyAutomaticFixture(39600, 96000, 56000);
+});
+
+it("automatic acceptance requires completed usable policy responses, not dispatch attempts", () => {
+	const classifier: PolicyResponse = {
+		api: "decisions",
+		model: RECOMMENDED_MILESTONE_POLICY.classifier ?? "",
+		context: {
+			state: {},
+			questions: {
+				status: { type: "choice", instructions: "", criteria: { milestone: "", unfinished: "" } },
+				boundary: { type: "choice", instructions: "", criteria: { none: "", record1: "" } },
+			},
+		},
+		result: {
+			api: "typesafe",
+			provider: "fixture",
+			model: "fixture",
+			timestamp: 1,
+			stopReason: "stop",
+			answers: {
+				status: { type: "choice", choice: "milestone", confidence: 0.99, probabilities: {} },
+				boundary: { type: "choice", choice: "record1", confidence: 0.99, probabilities: {} },
+			},
+		},
+	};
+	const confirmer: PolicyResponse = {
+		api: "chat",
+		model: RECOMMENDED_MILESTONE_POLICY.confirmer ?? "",
+		result: fauxAssistantMessage(
+			JSON.stringify({
+				answers: {
+					status: { choice: "unfinished", confidence: 0.99 },
+					boundary: { choice: "none", confidence: 0.99 },
+				},
+			}),
+		),
+	};
+	assert.throws(() => verifyAutomaticPolicy([]), /record classifier decisions/);
+	assert.throws(() => verifyAutomaticPolicy([classifier]), /record confirmer decisions/);
+	const decisions = verifyAutomaticPolicy([classifier, confirmer]);
+	assert.equal(decisions.confirmer["status"]?.choice, "unfinished");
+	assert.throws(
+		() =>
+			verifyAutomaticPolicy([
+				{ ...classifier, result: { ...classifier.result, stopReason: "error" } },
+				confirmer,
+			]),
+		/complete successfully/,
+	);
+	assert.throws(
+		() =>
+			verifyAutomaticPolicy([
+				{ ...classifier, result: { ...classifier.result, answers: {} } },
+				confirmer,
+			]),
+		/usable status/,
+	);
+	assert.throws(
+		() =>
+			verifyAutomaticPolicy([
+				classifier,
+				{ ...confirmer, result: fauxAssistantMessage("not JSON decisions") },
+			]),
+		/usable status/,
+	);
+});
+
+it("misconfigured automatic fixtures fail before runtime, ledger or provider access", async () => {
+	const root = mkdtempSync(join(tmpdir(), "fold-auto-invalid-"));
+	try {
+		const options = parseOptions([
+			"--scenario",
+			"automatic",
+			"--window",
+			"32000",
+			"--out",
+			join(root, "out"),
+			"--ledger",
+			join(root, "ledger.jsonl"),
+		]);
+		let runtimeOpened = false;
+		await assert.rejects(
+			runAcceptance(options, async () => {
+				runtimeOpened = true;
+				throw new Error("must not open runtime");
+			}),
+			/operating window/,
+		);
+		assert.equal(runtimeOpened, false);
+		assert.equal(existsSync(options.ledger), false);
+		assert.equal(existsSync(options.out), false);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
 
 it("automatic continuation need not repeat an already fulfilled finalization request", () => {
 	const sm = SessionManager.inMemory();
@@ -180,14 +285,14 @@ it("automatic dry run records the opt-in policy and finalization fixture without
 		const sm = SessionManager.create(root, join(root, "sessions"));
 		seedCorpus(sm, fixture.corpus, { completedReview: true });
 		const initialTokens = estimateAdmissionTokens(sm);
-		assert.ok(initialTokens > AUTOMATIC_CONFIG.auto_navigate.rewind_at_tokens);
+		assert.ok(initialTokens < automaticConfig(initialTokens).auto_navigate.rewind_at_tokens);
 		assert.ok(initialTokens > 4000);
 		assert.ok(initialTokens + 16384 < options.window);
 		assert.match(JSON.stringify(sm.getBranch().at(-1)), /Synthetic completed review phase/);
 		assert.doesNotMatch(fixture.request, /rewind|navigate_tree|classifier|confidence/i);
 		assert.deepEqual(
 			JSON.parse(readFileSync(join(options.out, "auto-config.json"), "utf8")),
-			AUTOMATIC_CONFIG,
+			automaticConfig(initialTokens),
 		);
 	} finally {
 		globalThis.fetch = oldFetch;

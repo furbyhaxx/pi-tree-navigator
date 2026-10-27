@@ -5,7 +5,14 @@ import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type {
+	Api,
+	AssistantMessage,
+	ClassifierAnswer,
+	ClassifierContext,
+	ClassifierResult,
+	Model,
+} from "@earendil-works/pi-ai";
 import {
 	createAgentSession,
 	DefaultResourceLoader,
@@ -20,6 +27,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { RECOMMENDED_MILESTONE_POLICY } from "../../src/auto/milestone-policy.ts";
 import { parseClassifierModel } from "../../src/continuity/intent-policy.ts";
+import { parseChatAnswers } from "../../src/continuity/intent-policy-chat.ts";
 import { estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
 import { REWIND_CUSTOM_TYPE } from "../../src/fold/fold-receipts.ts";
 import navigateTree, { __testHooks, PRESSURE_COMPACTION_CUSTOM_TYPE } from "../../src/index.ts";
@@ -32,8 +40,8 @@ import {
 } from "../classifier-eval/billing.ts";
 import { BudgetLedger } from "../classifier-eval/budget.ts";
 import {
-	AUTOMATIC_CONFIG,
 	AUTOMATIC_REQUEST,
+	automaticConfig,
 	buildCorpus,
 	buildDenseCorpus,
 	corpusManifest,
@@ -96,6 +104,63 @@ const textOf = (message: { role?: string; content?: unknown }): string =>
 
 const branchesFolded = (sm: SessionManager): boolean =>
 	sm.getBranch().some((entry) => entry.type === "branch_summary");
+
+/** Reject fixtures whose deterministic relief would preempt the milestone policy. */
+export function verifyAutomaticFixture(
+	initialTokens: number,
+	window: number,
+	pressureThreshold: number,
+): void {
+	assert.ok(
+		initialTokens < pressureThreshold,
+		`automatic fixture estimate ${initialTokens} >= pressure threshold ${pressureThreshold}: pressure relief would preempt the milestone classifier; raise rewind_at_tokens`,
+	);
+	assert.ok(
+		initialTokens + 16384 <= pressureThreshold && pressureThreshold < window,
+		"automatic fixture needs 16384 tokens of pressure runway below the operating window; reduce --blocks or increase --window",
+	);
+}
+
+/** Completed runtime responses retained separately from dispatch attempts. */
+export type PolicyResponse =
+	| { api: "decisions"; model: string; context: ClassifierContext; result: ClassifierResult }
+	| { api: "chat"; model: string; result: AssistantMessage };
+
+/** Require successful, usable answers from both real policy stages, even when they disagree. */
+export function verifyAutomaticPolicy(responses: readonly PolicyResponse[]) {
+	const classifier = responses.find(
+		(response) =>
+			response.api === "decisions" && response.model === RECOMMENDED_MILESTONE_POLICY.classifier,
+	);
+	const confirmer = responses.find(
+		(response) =>
+			response.api === "chat" && response.model === RECOMMENDED_MILESTONE_POLICY.confirmer,
+	);
+	assert.ok(classifier?.api === "decisions", "automatic policy must record classifier decisions");
+	assert.ok(confirmer?.api === "chat", "automatic policy must record confirmer decisions");
+	assert.equal(classifier.result.stopReason, "stop", "classifier must complete successfully");
+	assert.equal(confirmer.result.stopReason, "stop", "confirmer must complete successfully");
+	const questions = Object.fromEntries(
+		Object.entries(classifier.context.questions).map(([id, question]) => {
+			assert.equal(question.type, "choice");
+			return [id, question.type === "choice" ? Object.keys(question.criteria) : []];
+		}),
+	);
+	const confirmation = parseChatAnswers(textOf(confirmer.result), questions);
+	for (const id of ["status", "boundary"]) {
+		const answer: ClassifierAnswer | undefined = classifier.result.answers[id];
+		assert.ok(
+			answer?.type === "choice" &&
+				questions[id]?.includes(answer.choice) &&
+				Number.isFinite(answer.confidence) &&
+				answer.confidence >= 0 &&
+				answer.confidence <= 1,
+			`classifier must record a usable ${id} decision`,
+		);
+		assert.ok(confirmation[id], `confirmer must record a usable ${id} decision`);
+	}
+	return { classifier: classifier.result.answers, confirmer: confirmation };
+}
 
 /** Require successful same-run work after folding and fulfillment of the authored request. */
 export function verifyAutomaticContinuation(
@@ -389,6 +454,7 @@ export function interceptRuntime(
 		messages: number;
 		startedAt: string;
 	}) => void,
+	recordResponse?: (response: PolicyResponse) => void,
 ): void {
 	const originalStream = runtime.streamSimple.bind(runtime);
 	const originalClassify = runtime.classify.bind(runtime);
@@ -400,13 +466,20 @@ export function interceptRuntime(
 			messages: context.messages.length,
 			startedAt: new Date().toISOString(),
 		});
-		return originalStream(selected, context, {
+		const stream = originalStream(selected, context, {
 			...options,
 			fetch,
 			maxRetries: 0,
 		});
+		if (recordResponse && options?.toolChoice === "none")
+			void stream
+				.result()
+				.then((result) =>
+					recordResponse({ api: "chat", model: `${selected.provider}/${selected.id}`, result }),
+				);
+		return stream;
 	}) as typeof runtime.streamSimple;
-	runtime.classify = ((selected, context, options) => {
+	runtime.classify = (async (selected, context, options) => {
 		record({
 			api: "decisions",
 			side: true,
@@ -414,11 +487,18 @@ export function interceptRuntime(
 			messages: 0,
 			startedAt: new Date().toISOString(),
 		});
-		return originalClassify(selected, context, {
+		const result = await originalClassify(selected, context, {
 			...options,
 			fetch,
 			maxRetries: 0,
 		});
+		recordResponse?.({
+			api: "decisions",
+			model: `${selected.provider}/${selected.id}`,
+			context,
+			result,
+		});
+		return result;
 	}) as typeof runtime.classify;
 }
 
@@ -434,17 +514,26 @@ export async function runAcceptance(
 			: options.scenario === "pressure"
 				? PRESSURE_REQUEST
 				: REQUEST;
+	const fixtureSession = SessionManager.inMemory();
+	seedCorpus(fixtureSession, corpus, { completedReview: options.scenario === "automatic" });
+	const fixtureTokens = estimateAdmissionTokens(fixtureSession);
 	const navigatorConfig =
 		options.scenario === "automatic"
-			? AUTOMATIC_CONFIG
+			? automaticConfig(fixtureTokens)
 			: options.scenario === "pressure"
 				? PRESSURE_CONFIG
 				: undefined;
+	if (options.scenario === "automatic")
+		verifyAutomaticFixture(
+			fixtureTokens,
+			options.window,
+			automaticConfig(fixtureTokens).auto_navigate.rewind_at_tokens,
+		);
 	mkdirSync(dirname(options.out), { recursive: true });
 	mkdirSync(options.out);
 	const save = (name: string, value: unknown) =>
 		writeFileSync(join(options.out, name), `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
-	save("fixture.json", { facts: FACTS, request, corpus });
+	save("fixture.json", { facts: FACTS, request, corpus, initialTokens: fixtureTokens });
 	if (navigatorConfig) save("auto-config.json", navigatorConfig);
 	save("manifest.json", corpusManifest(corpus));
 	const { authDir: _authDir, ...publicOptions } = options;
@@ -571,10 +660,22 @@ export async function runAcceptance(
 				appendFileSync(join(options.out, "wire.jsonl"), `${JSON.stringify(record)}\n`),
 		});
 		const calls: Parameters<Parameters<typeof interceptRuntime>[2]>[0][] = [];
-		interceptRuntime(runtime, transport.fetch, (call) => {
-			calls.push(call);
-			appendFileSync(join(options.out, "calls.jsonl"), `${JSON.stringify(call)}\n`);
-		});
+		const policyResponses: PolicyResponse[] = [];
+		interceptRuntime(
+			runtime,
+			transport.fetch,
+			(call) => {
+				calls.push(call);
+				appendFileSync(join(options.out, "calls.jsonl"), `${JSON.stringify(call)}\n`);
+			},
+			(response) => {
+				policyResponses.push(response);
+				appendFileSync(
+					join(options.out, "policy-responses.jsonl"),
+					`${JSON.stringify(response)}\n`,
+				);
+			},
+		);
 		const settings = SettingsManager.inMemory({
 			compaction: { enabled: false },
 			retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0 } },
@@ -760,7 +861,24 @@ export async function runAcceptance(
 			const receipts = entries.filter(
 				(entry) => entry.type === "custom_message" && entry.customType === "navigate-tree-rewind",
 			);
-			save("automatic-evidence.json", { calls, receipts });
+			save("automatic-evidence.json", { calls, receipts, policyResponses });
+			const decisions = verifyAutomaticPolicy(policyResponses);
+			save("policy-decisions.json", decisions);
+			assert.ok(
+				!sm.getBranch().some((entry) => entry.type === "compaction"),
+				"automatic milestone scenario must not be preempted by compaction",
+			);
+			assert.ok(
+				entries.some(
+					(entry) =>
+						entry.type === "message" &&
+						entry.message.role === "assistant" &&
+						entry.message.provider !== "fixture" &&
+						entry.message.stopReason === "stop" &&
+						textOf(entry.message).includes("ACCEPTANCE-CONTINUED"),
+				),
+				"main model must fulfill the automatic finalization request",
+			);
 			assert.ok(
 				calls.some(
 					(call) =>
@@ -803,15 +921,22 @@ export async function runAcceptance(
 			);
 		}
 		if (options.scenario === "automatic" && !branchesFolded(sm)) {
-			// The pair ran and did not accept a milestone: no fold is the safe outcome.
 			await transport.drain();
-			save("abstained.json", {
-				abstained: true,
-				reason: "the recommended classifier pair ran and did not accept a milestone",
+			save("result.json", {
+				passed: true,
+				scenario: options.scenario,
+				outcome: "policy-evaluated-no-fold",
+				folded: false,
+				initialTokens,
+				afterTokens: estimateAdmissionTokens(sm),
+				decisions: verifyAutomaticPolicy(policyResponses),
 				calls,
-				budget: ledger.snapshot(),
+				sessionFile: sm.getSessionFile(),
+				beforeBudget,
+				afterBudget: ledger.snapshot(),
+				completedAt: new Date().toISOString(),
 			});
-			console.log("automatic: policy ran and abstained; no fold claimed (see abstained.json).");
+			console.log("automatic: PASS; policy decisions recorded; no fold claimed (see result.json).");
 			return;
 		}
 		const branch = sm.getBranch();
