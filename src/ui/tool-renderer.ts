@@ -2,13 +2,13 @@
  * TUI rows for the `navigate_tree` tool call and result, and for the
  * continuity-ops ledger entry.
  *
- * Collapsed rows are exactly one line, truncated to the width and never
- * wrapped; expanded rows wrap and add detail. Every input comes from the
+ * Headers stay on one line; result bodies wrap and expand independently.
+ * Every input comes from the
  * model or the session file, so field access is guarded: a renderer that throws
  * breaks the row it paints.
  */
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import { keyHint, type Theme } from "@earendil-works/pi-coding-agent";
 import {
 	type Component,
 	truncateToWidth,
@@ -64,33 +64,54 @@ class Lines implements Component {
 
 const join = (...parts: string[]): string => parts.filter(Boolean).join(" ");
 
-/** `renderCall`: `anchor <name>`, `rewind <from> → <to>`, `list`, `pin <kind>: <text or path>`. */
-export function renderToolCall(args: unknown, theme: Theme, expanded: boolean): Component {
+/** Shared outcome read lazily because Pi renders the call before the result. */
+export interface ToolRowState {
+	outcome?: "success" | "error" | "warning";
+	metrics?: string;
+	notes?: readonly string[];
+}
+
+/** Lifecycle facts supplied by Pi for the call slot. */
+export interface ToolRowContext {
+	readonly state: ToolRowState;
+	readonly executionStarted: boolean;
+	readonly outputPad: number;
+}
+
+/** Renders the call identity and the latest reported outcome. */
+export function renderToolCall(
+	args: unknown,
+	theme: Theme,
+	expanded: boolean,
+	context?: ToolRowContext,
+): Component {
 	const a = isRecord(args) ? args : {};
 	const title = (word: string) => theme.fg("toolTitle", theme.bold(word));
 	const arg = (text: string) => (text ? theme.fg("accent", text) : "");
 	const field = (key: string) => oneLine(a[key]);
-	const extra: string[] = [];
-	const note = (label: string, value: string) => {
-		if (value) extra.push(theme.fg("muted", `  ${label}: ${value}`));
-	};
+	const notes = expanded
+		? ["summaryFocus", "why", "scopeAnchor"].flatMap((key) => {
+				const value = field(key);
+				return value ? [`${key}: ${value}`] : [];
+			})
+		: [];
+	if (context) context.state.notes = notes;
 	let head: string;
 	switch (a["action"]) {
 		case "anchor":
-			head = join(title("anchor"), arg(field("name")));
+			head = join("anchor", arg(field("name") ? `"${field("name")}"` : ""));
 			break;
 		case "rewind": {
 			const from = field("rewindTo");
 			const to = field("newLabel");
 			head =
 				from || to
-					? join(title("rewind"), arg(from || "…"), to ? `${theme.fg("dim", "→")} ${arg(to)}` : "")
-					: title("rewind");
-			note("focus", field("summaryFocus"));
+					? join("rewind →", arg(from ? `"${from}"` : "…"), to ? `as ${arg(`"${to}"`)}` : "")
+					: "rewind";
 			break;
 		}
 		case "list":
-			head = title("list");
+			head = "list";
 			break;
 		case "pin": {
 			const kind = field("kind");
@@ -99,18 +120,29 @@ export function renderToolCall(args: unknown, theme: Theme, expanded: boolean): 
 			const file = path ? path + (lines ? `:${lines}` : "") : "";
 			const body = kind === "file" ? file || field("text") : field("text") || file;
 			head = join(
-				title("pin"),
+				"pin",
 				kind ? arg(kind) + (body ? theme.fg("dim", ":") : "") : "",
 				body ? theme.fg("toolOutput", body) : "",
 			);
-			note("why", field("why"));
-			note("scope", field("scopeAnchor"));
 			break;
 		}
 		default:
-			head = join(title(TOOL_NAME), arg(field("action")));
+			head = arg(field("action"));
 	}
-	return expanded ? new Lines([head, ...extra], true) : new Lines([head], false);
+	return {
+		render(width) {
+			const outcome = context?.state.outcome;
+			const tone = outcome ?? (context?.executionStarted ? "accent" : "dim");
+			const glyph = outcome ? "●" : context?.executionStarted ? "⠋" : "○";
+			const metrics = context?.state.metrics;
+			const header =
+				join(theme.fg(tone, glyph), title(TOOL_NAME), head) +
+				(metrics ? theme.fg("muted", ` · ${metrics}`) : "");
+			const pad = context?.outputPad ?? 0;
+			return new Lines([header], false, pad).render(width);
+		},
+		invalidate() {},
+	};
 }
 
 function contentText(content: unknown): string {
@@ -155,23 +187,84 @@ function summarize(details: Record<string, unknown>, text: string): string | und
 	return undefined;
 }
 
-/** `renderResult`: one summary row; expanded, the full text the model received. */
+/** Renders human-facing output independently of model-facing result content. */
 export function renderToolResult(
 	result: unknown,
-	options: { readonly expanded: boolean },
+	options: { readonly expanded: boolean; readonly isPartial?: boolean },
 	theme: Theme,
 	isError: boolean,
+	context?: ToolRowContext,
 ): Component {
 	const r = isRecord(result) ? result : {};
 	const details = isRecord(r["details"]) ? r["details"] : {};
 	const text = contentText(r["content"]);
 	const failed = isError || details["refusal"] === true;
-	const paint = (line: string) => theme.fg(failed ? "error" : "toolOutput", line);
-	if (options.expanded && text.trim()) {
-		return new Lines(textLines(text).map(paint), true);
+	const aborted = isError && firstLine(text) === "Operation aborted";
+	const summary = summarize(details, text);
+	const queued = details["status"] === "queued" || details["status"] === "summary-requested";
+	if (context && !options.isPartial) {
+		context.state.outcome = aborted ? "warning" : failed ? "error" : "success";
+		context.state.metrics = aborted
+			? "interrupted"
+			: failed
+				? details["refusal"] === true
+					? "refused"
+					: "failed"
+				: queued
+					? "accepted"
+					: (summary ?? "complete");
 	}
-	const row = failed ? firstLine(text) : (summarize(details, text) ?? firstLine(text));
-	return new Lines(row ? [paint(row)] : [], false);
+	const paint = (line: string) =>
+		theme.fg(aborted ? "warning" : failed ? "error" : "toolOutput", line);
+	let body = textLines(text);
+	if (!failed) {
+		if (queued) {
+			body = [details["status"] === "queued" ? "Folding after this turn." : "Summarizing."];
+		} else if (typeof details["label"] === "string") {
+			const hint = oneLine(details["labelHint"]);
+			body = [
+				hint ? `Anchored after "${hint}"` : "Milestone anchored.",
+				...(options.expanded ? body.slice(1) : []),
+			];
+		} else if (summary && body[0]?.startsWith("[")) {
+			body = body.slice(1);
+		}
+		if (options.expanded) body.push(...(context?.state.notes ?? []));
+	}
+	while (body[0]?.trim() === "") body.shift();
+	while (body.at(-1)?.trim() === "") body.pop();
+	const cache = new Map<number, string[]>();
+	return {
+		render(width) {
+			if (width <= 0) return [];
+			const cached = cache.get(width);
+			if (cached) return cached;
+			const pad = Math.min(context?.outputPad ?? 0, Math.max(0, width - 1));
+			const inner = Math.max(1, width - 2 * pad - 5);
+			const full = body.flatMap((line) => wrapTextWithAnsi(paint(line), inner));
+			const shown = options.expanded ? full : full.slice(0, 4);
+			if (!options.expanded && full.length > shown.length) {
+				shown.push(
+					theme.fg(
+						"dim",
+						`… ${full.length - shown.length} more lines · ${keyHint("app.tools.expand", "expand")}`,
+					),
+				);
+			}
+			const lines = shown.map((line, index) =>
+				truncateToWidth(
+					" ".repeat(pad) + (index === 0 ? theme.fg("dim", "  ⎿  ") : "     ") + line,
+					width,
+					"…",
+				),
+			);
+			cache.set(width, lines);
+			return lines;
+		},
+		invalidate() {
+			cache.clear();
+		},
+	};
 }
 
 interface OpView {

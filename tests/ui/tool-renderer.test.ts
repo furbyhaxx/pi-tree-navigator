@@ -9,6 +9,7 @@ import {
 	renderContinuityOps,
 	renderToolCall,
 	renderToolResult,
+	type ToolRowState,
 } from "../../src/ui/tool-renderer.ts";
 
 initTheme("dark", false);
@@ -61,164 +62,200 @@ test("call rows are one line at every width", () => {
 	}
 });
 
-test("call rows read as the brief specifies", () => {
-	const row = (args: unknown) => oneLinePerWidth(renderToolCall(args, theme, false))[2];
-	assert.equal(row(calls["anchor"]), "anchor impl-start");
-	assert.equal(row(calls["rewind"]), "rewind impl-start → impl-done");
-	assert.equal(row(calls["list"]), "list");
-	assert.equal(
-		row({ action: "pin", kind: "rule", text: "Always answer in German" }),
-		"pin rule: Always answer in German",
-	);
-	assert.equal(row(calls["pin file"]), "pin file: src/some/deep/path/to/a/module.ts:10-40");
-	assert.equal(row(calls["pin multi-line"]), "pin fact: a b [2Jc");
-	const raw = renderToolCall(calls["pin multi-line"], theme, false).render(80);
-	assert.ok(!raw.join("").includes("\x1b[2J"));
-	assert.equal(row({ action: "rewind", rewindTo: "a" }), "rewind a");
-	assert.equal(row({ action: "pin", kind: "fact" }), "pin fact");
-	assert.equal(row({ action: "pin" }), "pin");
+test("partial args are guarded and control characters never reach the terminal", () => {
+	for (const args of [null, undefined, {}, 42, [], { action: "pin", text: {} }]) {
+		assert.doesNotThrow(() => renderToolCall(args, theme, false).render(80));
+	}
+	const row = renderToolCall({ action: "anchor", name: "a\n\x1b[2Jb" }, theme, false).render(80);
+	assert.equal(row.join("").includes("\x1b[2J"), false);
+	assert.match(plain(row), /anchor "a \[2Jb"/);
 });
 
-test("streaming and garbage args render without throwing", () => {
-	const garbage = [
-		undefined,
-		null,
-		{},
-		42,
-		"anchor",
-		[],
-		{ action: 5 },
-		{ action: "nope" },
-		{ action: "anchor", name: { deep: 1 } },
-		{ action: "pin", kind: 3, text: 9, path: [], lines: {} },
-		{ action: "rewind", rewindTo: 1, newLabel: null },
-	];
-	for (const args of garbage) {
-		for (const isExpanded of [false, true]) {
-			for (const width of WIDTHS) {
-				const lines = renderToolCall(args, theme, isExpanded).render(width);
-				assert.ok(lines.every((line) => visibleWidth(line) <= width));
-				if (!isExpanded) assert.ok(lines.length <= 1);
+test("headers use the documented grammar for pending and running actions", () => {
+	for (const args of Object.values(calls)) {
+		for (const executionStarted of [false, true]) {
+			const context = { state: {}, executionStarted, outputPad: 0 };
+			const component = renderToolCall(args, theme, false, context);
+			for (const width of [36, 57, 80, 130, 140]) {
+				const lines = component.render(width);
+				assert.equal(lines.length, 1);
+				assert.ok(visibleWidth(lines[0] ?? "") <= width);
+				assert.match(plain(lines), executionStarted ? /^⠋ navigate_tree/ : /^○ navigate_tree/);
 			}
 		}
 	}
-	assert.equal(oneLinePerWidth(renderToolCall({}, theme, false))[2], "navigate_tree");
 });
 
-test("expanded call wraps the full text and adds detail", () => {
-	const lines = renderToolCall(calls["pin"], theme, true).render(40);
-	assert.ok(lines.length > 10);
-	assert.ok(lines.every((line) => visibleWidth(line) <= 40));
-	assert.match(plain(renderToolCall(calls["rewind"], theme, true).render(80)), /focus:\s+x{20}/);
-	assert.match(
-		plain(renderToolCall(calls["pin file"], theme, true).render(80)),
-		/why: entry point/,
-	);
+test("rewind and refused anchor settle lazily with metrics and indented bodies", () => {
+	for (const refused of [false, true]) {
+		const state: ToolRowState = {};
+		const context = { state, executionStarted: true, outputPad: 0 };
+		const args = refused ? calls["anchor"] : calls["rewind"];
+		const result = refused
+			? {
+					...text("A label 'impl-start' already exists. Use action='list'."),
+					details: { refusal: true },
+				}
+			: {
+					...text("[navigate_tree] Rewind to 'impl-start' accepted (collapse as 'impl-done')."),
+					details: { status: "queued" },
+				};
+		for (const isExpanded of [false, true]) {
+			const call = renderToolCall(args, theme, isExpanded, context);
+			const body = renderToolResult(result, { expanded: isExpanded }, theme, false, context);
+			const lines = [...call.render(80), ...body.render(80)];
+			assert.match(
+				plain(lines),
+				refused
+					? /^● navigate_tree anchor "impl-start" · refused\n {2}⎿ {2}A label/
+					: /^● navigate_tree rewind → "impl-start" as "impl-done" · accepted/,
+			);
+			assert.ok(lines.every((line) => visibleWidth(line) <= 80));
+			assert.match(plain(body.render(80)), /^ {2}⎿ {2}/);
+			assert.doesNotMatch(plain(lines), /\[navigate_tree\]/);
+		}
+	}
 });
 
-const results = {
-	anchor: {
-		...text(
-			"[anchor 'ctx'] set at 4.1% of 1.0M (after: “read the repo”)\n\nOnce real work has accumulated after this anchor, collapse it.",
-		),
-		details: {
-			label: "ctx",
-			entryId: "e1",
-			contextTokens: 41000,
-			labelHint: "read the repo",
-		},
-	},
-	list: {
-		...text("[list] · 3 labels · ctx 12.0% of 1.0M\n\n 4.1%  ctx\n 9.0%  b"),
-		details: {
-			count: 3,
-			contextTokens: 120000,
-			contextWindow: 1_000_000,
-			reflectionOk: true,
-		},
-	},
-	pin: {
-		...text("[pin] D4 decision recorded"),
-		details: { id: "D4", kind: "decision", effect: "added", rev: 3 },
-	},
-	duplicate: {
-		...text("[pin] D4 already records this decision; nothing added."),
-		details: { id: "D4", kind: "decision", effect: "duplicate", rev: 3 },
-	},
-	rewind: {
-		...text("Rewind accepted. Write the summary now."),
-		details: {
-			status: "summary-requested",
-			rewindTo: "a",
-			newLabel: "b",
-		},
-	},
-	queuedRewind: {
-		...text("Rewind accepted; folding after this turn."),
-		details: { status: "queued", rewindTo: "a", newLabel: "b" },
-	},
-};
-
-test("result rows summarize each action in one line", () => {
-	const row = (result: unknown) =>
-		oneLinePerWidth(renderToolResult(result, collapsed, theme, false))[2];
-	assert.equal(row(results.anchor), "set at 4.1% of 1.0M");
-	assert.equal(row(results.list), "3 labels · ctx 12.0% of 1.0M");
-	assert.equal(row(results.pin), "D4 decision recorded");
-	assert.equal(row(results.duplicate), "already recorded as D4");
-	assert.equal(row(results.rewind), "accepted · summarizing");
-	assert.equal(row(results.queuedRewind), "accepted · folding after this turn");
-	assert.equal(
-		row({ ...results.list, details: { count: 1, contextTokens: 5000 } }),
-		"1 label · ctx 5.0k",
+test("expanded list output preserves content and collapsed output offers the bound key", () => {
+	const result = text(
+		`[list] · 8 labels\n${Array.from({ length: 8 }, (_, i) => `label-${i}`).join("\n")}`,
 	);
+	const small = plain(
+		renderToolResult({ ...result, details: { count: 8 } }, collapsed, theme, false).render(80),
+	);
+	const full = plain(
+		renderToolResult({ ...result, details: { count: 8 } }, expanded, theme, false).render(80),
+	);
+	assert.match(small, /more lines · .*expand/);
+	assert.doesNotMatch(small, /label-7/);
+	assert.match(full, / {5}label-7/);
+});
+
+test("aborted, partial and malformed results fit every width", () => {
+	const state: ToolRowState = {};
+	const context = { state, executionStarted: true, outputPad: 1 };
+	renderToolResult(text("Operation aborted"), collapsed, theme, true, context);
+	assert.equal(state.outcome, "warning");
+	renderToolResult(
+		text("late progress"),
+		{ expanded: false, isPartial: true },
+		theme,
+		false,
+		context,
+	);
+	assert.equal(state.outcome, "warning");
+	for (const result of [undefined, null, {}, { content: [null] }, text("x".repeat(800))]) {
+		for (const options of [collapsed, expanded]) {
+			for (const width of [1, 2, 36, 57, 80, 140]) {
+				assert.ok(
+					renderToolResult(result, options, theme, true, context)
+						.render(width)
+						.every((line) => visibleWidth(line) <= width),
+				);
+			}
+		}
+	}
+});
+
+for (const [details, expected] of [
+	[{ count: 3, contextTokens: 120000, contextWindow: 1000000 }, "3 labels · ctx 12.0% of 1.0M"],
+	[{ id: "D4", kind: "decision", effect: "added" }, "D4 decision recorded"],
+	[{ id: "D4", kind: "decision", effect: "duplicate" }, "already recorded as D4"],
+	[{ status: "summary-requested" }, "accepted"],
+] as const) {
+	test(`reported header metrics: ${expected}`, () => {
+		const state: ToolRowState = {};
+		renderToolResult({ ...text("result"), details }, collapsed, theme, false, {
+			state,
+			executionStarted: true,
+			outputPad: 0,
+		});
+		assert.equal(state.metrics, expected);
+		assert.equal(state.outcome, "success");
+		const header = renderToolCall({ action: "list" }, theme, false, {
+			state,
+			executionStarted: true,
+			outputPad: 0,
+		}).render(130);
+		assert.equal(header.length, 1);
+		assert.ok(plain(header).endsWith(` · ${expected}`));
+	});
+}
+
+test("expanded results show the full label text the model received", () => {
+	const rows = Array.from(
+		{ length: 8 },
+		(_, index) => `${index + 1}.0%  label-${index} · after preview-${index}`,
+	);
+	const result = { ...text(`[list] · 8 labels\n\n${rows.join("\n")}`), details: { count: 8 } };
+	for (const width of [57, 130]) {
+		const full = plain(renderToolResult(result, expanded, theme, false).render(width));
+		for (const row of rows) assert.ok(full.includes(row));
+		assert.doesNotMatch(full, /8 labels/);
+		const small = plain(renderToolResult(result, collapsed, theme, false).render(width));
+		assert.doesNotMatch(small, /label-7/);
+		assert.match(small, /more lines · .*expand/);
+	}
 });
 
 test("an error result shows its first line in the error colour", () => {
-	const message = `No label 'x' on the active branch. ${"y".repeat(200)}\nUse action='list'.`;
-	const failure = { ...text(message), details: { refusal: true } };
-	const rows = oneLinePerWidth(renderToolResult(failure, collapsed, theme, true));
-	assert.match(rows[2] ?? "", /^No label 'x' on the active branch\. y+…?$/);
-	assert.doesNotMatch(rows[2] ?? "", /Use action/);
-	const raw = renderToolResult(failure, collapsed, theme, true).render(80)[0];
-	assert.ok(raw?.startsWith(theme.getFgAnsi("error")));
-	// The refusal marker alone is enough when the host has not promoted it yet.
-	oneLinePerWidth(renderToolResult(failure, collapsed, theme, false));
-	const full = renderToolResult(failure, expanded, theme, true).render(130);
-	assert.match(plain(full), /Use action='list'\./);
-});
-
-test("expanded results show the full text the model received", () => {
-	const lines = renderToolResult(results.list, expanded, theme, false).render(80);
-	assert.match(plain(lines), /\[list\] · 3 labels[\s\S]*4\.1% {2}ctx[\s\S]*9\.0% {2}b/);
-	assert.ok(lines.length > 1);
+	const result = { ...text("Duplicate label.\nUse action='list'."), details: { refusal: true } };
+	for (const options of [collapsed, expanded]) {
+		const lines = renderToolResult(result, options, theme, false).render(80);
+		assert.match(plain(lines), /^ {2}⎿ {2}Duplicate label\./);
+		assert.ok(lines[0]?.includes(theme.getFgAnsi("error")));
+		assert.match(plain(lines), /Use action='list'/);
+	}
 });
 
 test("garbage results render without throwing", () => {
-	const garbage = [
-		undefined,
+	for (const result of [
 		null,
-		{},
+		undefined,
 		7,
+		{},
 		{ content: null },
 		{ content: [null, 3, { type: "text" }] },
 		{ details: "x" },
-		{ details: { count: "3", id: 4, label: 1 } },
-		{ content: [{ type: "text", text: "\x1b[31mhi\x1b[0m" }], details: [] },
-	];
-	for (const result of garbage) {
-		for (const isError of [false, true]) {
-			for (const options of [collapsed, expanded]) {
-				for (const width of WIDTHS) {
-					const lines = renderToolResult(result, options, theme, isError).render(width);
-					assert.ok(lines.every((line) => visibleWidth(line) <= width));
-					if (!options.expanded) assert.ok(lines.length <= 1);
-				}
+		{ details: { count: "3", label: 1 } },
+	]) {
+		for (const options of [collapsed, expanded]) {
+			for (const isError of [false, true]) {
+				const lines = renderToolResult(result, options, theme, isError).render(57);
+				assert.ok(lines.every((line) => visibleWidth(line) <= 57));
 			}
 		}
 	}
-	const escaped = renderToolResult(garbage[8], collapsed, theme, false);
-	assert.equal(plain(escaped.render(80)), "[31mhi [0m");
+});
+
+test("anchor preview and queued focus add information with one body marker", () => {
+	const anchor = {
+		...text("[anchor 'a'] set at 1.0% of 1.0M"),
+		details: { label: "a", contextTokens: 10000, labelHint: "reviewed parser" },
+	};
+	assert.equal(
+		plain(renderToolResult(anchor, collapsed, theme, false).render(80)),
+		'  ⎿  Anchored after "reviewed parser"',
+	);
+	const context = { state: {}, executionStarted: true, outputPad: 0 };
+	const call = renderToolCall(
+		{ action: "rewind", summaryFocus: "Keep the parser contract." },
+		theme,
+		true,
+		context,
+	);
+	const body = renderToolResult(
+		{ ...text("Rewind accepted"), details: { status: "queued" } },
+		expanded,
+		theme,
+		false,
+		context,
+	);
+	const output = plain([...call.render(80), ...body.render(80)]);
+	assert.equal(output.split("⎿").length - 1, 1);
+	assert.match(output, /Folding after this turn\.\n {5}summaryFocus: Keep the parser contract\./);
+	assert.equal(output.split("accepted").length - 1, 1);
 });
 
 const user = { origin: "user", entryId: "e1" };
