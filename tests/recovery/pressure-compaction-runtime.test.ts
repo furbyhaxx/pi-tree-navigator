@@ -253,7 +253,7 @@ describe("rewind-driven compaction (#101)", () => {
 		}
 	});
 
-	it("silent stop overflow: preserves successful evidence and the pending input without withholding", async () => {
+	it("silent stop above the local window settles the successful answer without rewriting history", async () => {
 		const f = await forcedSetup();
 		try {
 			f.sm.appendMessage({
@@ -266,12 +266,13 @@ describe("rewind-driven compaction (#101)", () => {
 				usage: { ...usageOf(105_000), input: 105_000 },
 			};
 			const id = f.sm.appendMessage(message as never);
+			const before = structuredClone(f.sm.getEntries());
 			const turn = await fireTurnEndAll(f.pi, f.ctx, message);
-			assert.equal(turn.continue, true);
-			const edits = turn.entries.filter((d) => d.type === "context_edit");
-			assert.deepEqual(edits, []);
+			assert.equal(turn.continue, false);
+			assert.deepEqual(turn.entries, []);
+			assert.deepEqual(f.sm.getEntries(), before);
+			assert.equal(f.ctx.registryCalls.length, 0);
 			assert.ok(!hiddenIds(f.sm).has(id));
-			assert.equal(at(forcedDrafts(turn), 0).details["status"], "done");
 			const wire = fireContext(f.pi, f.ctx);
 			assert.ok(JSON.stringify(wire).includes("protected"));
 			assert.ok(JSON.stringify(wire).includes("done"));
