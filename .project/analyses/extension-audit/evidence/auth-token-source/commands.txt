@@ -1,0 +1,9 @@
+All runs used Bun 1.4.3 with HOME, XDG_CONFIG_HOME, XDG_CACHE_HOME, XDG_STATE_HOME, XDG_DATA_HOME, PI_CODING_AGENT_DIR and TMPDIR set inside an ephemeral mktemp directory; PI_OFFLINE=1. A preload replaced global fetch with a throwing guard. Sandboxes were removed on exit.
+
+From ../pi-auth-plus:
+timeout 120 bun test --isolate --preload ../pi-tree-navigator/.project/analyses/extension-audit/evidence/auth-token-source/network-guard.ts tests/tokens/engine.test.ts tests/tokens/tracker.test.ts tests/tokens/bus.test.ts tests/tokens/families.test.ts tests/tokens/estimate.test.ts tests/families/synthetic/usage.test.ts tests/families/synthetic/physical.test.ts tests/models/runtime/physical.test.ts tests/families/anthropic/count.test.ts
+
+From the navigator root:
+timeout 30 bun --preload ./.project/analyses/extension-audit/evidence/auth-token-source/network-guard.ts ./.project/analyses/extension-audit/evidence/auth-token-source/repro.ts
+
+The initial reproduction command omitted './' before the preload and failed with 'preload not found' (repro.log); the corrected command passed (repro-pass.log).

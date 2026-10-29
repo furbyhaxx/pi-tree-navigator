@@ -1,0 +1,3 @@
+tokenizer load alone: unchanged 200-token stored usage source provider -> tokenizer
+model switch: current hf:example/other reused hf:example/model's 200-token anchor
+post-compaction bus: cached=100, refresh=20 for changed leaf

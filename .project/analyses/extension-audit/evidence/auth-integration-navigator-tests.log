@@ -1,0 +1,23 @@
+bun test v1.4.3 (c6da4a4d3)
+
+tests/core/context-tokens.test.ts:
+(pass) estimateContextTokens > empty message list is 0 [0.29ms]
+(pass) estimateContextTokens > no usage anywhere: sums estimateTokens over every message [0.24ms]
+(pass) estimateContextTokens > uses the newest valid assistant usage as baseline + trailing estimates [0.02ms]
+(pass) estimateContextTokens > picks the newest valid usage, not the oldest [0.02ms]
+(pass) estimateContextTokens > skips aborted/error/zero-usage baselines and falls through to the previous valid usage [0.02ms]
+(pass) estimateContextTokens > counts toolResult / custom / branchSummary shapes [0.05ms]
+(pass) estimateContextTokens > system message: delegates to the host estimateTokens (0.84.2 scores 0; 1.0.0 counts content+sections+toolsAdded) [0.16ms]
+(pass) estimateContextTokens > counts the effective system state once after section replacement [0.15ms]
+(pass) estimateContextTokens > image blocks are accounted as chars in the trailing estimate [0.03ms]
+(pass) estimateContextTokens > circular toolCall arguments throw (plain JSON.stringify — no safeJsonStringify guard) [2.97ms]
+(pass) estimateContextTokens > image blocks after the baseline are counted in the trailing estimate [0.03ms]
+(pass) estimateRequestTokens > valid baseline: usage plus the SDK-scaled tail, even when a whole-content scan is larger [0.13ms]
+(pass) estimateRequestTokens > no baseline: the whole content, scaled [0.03ms]
+(pass) estimateRequestTokens > an aborted or errored reply is no baseline [0.02ms]
+(pass) fixedOverheadNote > names the tool schemas and the largest MCP server when they alone exceed the limit [3.80ms]
+(pass) fixedOverheadNote > stays silent while the conversation holds enough to fold [0.49ms]
+
+ 16 pass
+ 0 fail
+Ran 16 tests across 1 file. [232.00ms]

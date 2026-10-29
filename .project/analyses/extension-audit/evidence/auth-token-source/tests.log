@@ -1,0 +1,92 @@
+bun test v1.4.3 (c6da4a4d3)
+
+tests/tokens/estimate.test.ts:
+(pass) token estimates > a sum carries its weakest source [0.10ms]
+(pass) token estimates > JSON is estimated denser than prose [0.22ms]
+(pass) token estimates > a tokenizer counter estimates until its tokenizer loads, then counts exactly [0.23ms]
+
+tests/tokens/families.test.ts:
+(pass) family token counters > selects cached counters by provider and model [0.90ms]
+
+tests/tokens/bus.test.ts:
+(pass) typed queries, ready, context changes and disposal share the token contract [7.14ms]
+(pass) malformed requests are dropped like quota queries [26.23ms]
+(pass) failures and caller aborts preserve the shared error API [0.44ms]
+(pass) untrusted replies and broadcasts validate nested counts and optional fields [72.81ms]
+(pass) stop suppresses in-flight replies and aborts breakdown work [5.34ms]
+
+tests/tokens/tracker.test.ts:
+(pass) event bursts debounce once and publish the last event reason [30.71ms]
+(pass) model changes invalidate immediately, suppress stale work, and same-model turns retain reports [63.23ms]
+(pass) session starts and branch replacements invalidate same-model reports [0.38ms]
+(pass) immediate refresh supersedes slow work even when the engine ignores abort [30.41ms]
+(pass) shutdown clears, aborts running work, cancels debounce and releases context [30.71ms]
+(pass) shutdown cancels a pending debounce [30.50ms]
+(pass) failures and throwing listeners are isolated; breakdown forwards the caller signal [31.05ms]
+
+tests/tokens/engine.test.ts:
+(pass) valid usage anchors only the tail and aborted or error assistants cannot anchor [1.43ms]
+(pass) compaction without subsequent valid usage counts system, tools and all messages [0.34ms]
+(pass) appending a message reuses exact segments but retries estimate results [0.22ms]
+(pass) breakdown extracts every model-visible role, tool arguments and image estimates [0.57ms]
+(pass) context edits invalidate old usage and later valid usage restores the anchor [0.14ms]
+(pass) native tool counts are deduplicated and reused [0.29ms]
+(pass) counter failures fall back to labelled estimates and abort stops between segments [0.42ms]
+(pass) family selection is ordered, cached per model and falls back to the default estimate [0.12ms]
+(pass) native count requests carry the accepted alias source id [1.68ms]
+(pass) accepted aliases use native physical counters and follow retargeting without changing reports [0.74ms]
+(pass) rejected aliases retain their own physical counter and native request identity [0.31ms]
+(pass) counter cache distinguishes resolved providers for the same physical model id [0.10ms]
+(pass) memo separates kinds and live counter ids, hashes large text and evicts old entries [12.85ms]
+(pass) zero usage is skipped while a later all-zero assistant stays in the tail [0.38ms]
+(pass) recorded system messages replace the live prompt and tools instead of adding to them [0.29ms]
+(pass) system prose is rewritten to what the provider sends before counting; tool JSON is not [0.17ms]
+
+tests/families/anthropic/count.test.ts:
+(pass) families/anthropic/count > keeps identity and version, omits billing and metadata, and subtracts one shared baseline [0.70ms]
+(pass) families/anthropic/count > 429 falls back and suppresses further requests during backoff [0.22ms]
+(pass) families/anthropic/count > API keys use x-api-key and tools use wire names and no-tools subtraction [0.43ms]
+(pass) families/anthropic/count > falls back without rejecting on 401 [0.12ms]
+(pass) families/anthropic/count > falls back without rejecting on 403 [0.05ms]
+(pass) families/anthropic/count > falls back without rejecting on 500 [0.03ms]
+(pass) families/anthropic/count > falls back without rejecting on json [0.03ms]
+(pass) families/anthropic/count > falls back without rejecting on shape [0.02ms]
+(pass) families/anthropic/count > falls back without rejecting on network [0.08ms]
+(pass) families/anthropic/count > no credential never fetches [0.06ms]
+(pass) families/anthropic/count > queues calls beyond two in flight and shares the baseline [26.51ms]
+(pass) families/anthropic/count > family caches only claude model counters without fetching [0.15ms]
+(pass) families/anthropic/count > rewrites system text the way the provider sends it, including user rules [0.11ms]
+
+tests/families/synthetic/physical.test.ts:
+(pass) Synthetic physical request hooks > isolates overlapping requests and counts caller-transformed logical alias payloads [1.41ms]
+(pass) Synthetic physical request hooks > handles physical identities, mismatches, errors and caller replacements [0.19ms]
+
+tests/families/synthetic/usage.test.ts:
+(pass) synthetic usage correction > context equals the real prompt and cost is unchanged (6869) [0.05ms]
+(pass) synthetic usage correction > context equals the real prompt and cost is unchanged (7311)
+(pass) synthetic usage correction > normal Anthropic accounting and other providers are left alone [0.03ms]
+(pass) Synthetic tokenizer usage > counts all request blocks and preserves billing (6869) [0.11ms]
+(pass) Synthetic tokenizer usage > counts all request blocks and preserves billing (7311) [0.03ms]
+(pass) Synthetic tokenizer usage > unloaded, absent, failed, mismatched and alias tokenizers keep only dedupe [0.08ms]
+(pass) Synthetic tokenizer usage > other providers, errors and zero prompt usage are untouched [0.03ms]
+(pass) Synthetic tokenizer usage > unsupported or malformed content falls back instead of counting binary data [0.05ms]
+(pass) Synthetic tokenizer usage > counts blocks separately for tokenizer memoization [0.04ms]
+(pass) Synthetic tokenizer usage > leaves request-local usage correction to the physical wrapper when available [0.92ms]
+(pass) Synthetic tokenizer usage > preloads on lifecycle events without awaiting, captures and persists matching usage [0.54ms]
+(pass) Synthetic tokenizer usage > configured aliases preload and count their source while retaining request identity [0.65ms]
+(pass) Synthetic tokenizer usage > does not capture foreign requests or reuse requests after session changes [0.13ms]
+
+tests/models/runtime/physical.test.ts:
+(pass) physical request hooks > isolates overlapping same-id requests, composes callbacks and preserves events [0.95ms]
+(pass) physical request hooks > runs caller response callbacks before request-local hooks for concurrent requests [0.39ms]
+(pass) physical request hooks > falls back when an extension-owned factory or hook throws [0.18ms]
+(pass) physical request hooks > passes virtual and unmatched calls through and updates factory on reload [0.16ms]
+(pass) physical request hooks > preserves abort events, identity, result rejection and no-message stream [0.29ms]
+(pass) physical request hooks > preserves stream iteration failures after forwarding earlier events [0.17ms]
+(pass) physical request hooks > intercepts physical recursion only and preserves callback errors and undefined payloads [0.12ms]
+(pass) physical request hooks > rejects unsupported or frozen runtimes without changes [0.04ms]
+
+ 68 pass
+ 0 fail
+ 400 expect() calls
+Ran 68 tests across 9 files. [907.00ms]

@@ -1,11 +1,11 @@
 ---
-version: 1
+version: 2
 id: "extension-audit"
 title: "Extension completeness, correctness and UX audit"
 description: "Integrated, evidence-ranked review of pi-tree-navigator and its alignment with pi-workbench conventions."
 type: "analysis"
 created: "2026-10-29T18:26:32+01:00"
-updated: "2026-10-29T18:26:32+01:00"
+updated: "2026-10-29T19:06:18+01:00"
 createdBy: "Pi coding assistant"
 updatedBy: "Pi coding assistant"
 ---
@@ -216,6 +216,19 @@ Additional improvements, separate from functional defects:
 - **Later:** measured anchor performance, secondary display/history improvements, and synchronization of documentation/skills. Update affected documentation alongside each fix rather than leaving all docs to the end.
 
 This is a recommendation, not authorization to implement. No findings were fixed in this review.
+
+## Follow-up: pi-auth-plus token accounting
+
+The [auth-plus integration addendum](auth-plus-integration.md) adds six findings/limitations AP1–AP6 after the user requested comparison with `../pi-auth-plus`:
+
+- Navigator consumes corrected persisted assistant usage, but does not consume auth-plus's richer tail counters or token bus. Fold/admission/chunking paths retain separate heuristics.
+- The bus currently counts the live persisted projection, without a request fingerprint or hypothetical-input API; cached totals cannot safely authorize final requests or proposed folds.
+- Endpoint-derived piece counts are labelled exact despite framing limitations and the provider's documented estimate semantics.
+- Tokenizer availability can relabel unchanged historical usage; model switches can reuse old-model baselines; cached compaction reports lack a freshness fence. Navigator's projection invalidation masks the model-switch defect when active.
+
+Recommend a supported snapshot-counting capability owned by auth-plus, consumed by Navigator with identity/provenance checks and an explicit fallback. Do not copy counter implementations or replace admission with a cached dashboard number. This recommendation does not change the preservation and ownership priorities above.
+
+Follow-up verification: **16 Navigator tests and 68 auth-plus tests passed**, five coordinator synthetic scenarios and three analyst reproductions passed. No live provider/count endpoints were called. Only public provider documentation was fetched. The existing 37-finding register remains unchanged; the addendum carries the additional findings and qualifications.
 
 ## Explicit remaining verification gaps
 
