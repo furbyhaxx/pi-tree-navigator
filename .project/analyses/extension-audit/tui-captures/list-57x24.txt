@@ -1,0 +1,24 @@
+ provider via OAuth or API key. See:
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/provide
+ rs.md
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.
+ md
+
+ Anchor 'important-milestone-suffix-alpha' set at the
+ current leaf.
+
+─ Anchor/List ──────────────────── 2 anchors · ctx 0.0k ─
+ ❯ Filter anchors by name or preview…
+
+ → ◆ audit-anchor             — · 46 · −0 savable
+   ◆ import…one-suffix-alpha  — · 46 · −0 savable
+   + Set new anchor at current leaf…
+
+   Press alt+r to fold the work since 'audit-anchor'.
+   Enter shows the full line.
+ ↑↓ navigate  enter select  type filter  esc back  …
+─────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                     unknown

@@ -1,0 +1,24 @@
+
+ Pi-Bolt can explain its own features and look up its docs. Ask it how to use or extend Pi-Bolt.
+
+[Extensions]
+  src
+
+
+ ledger · +rule "Synthetic rule for audit only"
+
+ Reloaded keybindings, extensions, skills, prompts, themes, and context files
+
+ Warning: ENOENT: no such file or directory, lstat
+ '/tmp/ptn-audit-M656f96L/sessions/2026-10-29T16-57-07-060Z_01a18898-06f4-7347-9157-71bc9f9827a9.jsonl'
+
+ Inspected "Synthetic audit session": 3 entries and 2 user turns.
+
+ Warning: ENOENT: no such file or directory, lstat
+ '/tmp/ptn-audit-M656f96L/sessions/2026-10-29T16-57-07-060Z_01a18898-06f4-7347-9157-71bc9f9827a9.jsonl'
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                                                                                                        unknown

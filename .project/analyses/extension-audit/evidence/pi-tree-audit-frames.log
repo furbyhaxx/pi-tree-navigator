@@ -1,0 +1,60 @@
+{
+  "original": [
+    {
+      "role": "system",
+      "content": "HEAD"
+    },
+    {
+      "role": "user",
+      "content": "Initial request"
+    },
+    {
+      "role": "system",
+      "content": "FRAME_MARKER"
+    },
+    {
+      "role": "user",
+      "content": "Latest request"
+    }
+  ],
+  "captured": [
+    {
+      "role": "system",
+      "content": "HEAD",
+      "timestamp": 0
+    },
+    {
+      "role": "system",
+      "content": "FRAME_MARKER",
+      "timestamp": 1793293215162
+    }
+  ],
+  "summary": [
+    {
+      "role": "system",
+      "content": "HEAD"
+    },
+    {
+      "role": "system",
+      "content": "FRAME_MARKER"
+    },
+    {
+      "role": "user",
+      "content": "Initial request"
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "FRAME_MARKER"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": "Latest request"
+    }
+  ],
+  "markerOccurrences": 2
+}

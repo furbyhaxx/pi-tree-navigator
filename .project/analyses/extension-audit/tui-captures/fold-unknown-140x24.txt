@@ -1,0 +1,24 @@
+ ledger · +rule "Synthetic rule for audit only"
+
+ Reloaded keybindings, extensions, skills, prompts, themes, and context files
+
+ Warning: ENOENT: no such file or directory, lstat
+ '/tmp/ptn-audit-M656f96L/sessions/2026-10-29T16-57-07-060Z_01a18898-06f4-7347-9157-71bc9f9827a9.jsonl'
+
+ Inspected "Synthetic audit session": 3 entries and 2 user turns.
+
+─ Anchor/Fold ──────────────────────────────────────────────────────────────────────────────────────────────────────────── 0 of 2 foldable ─
+ ❯ Type to filter anchors and previews…
+   ✗ cannot fold to important-milestone-suffix-alpha
+
+
+
+
+ → ◆ important-milestone-suffix-alpha  not foldable
+   ◆ audit-anchor                      not foldable
+
+   the materialized handoff does not reduce projected context (estimated 0 -> 8376 tokens); original history was kept
+ ↑↓ choose anchor  type filter  esc back
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                                                                                                        unknown

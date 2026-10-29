@@ -1,0 +1,18 @@
+import {SessionManager} from '../../../../node_modules/@earendil-works/pi-coding-agent/dist/index.js';
+import {projectFrames} from '../../../../../pi-workbench/src/message-framing/projection.ts';
+import {createNavigatorState} from '../../../../src/core/navigator-state.ts';
+import {createFoldRuntime} from '../../../../src/fold/fold-runtime.ts';
+import {preparedInContext} from '../../../../src/fold/fold-pricing.ts';
+const sm=SessionManager.inMemory();
+sm.appendMessage({role:'system',content:'HEAD',timestamp:0});
+const anchor=sm.appendMessage({role:'user',content:'Initial request',timestamp:1});
+const details={v:1,seq:1,nonce:'1234abcd',ts:'2026-10-29T18:00:00+01:00',kind:'instruction',source:'instructions',body:'FRAME_MARKER',trust:'trusted'};
+sm.appendCustomMessageEntry('wb-frame','FRAME_MARKER',true,details);
+const leaf=sm.appendMessage({role:'user',content:'Latest request',timestamp:2});
+const messages=projectFrames(sm.buildSessionProjection().messages,{nativeSystem:true,forceUser:false});
+const state=createNavigatorState();
+const runtime=createFoldRuntime({state,minRewindSavingsTokens:4000,writeLabel:()=>true});
+const model={provider:'fixture',id:'fixture'};
+runtime.captureSystemHead(sm,sm.getSessionId(),model,messages);
+const prepared=preparedInContext(sm,anchor,leaf,state.folds.capturedSystems.get(sm.getSessionId()),model);
+console.log(JSON.stringify({original:messages.map(m=>({role:m.role,content:m.content})),captured:state.folds.capturedSystems.get(sm.getSessionId())?.messages,summary:prepared?.messages.map(m=>({role:m.role,content:m.content})),markerOccurrences:JSON.stringify(prepared?.messages).split('FRAME_MARKER').length-1},null,2));

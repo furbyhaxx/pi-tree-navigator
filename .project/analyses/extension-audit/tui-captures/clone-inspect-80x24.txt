@@ -1,0 +1,24 @@
+
+
+ ledger · +rule "Synthetic rule for audit only"
+
+ Reloaded keybindings, extensions, skills, prompts, themes, and context files
+
+ Warning: ENOENT: no such file or directory, lstat
+ '/tmp/ptn-audit-M656f96L/sessions/2026-10-29T16-57-07-060Z_01a18898-06f4-7347-
+ 9157-71bc9f9827a9.jsonl'
+
+─ Anchor/Clone/Inspect ───────────────────────────────────────────── 3 entries ─
+ ❯ Type to search…
+
+ → Session   Synthetic audit session
+   Id        audit-synthetic
+   Entries   3 · 2 user turns
+   Branches  1, linear history
+   Folds     none
+   Anchors   none
+   Tools     all calls finished
+ ↑↓ navigate  enter close  alt+j raw JSON  type filter  esc back
+─────────────────────────────────── ↓ 2 more ───────────────────────────────────
+~/work
+0.0%/0 (auto)                                                            unknown

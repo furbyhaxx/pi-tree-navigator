@@ -1,0 +1,6 @@
+clone ledger preservation {"before":["Rule: never deploy without approval"],"after":[],"sourceOpsStillArchived":true}
+user duplicate authority {"source":{"origin":"agent"},"agentArchiveApplied":1,"status":"archived"}
+{"calls":1,"aborted":false,"returnedTokens":40054,"window":10000}
+{"beforeCut":{"ok":false,"detail":"the recovery cut is unsafe: tool call without its result"},"resultStatus":"done","summaryCalls":2,"afterCut":{"ok":false,"detail":"the recovery cut is unsafe: tool call without its result"}}
+{"ok":true,"before":{"model":{"provider":"claude","modelId":"claude-sonnet-4-5"},"thinking":"high","sections":{"policy":"new-critical-policy"}},"after":{"model":{"provider":"test","modelId":"old-model"},"thinking":"low","sections":{"policy":"old"}}}
+{"wireContainsHidden":true,"summaryRecords":[]}

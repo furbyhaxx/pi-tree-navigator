@@ -1,0 +1,24 @@
+
+ Pi-Bolt can explain its own features and look up its docs. Ask it how to use or extend Pi-Bolt.
+
+[Extensions]
+  src
+
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Anchor 'audit-anchor': — of the window.
+ at: thinking level change
+
+─ Anchor/Tree ───────────────────────────────────────────────────────────────────────────────────────────── 0 folds · 2 anchors · ctx 0.0k ─
+ ❯ Search the outline · showing all rows
+
+ → ◆ audit-anchor                      —
+      ↳ at: thinking level change
+   ◆ important-milestone-suffix-alpha  —
+ ↑↓ navigate  enter view  alt+g go  alt+f filter  type filter  esc back
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                                                                                                        unknown

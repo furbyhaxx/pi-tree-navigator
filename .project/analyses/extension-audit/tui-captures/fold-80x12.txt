@@ -1,0 +1,12 @@
+ Added R1 (rule).
+─ Anchor/Fold ──────────────────────────────────────────────── 0 of 2 foldable ─
+ ❯ Type to filter anchors and previews…
+   ✗ cannot fold to important-milestone-suffix-alpha
+
+
+
+
+ → ◆ important-milestone-suffix-alpha  not foldable
+   ◆ audit-anchor                      not foldable
+
+~/work

@@ -1,0 +1,24 @@
+ Warning: No models available. Use
+ /login to log into a provider via
+ OAuth or API key. See:
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-l
+ inux-x64/docs/providers.md
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-l
+ inux-x64/docs/models.md
+
+─ Anchor ──────────────── ctx 0.0k ─
+ ❯ Type to search views or actions…
+
+ → Session tree & …  0 folds · 0 an…
+   Active anchors …  none yet
+   Current briefin…  empty · rev 0
+   Fold current wo…  anchor · label…
+
+   Browse the chronological outline
+   of phases, anchors and folded…
+ type filter  esc close  …
+───────────── ↓ 2 more ─────────────
+~/work
+0.0%/0 (auto)                unknown

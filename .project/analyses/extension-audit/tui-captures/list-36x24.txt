@@ -1,0 +1,24 @@
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-l
+ inux-x64/docs/providers.md
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-l
+ inux-x64/docs/models.md
+
+ Anchor
+ 'important-milestone-suffix-alpha'
+ set at the current leaf.
+
+─ Anchor/List  2 anchors · ctx 0.… ─
+ ❯ Filter anchors by name or previe…
+
+ → ◆ audit-anchor    — · 46 · −0 sa…
+   ◆ imp…ffix-alpha  — · 46 · −0 sa…
+   + Set new anchor at current leaf…
+
+   Press alt+r to fold the work
+   since 'audit-anchor'. Enter show…
+ type filter  esc back  …
+────────────────────────────────────
+~/work
+0.0%/0 (auto)                unknown

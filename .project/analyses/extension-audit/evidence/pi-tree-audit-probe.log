@@ -1,0 +1,37 @@
+node scripts/pi-upstream-probe.mjs
+PASS  AgentSession exported  — function
+PASS  prompt is own data property  — {"writable":true,"hasGet":false}
+PASS  prompt is writable
+PASS  prompt is a function  — function
+PASS  sessionManager plain-field assignment  — plain this.sessionManager = found
+PASS  SessionManager exported  — function
+PASS  buildSessionContext is prototype method  — function
+PASS  buildSessionContext callable with no args → { messages }  — returns messages array
+PASS  SessionManager.prototype.getEntries is a method (hint anchor walk)  — function
+PASS  SessionManager.prototype.getBranch is a method (hint anchor walk)  — function
+PASS  SessionManager.prototype.getLabel is a method (hint anchor walk)  — function
+PASS  Agent exported (pi-agent-core)  — function
+PASS  Agent.prototype.state readable  — {"hasGet":true,"hasValue":false}
+PASS  state.messages writable (source: set messages accessor)  — set messages accessor found
+PASS  getSessionId is prototype method  — function
+PASS  native handoff updateDisplay  — function
+PASS  native tree render  — function
+PASS  native tree input  — function
+PASS  native tree list access  — function
+PASS  native session projection  — function
+PASS  proposal model lookup  — function
+PASS  proposal model authentication  — function
+PASS  proposal provider-neutral streaming  — function
+PASS  offline proposal model runtime  — function
+PASS  native tree row presentation
+PASS  AgentSession._extensionRunner plain field (#79)  — plain this._extensionRunner = found
+PASS  ExtensionRunner.emit is prototype method (#79)  — function
+PASS  navigateTree emits session_tree (#79 payload parity)  — session_tree emit found
+PASS  agent loop awaits finishTurn before the steering drain (#80)  — finishTurn → getSteeringMessages order found
+PASS  AgentSession.finishTurn awaits the turn_end dispatch (#80)  — await _dispatchTurnEndBoundary found
+PASS  turn_end dispatch commits boundary entries and returns continue (#80)  — _commitBoundaryDrafts(boundary.entries) … return boundary.continue found
+PASS  assistant message_end (persisted) precedes tool_execution_start (#37)  — persist:assistant -> tool_execution_start:probe-tc-a -> execute:probe-tc-a -> tool_execution_start:probe-tc-b -> execute:probe-tc-b -> persist:assistant
+PASS  AgentSession persists message_end payloads via sessionManager.appendMessage (#37)  — subscription + message_end appendMessage found
+PASS  extension runtime named imports exist on host packages  — 43 runtime named import(s) across 110 source file(s) verified
+
+0 of 34 checks failed

@@ -1,0 +1,24 @@
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Anchor 'audit-anchor': — of the window.
+ at: thinking level change
+
+ ledger · +rule "Synthetic rule for audit only"
+
+ Added R1 (rule).
+
+─ Anchor/Fold ──────────────────────────────────────────────────────────────────────────────────────────────────────────── 0 of 2 foldable ─
+ ❯ Type to filter anchors and previews…
+   ✗ cannot fold to important-milestone-suffix-alpha
+
+
+
+
+ → ◆ important-milestone-suffix-alpha  not foldable
+   ◆ audit-anchor                      not foldable
+
+   the materialized handoff does not reduce projected context (estimated 0 -> 8376 tokens); original history was kept
+ ↑↓ choose anchor  type filter  esc back
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                                                                                                        unknown

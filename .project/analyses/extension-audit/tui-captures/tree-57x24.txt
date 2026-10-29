@@ -1,0 +1,24 @@
+
+
+ Warning: No models available. Use /login to log into a
+ provider via OAuth or API key. See:
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/provide
+ rs.md
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.
+ md
+
+ Anchor 'important-milestone-suffix-alpha' set at the
+ current leaf.
+
+─ Anchor/Tree ────────── 0 folds · 2 anchors · ctx 0.0k ─
+ ❯ Search the outline · showing all rows
+
+ → ◆ audit-anchor             —
+      ↳ at: thinking level change
+   ◆ import…one-suffix-alpha  —
+ ↑↓ navigate  enter view  type filter  esc back  …
+─────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                     unknown

@@ -1,0 +1,6 @@
+{"messages":500,"anchors":50,"projectionMedianMs":"0.46","anchorListingMedianMs":"5.12"}
+{"messages":1000,"anchors":100,"projectionMedianMs":"0.65","anchorListingMedianMs":"16.02"}
+{"messages":2000,"anchors":200,"projectionMedianMs":"1.02","anchorListingMedianMs":"52.69"}
+{"messages":4000,"anchors":400,"projectionMedianMs":"2.34","anchorListingMedianMs":"207.35"}
+{"scenario":"two active installations","tokens":2}
+{"scenario":"B shutdown, A still active","tokens":100010}

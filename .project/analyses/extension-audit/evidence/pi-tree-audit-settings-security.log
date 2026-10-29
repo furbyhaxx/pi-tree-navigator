@@ -1,0 +1,5 @@
+{"before":false,"accepted":true,"after":true,"emptyConfigAuto":{"kind":"ok","value":{"enabled":true}}}
+{"case":"valid-proposal","enabled":true,"tools":{"read":"omit"},"warnings":[],"syntheticContentInEvidence":false}
+{"case":"invalid-proposal","enabled":true,"tools":{},"proposalError":"treeProposal.model must be current or provider/model[:thinking]","warnings":["navigate_tree: invalid treeProposal in global config at /synthetic-agent/tree-navigator.json — treeProposal.model must be current or provider/model[:thinking]; model proposals are blocked until this is corrected."],"syntheticContentInEvidence":true}
+{"case":"invalid-base-override","enabled":true,"tools":{},"warnings":["navigate_tree: invalid auto_navigate in global config at /synthetic-agent/tree-navigator.json — Invalid auto_navigate.tools[\"read\"]: expected full, calls-only or omit; auto_navigate is disabled for this session."],"syntheticContentInEvidence":true}
+{"case":"malformed-layer","enabled":true,"tools":{},"warnings":["navigate_tree: invalid JSON in global config at /synthetic-agent/tree-navigator.json — that layer was ignored."],"syntheticContentInEvidence":true}

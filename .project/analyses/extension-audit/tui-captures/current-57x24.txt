@@ -1,0 +1,24 @@
+ rs.md
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.
+ md
+
+ Anchor 'audit-anchor': — of the window.
+ at: thinking level change
+
+ ledger · +rule "Synthetic rule for audit only"
+
+ Added R1 (rule).
+
+─ Anchor/Current ─────────────────────── rev 1 · 1 rule ─
+ ❯ Filter by id, text, origin or marker…
+
+ → R1 Synthetic rule for au…  user · pinned
+   + Add an item…
+
+   x retracts it, e edits the text, p unpins it.
+   Protected: the agent cannot change it.
+ ↑↓ navigate  enter open  type filter  esc back  …
+─────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                     unknown

@@ -1,0 +1,2 @@
+{"ok":true,"omittedMessageVisibleBefore":false,"omittedMessageVisibleAfter":true}
+{"locked":true,"pressureCalled":true,"outcome":{"status":"failed","detail":"no anchors on the active branch; a compaction did not help either: Synthetic fixture stopped before mutation"}}

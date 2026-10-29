@@ -1,0 +1,15 @@
+import { createAssistantMessageEventStream } from "../../../../node_modules/@earendil-works/pi-ai/dist/index.js";
+import { createProposalModelRunner } from "../../../../src/retrospective/proposal-model.ts";
+const model = { provider: "test", id: "proposal", name: "Proposal", api: "openai-completions", baseUrl: "http://localhost", reasoning: false, input: ["text"], contextWindow: 32000, maxTokens: 4000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+const stream = createAssistantMessageEventStream();
+let observed;
+const runner = createProposalModelRunner({model, thinking: "off", registry: {streamSimple(_model, _context, options) { observed = options; return stream; }}});
+const controller = new AbortController();
+let settled = false;
+const pending = runner.complete({systemPrompt: "JSON", text: "synthetic fixture", signal: controller.signal}).then(() => { settled = true; }, () => { settled = true; });
+controller.abort();
+await new Promise(resolve => setTimeout(resolve, 100));
+console.log(JSON.stringify({callerSignalForwardedUnchanged: observed.signal === controller.signal, optionKeys: Object.keys(observed), abortObservedByProvider: observed.signal.aborted, settledAfterAbort100ms: settled}));
+stream.end({role: "assistant", content: [], api: model.api, provider: model.provider, model: model.id, stopReason: "aborted", timestamp: 1, usage: {input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: {input:0, output:0, cacheRead:0, cacheWrite:0,total:0}}});
+await pending;
+console.log(JSON.stringify({settledOnlyAfterStreamEnded: settled}));

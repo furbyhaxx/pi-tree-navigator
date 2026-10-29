@@ -1,0 +1,24 @@
+ Pi-Bolt can explain its own features and look up its docs. Ask it how to use or extend Pi-Bolt.
+
+[Extensions]
+  src
+
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+─ Anchor ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ctx 0.0k ─
+ ❯ Type to search views or actions…
+
+ → Session tree & phases                 0 folds · 0 anchors
+   Active anchors (0 on branch)          none yet
+   Current briefing & continuity ledger  empty · rev 0
+   Fold current work now…                anchor · label · focus
+   Retrospective clone & restructure     inspect · propose · preview · create
+
+   Browse the chronological outline of phases, anchors and folded handoffs.
+ ↑↓ navigate  enter open  type filter  esc close
+───────────────────────────────────────────────────────────────── ↓ 1 more ─────────────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                                                                                                        unknown

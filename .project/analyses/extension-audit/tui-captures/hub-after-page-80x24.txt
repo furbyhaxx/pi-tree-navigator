@@ -1,0 +1,24 @@
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Anchor 'audit-anchor': — of the window.
+ at: thinking level change
+
+ ledger · +rule "Synthetic rule for audit only"
+
+ Added R1 (rule).
+
+─ Anchor ──────────────────────────────────────────────────────────── ctx 0.0k ─
+ ❯ Type to search views or actions…
+
+ → Session tree & phases                 0 folds · 2 anchors
+   Active anchors (2 on branch)          latest: important-milestone-suffix-alp…
+   Current briefing & continuity ledger  1 rule · rev 1
+   Fold current work now…                anchor · label · focus
+
+   Browse the chronological outline of phases, anchors and folded handoffs.
+
+ ↑↓ navigate  enter open  type filter  esc close
+─────────────────────────────────── ↓ 2 more ───────────────────────────────────
+~/work
+0.0%/0 (auto)                                                            unknown

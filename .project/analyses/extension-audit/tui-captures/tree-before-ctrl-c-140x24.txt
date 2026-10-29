@@ -1,0 +1,24 @@
+
+[Extensions]
+  src
+
+
+ ledger · +rule "Synthetic rule for audit only"
+
+ Reloaded keybindings, extensions, skills, prompts, themes, and context files
+
+ Warning: ENOENT: no such file or directory, lstat
+ '/tmp/ptn-audit-M656f96L/sessions/2026-10-29T16-57-07-060Z_01a18898-06f4-7347-9157-71bc9f9827a9.jsonl'
+
+ Inspected "Synthetic audit session": 3 entries and 2 user turns.
+
+─ Anchor/Tree ───────────────────────────────────────────────────────────────────────────────────────────── 0 folds · 2 anchors · ctx 0.0k ─
+ ❯ Search the outline · showing all rows
+
+ → ◆ audit-anchor                      —
+      ↳ at: thinking level change
+   ◆ important-milestone-suffix-alpha  —
+ ↑↓ navigate  enter view  alt+g go  alt+f filter  type filter  esc back
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                                                                                                        unknown

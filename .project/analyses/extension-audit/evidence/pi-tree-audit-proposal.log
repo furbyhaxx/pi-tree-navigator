@@ -1,0 +1,2 @@
+{"callerSignalForwardedUnchanged":true,"optionKeys":["signal","maxTokens","toolChoice"],"abortObservedByProvider":true,"settledAfterAbort100ms":false}
+{"settledOnlyAfterStreamEnded":true}

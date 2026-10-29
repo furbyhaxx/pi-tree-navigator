@@ -1,0 +1,24 @@
+ Anchor 'audit-anchor': — of the
+ window.
+ at: thinking level change
+
+ ledger · +rule "Synthetic rule fo…
+
+ Added R1 (rule).
+
+─ Anchor/Fold ──── 0 of 2 foldable ─
+ ❯ Type to filter anchors and previ…
+   ✗ cannot fold to important-miles…
+
+
+
+
+ → ◆ imp…ffix-alpha  not foldable
+   ◆ audit-anchor    not foldable
+
+   the materialized handoff does not
+   reduce projected context…
+ type filter  esc back  …
+────────────────────────────────────
+~/work
+0.0%/0 (auto)                unknown

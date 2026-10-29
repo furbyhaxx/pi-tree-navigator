@@ -1,0 +1,24 @@
+
+ ledger · +rule "Synthetic rule for audit only"
+
+ Reloaded keybindings, extensions, skills, prompts, themes, and context files
+
+ Warning: ENOENT: no such file or directory, lstat
+ '/tmp/ptn-audit-M656f96L/sessions/2026-10-29T16-57-07-060Z_01a18898-06f4-7347-9157-71bc9f9827a9.jsonl'
+
+ Inspected "Synthetic audit session": 3 entries and 2 user turns.
+
+─ Anchor ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── ctx 0.0k ─
+ ❯ Type to search views or actions…
+
+ → Session tree & phases                 0 folds · 2 anchors
+   Active anchors (2 on branch)          latest: important-milestone-suffix-alpha
+   Current briefing & continuity ledger  1 rule · rev 1
+   Fold current work now…                anchor · label · focus
+   Retrospective clone & restructure     inspect · propose · preview · create
+
+   Browse the chronological outline of phases, anchors and folded handoffs.
+ ↑↓ navigate  enter open  type filter  esc close
+───────────────────────────────────────────────────────────────── ↓ 1 more ─────────────────────────────────────────────────────────────────
+~/work
+0.0%/0 (auto)                                                                                                                        unknown
