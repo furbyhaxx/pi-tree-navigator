@@ -55,6 +55,7 @@ export function createSessionLifecycle({ state }: SessionLifecycleDeps) {
 			state.folds.queuedFolds.delete(sessionId);
 			tokenCalibration.delete(sessionId);
 			state.automatic.autoFoldStateBySession.delete(sessionId);
+			clearRuntimeConfig(sessionId);
 		} catch {
 			// Fail-open: session_start clears it too.
 		}

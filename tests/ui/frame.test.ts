@@ -1,6 +1,12 @@
 import { describe, it } from "bun:test";
 import * as assert from "node:assert/strict";
-import { CURSOR_MARKER, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
+import {
+	CURSOR_MARKER,
+	KeybindingsManager,
+	TUI_KEYBINDINGS,
+	type TuiMouseEvent,
+	visibleWidth,
+} from "@earendil-works/pi-tui";
 import {
 	FrameList,
 	type FrameListOptions,
@@ -42,6 +48,46 @@ describe("FrameList", () => {
 		for (const key of ["\x1bt", "\x1b[116;3u"]) frame.handleInput(key);
 		assert.equal(switches, 2);
 		assert.equal(frame.search, "treeProposal.tools");
+	});
+
+	it("gives enabled Alt actions priority over conflicting selection bindings", () => {
+		const keyboard = new KeybindingsManager(TUI_KEYBINDINGS, {
+			"tui.select.cancel": ["alt+s", "escape"],
+		});
+		let saves = 0;
+		let enabled = true;
+		const { frame, events } = list([{ label: "setting" }], {
+			keyboard,
+			shortcuts: [{ key: "s", action: "save", enabled: () => enabled, onPress: () => saves++ }],
+		});
+		assert.match(plain(frame.render(140)).at(-2) ?? "", /esc back/);
+		assert.doesNotMatch(plain(frame.render(140)).at(-2) ?? "", /alt\+s back/);
+		for (const data of ["\x1bs", "\x1b[115;3u"]) frame.handleInput(data);
+		assert.equal(saves, 2);
+		assert.deepEqual(events, []);
+		enabled = false;
+		assert.match(plain(frame.render(140)).at(-2) ?? "", /alt\+s back/);
+		frame.handleInput("\x1bs");
+		frame.handleInput("\x1b");
+		frame.handleInput("\x03");
+		assert.deepEqual(events, ["cancel", "cancel", "cancel"]);
+	});
+
+	it("shows actual rebound navigation and confirmation keys", () => {
+		const keyboard = new KeybindingsManager(TUI_KEYBINDINGS, {
+			"tui.select.up": "ctrl+p",
+			"tui.select.down": "ctrl+n",
+			"tui.select.confirm": "ctrl+j",
+			"tui.select.cancel": "ctrl+q",
+		});
+		const { frame, events } = list([{ label: "first" }, { label: "second" }], { keyboard });
+		const footer = plain(frame.render(140)).at(-2) ?? "";
+		assert.match(footer, /ctrl\+p\/ctrl\+n navigate/);
+		assert.match(footer, /ctrl\+j select/);
+		assert.match(footer, /ctrl\+q back/);
+		frame.handleInput("\x0e");
+		frame.handleInput("\x0a");
+		assert.deepEqual(events, ["select:second:1"]);
 	});
 
 	it("toggles on initial Space and keeps spaces and slashes in multi-term filters", () => {
@@ -315,6 +361,12 @@ describe("FrameList", () => {
 			for (const line of lines) assert.ok(visibleWidth(line) <= width, line);
 			return plain(lines).at(-2) ?? "";
 		};
+
+		it("keeps confirm and cancel visible at 36 columns", () => {
+			const text = footer(36);
+			assert.match(text, /enter select/);
+			assert.match(text, /esc back/);
+		});
 
 		it("keeps esc and search whole at 60 columns and drops optional actions with an ellipsis", () => {
 			const text = footer(60);

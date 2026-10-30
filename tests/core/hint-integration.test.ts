@@ -52,13 +52,7 @@ describe("settings live application", () => {
 			f.ctx.cwd = fixture.projectDir;
 			anchorStart(f.sm, f.pi);
 			await runSessionStart(f.pi, f.ctx, fixture);
-			const keys = [
-				["\x1bt"],
-				["\x1b[H", "\x1b[B", "\x1b[B", "\x1b[B", "\r"],
-				["\x1bs"],
-				["\r"],
-				["\x1b"],
-			];
+			const keys = [["continuity.capture", "\r"], ["Apply/save staged changes", "\r"], ["\x1b"]];
 			const ctx = {
 				...f.ctx,
 				hasUI: true,

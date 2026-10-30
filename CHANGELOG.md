@@ -15,6 +15,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Settings access**: Save/apply and scope selection are searchable Enter-selectable rows; Session is the initial scope, so session-only changes no longer require Alt shortcuts or a file save. Switching scope retains unsaved edits and discard protection.
+- **Session pause**: pause automatic folding independently of base and per-model policies, without stopping recovery, capture or manual folds. Pause/resume fences in-flight milestone results and clears on reload/session switch.
+- **Panel keys**: enabled Alt actions take priority over conflicting selection bindings, fullscreen paging reaches the focused panel, and navigation hints show the actual user bindings.
 - **Recovery**: a completed final answer is no longer followed by a continuation nudge or another recovery; a reply whose measured input exceeds the local window settles instead of restarting work, and the next user turn is still guarded by preflight recovery.
 - **Fold summaries**: provider stream failures the SDK marks transient are retried once within the call budget, and runaway streams are bounded by output size, event count and a five-minute idle timeout instead of hanging for many minutes.
 - **Narrow panels**: the context % survives in the panel badge, breadcrumbs keep their root, and anchor names and setting keys are middle-truncated so names sharing a prefix stay distinct.

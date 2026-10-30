@@ -19,7 +19,11 @@ import { formatPct1, formatWindow, LABEL_PREFIX, MAX_NAME_LENGTH } from "../core
 import type { NavigatorState } from "../core/navigator-state.ts";
 import { estimateAdmissionTokens } from "../core/request-accounting.ts";
 import { RewindHintTracker } from "../core/rewind-hint.ts";
-import { readRuntimeConfig } from "../core/runtime-config.ts";
+import {
+	readAutomaticFoldingControl,
+	readRuntimeConfig,
+	setAutomaticFoldingPaused,
+} from "../core/runtime-config.ts";
 import type { createFoldAdaptersController } from "../fold/fold-adapters.ts";
 import { MIN_SUMMARY_FOCUS_LENGTH, START_ANCHOR_LABEL } from "../fold/fold-policy.ts";
 import type { AnchorCommandDeps } from "./anchor-command.ts";
@@ -54,6 +58,20 @@ export function createAnchorCommandDeps({
 	return {
 		settings: {
 			...createSettingsScreenDeps(),
+			automaticFolding: {
+				isPaused: (ctx) => readAutomaticFoldingControl(ctx.sessionManager.getSessionId()).paused,
+				setPaused(ctx, paused) {
+					const sessionId = ctx.sessionManager.getSessionId();
+					setAutomaticFoldingPaused(sessionId, paused);
+					getState().automatic.autoFoldStateBySession.delete(sessionId);
+					ctx.ui.notify(
+						paused
+							? "Automatic folding paused for this session. Recovery, continuity capture and manual folds remain active. Reload or switching sessions clears the pause."
+							: "Automatic folding resumed with the configured base and per-model policy.",
+						"info",
+					);
+				},
+			},
 			async onSaved(ctx) {
 				const state = getState();
 				const sm = ctx.sessionManager;
@@ -163,7 +181,8 @@ export function createAnchorCommandDeps({
 		contextBadge(ctx) {
 			const cw = ctx.model?.contextWindow ?? 0;
 			const tokens = estimateAdmissionTokens(ctx.sessionManager as SessionManager);
-			return `ctx ${formatPct1(tokens, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}`;
+			const paused = readAutomaticFoldingControl(ctx.sessionManager.getSessionId()).paused;
+			return `ctx ${formatPct1(tokens, cw)}${cw > 0 ? ` of ${formatWindow(cw)}` : ""}${paused ? " · auto paused" : ""}`;
 		},
 		readLedger: (ctx) => readBranchLedger(ctx.sessionManager.getBranch()).ledger,
 		applyUserOps: createUserOpsWriter(pi, () => getState().config.continuity.capture),

@@ -46,8 +46,15 @@ Run `/anchor` for the unified menu: `tree`, `list`, `current`, `fold`, `clone`,
 - **Clone:** inspect, propose, review, preview and create with readable screens.
   Raw JSON is an explicit advanced option, never the default review surface.
 - **Settings:** stage scalar settings, model choices, per-model overrides and
-  tool disclosure policies, then save to global, trusted project or runtime scope.
-  `/anchor settings show` prints effective settings without opening a panel.
+  tool disclosure policies. Opens in **Session** scope; apply without writing a file,
+  or explicitly choose Global or trusted Project scope to persist changes.
+  Save/apply and scope selection are searchable rows operated with arrows and Enter;
+  Alt shortcuts are optional. `/anchor settings show` prints effective settings.
+- **Pause automatic folding:** in `/anchor settings`, select **Pause automatic folding**.
+  This session-only switch wins over per-model enablement. It stops milestone checks
+  and automatic pressure folds/compaction; recovery, continuity capture, hints and
+  manual/tool folds remain active. Select **Resume automatic folding** to restore the
+  configured policy. Reloading or switching sessions clears the pause.
 
 All panels share a breadcrumb frame, fuzzy search (type to filter), navigation keys and an
 Escape/back path. Filtering keeps the panel height stable; narrow hint bars keep
@@ -129,7 +136,8 @@ runtime overrides set through `/anchor settings`:
 
 A runtime key wins over project, which wins over global (including the hint's
 disable sentinels); absent everywhere uses the field's default. Settings saves apply
-immediately to the current session; no reload is needed. Reset removes a key from
+immediately to the current session; no reload is needed. Session overrides and the
+session automatic-fold pause clear on `/reload` or a session switch. Reset removes a key from
 the selected scope, revealing the lower layer rather than forcing the default.
 Unknown keys and existing JSON key aliases are preserved on disk. An untrusted
 project is neither read nor edited, and malformed files must be corrected before

@@ -8,6 +8,19 @@
  */
 
 const store = new Map<string, Record<string, unknown>>();
+const automaticFolding = new Map<string, Readonly<{ paused: boolean }>>();
+const activeAutomaticFolding = Object.freeze({ paused: false });
+
+/** Session gate snapshot; identity changes on pause/resume to fence in-flight work. */
+export function readAutomaticFoldingControl(sessionId: string): Readonly<{ paused: boolean }> {
+	return automaticFolding.get(sessionId) ?? activeAutomaticFolding;
+}
+
+/** Pause only automatic folding, independently of base and per-model policy. */
+export function setAutomaticFoldingPaused(sessionId: string, paused: boolean): void {
+	if (readAutomaticFoldingControl(sessionId).paused !== paused)
+		automaticFolding.set(sessionId, Object.freeze({ paused }));
+}
 
 /** The runtime root for `sessionId` (a fresh empty object when none is set). */
 export function readRuntimeConfig(sessionId: string): Record<string, unknown> {
@@ -23,4 +36,5 @@ export function writeRuntimeConfig(sessionId: string, root: Record<string, unkno
 /** Drop the runtime root for `sessionId`. */
 export function clearRuntimeConfig(sessionId: string): void {
 	store.delete(sessionId);
+	automaticFolding.delete(sessionId);
 }

@@ -129,7 +129,7 @@ export async function describeSettings(
 		`Runtime: ${snap.paths.runtime}`,
 		...(deps.automaticFolding
 			? [
-					`Automatic folding: ${deps.automaticFolding.isPaused(ctx) ? "paused" : "active"} (Session only)`,
+					`Automatic folding: ${deps.automaticFolding.isPaused(ctx) ? "paused" : "not paused"} (Session only)`,
 				]
 			: []),
 	].join("\n");

@@ -13,6 +13,7 @@ import { estimateRawRequestTokens, estimateRequestTokens } from "../../src/core/
 import { formatPct1 } from "../../src/core/helpers.ts";
 import { ANCHOR_MANDATE, estimateAdmissionTokens } from "../../src/core/request-accounting.ts";
 import { buildRewindHintText } from "../../src/core/rewind-hint.ts";
+import { clearRuntimeConfig, setAutomaticFoldingPaused } from "../../src/core/runtime-config.ts";
 import { __testHooks, PRESSURE_COMPACTION_CUSTOM_TYPE } from "../../src/index.ts";
 import { fireAgentSettled, fireContext, fireTurnEndAll } from "../support/boundary-drivers.ts";
 import {
@@ -182,6 +183,81 @@ function toolTurn(f: Forced, id: string, tokens: number, usage = 0) {
 	appendToolResult(f.sm, id, "read", "e".repeat(tokens * 4));
 	return assistantId;
 }
+
+describe("session automatic-fold pause", () => {
+	it("wins over model enablement, keeps manual anchors available, and resumes without changing policy", async () => {
+		const f = await autoFixture(
+			async (context) => ({ status: "milestone", boundary: newestBoundary(context) }),
+			{ check_every_turns: 1 },
+			{ model_overrides: { "claude/*": { auto_navigate: { enabled: true } } } },
+		);
+		const sessionId = f.sm.getSessionId();
+		try {
+			setAutomaticFoldingPaused(sessionId, true);
+			await autoTurn(f, 30_000);
+			await autoTurn(f, 90_000);
+			assert.equal(f.questions.length, 0);
+			assert.equal(f.summaries.calls.length, 0);
+			const manual = await f.tool.execute(
+				"pause-anchor",
+				{ action: "anchor", name: "manual-while-paused" },
+				undefined,
+				undefined,
+				f.ctx,
+			);
+			assert.equal(manual.isError, undefined);
+			setAutomaticFoldingPaused(sessionId, false);
+			await autoTurn(f, 31_000);
+			assert.equal(f.questions.length, 1);
+			assert.ok(
+				f.sm.getBranch().some((entry) => f.sm.getLabel(entry.id)?.startsWith("anchor:working")),
+			);
+		} finally {
+			clearRuntimeConfig(sessionId);
+			cleanupConfigFixture(f.fixture);
+		}
+	});
+
+	it("does not suppress overflow recovery while automatic folding is paused", async () => {
+		const f = await forcedSetup();
+		const sessionId = f.sm.getSessionId();
+		try {
+			setAutomaticFoldingPaused(sessionId, true);
+			const failure = errorOverflow(f.sm);
+			const { settle } = await runErrorEnd(f, failure.message);
+			assert.ok(f.ctx.registryCalls.length > 0);
+			assert.ok(forcedDrafts(settle).some((draft) => draft.details["status"] === "done"));
+		} finally {
+			clearRuntimeConfig(sessionId);
+			cleanupConfigFixture(f.fixture);
+		}
+	});
+
+	it("rejects a classifier result if pause and resume occurred while it was in flight", async () => {
+		let onClassify = () => {};
+		const f = await autoFixture(
+			async (context) => {
+				onClassify();
+				return { status: "milestone", boundary: newestBoundary(context) };
+			},
+			{ check_every_turns: 1 },
+		);
+		const sessionId = f.sm.getSessionId();
+		try {
+			onClassify = () => {
+				setAutomaticFoldingPaused(sessionId, true);
+				setAutomaticFoldingPaused(sessionId, false);
+			};
+			const labels = f.pi.setLabelCalls.length;
+			await autoTurn(f, 30_000);
+			assert.equal(f.questions.length, 1);
+			assert.equal(f.pi.setLabelCalls.length, labels);
+		} finally {
+			clearRuntimeConfig(sessionId);
+			cleanupConfigFixture(f.fixture);
+		}
+	});
+});
 
 describe("rewind-driven compaction (#101)", () => {
 	describe("one admission estimate", () => {

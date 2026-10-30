@@ -360,7 +360,7 @@ export function buildScreen(
 		if (paused !== undefined) {
 			rows.push({
 				label: paused ? "Resume automatic folding" : "Pause automatic folding",
-				value: paused ? "paused" : "active",
+				value: paused ? "paused" : "not paused",
 				description:
 					"Session only; recovery, continuity capture, and manual folding remain active.",
 			});

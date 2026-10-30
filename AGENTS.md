@@ -171,9 +171,12 @@ frame or list widget.
 - **Narrow terminals:** side-by-side layouts fall back to a separate screen; anchor identity
   (label plus context %) survives every width.
 - **Mouse is optional:** never the only way to reach an action.
-- **Settings stage edits**, show each value's source scope, and save to an explicit scope.
-  Project scope only when Pi reports the project as trusted. Saving preserves unknown keys; a
-  malformed file blocks the save instead of being overwritten.
+- **Settings stage edits**, open in Session scope, show each value's source scope, and save to
+  an explicit scope. Save/apply and scope selection are searchable Enter-selectable rows;
+  Alt is optional. Project scope only when Pi reports the project as trusted. Saving preserves
+  unknown keys; a malformed file blocks the save instead of being overwritten.
+- **Session pause affects automatic folding only.** It overrides model policies without
+  rewriting them; recovery, capture, hints, start anchors and manual/tool folds remain active.
 - **Session-bound:** a panel, fold or proposal belongs to the session that started it. After
   shutdown, late results must not change UI state or write entries.
 - **New surfaces or layout changes are the user's call.** Show rendered frames (captures at

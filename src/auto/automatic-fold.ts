@@ -28,6 +28,7 @@ import {
 	estimateAtEntry,
 	tokenFactorOf,
 } from "../core/request-accounting.ts";
+import { readAutomaticFoldingControl } from "../core/runtime-config.ts";
 import type { FoldHost, FoldResult } from "../fold/fold-api.ts";
 import { unrestoredFoldCursors } from "../fold/fold-commit.ts";
 import { type FoldRequest, type FoldRunOptions, selectFoldTarget } from "../fold/fold-engine.ts";
@@ -70,7 +71,9 @@ export function createAutomaticFoldController({
 		event: { entries?: SessionBoundaryDraft[]; continue?: boolean },
 		ctx: ExtensionContext,
 	): Promise<{ entries: SessionBoundaryDraft[]; continue: boolean } | undefined> {
+		const automaticFolding = readAutomaticFoldingControl(sessionId);
 		if (
+			automaticFolding.paused ||
 			(state.activity.toolActiveBySession.get(sessionId) ?? state.activity.toolActive) === false ||
 			message.stopReason === "error" ||
 			message.stopReason === "aborted" ||
@@ -148,6 +151,7 @@ export function createAutomaticFoldController({
 			try {
 				return (
 					!signal?.aborted &&
+					readAutomaticFoldingControl(sessionId) === automaticFolding &&
 					ctx.signal === signal &&
 					ctx.sessionManager === sm &&
 					sm.getSessionId() === sessionId &&

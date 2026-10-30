@@ -71,5 +71,7 @@ All extension tools (`navigate_tree`) and custom transcript entries render witho
 
 ## 4. Settings Screen Contract (`/anchor settings`)
 
-- Every setting in `tree-navigator.json` is an interactive row in `FrameList` (`←→` to cycle enums/booleans/steps, `Enter` to open inline input or fuzzy model+thinking picker, `d` or `⌫` to reset to default).
-- Edits stage in memory (`● N staged` in top border) and commit via a framed save-scope prompt (`u` user global, `p` project `.pi/tree-navigator.json`, `r` runtime session only).
+- Every setting in `tree-navigator.json` is an interactive row in `FrameList` (`←→` cycles values, `Enter` edits, Alt+d or `⌫` inherits from the lower scope). Printable keys always filter.
+- Settings open in Session scope. Save/apply and scope selection are ordinary searchable action rows, reachable with arrows and Enter; Alt shortcuts are optional accelerators.
+- Edits stage in memory and commit via a framed scope picker: Session (in memory), Global or trusted Project. Count pending edits independently of the selected target so switching scope cannot hide unsaved work.
+- Pause/resume automatic folding is an immediate session-only action, independent of staged settings and per-model enablement. Recovery, capture, hints, start anchors and manual/tool folds remain active; reload/session switch clears the pause.

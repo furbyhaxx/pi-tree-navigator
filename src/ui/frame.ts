@@ -18,6 +18,7 @@ import {
 	type TuiMouseEvent,
 	type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
+import { claimFramePageKeys, frameBindingLabel } from "./frame-keybindings.ts";
 import {
 	type FrameLayout,
 	type FrameOptions,
@@ -264,7 +265,9 @@ export class FrameList implements Component, Focusable {
 		const page = this.layout?.listRows ?? 1;
 		const row = this.options.rows[this.cursor];
 
-		if (matches("tui.select.up", Key.up)) this.move(this.position - 1);
+		if (this.handleShortcut(data, row, true)) {
+			// Panel Alt actions own their chord before selection aliases.
+		} else if (matches("tui.select.up", Key.up)) this.move(this.position - 1);
 		else if (matches("tui.select.down", Key.down)) this.move(this.position + 1);
 		else if (matches("tui.select.pageUp", Key.pageUp)) this.move(this.position - page);
 		else if (matches("tui.select.pageDown", Key.pageDown)) this.move(this.position + page);
@@ -286,14 +289,19 @@ export class FrameList implements Component, Focusable {
 		this.options.tui.requestRender();
 	}
 
-	private handleShortcut(data: string, row: FrameRow | undefined): boolean {
-		if (this.query && matchesKey(data, Key.space)) return false;
+	private handleShortcut(data: string, row: FrameRow | undefined, altOnly = false): boolean {
+		if (!row || (this.query && matchesKey(data, Key.space))) return false;
 		if (this.focus === "search" && matchesKey(data, Key.backspace)) return false;
-		const shortcut = this.options.shortcuts?.find((candidate) =>
-			matchesKey(data, frameShortcutKey(candidate.key)),
-		);
+		const shortcut = this.options.shortcuts?.find((candidate) => {
+			const key = frameShortcutKey(candidate.key);
+			return (
+				(!altOnly || key.startsWith("alt+")) &&
+				matchesKey(data, key) &&
+				(candidate.enabled?.(row, this.cursor) ?? true)
+			);
+		});
 		if (!shortcut) return false;
-		if (row && (shortcut.enabled?.(row, this.cursor) ?? true)) shortcut.onPress(row, this.cursor);
+		shortcut.onPress(row, this.cursor);
 		return true;
 	}
 
@@ -344,17 +352,30 @@ export class FrameList implements Component, Focusable {
 	}
 
 	private keybindings(): FrameKeybinding[] {
+		const row = this.options.rows[this.cursor];
+		const claimed = new Set(
+			(this.options.shortcuts ?? [])
+				.filter((shortcut) => row && (shortcut.enabled?.(row, this.cursor) ?? true))
+				.map((shortcut) => frameShortcutKey(shortcut.key))
+				.filter((key) => key.startsWith("alt+")),
+		);
+		const label = (id: Keybinding, fallback: string) =>
+			frameBindingLabel(this.options.keyboard, id, fallback, claimed);
+		const up = label("tui.select.up", "↑");
+		const down = label("tui.select.down", "↓");
 		const enter = {
-			key: "enter",
+			key: label("tui.select.confirm", "enter"),
 			action: this.options.enterAction ?? "select",
-			priority: "navigation" as const,
+			priority: "essential" as const,
 		};
 		const navigate = {
-			key: "↑↓",
+			key:
+				up.length === 1 && down.length === 1
+					? `${up}${down}`
+					: [up, down].filter(Boolean).join("/"),
 			action: "navigate",
 			priority: "navigation" as const,
 		};
-		const row = this.options.rows[this.cursor];
 		const shortcuts = row
 			? (this.options.shortcuts ?? [])
 					.filter(
@@ -369,18 +390,19 @@ export class FrameList implements Component, Focusable {
 						action: typeof action === "function" ? action(row, this.cursor) : action,
 					}))
 			: [];
-		return [
+		const hints: FrameKeybinding[] = [
 			navigate,
 			enter,
 			...shortcuts,
-			{ key: "type", action: "filter", priority: "essential" },
+			{ key: "type", action: "filter", priority: "navigation" },
 			{
-				key: "esc",
+				key: label("tui.select.cancel", "esc"),
 				action:
 					this.focus === "search" || this.query ? "clear" : (this.options.cancelAction ?? "back"),
 				priority: "essential",
 			},
 		];
+		return hints.filter(({ key }) => key.length > 0);
 	}
 
 	private renderOptions(): FrameOptions {
@@ -450,13 +472,15 @@ export interface FrameScreen {
 }
 
 /** Show a frame in place of the editor and resolve with the user's choice, or undefined when cancelled. */
-export function selectFrame(
+export async function selectFrame(
 	ctx: ExtensionCommandContext,
 	screen: FrameScreen,
 ): Promise<FrameChoice | undefined> {
-	return ctx.ui.custom<FrameChoice | undefined>(
-		(tui, theme, keyboard, done) =>
-			new FrameList({
+	let releaseKeys: (() => void) | undefined;
+	try {
+		return await ctx.ui.custom<FrameChoice | undefined>((tui, theme, keyboard, done) => {
+			releaseKeys = claimFramePageKeys(keyboard);
+			return new FrameList({
 				...screen,
 				tui,
 				theme,
@@ -467,6 +491,9 @@ export function selectFrame(
 					...shortcut,
 					onPress: (_row, index) => done({ index, key: shortcut.key }),
 				})),
-			}),
-	);
+			});
+		});
+	} finally {
+		releaseKeys?.();
+	}
 }

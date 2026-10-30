@@ -3,6 +3,27 @@
 Settings live in `tree-navigator.json`; layers and precedence are described in the
 [README](../README.md#configuration-tree-navigatorjson).
 
+## Session settings and automatic-fold pause
+
+Open `/anchor settings`: **Session** is the initial editing scope. Edits remain
+staged until applied. Select **Apply/save staged changes** with arrows and Enter
+and confirm to apply to the selected scope. Use **Change scope** to choose Session,
+Global or trusted Project; Alt shortcuts are optional. Session changes stay in
+memory and never write a config file. Scope changes preserve staged edits,
+including when the new scope already contains the proposed value.
+
+Select **Pause automatic folding** to stop milestone checks and automatic pressure
+folds/compaction for the current session. This separate gate wins over every base
+or per-model `auto_navigate.enabled` setting; changing settings while paused does
+not silently resume it. Recovery, continuity capture, hints, automatic start anchors
+and manual/tool folds remain active. An in-flight milestone result is discarded
+if the pause changes before it lands. An already committed fold is not undone.
+
+Select **Resume automatic folding** to use the configured policy again; it does
+not force an otherwise disabled policy on. Both the pause and applied Session
+settings clear on `/reload`, session switch or shutdown. `/anchor settings show`
+reports the pause alongside the effective configuration.
+
 ## Rewind hint (optional)
 
 Long autonomous sessions can blow through context silently — the model can't read pi's footer, and `rewind` is a targeted alternative to pi's lossy auto-compaction, but nothing tells the agent *when* to use it. The rewind hint is an opt-in `turn_end` observer that fires **once per crossing**: when the tokens left in the context window drop to the configured reserve, the agent gets a persisted nudge to persist what matters to files and rewind to an anchor. Default: **disabled** (pi's own compaction behavior is unchanged).

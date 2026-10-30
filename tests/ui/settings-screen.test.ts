@@ -607,14 +607,14 @@ describe("settings screen: Enter actions", () => {
 		const h = harness({ foldingPaused: false, confirms: [true], columns: 120 });
 		assert.match(
 			await describeSettings(h.ctx, h.deps),
-			/Automatic folding: active \(Session only\)/,
+			/Automatic folding: not paused \(Session only\)/,
 		);
 		await h.run(
 			edit(ROW.autoEnabled),
 			(screen) => {
 				press(HOME, ...down(ROW.overrides + 3))(screen, []);
 				const selected = text(screen.render(120));
-				assert.match(selected, /→ Pause automatic folding\s+active/);
+				assert.match(selected, /→ Pause automatic folding\s+not paused/);
 				assert.match(
 					selected,
 					/Session only; recovery, continuity capture, and manual folding remain active/,

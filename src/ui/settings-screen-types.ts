@@ -16,6 +16,11 @@ export interface SettingsAccess {
 	writeFile?(path: string, text: string): Promise<void>;
 	/** Apply the effective configuration to the live session after any scope is saved. */
 	onSaved?(ctx: ExtensionCommandContext): Promise<void>;
+	/** Session-only automatic-fold gate; recovery, capture and manual folds remain active. */
+	automaticFolding?: {
+		isPaused(ctx: ExtensionCommandContext): boolean;
+		setPaused(ctx: ExtensionCommandContext, paused: boolean): void;
+	};
 }
 
 /** "done" ends the whole command; "back" returns to the screen that opened this one. */
