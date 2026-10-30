@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Automatic folding resumed with the configured base and per-model policy.
+
+
+
+
+
+
+
+─ Anchor/Settings ───────────────────────────────────────────────────────────────────────────────────────────── 1 staged · target: Session ─
+ ❯ Filter settings or actions…
+
+   rewindHintReserveTokens                off · default
+   anchorStartAfterTurns                  2 · global
+   parentHandoffMode                      digest · default
+ → continuity.capture                     false → true
+      ↳ global false · project untrusted · runtime unset
+   continuity.intentClassifier            off · default
+   treeProposal.model                     current · default
+   treeProposal.tools                     none · default
+
+   Capture your rules and decisions from messages into the continuity ledger. Default true.
+ ↑↓ navigate  enter select  alt+t to global  space toggle  left decrease  right increase  alt+u unstage  alt+s save  type filter  esc back
+──────────────────────────────────────────────────────────────── ↓ 17 more ─────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-_3ecwhn8/work
+0.0%/0 (auto)                                                                                                                        unknown

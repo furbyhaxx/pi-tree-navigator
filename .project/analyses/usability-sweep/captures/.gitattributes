@@ -1,0 +1,3 @@
+# Terminal captures preserve trailing blank screen rows.
+*.txt whitespace=-blank-at-eof
+*.ansi whitespace=-blank-at-eof

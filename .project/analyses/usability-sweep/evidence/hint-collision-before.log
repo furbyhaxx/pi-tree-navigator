@@ -1,0 +1,47 @@
+bun test v1.4.3 (c6da4a4d3)
+
+tests/ui/frame.test.ts:
+(pass) FrameList > filters printable mnemonics and dispatches Alt actions with either terminal encoding [4.73ms]
+58 | 		let enabled = true;
+59 | 		const { frame, events } = list([{ label: "setting" }], {
+60 | 			keyboard,
+61 | 			shortcuts: [{ key: "s", action: "save", enabled: () => enabled, onPress: () => saves++ }],
+62 | 		});
+63 | 		assert.match(plain(frame.render(140)).at(-2) ?? "", /esc back/);
+              ^
+AssertionError: The input did not match the regular expression /esc back/. Input:
+
+' ↑↓ navigate  enter select  alt+s save  type filter  alt+s back'
+
+      at internalMatch (node:assert:514:55)
+      at match (node:assert:518:16)
+      at <anonymous> (/mnt/Projects/furbyhaxx/pi-tree-navigator/tests/ui/frame.test.ts:63:10)
+(fail) FrameList > gives enabled Alt actions priority over conflicting selection bindings [11.39ms]
+(pass) FrameList > shows actual rebound navigation and confirmation keys [0.73ms]
+(pass) FrameList > toggles on initial Space and keeps spaces and slashes in multi-term filters [0.73ms]
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 36 columns [5.62ms]
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 57 columns [3.91ms]
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 60 columns [3.76ms]
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 80 columns [4.65ms]
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 130 columns [9.21ms]
+(pass) FrameList > maps filtered, scrolled clicks and selected detail rows at 140 columns [4.38ms]
+(pass) FrameList > focuses search on click and moves selection one row per wheel event [1.01ms]
+(pass) FrameList > ignores hover, non-left clicks, padding, chrome and out-of-bounds cells [1.27ms]
+(pass) FrameList > never changes height while filtering or moving the cursor [6.63ms]
+(pass) FrameList > filters fuzzily and reports original indices [0.59ms]
+(pass) FrameList > clears a non-empty search on the first escape and cancels on the next [0.72ms]
+(pass) FrameList > keeps the selected row selected when the search is cleared [0.27ms]
+(pass) FrameList > does not start a search from control keys [0.70ms]
+(pass) FrameList > cancels on ctrl+c from either focus [0.28ms]
+(pass) FrameList > dispatches shortcuts only on rows where they are enabled and typing otherwise searches [0.63ms]
+(pass) FrameList > re-measures only when the terminal size changes [0.84ms]
+(pass) FrameList > hint bar > keeps esc and search whole at 60 columns and drops optional actions with an ellipsis [0.62ms]
+(pass) FrameList > hint bar > shows every hint without an ellipsis when they fit [0.67ms]
+(pass) FrameList > hint bar > resolves shortcut actions per row [0.59ms]
+
+1 tests failed:
+(fail) FrameList > gives enabled Alt actions priority over conflicting selection bindings [11.39ms]
+
+ 22 pass
+ 1 fail
+Ran 23 tests across 1 file. [268.00ms]

@@ -1,0 +1,30 @@
+
+ [38;5;172mWarning: No models available. Use /login to log into a provider via OAuth or API key. See:
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md[39m
+
+ [38;5;102mSaved 1 change to Session memory. Applied to this session. No file was written; reload or switching sessions clears it.[39m
+
+
+
+
+
+
+
+[38;5;140m─ [38;5;145mAnchor[39m/[1mSettings[0m [38;5;140m────────────────────────────────────────────────────────────────────────────────────────────────────────[39m [38;5;145mtarget: Session[39m [38;5;140m─
+[39m [38;5;140m❯[39m continuity.capture[7m [0m
+
+ [38;5;140m→[39m continuity.capture                     [38;5;254mtrue · runtime[39m
+      [38;5;102m↳[39m [38;5;145mglobal false · project untrusted · runtime true[39m
+   continuity.intentClassifier            [38;5;145moff · default[39m
+
+
+
+
+
+
+[38;5;102m   Capture your rules and decisions from messages into the continuity ledger. Default true.[39m
+ [1m↑↓[0m [38;5;102mnavigate[39m  [1menter[0m [38;5;102mselect[39m  [1malt+t[0m [38;5;102mto global[39m  [1mleft[0m [38;5;102mdecrease[39m  [1mright[0m [38;5;102mincrease[39m  [1malt+d[0m [38;5;102minherit[39m  [1mtype[0m [38;5;102mfilter[39m  [1malt+s[0m [38;5;102mclear[39m
+[38;5;140m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;102m/tmp/navigator-usability-x2bej9fu/work[39m
+[38;5;102m0.0%/0 (auto)                                                                                                                        unknown

@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use
+ /login to log into a provider via
+ OAuth or API key. See:
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-l
+ inux-x64/docs/providers.md
+
+ /home/furbyhaxx/.pi-bolt/pi-bolt-l
+ inux-x64/docs/models.md
+
+
+
+─ Anchor/Settings  target: Session ─
+ ❯ Pause automatic folding
+
+ → Pause automatic…  not paused
+   paren…andoffMode  digest · defau…
+   conso…eep_newest  2 · default
+   auto_…very_turns  6 · default
+   auto_…te.enabled  true · global
+   model_overrides   none · default
+   treeP…osal.model  current · defa…
+
+   Session only; recovery,
+   continuity capture, and manual…
+ enter select  alt+s clear  …
+───────────── ↓ 1 more ─────────────
+/tmp/navigator-usability-x2bej9fu...
+0.0%/0 (auto)                unknown

@@ -1,0 +1,11 @@
+{"stage":"start"}
+{"stage":"stdin","data":"/anchor settings"}
+{"stage":"stdin","data":"\r"}
+{"stage":"stdin","data":"\r"}
+{"stage":"stdin","data":"\u001b[B\u001b[B\u001b[B "}
+{"stage":"stdin","data":"\u001bs"}
+{"stage":"stdin","data":"\u001b"}
+{"stage":"stdin","data":"\u001b[115;3u"}
+{"stage":"stdin","data":"\u001b"}
+{"stage":"stdin","data":"\u001b"}
+{"stage":"stdin","data":"s"}

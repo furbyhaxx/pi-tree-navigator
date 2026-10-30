@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Automatic folding resumed with the configured base and per-model policy.
+
+
+
+
+
+
+
+─ Anchor/Settings ────────────────────────────────────────────── ↑ 16 more ───────────────────────────────────── 1 staged · target: global ─
+ ❯ Filter settings or actions…
+
+   consolidation.enabled                  true · default
+   consolidation.max_handoffs             4 · default
+   consolidation.max_window_share         0.1 · default
+   consolidation.keep_newest              2 · default
+   model_overrides                        none · default
+   Apply/save staged changes              1 staged
+ → Change scope                           global
+      ↳ file: /tmp/navigator-usability-rdfoqjup/agent/tree-navigator.json
+
+   Choose where to apply or save staged changes without discarding them.
+ ↑↓ navigate  enter select  alt+t to Session  alt+s save  type filter  esc back
+───────────────────────────────────────────────────────────────── ↓ 1 more ─────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-rdfoqjup/work
+0.0%/0 (auto)                                                                                                                        unknown

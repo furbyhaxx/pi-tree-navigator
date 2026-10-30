@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Saved 1 change to Session memory. Applied to this session. No file was written; reload or switching sessions clears it.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Save 1 change to the global config?
+ /tmp/navigator-usability-0o3xi6hj/agent/tree-navigator.json
+
+ parentHandoffMode: unset → full
+
+ All other keys stay as they are.
+
+ → Yes
+   No
+
+ ↑↓ navigate  enter select  escape/ctrl+c cancel
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-0o3xi6hj/work
+0.0%/0 (auto)                                                                                                                        unknown
+
+
+
+
+
+

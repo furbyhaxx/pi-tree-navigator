@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+─ Anchor/Settings ──────────────────────────────────────────────────────────────────────────────────────────────────────── target: Session ─
+ ❯ Filter settings or actions…
+
+ → rewindHintReserveTokens                off · default
+      ↳ global unset · project untrusted · runtime unset
+   anchorStartAfterTurns                  2 · global
+   parentHandoffMode                      digest · default
+   continuity.capture                     false · global
+   continuity.intentClassifier            off · default
+   treeProposal.model                     current · default
+   treeProposal.tools                     none · default
+
+   Nudge the agent to rewind when this many tokens are left in the window. 1,000-1,000,000, or off (default).
+ ↑↓ navigate  enter select  alt+t to global  left decrease  right increase  type filter  esc back
+──────────────────────────────────────────────────────────────── ↓ 17 more ─────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-gwcz6352/work
+0.0%/0 (auto)                                                                                                                        unknown
+
+
+
+
+
+
+
+

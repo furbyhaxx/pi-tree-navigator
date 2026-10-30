@@ -1,0 +1,30 @@
+
+ [38;5;172mWarning: No models available. Use /login to log into a provider via OAuth or API key. See:
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md[39m
+
+
+
+
+
+
+
+
+
+[38;5;140m─ [38;5;145mAnchor[39m/[1mSettings[0m [38;5;140m────────────────────────────────────────────────────────────────────────────────────────────────────────[39m [38;5;145mtarget: Session[39m [38;5;140m─
+[39m [38;5;140m❯[39m [3m[38;5;102mFilter settings or actions…[0m
+
+ [38;5;140m→[39m rewindHintReserveTokens                [38;5;145moff · default[39m
+      [38;5;102m↳[39m [38;5;145mglobal unset · project untrusted · runtime unset[39m
+   anchorStartAfterTurns                  [38;5;254m2 · global[39m
+   parentHandoffMode                      [38;5;145mdigest · default[39m
+   continuity.capture                     [38;5;254mfalse · global[39m
+   continuity.intentClassifier            [38;5;145moff · default[39m
+   treeProposal.model                     [38;5;145mcurrent · default[39m
+   treeProposal.tools                     [38;5;145mnone · default[39m
+
+[38;5;102m   Nudge the agent to rewind when this many tokens are left in the window. 1,000-1,000,000, or off (default).[39m
+ [1m↑↓[0m [38;5;102mnavigate[39m  [1menter[0m [38;5;102mselect[39m  [1malt+t[0m [38;5;102mto global[39m  [1mleft[0m [38;5;102mdecrease[39m  [1mright[0m [38;5;102mincrease[39m  [1mtype[0m [38;5;102mfilter[39m  [1mesc[0m [38;5;102mback[39m
+[38;5;140m────────────────────────────────────────────────────────────────[38;5;102m ↓ 17 more [38;5;140m─────────────────────────────────────────────────────────────────
+[38;5;102m/tmp/navigator-usability-_3ecwhn8/work[39m
+[38;5;102m0.0%/0 (auto)                                                                                                                        unknown

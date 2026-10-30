@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Saved 1 change to Session memory. Applied to this session. No file was written; reload or switching sessions clears it.
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ Anchor/Settings/Save ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ❯ Type to search…
+
+   global
+ → Session
+
+   Apply only to this Session. No file is written; reload or switching sessions clears it.
+ ↑↓ navigate  enter choose  alt+u global  alt+r Session  type filter  esc back
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-rdfoqjup/work
+0.0%/0 (auto)                                                                                                                        unknown

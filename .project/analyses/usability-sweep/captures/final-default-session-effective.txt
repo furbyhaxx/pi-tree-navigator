@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Saved 1 change to Session memory. Applied to this session. No file was written; reload or switching sessions clears it.
+
+
+
+
+
+
+
+─ Anchor/Settings ──────────────────────────────────────────────────────────────────────────────────────────────────────── target: Session ─
+ ❯ continuity.capture
+
+ → continuity.capture                     true · runtime
+      ↳ global false · project untrusted · runtime true
+   continuity.intentClassifier            off · default
+
+
+
+
+
+
+   Capture your rules and decisions from messages into the continuity ledger. Default true.
+ ↑↓ navigate  enter select  alt+t to global  left decrease  right increase  alt+d inherit  type filter  esc clear
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-_3ecwhn8/work
+0.0%/0 (auto)                                                                                                                        unknown

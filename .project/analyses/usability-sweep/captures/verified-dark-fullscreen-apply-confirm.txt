@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Automatic folding resumed with the configured base and per-model policy.
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ Apply 1 change to this Session?
+ continuity.capture: unset → true
+
+ No file is written; reload or switching sessions clears these changes. All other settings stay as they are.
+
+ → Yes
+   No
+
+ ↑↓ navigate  enter select  escape/ctrl+c cancel
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-rdfoqjup/work
+0.0%/0 (auto)                                                                                                                        unknown

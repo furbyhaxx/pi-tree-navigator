@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Automatic folding paused for this session. Recovery, continuity capture and manual folds remain active. Reload or switching sessions
+ clears the pause.
+
+
+
+
+
+
+─ Anchor/Settings ────────────────────────────────────────────── ↑ 16 more ─────────────────────────────────────────────── target: Session ─
+ ❯ Filter settings or actions…
+
+   consolidation.enabled                  true · default
+   consolidation.max_handoffs             4 · default
+   consolidation.max_window_share         0.1 · default
+   consolidation.keep_newest              2 · default
+   model_overrides                        none · default
+   Apply/save staged changes              none staged
+   Change scope                           Session
+ → Resume automatic folding               paused
+
+   Session only; recovery, continuity capture, and manual folding remain active.
+ ↑↓ navigate  enter select  alt+t to global  type filter  esc back
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-rdfoqjup/work
+0.0%/0 (auto)                                                                                                                        unknown

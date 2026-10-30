@@ -1,0 +1,32 @@
+ █▀ █ escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more
+ Press ctrl+o to show full startup help and loaded resources.
+
+ Pi-Bolt can explain its own features and look up its docs. Ask it how to use or extend Pi-Bolt.
+
+[Extensions]
+  src, trace-keys.ts
+
+ This project is not trusted. Project .pi resources and packages are ignored. Use /trust to save a trust decision, then restart pi-bolt.
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+─ Anchor/Settings ─────────────────────────────────────────────── ↑ 2 more ──────────────────────────────────────────────── target: global ─
+ ❯ Filter settings · file: /tmp/page-routing.5PJ6nn/masked/agent/tree-navigator.json
+
+   parentHandoffMode                      digest · default
+   continuity.capture                     true · default
+   continuity.intentClassifier            off · default
+   treeProposal.model                     current · default
+   treeProposal.tools                     none · default
+   auto_navigate.enabled                  false · default
+   auto_navigate.mode                     anchor-and-rewind · default
+ → auto_navigate.milestone                recommended · default
+      ↳ global unset · project untrusted · runtime unset
+
+   Confirms a finished phase before an automatic fold. recommended (default), off, or a custom policy.
+ ↑↓ navigate  enter edit  alt+t to runtime  left decrease  right increase  type filter  esc back
+──────────────────────────────────────────────────────────────── ↓ 11 more ─────────────────────────────────────────────────────────────────
+/mnt/Projects/furbyhaxx/pi-tree-navigator (main)
+0.0%/0 (auto)                                                                                                                        unknown

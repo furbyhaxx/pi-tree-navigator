@@ -1,0 +1,39 @@
+{"stage":"start"}
+{"stage":"stdin","data":"/route-probe"}
+{"stage":"stdin","data":"\r"}
+{"stage":"probe-installed","cancelKeys":["escape","ctrl+c"],"selectPageDown":["pageDown"],"viewportPageDown":["pageDown"]}
+{"stage":"stdin","data":"/anchor settings"}
+{"stage":"host-listener","data":"/"}
+{"stage":"host-listener","data":"a"}
+{"stage":"host-listener","data":"n"}
+{"stage":"host-listener","data":"c"}
+{"stage":"host-listener","data":"h"}
+{"stage":"host-listener","data":"o"}
+{"stage":"host-listener","data":"r"}
+{"stage":"host-listener","data":" "}
+{"stage":"host-listener","data":"s"}
+{"stage":"host-listener","data":"e"}
+{"stage":"host-listener","data":"t"}
+{"stage":"host-listener","data":"t"}
+{"stage":"host-listener","data":"i"}
+{"stage":"host-listener","data":"n"}
+{"stage":"host-listener","data":"g"}
+{"stage":"host-listener","data":"s"}
+{"stage":"stdin","data":"\r"}
+{"stage":"host-listener","data":"\r"}
+{"stage":"stdin","data":"\r"}
+{"stage":"host-listener","data":"\r"}
+{"stage":"stdin","data":"\u001b[B\u001b[B\u001b[B "}
+{"stage":"host-listener","data":"\u001b[B"}
+{"stage":"frame","panel":"Anchor/Settings","data":"\u001b[B","cancel":false,"cancelKeys":["escape","ctrl+c"],"altS":false,"altT":false,"cursor":0,"query":""}
+{"stage":"host-listener","data":"\u001b[B"}
+{"stage":"frame","panel":"Anchor/Settings","data":"\u001b[B","cancel":false,"cancelKeys":["escape","ctrl+c"],"altS":false,"altT":false,"cursor":1,"query":""}
+{"stage":"host-listener","data":"\u001b[B"}
+{"stage":"frame","panel":"Anchor/Settings","data":"\u001b[B","cancel":false,"cancelKeys":["escape","ctrl+c"],"altS":false,"altT":false,"cursor":2,"query":""}
+{"stage":"host-listener","data":" "}
+{"stage":"frame","panel":"Anchor/Settings","data":" ","cancel":false,"cancelKeys":["escape","ctrl+c"],"altS":false,"altT":false,"cursor":3,"query":""}
+{"stage":"stdin","data":"\u001b"}
+{"stage":"host-listener","data":"\u001b"}
+{"stage":"frame","panel":"Anchor/Settings","data":"\u001b","cancel":true,"cancelKeys":["escape","ctrl+c"],"altS":false,"altT":false,"cursor":3,"query":""}
+{"stage":"stdin","data":"s"}
+{"stage":"host-listener","data":"s"}

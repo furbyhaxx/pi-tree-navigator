@@ -1,0 +1,2 @@
+READY /tmp/navigator-usability-_3ecwhn8 nav-usability-4038464
+{"status": "passed", "socket": "nav-usability-4038464", "prefix": "final-default", "fixture": "/tmp/navigator-usability-_3ecwhn8", "config": {"anchorStartAfterTurns": 2, "continuity": {"capture": false}, "auto_navigate": {"enabled": true}, "parentHandoffMode": "full"}}

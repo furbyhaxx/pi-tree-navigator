@@ -1,0 +1,30 @@
+
+ [38;5;94mWarning: No models available. Use /login to log into a provider via OAuth or API key. See:
+[39m [38;5;94m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+[39m [38;5;94m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md[39m
+
+ [38;5;102mSaved 1 change to Session memory. Applied to this session. No file was written; reload or switching sessions clears it.[39m
+
+[38;5;67m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+[39m [1m[38;5;97mSave 1 change to the global config?[0m[38;5;97m
+[39m [1m[38;5;97m/tmp/navigator-usability-gwcz6352/agent/tree-navigator.json[0m[38;5;97m
+[39m [38;5;97m
+[39m [1m[38;5;97mparentHandoffMode: unset → full[0m[38;5;97m
+[39m [38;5;97m
+[39m [1m[38;5;97mAll other keys stay as they are.[0m
+
+ [38;5;97m→ Yes[39m
+   [38;5;237mNo[39m
+
+ [38;5;102m↑↓[38;5;60m navigate[39m  [38;5;102menter[38;5;60m select[39m  [38;5;102mescape/ctrl+c[38;5;60m cancel[39m
+
+[38;5;67m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+[38;5;102m/tmp/navigator-usability-gwcz6352/work[39m
+[38;5;102m0.0%/0 (auto)                                                                                                                        unknown
+
+
+
+
+
+

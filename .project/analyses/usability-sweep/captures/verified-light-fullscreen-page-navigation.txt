@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+
+
+
+
+
+
+
+
+─ Anchor/Settings ─────────────────────────────────────────────── ↑ 2 more ─────────────────────────────────────────────── target: Session ─
+ ❯ Filter settings or actions…
+
+   parentHandoffMode                      digest · default
+   continuity.capture                     false · global
+   continuity.intentClassifier            off · default
+   treeProposal.model                     current · default
+   treeProposal.tools                     none · default
+   auto_navigate.enabled                  true · global
+ → auto_navigate.mode                     anchor-and-rewind · default
+      ↳ global unset · project untrusted · runtime unset
+
+   anchor-only sets anchors; anchor-and-rewind (default) may also fold back to one.
+ ↑↓ navigate  enter select  alt+t to global  left decrease  right increase  type filter  esc back
+──────────────────────────────────────────────────────────────── ↓ 15 more ─────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-5qqnj5ad/work
+0.0%/0 (auto)                                                                                                                        unknown

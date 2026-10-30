@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+ Automatic folding resumed with the configured base and per-model policy.
+
+─ Anchor/Settings ────────────────────────────────────────────── ↑ 16 more ─────────────────────────────────────────────── target: Session ─
+ ❯ Filter settings or actions…
+
+   consolidation.enabled                  true · default
+   consolidation.max_handoffs             4 · default
+   consolidation.max_window_share         0.1 · default
+   consolidation.keep_newest              2 · default
+   model_overrides                        none · default
+   Apply/save staged changes              none staged
+   Change scope                           Session
+ → Pause automatic folding                not paused
+
+   Session only; recovery, continuity capture, and manual folding remain active.
+ ↑↓ navigate  enter select  alt+t to global  type filter  esc back
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-gwcz6352/work
+0.0%/0 (auto)                                                                                                                        unknown
+
+
+
+
+
+

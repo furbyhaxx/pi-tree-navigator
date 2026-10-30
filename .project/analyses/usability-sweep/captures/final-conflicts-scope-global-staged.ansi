@@ -1,0 +1,30 @@
+
+ [38;5;172mWarning: No models available. Use /login to log into a provider via OAuth or API key. See:
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md[39m
+
+ [38;5;102mAutomatic folding resumed with the configured base and per-model policy.[39m
+
+
+
+
+
+
+
+[38;5;140m─ [38;5;145mAnchor[39m/[1mSettings[0m [38;5;140m──────────────────────────────────────────────[38;5;102m ↑ 16 more [38;5;140m─────────────────────────────────────[39m [38;5;145m1 staged · target: global[39m [38;5;140m─
+[39m [38;5;140m❯[39m [3m[38;5;102mFilter settings or actions…[0m
+
+   consolidation.enabled                  [38;5;145mtrue · default[39m
+   consolidation.max_handoffs             [38;5;145m4 · default[39m
+   consolidation.max_window_share         [38;5;145m0.1 · default[39m
+   consolidation.keep_newest              [38;5;145m2 · default[39m
+   model_overrides                        [38;5;145mnone · default[39m
+   Apply/save staged changes              [38;5;254m1 staged[39m
+ [38;5;140m→[39m Change scope                           [38;5;254mglobal[39m
+      [38;5;102m↳[39m [38;5;145mfile: /tmp/navigator-usability-x2bej9fu/agent/tree-navigator.json[39m
+
+[38;5;102m   Choose where to apply or save staged changes without discarding them.[39m
+ [1m↑↓[0m [38;5;102mnavigate[39m  [1menter[0m [38;5;102mselect[39m  [1malt+t[0m [38;5;102mto Session[39m  [1malt+s[0m [38;5;102msave[39m  [1mtype[0m [38;5;102mfilter[39m  [1mesc[0m [38;5;102mback[39m
+[38;5;140m─────────────────────────────────────────────────────────────────[38;5;102m ↓ 1 more [38;5;140m─────────────────────────────────────────────────────────────────
+[38;5;102m/tmp/navigator-usability-x2bej9fu/work[39m
+[38;5;102m0.0%/0 (auto)                                                                                                                        unknown

@@ -1,0 +1,30 @@
+
+ [38;5;172mWarning: No models available. Use /login to log into a provider via OAuth or
+[39m [38;5;172mAPI key. See:
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+[39m [38;5;172m  /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md[39m
+
+
+
+
+
+
+
+
+[38;5;140m─ [38;5;145mAnchor[39m/[1mSettings[0m [38;5;140m────────────────────────────────────────────[39m [38;5;145mtarget: Session[39m [38;5;140m─
+[39m [38;5;140m❯[39m Pause automatic folding[7m [0m
+
+ [38;5;140m→[39m Pause automatic folding               [38;5;254mnot paused[39m
+   parentHandoffMode                     [38;5;145mdigest · default[39m
+   consolidation.keep_newest             [38;5;145m2 · default[39m
+   auto_navigate.check_every_turns       [38;5;145m6 · default[39m
+   auto_navigate.enabled                 [38;5;254mtrue · global[39m
+   model_overrides                       [38;5;145mnone · default[39m
+   treeProposal.model                    [38;5;145mcurrent · default[39m
+
+[38;5;102m   Session only; recovery, continuity capture, and manual folding remain active.
+
+[39m [1m↑↓[0m [38;5;102mnavigate[39m  [1menter[0m [38;5;102mselect[39m  [1malt+t[0m [38;5;102mto global[39m  [1mtype[0m [38;5;102mfilter[39m  [1mesc[0m [38;5;102mclear[39m
+[38;5;140m───────────────────────────────────[38;5;102m ↓ 1 more [38;5;140m───────────────────────────────────
+[38;5;102m/tmp/navigator-usability-_3ecwhn8/work[39m
+[38;5;102m0.0%/0 (auto)                                                            unknown

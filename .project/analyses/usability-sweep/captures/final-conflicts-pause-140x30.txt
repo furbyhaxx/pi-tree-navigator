@@ -1,0 +1,30 @@
+
+ Warning: No models available. Use /login to log into a provider via OAuth or API key. See:
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/providers.md
+   /home/furbyhaxx/.pi-bolt/pi-bolt-linux-x64/docs/models.md
+
+
+
+
+
+
+
+
+
+─ Anchor/Settings ──────────────────────────────────────────────────────────────────────────────────────────────────────── target: Session ─
+ ❯ Pause automatic folding
+
+ → Pause automatic folding                not paused
+   parentHandoffMode                      digest · default
+   consolidation.keep_newest              2 · default
+   auto_navigate.check_every_turns        6 · default
+   auto_navigate.enabled                  true · global
+   model_overrides                        none · default
+   treeProposal.model                     current · default
+   continuity.intentClassifier            off · default
+
+   Session only; recovery, continuity capture, and manual folding remain active.
+ ↑↓ navigate  enter select  alt+t to global  type filter  alt+s clear
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-usability-x2bej9fu/work
+0.0%/0 (auto)                                                                                                                        unknown

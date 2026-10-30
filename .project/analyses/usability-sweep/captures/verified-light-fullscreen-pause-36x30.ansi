@@ -1,0 +1,30 @@
+
+ [38;5;94mWarning: No models available. Use
+[39m [38;5;94m/login to log into a provider via
+[39m [38;5;94mOAuth or API key. See:
+[39m [38;5;94m
+[39m [38;5;94m/home/furbyhaxx/.pi-bolt/pi-bolt-l
+[39m [38;5;94minux-x64/docs/providers.md
+[39m [38;5;94m
+[39m [38;5;94m/home/furbyhaxx/.pi-bolt/pi-bolt-l
+[39m [38;5;94minux-x64/docs/models.md[39m
+
+
+
+[38;5;98m─ [38;5;60mAnchor[39m/[1mSettings[0m  [38;5;60mtarget: Session[39m [38;5;98m─
+[39m [38;5;97m❯[39m Pause automatic folding[7m [0m
+
+ [38;5;97m→[39m Pause automatic…  [38;5;237mnot paused[39m
+   paren…andoffMode  [38;5;60mdigest · defau[39m…
+   conso…eep_newest  [38;5;60m2 · default[39m
+   auto_…very_turns  [38;5;60m6 · default[39m
+   auto_…te.enabled  [38;5;237mtrue · global[39m
+   model_overrides   [38;5;60mnone · default[39m
+   treeP…osal.model  [38;5;60mcurrent · defa[39m…
+
+[38;5;102m   Session only; recovery,[39m
+[38;5;102m   continuity capture, and manual…[39m
+ [1mtype[0m [38;5;102mfilter[39m  [1mesc[0m [38;5;102mclear[39m  [38;5;102m…[39m
+[38;5;98m─────────────[38;5;102m ↓ 1 more [38;5;98m─────────────
+[38;5;102m/tmp/navigator-usability-5qqnj5ad...
+0.0%/0 (auto)                unknown
