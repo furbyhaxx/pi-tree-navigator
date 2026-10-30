@@ -106,11 +106,13 @@ interface Setup {
 	project?: string;
 	runtime?: Record<string, unknown>;
 	trusted?: boolean;
+	initialScope?: "global";
 	columns?: number;
 	idle?: boolean;
 	inputs?: (string | undefined)[];
 	selects?: (string | undefined)[];
 	saveScopes?: ("global" | "project" | "runtime" | "cancel")[];
+	scopeKeys?: string[][];
 	confirms?: boolean[];
 	confirmEffects?: ((paths: { globalPath: string; projectPath: string }) => void)[];
 	/** How the next model picker leaves: off selects the first row. */
@@ -118,6 +120,7 @@ interface Setup {
 	/** Throw if the registry is used for anything but listing models. */
 	guardRegistry?: boolean;
 	writeFails?: boolean;
+	foldingPaused?: boolean;
 	/** Use the screen's own atomic writer instead of the recording one. */
 	realWriter?: boolean;
 }
@@ -140,7 +143,13 @@ function harness(setup: Setup = {}) {
 
 	const sessionId = root;
 	if (setup.runtime) writeRuntimeConfig(sessionId, setup.runtime);
-	const state = { idle: setup.idle ?? true, reloads: 0, applies: 0 };
+	const state = {
+		idle: setup.idle ?? true,
+		reloads: 0,
+		applies: 0,
+		foldingPaused: setup.foldingPaused ?? false,
+	};
+	const foldingChanges: boolean[] = [];
 	const writes: string[] = [];
 	const notifications: { message: string; type: string | undefined }[] = [];
 	const dialogs = {
@@ -153,12 +162,14 @@ function harness(setup: Setup = {}) {
 	const confirms = [...(setup.confirms ?? [])];
 	const confirmEffects = [...(setup.confirmEffects ?? [])];
 	const saveScopes = [...(setup.saveScopes ?? [])];
+	const scopeKeys = [...(setup.scopeKeys ?? [])];
 	const modelPicks = [...(setup.modelPicks ?? [])];
 	const registryCalls: string[] = [];
 	const rendered: string[][] = [];
 	const saveScopeFrames: string[][] = [];
 	const scripts: Script[] = [];
 	let cancelPicker = false;
+	let selectGlobal = setup.initialScope === "global";
 	const theme = {
 		fg: (_color: string, text: string) => text,
 		bold: (text: string) => text,
@@ -224,8 +235,18 @@ function harness(setup: Setup = {}) {
 					const screen = factory(tui, theme, undefined, resolve);
 					const lines = screen.render(columns);
 					const header = lines[0] ?? "";
-					if (header.includes("Anchor/Settings/Save")) {
+					if (selectGlobal) {
+						selectGlobal = false;
+						screen.handleInput("\x1bt");
+						return;
+					}
+					if (header.includes("Anchor/Settings/Save") || header.includes("Anchor/Settings/Scope")) {
 						saveScopeFrames.push(lines);
+						const keys = scopeKeys.shift();
+						if (keys) {
+							for (const key of keys) screen.handleInput(key);
+							return;
+						}
 						const scope = saveScopes.shift();
 						if (scope === "cancel") screen.handleInput(ESC);
 						else if (scope) {
@@ -282,6 +303,19 @@ function harness(setup: Setup = {}) {
 		async onSaved() {
 			state.applies++;
 		},
+		...(setup.foldingPaused !== undefined && {
+			automaticFolding: {
+				isPaused(current: ExtensionCommandContext) {
+					assert.equal(current, ctx);
+					return state.foldingPaused;
+				},
+				setPaused(current: ExtensionCommandContext, paused: boolean) {
+					assert.equal(current, ctx);
+					state.foldingPaused = paused;
+					foldingChanges.push(paused);
+				},
+			},
+		}),
 		...(!setup.realWriter && {
 			async writeFile(path: string, text: string) {
 				writes.push(path);
@@ -297,6 +331,7 @@ function harness(setup: Setup = {}) {
 		deps,
 		state,
 		sessionId,
+		foldingChanges,
 		writes,
 		notifications,
 		dialogs,
@@ -315,15 +350,324 @@ function harness(setup: Setup = {}) {
 	};
 }
 
+function globalHarness(setup: Setup = {}) {
+	return harness({ ...setup, initialScope: "global" });
+}
+
 const json = (value: unknown): string => `${JSON.stringify(value, null, 2)}\n`;
 const text = (lines: readonly string[]): string => lines.join("\n");
 /** The one rendered line that holds this label. */
 const line = (lines: readonly string[], label: string): string =>
 	lines.find((candidate) => candidate.includes(label)) ?? "";
 
+describe("settings screen: Enter actions", () => {
+	it("edits, chooses a scope and saves using only Enter, arrows and filtering", async () => {
+		const h = harness({
+			global: json({}),
+			trusted: true,
+			inputs: ["7"],
+			scopeKeys: [[HOME, DOWN, ENTER]],
+			confirms: [true],
+			columns: 120,
+		});
+		await h.run(
+			(screen, lines) => {
+				assert.match(text(lines), /target: Session/);
+				press(HOME, ...down(ROW.startAnchor), ENTER)(screen, lines);
+			},
+			(screen) => {
+				for (const key of "Change scope") screen.handleInput(key);
+				assert.match(text(screen.render(120)), /→ Change scope/);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /1 staged · target: project/);
+				for (const key of "Apply/save staged changes") screen.handleInput(key);
+				assert.match(text(screen.render(120)), /→ Apply\/save staged changes/);
+				screen.handleInput(ENTER);
+			},
+			press(ESC),
+		);
+		assert.equal(h.readProject(), json({ anchorStartAfterTurns: 7 }));
+		assert.equal(h.readGlobal(), json({}));
+		assert.deepEqual(h.readRuntime(), {});
+		assert.equal(h.state.applies, 1);
+		assert.equal(h.saveScopeFrames.length, 1);
+	});
+
+	it("selects a filtered project scope by its original row index", async () => {
+		const h = harness({
+			trusted: true,
+			scopeKeys: [[..."project", ENTER]],
+			columns: 120,
+		});
+		await h.run(
+			(screen) => {
+				for (const key of "Change scope") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /target: project/);
+				screen.handleInput(ESC);
+			},
+		);
+		assert.deepEqual(h.writes, []);
+	});
+
+	it("reports when the apply action is selected without staged edits", async () => {
+		const h = harness({ columns: 120 });
+		await h.run(at(ROW.overrides + 1, ENTER), press(ESC));
+		assert.ok(
+			h.notifications.some(({ message }) => message === "No staged changes to apply or save."),
+		);
+		assert.equal(h.state.applies, 0);
+		assert.deepEqual(h.dialogs.confirm, []);
+	});
+
+	it("keeps and protects staged edits when the selected scope already has the value", async () => {
+		const h = harness({
+			global: json({ rewindHintReserveTokens: 50000 }),
+			inputs: ["50k"],
+			scopeKeys: [
+				[HOME, ENTER],
+				[HOME, DOWN, ENTER],
+			],
+			confirms: [false, true],
+			columns: 120,
+		});
+		await h.run(
+			edit(ROW.hint),
+			(screen) => {
+				for (const key of "Change scope") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /1 staged · target: global/);
+				screen.handleInput(ESC);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /1 staged · target: global/);
+				for (const key of "Change scope") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /1 staged · target: Session/);
+				for (const key of "Apply/save staged changes") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			press(ESC),
+		);
+		assert.deepEqual(
+			h.dialogs.confirm.map(([title]) => title),
+			["Discard staged changes?", "Apply 1 change to this Session?"],
+		);
+		assert.deepEqual(h.readRuntime(), { rewindHintReserveTokens: 50000 });
+		assert.equal(h.readGlobal(), json({ rewindHintReserveTokens: 50000 }));
+		assert.deepEqual(h.writes, []);
+		assert.match(
+			required(h.dialogs.confirm[1])[1],
+			/No file is written; reload or switching sessions/,
+		);
+		assert.ok(h.notifications.some(({ message }) => /No file was written/.test(message)));
+	});
+
+	it("leaves the target and edits untouched when the scope chooser is cancelled", async () => {
+		const h = harness({
+			inputs: ["7"],
+			scopeKeys: [[ESC]],
+			confirms: [true],
+			columns: 120,
+		});
+		await h.run(
+			edit(ROW.startAnchor),
+			(screen) => {
+				for (const key of "Change scope") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /1 staged · target: Session/);
+				screen.handleInput(ESC);
+			},
+		);
+		const picker = text(required(h.saveScopeFrames[0]));
+		assert.match(picker, /→ Session/);
+		assert.match(picker, /No file is written; reload or switching sessions clears it/);
+		assert.doesNotMatch(picker, /project/);
+		assert.deepEqual(
+			h.dialogs.confirm.map(([title]) => title),
+			["Discard staged changes?"],
+		);
+		assert.deepEqual(h.readRuntime(), {});
+		assert.deepEqual(h.writes, []);
+	});
+
+	it("allows saving a pending edit when the selected target already has the value", async () => {
+		const original = json({ rewindHintReserveTokens: 50000 });
+		const h = harness({
+			global: original,
+			inputs: ["50k"],
+			scopeKeys: [[HOME, ENTER]],
+			columns: 120,
+		});
+		await h.run(
+			edit(ROW.hint),
+			(screen) => {
+				for (const key of "Change scope") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /1 staged · target: global/);
+				for (const key of "Apply/save staged changes") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			press(ESC),
+		);
+		assert.ok(h.notifications.some(({ message }) => message.includes("already has these values")));
+		assert.equal(h.readGlobal(), original);
+		assert.deepEqual(h.writes, []);
+		assert.deepEqual(h.dialogs.confirm, []);
+	});
+
+	it("keeps Alt+s available when a pending value already matches the target", async () => {
+		const h = harness({
+			global: json({ anchorStartAfterTurns: 7 }),
+			inputs: ["7"],
+			scopeKeys: [[HOME, ENTER], [ENTER]],
+			columns: 120,
+		});
+		await h.run(
+			edit(ROW.startAnchor),
+			(screen) => {
+				for (const key of "Change scope") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			press("\x1bs"),
+			press(ESC),
+		);
+		assert.equal(h.saveScopeFrames.length, 2);
+		assert.ok(h.notifications.some(({ message }) => message.includes("already has these values")));
+		assert.deepEqual(h.dialogs.confirm, []);
+	});
+
+	it("shows and unstages a nested pending edit after switching to an identical scope", async () => {
+		const original = json({ treeProposal: { tools: { bash: "omit" } } });
+		const h = harness({
+			global: original,
+			selects: ["omit"],
+			scopeKeys: [[HOME, ENTER]],
+			columns: 120,
+		});
+		await h.run(
+			edit(ROW.proposalTools),
+			edit(0),
+			press(ESC),
+			(screen) => {
+				for (const key of "Change scope") screen.handleInput(key);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.match(line(lines, "treeProposal.tools"), /1 tool · global · 1 staged/);
+				press(HOME, ...down(ROW.proposalTools), ENTER)(screen, lines);
+			},
+			(screen, lines) => {
+				assert.match(text(lines), /1 staged · target: global/);
+				assert.match(text(lines), /alt\+u unstage/);
+				screen.handleInput("\x1bu");
+			},
+			press(ESC),
+			press(ESC),
+		);
+		assert.equal(h.readGlobal(), original);
+		assert.deepEqual(h.readRuntime(), {});
+		assert.deepEqual(h.dialogs.confirm, []);
+		assert.deepEqual(h.dialogs.select[0], [
+			'treeProposal.tools["bash"] (Session)',
+			["full", "calls-only", "omit"],
+		]);
+		assert.match(text(required(h.rendered[1])), /Filter tools · Session only/);
+	});
+
+	it("keeps every action row inside narrow and wide terminal widths", async () => {
+		const h = harness({ foldingPaused: false, columns: 140 });
+		await h.run((screen) => {
+			press(HOME, ...down(ROW.overrides + 1))(screen, []);
+			for (let row = 0; row < 3; row++) {
+				for (const width of [36, 57, 80, 140]) {
+					for (const rendered of screen.render(width)) {
+						assert.ok(visibleWidth(rendered) <= width, `${width}: ${rendered}`);
+					}
+				}
+				screen.handleInput(DOWN);
+			}
+			screen.handleInput(ESC);
+		});
+	});
+
+	it("pauses and resumes folding immediately without changing staged settings", async () => {
+		const h = harness({ foldingPaused: false, confirms: [true], columns: 120 });
+		assert.match(
+			await describeSettings(h.ctx, h.deps),
+			/Automatic folding: active \(Session only\)/,
+		);
+		await h.run(
+			edit(ROW.autoEnabled),
+			(screen) => {
+				press(HOME, ...down(ROW.overrides + 3))(screen, []);
+				const selected = text(screen.render(120));
+				assert.match(selected, /→ Pause automatic folding\s+active/);
+				assert.match(
+					selected,
+					/Session only; recovery, continuity capture, and manual folding remain active/,
+				);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.equal(h.state.foldingPaused, true);
+				assert.match(text(lines), /1 staged · target: Session/);
+				for (const key of "Resume automatic folding") screen.handleInput(key);
+				assert.match(text(screen.render(120)), /→ Resume automatic folding\s+paused/);
+				screen.handleInput(ENTER);
+			},
+			(screen, lines) => {
+				assert.equal(h.state.foldingPaused, false);
+				assert.match(text(lines), /1 staged · target: Session/);
+				screen.handleInput(ESC);
+			},
+		);
+		assert.deepEqual(h.foldingChanges, [true, false]);
+		assert.equal(h.state.applies, 0);
+		assert.deepEqual(h.readRuntime(), {});
+		assert.deepEqual(h.writes, []);
+		assert.deepEqual(
+			h.dialogs.confirm.map(([title]) => title),
+			["Discard staged changes?"],
+		);
+	});
+
+	it("reports paused folding when available and hides it otherwise", async () => {
+		const paused = harness({ foldingPaused: true, columns: 120 });
+		assert.match(
+			await describeSettings(paused.ctx, paused.deps),
+			/Automatic folding: paused \(Session only\)/,
+		);
+		const unavailable = harness({ columns: 120 });
+		assert.doesNotMatch(
+			await describeSettings(unavailable.ctx, unavailable.deps),
+			/Automatic folding:/,
+		);
+		await unavailable.run((screen) => {
+			press(HOME, ...down(ROW.overrides + 4))(screen, []);
+			const selected = text(screen.render(120));
+			assert.match(selected, /→ Change scope/);
+			assert.doesNotMatch(selected, /Pause automatic folding|Resume automatic folding/);
+			screen.handleInput(ESC);
+		});
+	});
+});
+
 describe("settings screen: saving", () => {
 	it("types setting paths without switching layers, and switches with Alt+t", async () => {
-		const h = harness({ global: json({}), trusted: true, project: json({}) });
+		const h = globalHarness({ global: json({}), trusted: true, project: json({}) });
 		await h.run(
 			(screen) => {
 				for (const key of "treeProposal.tools") screen.handleInput(key);
@@ -341,7 +685,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("toggles a boolean with Space without opening the filter", async () => {
-		const h = harness({ global: json({}), confirms: [true] });
+		const h = globalHarness({ global: json({}), confirms: [true] });
 		await h.run(
 			at(ROW.autoEnabled, " "),
 			(screen) => {
@@ -355,7 +699,7 @@ describe("settings screen: saving", () => {
 		assert.deepEqual(JSON.parse(h.readGlobal()), { auto_navigate: { enabled: true } });
 	});
 	it("lists consolidation settings and saves a staged flag while preserving unknown keys", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ custom: 7, consolidation: { unknown: "keep" } }),
 			confirms: [true],
 		});
@@ -370,7 +714,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("edits consolidation counts and fractional share with validation", async () => {
-		const h = harness({ inputs: ["6", "0.25", "3"], confirms: [true] });
+		const h = globalHarness({ inputs: ["6", "0.25", "3"], confirms: [true] });
 		await h.run(
 			edit(ROW.consolidationMax),
 			edit(ROW.consolidationShare),
@@ -396,7 +740,7 @@ describe("settings screen: saving", () => {
 			custom_note: { keep: [1, 2] },
 			model_overrides: { "openai/x": { rewind_hint_reserve_tokens: 70000 } },
 		};
-		const h = harness({
+		const h = globalHarness({
 			global: json(original),
 			inputs: ["80k", "5"],
 			confirms: [true, false],
@@ -427,7 +771,7 @@ describe("settings screen: saving", () => {
 		const saved = text(required(h.rendered[3]));
 		assert.match(saved, /rewindHintReserveTokens\s+80k · global/);
 		assert.match(saved, /anchorStartAfterTurns\s+5 · global/);
-		assert.ok(!saved.includes("staged"));
+		assert.doesNotMatch(saved, /\b\d+ staged\b/);
 		assert.ok(
 			h.notifications.some(
 				({ message: m, type }) =>
@@ -440,7 +784,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("creates a missing project file and directory, and leaves the global file alone", async () => {
-		const h = harness({
+		const h = globalHarness({
 			trusted: true,
 			inputs: ["100k"],
 			confirms: [true, false],
@@ -456,7 +800,7 @@ describe("settings screen: saving", () => {
 	it("saves a runtime override without writing files and takes precedence over project values", async () => {
 		const global = json({ anchorStartAfterTurns: 3 });
 		const project = json({ anchorStartAfterTurns: 4 });
-		const h = harness({
+		const h = globalHarness({
 			global,
 			project,
 			trusted: true,
@@ -483,7 +827,7 @@ describe("settings screen: saving", () => {
 
 	it("leaves staged changes untouched when the save-scope chooser is cancelled", async () => {
 		const original = json({ rewindHintReserveTokens: 50000 });
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			inputs: ["80k"],
 			saveScopes: ["cancel"],
@@ -507,7 +851,7 @@ describe("settings screen: saving", () => {
 			keep: 1,
 		});
 		const replaced = json({ auto_navigate: "external replacement", keep: 1 });
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			inputs: ["8"],
 			confirms: [true, true],
@@ -527,7 +871,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("accepts forgiving numbers and writes the off sentinel as null", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ rewindHintReserveTokens: 50000, other: true }),
 			inputs: ["OFF", "1 500"],
 			confirms: [true, false],
@@ -544,7 +888,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("converts the auto_navigate boolean shorthand when a sibling key is edited", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ auto_navigate: true }),
 			confirms: [true, false],
 		});
@@ -555,7 +899,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("toggles a global flag from its target value when a project value shadows it", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ continuity: { capture: true } }),
 			project: json({ continuity: { capture: false } }),
 			trusted: true,
@@ -572,7 +916,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("toggles a flag and cycles a choice without opening an input", async () => {
-		const h = harness({ global: json({}), confirms: [true, false] });
+		const h = globalHarness({ global: json({}), confirms: [true, false] });
 		await h.run(edit(ROW.parentMode), edit(ROW.capture), press("\x1bs"), press(ESC));
 		assert.deepEqual(h.dialogs.input, []);
 		assert.deepEqual(JSON.parse(h.readGlobal()), {
@@ -582,7 +926,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("resets by removing every spelling of the key and prunes a container it empties", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				anchorStartAfterTurns: 4,
 				anchor_start_after_turns: 6,
@@ -603,7 +947,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("warns when a higher layer still overrides what was saved", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({}),
 			project: json({ rewindHintReserveTokens: 90000 }),
 			trusted: true,
@@ -621,7 +965,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("applies saved settings immediately without offering a reload", async () => {
-		const h = harness({ global: json({}), inputs: ["3"], confirms: [true] });
+		const h = globalHarness({ global: json({}), inputs: ["3"], confirms: [true] });
 		const exit = await h.run(edit(ROW.startAnchor), press("\x1bs"), press(ESC));
 		assert.equal(exit, "back");
 		assert.equal(h.state.applies, 1);
@@ -632,7 +976,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("applies immediately while the agent is working without offering a reload", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({}),
 			inputs: ["3"],
 			confirms: [true],
@@ -646,7 +990,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("warns when a runtime value shadows a lower-scope save", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({}),
 			runtime: { rewindHintReserveTokens: 90000 },
 			inputs: ["80k"],
@@ -668,7 +1012,7 @@ describe("settings screen: saving", () => {
 	it("resets a runtime value to reveal the trusted project value", async () => {
 		const global = json({ anchorStartAfterTurns: 3 });
 		const project = json({ anchorStartAfterTurns: 5 });
-		const h = harness({
+		const h = globalHarness({
 			global,
 			project,
 			runtime: { anchorStartAfterTurns: 8 },
@@ -692,7 +1036,7 @@ describe("settings screen: saving", () => {
 
 	it("keeps the staged edits and the file when the write fails", async () => {
 		const original = json({ keep: 1 });
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			inputs: ["3"],
 			confirms: [true, true],
@@ -711,7 +1055,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("steps numeric settings in both directions without crossing their bounds", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				rewindHintReserveTokens: 1000,
 				anchorStartAfterTurns: 50,
@@ -752,7 +1096,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("edits automatic pressure and its kept-recent share", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				auto_navigate: { pressure: "compact", keep_recent_share: 0.25 },
 			}),
@@ -767,7 +1111,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("uses left and right to set flags and cycle choices", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				parentHandoffMode: "full",
 				continuity: { capture: true },
@@ -791,7 +1135,7 @@ describe("settings screen: saving", () => {
 	});
 
 	it("writes atomically through a symlink and leaves no temp file behind", async () => {
-		const h = harness({
+		const h = globalHarness({
 			inputs: ["4"],
 			confirms: [true, false],
 			realWriter: true,
@@ -812,7 +1156,7 @@ describe("settings screen: saving", () => {
 
 describe("settings screen: refusals", () => {
 	it("refuses invalid ranges and custom model selectors", async () => {
-		const h = harness({
+		const h = globalHarness({
 			inputs: ["5m", "0", "foo", undefined, "101"],
 		});
 		await h.run(
@@ -839,12 +1183,12 @@ describe("settings screen: refusals", () => {
 			required(warnings[3]),
 			/"101" is not valid for auto_navigate\.check_every_turns\. Use 1-100 turns/,
 		);
-		assert.ok(!text(h.rendered.at(-1) ?? []).includes("staged"));
+		assert.doesNotMatch(text(h.rendered.at(-1) ?? []), /\b\d+ staged\b/);
 		assert.ok(!existsSync(h.globalPath));
 	});
 
 	it("shows a valid staged model when a sibling proposal field is invalid", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ treeProposal: { model: "current", tools: "invalid" } }),
 			inputs: ["offline/model:high"],
 			confirms: [true],
@@ -859,7 +1203,7 @@ describe("settings screen: refusals", () => {
 	});
 
 	it("shows the current value and the valid range in the input prompt", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ rewindHintReserveTokens: 50000 }),
 			inputs: [undefined],
 		});
@@ -874,7 +1218,7 @@ describe("settings screen: refusals", () => {
 
 	it("writes nothing when the user cancels with staged edits", async () => {
 		const original = json({ rewindHintReserveTokens: 50000 });
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			inputs: ["80k"],
 			confirms: [false, true],
@@ -892,7 +1236,7 @@ describe("settings screen: refusals", () => {
 
 	it("writes nothing when the save confirmation is declined", async () => {
 		const original = json({ rewindHintReserveTokens: 50000 });
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			inputs: ["80k"],
 			confirms: [false, true],
@@ -904,14 +1248,14 @@ describe("settings screen: refusals", () => {
 	});
 
 	it("closes without a question when nothing is staged", async () => {
-		const h = harness({ global: json({}) });
+		const h = globalHarness({ global: json({}) });
 		assert.equal(await h.run(press(ESC)), "back");
 		assert.deepEqual(h.dialogs.confirm, []);
 	});
 
 	it("never overwrites a file that does not parse, and says which file and why", async () => {
 		const broken = '{ "rewindHintReserveTokens": 5000, ';
-		const h = harness({
+		const h = globalHarness({
 			global: broken,
 			project: json({ anchorStartAfterTurns: 3 }),
 			trusted: true,
@@ -945,7 +1289,7 @@ describe("settings screen: refusals", () => {
 	});
 
 	it("refuses a config whose root is not an object", async () => {
-		const h = harness({ global: "[1, 2]", inputs: ["3"] });
+		const h = globalHarness({ global: "[1, 2]", inputs: ["3"] });
 		await h.run(edit(ROW.startAnchor), press(ESC));
 		assert.equal(readFileSync(h.globalPath, "utf8"), "[1, 2]");
 		assert.match(required(h.notifications[0]).message, /must be a JSON object/);
@@ -953,7 +1297,7 @@ describe("settings screen: refusals", () => {
 	});
 
 	it("cycles global, project and runtime targets", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({}),
 			project: json({}),
 			runtime: { anchorStartAfterTurns: 3 },
@@ -969,13 +1313,13 @@ describe("settings screen: refusals", () => {
 		await h.run(atTarget("\x1bt"), atTarget("\x1bt"), atTarget("\x1bt"), atTarget(ESC));
 		assert.match(required(targets[0]), /target: global/);
 		assert.match(required(targets[1]), /target: project/);
-		assert.match(required(targets[2]), /target: runtime/);
+		assert.match(required(targets[2]), /target: Session/);
 		assert.match(required(targets[3]), /target: global/);
 	});
 
 	it("does not read or edit the project file when the project is not trusted", async () => {
 		const project = json({ rewindHintReserveTokens: 1000 });
-		const h = harness({ global: json({}), project, trusted: false });
+		const h = globalHarness({ global: json({}), project, trusted: false });
 		let afterT: string[] = [];
 		await h.run(press("\x1bt"), (screen) => {
 			afterT = screen.render(80);
@@ -988,13 +1332,13 @@ describe("settings screen: refusals", () => {
 		assert.match(first, /parentHandoffMode\s+digest · default/);
 		assert.match(first, /global unset · project untrusted/);
 		assert.ok(!first.includes("to project"));
-		assert.match(text(afterT), /target: runtime/);
+		assert.match(text(afterT), /target: Session/);
 	});
 });
 
 describe("settings screen: rows", () => {
 	it("shows each effective value with the layer it comes from", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				rewindHintReserveTokens: 50000,
 				continuity: { capture: false },
@@ -1028,7 +1372,7 @@ describe("settings screen: rows", () => {
 	});
 
 	it("explains an ignored invalid value instead of hiding it", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				anchorStartAfterTurns: 7,
 				rewindHintReserveTokens: 50000,
@@ -1047,13 +1391,16 @@ describe("settings screen: rows", () => {
 	});
 
 	it("stays inside 60 columns and never cuts a description", async () => {
-		const h = harness({ global: json({}), columns: 60 });
+		const h = globalHarness({ global: json({}), columns: 60 });
 		const frames: string[][] = [];
+		let scope: string[] = [];
 		await h.run((screen) => {
 			for (let row = 0; row <= ROW.overrides; row++) {
 				frames.push(screen.render(60));
 				screen.handleInput(DOWN);
 			}
+			screen.handleInput(DOWN);
+			scope = screen.render(60);
 			screen.handleInput(ESC);
 		});
 		assert.equal(frames.length, ROW.overrides + 1);
@@ -1064,11 +1411,12 @@ describe("settings screen: rows", () => {
 		}
 		assert.match(required(required(frames[0])[0]), /Anchor\/Settings/);
 		assert.match(required(required(frames[0])[0]), /target: global/);
-		assert.match(required(required(frames[0])[1]), /file: /);
+		assert.match(required(required(frames[0])[1]), /Filter settings or actions/);
+		assert.match(line(scope, "↳"), /file: /);
 	});
 
 	it("describes effective nested map and runtime settings", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ treeProposal: { tools: { bash: "calls-only" } } }),
 			runtime: {
 				rewindHintReserveTokens: 60000,
@@ -1131,7 +1479,7 @@ describe("settings screen: keyed maps", () => {
 
 	it("leaves the original bytes alone when staged map edits are cancelled", async () => {
 		const original = json(MAPS);
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			selects: ["omit"],
 			inputs: ["150k"],
@@ -1150,7 +1498,7 @@ describe("settings screen: keyed maps", () => {
 	});
 
 	it("saves both edits, keeping another model's unknown data and snake_case, and the loader resolves them", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json(MAPS),
 			selects: ["omit"],
 			inputs: ["150k"],
@@ -1178,7 +1526,7 @@ describe("settings screen: keyed maps", () => {
 	});
 
 	it("shows inherited tool modes apart from the target file and stages add, change, remove and unstage", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				tree_proposal: { tools: { bash: "omit" } },
 				auto_navigate: { tools: { read: "calls-only" } },
@@ -1233,7 +1581,7 @@ describe("settings screen: keyed maps", () => {
 	});
 
 	it("confirms removing a non-empty model entry and stages an explicit delete", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json(MAPS),
 			confirms: [false, true, true, false],
 		});
@@ -1262,7 +1610,7 @@ describe("settings screen: keyed maps", () => {
 	});
 
 	it("edits nested model settings through the root rules and keeps the camelCase spelling", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				keep: 1,
 				modelOverrides: { "a/b": { autoNavigate: { check_every_turns: 4 } } },
@@ -1303,7 +1651,7 @@ describe("settings screen: keyed maps", () => {
 	});
 
 	it("adds a model pattern with a reserve and a tool policy, and the loader applies them", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({}),
 			inputs: ["bad name", "openrouter/*", "90k", "bash"],
 			selects: ["omit"],
@@ -1344,7 +1692,7 @@ describe("settings screen: keyed maps", () => {
 	});
 
 	it("resets and unstages a whole map from the top screen", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ tree_proposal: { tools: { bash: "omit" } } }),
 			confirms: [true],
 		});
@@ -1359,7 +1707,7 @@ describe("settings screen: keyed maps", () => {
 
 	it("shows a map that is not an object as invalid and refuses to replace it silently", async () => {
 		const original = json({ tree_proposal: { tools: "oops" } });
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			inputs: ["bash"],
 			selects: ["omit"],
@@ -1387,7 +1735,7 @@ describe("settings screen: keyed maps", () => {
 	});
 
 	it("lists an invalid tool mode as invalid and replaces it only when the user picks a mode", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({ tree_proposal: { tools: { bash: "banana" } } }),
 			selects: ["omit"],
 			confirms: [true],
@@ -1417,7 +1765,7 @@ describe("settings screen: classifier policies", () => {
 		const original = json({
 			continuity: { intentClassifier: "recommended" },
 		});
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			modelPicks: ["off"],
 			saveScopes: ["runtime"],
@@ -1468,7 +1816,7 @@ describe("settings screen: classifier policies", () => {
 		const original = json({
 			continuity: { intentClassifier: "recommended" },
 		});
-		const h = harness({
+		const h = globalHarness({
 			global: original,
 			inputs: ["acme/judge"],
 			modelPicks: ["custom"],
@@ -1512,17 +1860,17 @@ describe("settings screen: classifier policies", () => {
 		const original = json({
 			continuity: { intentClassifier: "recommended" },
 		});
-		const h = harness({ global: original, inputs: ["0.4"], columns: 120 });
+		const h = globalHarness({ global: original, inputs: ["0.4"], columns: 120 });
 		await h.run(edit(ROW.classifier), until("gate"), press(ESC), press(ESC));
 		assert.equal(h.readGlobal(), original);
 		assert.deepEqual(h.writes, []);
 		assert.deepEqual(h.readRuntime(), {});
 		assert.deepEqual(h.dialogs.confirm, []);
-		assert.ok(!text(h.rendered.at(-1) ?? []).includes("staged"));
+		assert.doesNotMatch(text(h.rendered.at(-1) ?? []), /\b\d+ staged\b/);
 	});
 
 	it("refuses an invalid milestone confidence without staging", async () => {
-		const h = harness({ inputs: ["0"], columns: 120 });
+		const h = globalHarness({ inputs: ["0"], columns: 120 });
 		await h.run(edit(ROW.milestone), until("gate"), press(ESC), press(ESC));
 		assert.match(
 			h.notifications.find(({ type }) => type === "warning")?.message ?? "",
@@ -1534,7 +1882,7 @@ describe("settings screen: classifier policies", () => {
 	});
 
 	it("keeps unspecified milestone stages under a wildcard override", async () => {
-		const h = harness({
+		const h = globalHarness({
 			global: json({
 				model_overrides: {
 					"openrouter/*": { auto_navigate: { enabled: true } },

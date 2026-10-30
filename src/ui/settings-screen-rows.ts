@@ -98,9 +98,7 @@ export function settingRow(def: SettingDef, view: View): FrameRow {
 				: after.value;
 	const afterText = show(def, displayed);
 	const edit = staged.get(def.key)?.edit;
-	const isStaged = plan
-		? plan.changes.some((change) => change.def.key === def.key)
-		: edit !== undefined;
+	const isStaged = edit !== undefined;
 	const changed = beforeText !== afterText;
 	const shadowed = isStaged && edit?.kind === "set" && after.source !== target;
 	const invalid = invalidIn(def, snap);
@@ -139,20 +137,20 @@ export function settingRow(def: SettingDef, view: View): FrameRow {
 }
 
 export function badgeOf(view: View): string {
-	const { snap, target, staged, plan } = view;
-	const pending = plan ? plan.changes.length : staged.size;
+	const { snap, target, staged } = view;
+	const pending = staged.size;
+	const label = scopeLabel(target);
 	const where = targetProblem(snap, target)
-		? `target: ${target} · file invalid`
-		: `target: ${target}`;
+		? `target: ${label} · file invalid`
+		: `target: ${label}`;
 	return pending > 0 ? `${pending} staged · ${where}` : where;
 }
 
 /** Staged edits that touch `path` or anything below it. */
 export function stagedUnder(view: View, path: readonly KeyName[]): Target[] {
-	const defs = view.plan
-		? view.plan.changes.map((change) => change.def)
-		: [...view.staged.values()].map((pending) => pending.def);
-	return defs.filter((def) => isUnder(def.path, path));
+	return [...view.staged.values()]
+		.map((pending) => pending.def)
+		.filter((def) => isUnder(def.path, path));
 }
 
 export function unstageUnder(staged: Map<string, Pending>, path: readonly KeyName[]): void {
@@ -170,6 +168,8 @@ export function canReset(view: View, target: Target): boolean {
 		view.staged.get(target.key)?.edit.kind !== "reset"
 	);
 }
+
+export const scopeLabel = (layer: Layer): string => (layer === "runtime" ? "Session" : layer);
 
 export const otherLayer = (layer: Layer, trusted: boolean): Layer => {
 	const available = LAYERS.filter((item) => item !== "project" || trusted);
@@ -264,19 +264,22 @@ export const itemTarget = (item: Item): Target =>
 
 type Shortcut = NonNullable<FrameScreen["shortcuts"]>[number];
 
+export const SETTINGS_ACTIONS = ["save", "scope", "folding"] as const;
+
 export function buildScreen(
 	view: View,
 	items: readonly Item[],
 	crumbs: readonly string[],
 	cursor: number,
 	top: boolean,
+	paused?: boolean,
 ): FrameScreen {
-	const { snap, target, plan, staged } = view;
+	const { snap, target, staged } = view;
 	const at = (index: number): Target | undefined => {
 		const item = items[index];
 		return item && itemTarget(item);
 	};
-	const pending = plan ? plan.changes.length : staged.size;
+	const pending = staged.size;
 	const shortcuts: Shortcut[] = [
 		{
 			key: "space",
@@ -324,7 +327,7 @@ export function buildScreen(
 	if (top) {
 		shortcuts.unshift({
 			key: "t",
-			action: `to ${otherLayer(target, snap.trusted)}`,
+			action: `to ${scopeLabel(otherLayer(target, snap.trusted))}`,
 		});
 		shortcuts.push({
 			key: "s",
@@ -333,12 +336,46 @@ export function buildScreen(
 			enabled: () => pending > 0,
 		});
 	}
+	const rows = items.map((item) => itemRow(item, view));
+	if (top) {
+		rows.push(
+			{
+				label: "Apply/save staged changes",
+				value: pending > 0 ? `${pending} staged` : "none staged",
+				description:
+					target === "runtime"
+						? "Apply to this Session only. No file is written; reload or switching sessions clears it."
+						: `Save to the ${target} file and apply to this session. Other keys are preserved.`,
+			},
+			{
+				label: "Change scope",
+				value: scopeLabel(target),
+				detail:
+					target === "runtime"
+						? "Session memory; no file"
+						: `file: ${shortPath(snap.paths[target], snap.cwd)}`,
+				description: "Choose where to apply or save staged changes without discarding them.",
+			},
+		);
+		if (paused !== undefined) {
+			rows.push({
+				label: paused ? "Resume automatic folding" : "Pause automatic folding",
+				value: paused ? "paused" : "active",
+				description:
+					"Session only; recovery, continuity capture, and manual folding remain active.",
+			});
+		}
+	}
 	return {
 		breadcrumbs: crumbs,
 		rightBadge: badgeOf(view),
-		placeholder: `Filter settings · file: ${shortPath(snap.paths[target], snap.cwd)}`,
-		enterAction: "edit",
-		rows: items.map((item) => itemRow(item, view)),
+		placeholder: top
+			? "Filter settings or actions…"
+			: target === "runtime"
+				? "Filter settings · Session only"
+				: `Filter settings · file: ${shortPath(snap.paths[target], snap.cwd)}`,
+		enterAction: top ? "select" : "edit",
+		rows,
 		cursor,
 		shortcuts,
 	};

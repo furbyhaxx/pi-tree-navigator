@@ -1,8 +1,8 @@
 /**
  * `/anchor settings`: staged editor for `tree-navigator.json`.
  *
- * Edits are staged in memory against one target layer (global or project) and
- * written only on save, after a confirmation. Effective values come from the
+ * Edits are staged in memory against one target layer and applied or written
+ * only on save, after a confirmation. Effective values come from the
  * real loader (`loadTreeNavigatorConfig`) and every candidate value is checked
  * with the real parsers (`parseTreeNavigatorConfig`), so the screen cannot
  * accept a value that the next session start would reject. A file that does
@@ -58,6 +58,7 @@ import {
 	mapNames,
 	otherLayer,
 	readableRoot,
+	SETTINGS_ACTIONS,
 	settingRow,
 	shortPath,
 	stagedUnder,
@@ -126,6 +127,11 @@ export async function describeSettings(
 		]),
 		`Project: ${snap.paths.project}${snap.trusted ? "" : " (untrusted, ignored)"}`,
 		`Runtime: ${snap.paths.runtime}`,
+		...(deps.automaticFolding
+			? [
+					`Automatic folding: ${deps.automaticFolding.isPaused(ctx) ? "paused" : "active"} (Session only)`,
+				]
+			: []),
 	].join("\n");
 }
 
@@ -139,7 +145,7 @@ export async function openSettingsScreen(
 		deps,
 		staged: new Map(),
 		warned: new Set(),
-		target: "global",
+		target: "runtime",
 	};
 	return itemsScreen(session, ["Anchor", "Settings"], ITEMS, true);
 }
@@ -156,9 +162,10 @@ async function itemsScreen(
 	while (true) {
 		const view = await loadView(session);
 		const { snap, plan, target } = view;
-		const pending = plan ? plan.changes.length : staged.size;
+		const pending = staged.size;
+		const paused = top ? deps.automaticFolding?.isPaused(ctx) : undefined;
 
-		const choice = await selectFrame(ctx, buildScreen(view, items, crumbs, cursor, top));
+		const choice = await selectFrame(ctx, buildScreen(view, items, crumbs, cursor, top, paused));
 		if (!choice) {
 			if (!top || pending === 0) return "back";
 			const discard = await ctx.ui.confirm(
@@ -169,18 +176,38 @@ async function itemsScreen(
 			continue;
 		}
 		cursor = choice.index;
-		const item = items[choice.index];
-		if (item === undefined) continue;
+		const action =
+			top && choice.key === undefined ? SETTINGS_ACTIONS[choice.index - items.length] : undefined;
 
 		if (choice.key === "t") {
 			session.target = otherLayer(target, snap.trusted);
-		} else if (choice.key === "s") {
-			const scope = await saveScope(ctx, target, snap.trusted);
+			continue;
+		}
+		if (action === "scope") {
+			const scope = await saveScope(ctx, target, snap.trusted, "Scope");
+			if (scope !== undefined) session.target = scope;
+			continue;
+		}
+		if (action === "folding" && deps.automaticFolding) {
+			deps.automaticFolding.setPaused(ctx, !deps.automaticFolding.isPaused(ctx));
+			continue;
+		}
+		if (choice.key === "s" || action === "save") {
+			if (pending === 0) {
+				ctx.ui.notify("No staged changes to apply or save.", "info");
+				continue;
+			}
+			const scope = choice.key === "s" ? await saveScope(ctx, target, snap.trusted) : target;
 			if (scope === undefined) continue;
 			session.target = scope;
 			const saved = await save(ctx, deps, scope, staged);
 			if (saved !== "kept") staged.clear();
-		} else if (choice.key === "u") {
+			continue;
+		}
+
+		const item = items[choice.index];
+		if (item === undefined) continue;
+		if (choice.key === "u") {
 			unstageUnder(staged, itemTarget(item).path);
 		} else if (choice.key === "d" || choice.key === "backspace") {
 			await removeEntry(session, view, itemTarget(item));
@@ -206,6 +233,14 @@ async function itemsScreen(
 
 // --- Keyed-map submenus -----------------------------------------------------------
 
+const targetName = (view: View): string =>
+	view.target === "runtime" ? "Session" : `${view.target} file`;
+
+const targetDetail = (view: View): string =>
+	view.target === "runtime"
+		? "Session only"
+		: `file: ${shortPath(view.snap.paths[view.target], view.snap.cwd)}`;
+
 /** Tool names the group lists in either file, or inherits from the policy behind it. */
 const toolNames = (view: View, group: ToolsGroup): string[] => [
 	...new Set([
@@ -217,7 +252,7 @@ const toolNames = (view: View, group: ToolsGroup): string[] => [
 async function chooseMode(session: Session, view: View, def: SettingDef): Promise<void> {
 	const { ctx } = session;
 	if (!usable(ctx, view.snap, view.target)) return;
-	const mode = await ctx.ui.select(`${def.key} (${view.target} file)`, [...TOOL_MODES]);
+	const mode = await ctx.ui.select(`${def.key} (${targetName(view)})`, [...TOOL_MODES]);
 	if (!mode) return;
 	if (!accepts(def, mode)) {
 		ctx.ui.notify(`"${mode}" is not valid for ${def.key}. Use ${def.expects}.`, "warning");
@@ -243,7 +278,7 @@ async function editTools(
 		const choice = await selectFrame(ctx, {
 			breadcrumbs: crumbs,
 			rightBadge: badgeOf(view),
-			placeholder: `Filter tools · file: ${shortPath(view.snap.paths[view.target], view.snap.cwd)}`,
+			placeholder: `Filter tools · ${targetDetail(view)}`,
 			enterAction: "set",
 			cursor,
 			rows: [
@@ -285,7 +320,7 @@ async function editTools(
 			await chooseMode(session, view, def);
 		} else if (usable(ctx, view.snap, view.target)) {
 			const input = await ctx.ui.input(
-				`${group.label ?? group.key} (${view.target} file)`,
+				`${group.label ?? group.key} (${targetName(view)})`,
 				"exact tool name, e.g. bash",
 			);
 			const tool = input?.trim();
@@ -304,7 +339,7 @@ async function editOverrides(session: Session, crumbs: readonly string[]): Promi
 		const choice = await selectFrame(ctx, {
 			breadcrumbs: crumbs,
 			rightBadge: badgeOf(view),
-			placeholder: `Filter models · file: ${shortPath(view.snap.paths[view.target], view.snap.cwd)}`,
+			placeholder: `Filter models · ${targetDetail(view)}`,
 			enterAction: "edit",
 			cursor,
 			rows: [
@@ -348,7 +383,7 @@ async function editOverrides(session: Session, crumbs: readonly string[]): Promi
 			let pattern: string | undefined = existing;
 			if (pattern === undefined || choice.key === "a") {
 				const input = await ctx.ui.input(
-					`${OVERRIDES.key} (${view.target} file)`,
+					`${OVERRIDES.key} (${targetName(view)})`,
 					"provider/model, a wildcard like openrouter/* or *gemini*, or a bare model id",
 				);
 				pattern = input?.trim();

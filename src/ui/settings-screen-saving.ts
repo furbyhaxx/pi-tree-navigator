@@ -14,7 +14,7 @@ import {
 	type Raw,
 	serialize,
 } from "./settings-screen-raw.ts";
-import { planFor, targetProblem } from "./settings-screen-rows.ts";
+import { planFor, scopeLabel, targetProblem } from "./settings-screen-rows.ts";
 import {
 	LAYERS,
 	type Layer,
@@ -81,13 +81,23 @@ export async function save(
 	}
 	const path = first.snap.paths[target];
 	if (first.plan.changes.length === 0) {
-		ctx.ui.notify(`Nothing to save: ${path} already has these values.`, "info");
+		ctx.ui.notify(
+			target === "runtime"
+				? "Nothing to apply: Session already has these values."
+				: `Nothing to save: ${path} already has these values.`,
+			"info",
+		);
 		return "unchanged";
 	}
 	const { changes } = first.plan;
+	const count = `${changes.length} ${changes.length === 1 ? "change" : "changes"}`;
 	const confirmed = await ctx.ui.confirm(
-		`Save ${changes.length} ${changes.length === 1 ? "change" : "changes"} to the ${target} config?`,
-		`${path}\n\n${changeLines(changes)}\n\nAll other keys stay as they are.`,
+		target === "runtime"
+			? `Apply ${count} to this Session?`
+			: `Save ${count} to the ${target} config?`,
+		target === "runtime"
+			? `${changeLines(changes)}\n\nNo file is written; reload or switching sessions clears these changes. All other settings stay as they are.`
+			: `${path}\n\n${changeLines(changes)}\n\nAll other keys stay as they are.`,
 	);
 	if (!confirmed) return "kept";
 
@@ -117,8 +127,11 @@ export async function save(
 		);
 		return "written";
 	}
+	const applied = deps.onSaved ? " Applied to this session." : "";
 	ctx.ui.notify(
-		`Saved ${changes.length} ${changes.length === 1 ? "setting" : "settings"} to ${path}.${deps.onSaved ? " Applied to this session." : ""}`,
+		target === "runtime"
+			? `Saved ${count} to Session memory.${applied} No file was written; reload or switching sessions clears it.`
+			: `Saved ${changes.length} ${changes.length === 1 ? "setting" : "settings"} to ${path}.${applied}`,
 		"info",
 	);
 	const saved = await readSnapshot(ctx, deps);
@@ -140,23 +153,26 @@ export async function saveScope(
 	ctx: ExtensionCommandContext,
 	target: Layer,
 	trusted: boolean,
+	title: "Save" | "Scope" = "Save",
 ): Promise<Layer | undefined> {
 	const scopes = LAYERS.filter((layer) => layer !== "project" || trusted);
 	const choice = await selectFrame(ctx, {
-		breadcrumbs: ["Anchor", "Settings", "Save"],
+		breadcrumbs: ["Anchor", "Settings", title],
 		cursor: scopes.indexOf(target),
 		enterAction: "choose",
 		rows: scopes.map((layer) => ({
-			label: layer,
+			label: scopeLabel(layer),
 			description:
 				layer === "runtime"
-					? "Apply only to this session. No file is written; reload or switching sessions clears it."
-					: `Merge into the ${layer} file and apply now. Other keys are preserved.`,
+					? "Apply only to this Session. No file is written; reload or switching sessions clears it."
+					: title === "Scope"
+						? `Target the ${layer} file. Changes are saved only when you apply them.`
+						: `Merge into the ${layer} file and apply now. Other keys are preserved.`,
 		})),
 		shortcuts: [
 			{ key: "u", action: "global" },
 			...(trusted ? [{ key: "p" as const, action: "project" }] : []),
-			{ key: "r", action: "runtime" },
+			{ key: "r", action: "Session" },
 		],
 	});
 	return !choice
