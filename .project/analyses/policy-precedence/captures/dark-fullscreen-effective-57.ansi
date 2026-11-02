@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+[38;5;140m─ [38;5;145mAnchor[39m/[1mSettings[0m [38;5;140m─────────────────────[39m [38;5;145mtarget: Session[39m [38;5;140m─
+[39m [38;5;140m❯[39m auto_navigate.enabled[7m [0m
+
+ [38;5;140m→[39m auto_navigate.enabled      [38;5;254mfalse · project[39m
+      [38;5;102m↳[39m [38;5;145mCurrent model: disabled · pressure at 400k · glo[39m…
+   auto_nav…rewind_at_tokens  [38;5;254m400k · project[39m
+   auto_nav…eep_recent_share  [38;5;145m0.25 · default[39m
+   auto_navigate.milestone    [38;5;145mrecommended · default[39m
+   auto_navigate.mode         [38;5;145manchor-and-rewind · default
+[39m   auto_nav…heck_every_turns  [38;5;145m6 · default[39m
+
+[38;5;102m   Let a sidecar controller set anchors and fold on its[39m
+[38;5;102m   own as the context grows. Default false.[39m
+ [1m↑↓[0m [38;5;102mnavigate[39m  [1menter[0m [38;5;102mselect[39m  [1mtype[0m [38;5;102mfilter[39m  [1mesc[0m [38;5;102mclear[39m  [38;5;102m…[39m
+[38;5;140m───────────────────────[38;5;102m ↓ 1 more [38;5;140m────────────────────────
+[38;5;102m/tmp/navigator-policy-wdh3y41n/work[39m
+[38;5;102m0.0%/1.0M (auto)                               scope-test

@@ -22,6 +22,7 @@ import {
 	makeConfigFixture,
 	runSessionStart,
 	writeGlobalConfig,
+	writeProjectConfig,
 } from "../support/config-fixtures.ts";
 import {
 	type BoundaryDraft,
@@ -183,6 +184,53 @@ function toolTurn(f: Forced, id: string, tokens: number, usage = 0) {
 	appendToolResult(f.sm, id, "read", "e".repeat(tokens * 4));
 	return assistantId;
 }
+
+describe("project automatic-fold policy precedence", () => {
+	for (const enabled of [false, true]) {
+		it(`honors project enabled=${enabled} and threshold through the live controller`, async () => {
+			const f = await autoFixture(
+				async () => ({ status: "continue" }),
+				{ check_every_turns: 50, rewind_at_tokens: 20_000, pressure: "compact" },
+				{
+					model_overrides: {
+						"claude/*": {
+							auto_navigate: { enabled: true, rewind_at_tokens: 20_000 },
+						},
+					},
+				},
+			);
+			try {
+				f.ctx.isProjectTrusted = () => true;
+				writeProjectConfig(
+					f.fixture,
+					JSON.stringify({ auto_navigate: { enabled, rewind_at_tokens: 40_000 } }),
+				);
+				await runSessionStart(f.pi, f.ctx, f.fixture, "reload");
+				for (let i = 1; i <= 3; i++) {
+					appendTurn(f.sm, `finished task ${i}`, `# Done ${i}`, i * 5_000, true);
+				}
+				await autoTurn(f, 30_000);
+				assert.equal(f.summaries.calls.length, 0, "must not compact at the global threshold");
+				assert.equal(f.questions.length, 0);
+				const boundary = await autoTurn(f, 45_000);
+				assert.equal(f.summaries.calls.length > 0, enabled);
+				assert.equal(
+					boundary.entries.some((entry) => entry.customType === PRESSURE_COMPACTION_CUSTOM_TYPE),
+					enabled,
+					JSON.stringify(boundary),
+				);
+				if (enabled) {
+					const receipt = boundary.entries.find(
+						(entry) => entry.customType === PRESSURE_COMPACTION_CUSTOM_TYPE,
+					);
+					assert.match(String(receipt?.content), /rewind_at_tokens 40k/);
+				}
+			} finally {
+				cleanupConfigFixture(f.fixture);
+			}
+		});
+	}
+});
 
 describe("session automatic-fold pause", () => {
 	it("wins over model enablement, keeps manual anchors available, and resumes without changing policy", async () => {

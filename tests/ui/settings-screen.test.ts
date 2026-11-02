@@ -1415,6 +1415,29 @@ describe("settings screen: rows", () => {
 		assert.match(line(scope, "↳"), /file: /);
 	});
 
+	it("shows current-model policy after applying project precedence", async () => {
+		const h = harness({
+			trusted: true,
+			global: json({
+				auto_navigate: { enabled: true, rewind_at_tokens: 200000 },
+				model_overrides: {
+					"*model*": { auto_navigate: { enabled: true, rewind_at_tokens: 200000 } },
+				},
+			}),
+			project: json({ auto_navigate: { enabled: false, rewind_at_tokens: 400000 } }),
+		});
+		Object.assign(h.ctx, { model: { provider: "test", id: "model-6" } });
+		assert.match(
+			await describeSettings(h.ctx, h.deps),
+			/Effective auto_navigate: enabled=false, rewind_at_tokens=400000/,
+		);
+		await h.run((screen) => {
+			for (const key of [HOME, ...down(ROW.autoEnabled)]) screen.handleInput(key);
+			assert.match(text(screen.render(140)), /Current model: disabled · pressure at 400k/);
+			screen.handleInput(ESC);
+		});
+	});
+
 	it("describes effective nested map and runtime settings", async () => {
 		const h = globalHarness({
 			global: json({ treeProposal: { tools: { bash: "calls-only" } } }),

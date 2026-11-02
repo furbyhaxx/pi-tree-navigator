@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ Anchor/Settings ──────────────────────────────────────────── target: Session ─
+ ❯ auto_navigate.enabled
+
+ → auto_navigate.enabled                 false · project
+      ↳ Current model: disabled · pressure at 400k · global true · project fals…
+   auto_navigate.rewind_at_tokens        400k · project
+   auto_navigate.keep_recent_share       0.25 · default
+   auto_navigate.milestone               recommended · default
+   auto_navigate.mode                    anchor-and-rewind · default
+   auto_navigate.check_every_turns       6 · default
+
+   Let a sidecar controller set anchors and fold on its own as the context
+   grows. Default false.
+ ↑↓ navigate  enter select  alt+t to global  type filter  esc clear  …
+─────────────────────────────────── ↓ 1 more ───────────────────────────────────
+/tmp/navigator-policy-wdh3y41n/work
+0.0%/1.0M (auto)                                                      scope-test

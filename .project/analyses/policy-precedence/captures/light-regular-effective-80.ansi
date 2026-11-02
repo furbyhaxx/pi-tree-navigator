@@ -1,0 +1,30 @@
+
+[38;5;98m─ [38;5;60mAnchor[39m/[1mSettings[0m [38;5;98m────────────────────────────────────────────[39m [38;5;60mtarget: Session[39m [38;5;98m─
+[39m [38;5;97m❯[39m auto_navigate.enabled[7m [0m
+
+ [38;5;97m→[39m auto_navigate.enabled                 [38;5;237mfalse · project[39m
+      [38;5;102m↳[39m [38;5;60mCurrent model: disabled · pressure at 400k · global true · project fals[39m…
+   auto_navigate.rewind_at_tokens        [38;5;237m400k · project[39m
+   auto_navigate.keep_recent_share       [38;5;60m0.25 · default[39m
+   auto_navigate.milestone               [38;5;60mrecommended · default[39m
+   auto_navigate.mode                    [38;5;60manchor-and-rewind · default[39m
+   auto_navigate.check_every_turns       [38;5;60m6 · default[39m
+
+[38;5;102m   Let a sidecar controller set anchors and fold on its own as the context[39m
+[38;5;102m   grows. Default false.[39m
+ [1m↑↓[0m [38;5;102mnavigate[39m  [1menter[0m [38;5;102mselect[39m  [1malt+t[0m [38;5;102mto global[39m  [1mtype[0m [38;5;102mfilter[39m  [1mesc[0m [38;5;102mclear[39m  [38;5;102m…[39m
+[38;5;98m───────────────────────────────────[38;5;102m ↓ 1 more [38;5;98m───────────────────────────────────
+[38;5;102m/tmp/navigator-policy-cfk2t9lu/work[39m
+[38;5;102m0.0%/1.0M (auto)                                                      scope-test
+
+
+
+
+
+
+
+
+
+
+
+

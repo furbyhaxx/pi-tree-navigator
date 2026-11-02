@@ -95,6 +95,7 @@ export function createSessionLifecycle({ state }: SessionLifecycleDeps) {
 	): void {
 		state.config.rewindHintReserveTokens = config.rewindHintReserveTokens;
 		state.config.hintByModel = config.rewindHintModelReserveTokens;
+		state.config.autoNavigateLayers = config.autoNavigateLayers;
 		state.config.autoNavigateBase = config.autoNavigate;
 		state.config.autoNavigateByModel = config.autoNavigateByModel ?? new Map();
 		state.config.proposalConfig = config.proposal;
@@ -134,6 +135,7 @@ export function createSessionLifecycle({ state }: SessionLifecycleDeps) {
 		tokenCalibration.delete(sessionId);
 		state.config.rewindHintReserveTokens = null;
 		state.config.hintByModel = new Map();
+		state.config.autoNavigateLayers = undefined;
 		state.config.autoNavigateBase = undefined;
 		state.config.autoNavigateByModel = new Map();
 		state.config.proposalConfig = undefined;

@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Automatic policy precedence**: trusted Project and Session base settings now override lower-scope model policies, so disabling automatic folding or raising its pressure threshold is honored. Settings show the current model's effective enabled state and threshold separately from editable base values.
 - **Settings access**: Save/apply and scope selection are searchable Enter-selectable rows; Session is the initial scope, so session-only changes no longer require Alt shortcuts or a file save. Switching scope retains unsaved edits and discard protection.
 - **Session pause**: pause automatic folding independently of base and per-model policies, without stopping recovery, capture or manual folds. Pause/resume fences in-flight milestone results and clears on reload/session switch.
 - **Panel keys**: enabled Alt actions take priority over conflicting selection bindings, fullscreen paging reaches the focused panel, and navigation hints show the actual user bindings.

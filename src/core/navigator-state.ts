@@ -8,6 +8,7 @@ import type { RewindMessageDraft } from "../fold/fold-receipts.ts";
 import type { HandoffMode } from "../fold/handoff.ts";
 import type { ProposalOptions } from "../retrospective/proposal-options.ts";
 import {
+	type AutoNavigateLayer,
 	CONSOLIDATION_DEFAULTS,
 	CONTINUITY_CAPTURE_DEFAULT,
 	type ConsolidationConfig,
@@ -21,6 +22,7 @@ export interface ConfigBindings {
 	consolidation: ConsolidationConfig;
 	rewindHintReserveTokens: number | null;
 	hintByModel: ReadonlyMap<string, number | null>;
+	autoNavigateLayers: readonly AutoNavigateLayer[] | undefined;
 	autoNavigateBase: AutoNavigatePartial | undefined;
 	autoNavigateByModel: ReadonlyMap<string, AutoNavigatePartial | null>;
 	proposalConfig: ProposalOptions | undefined;
@@ -106,6 +108,7 @@ export function createNavigatorState(): NavigatorState {
 			consolidation: CONSOLIDATION_DEFAULTS,
 			rewindHintReserveTokens: null,
 			hintByModel: new Map(),
+			autoNavigateLayers: undefined,
 			autoNavigateBase: undefined,
 			autoNavigateByModel: new Map(),
 			proposalConfig: undefined,

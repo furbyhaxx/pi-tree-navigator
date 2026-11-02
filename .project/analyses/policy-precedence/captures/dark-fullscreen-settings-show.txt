@@ -1,0 +1,70 @@
+
+ Anchor settings
+ Current model: offline/scope-test
+ Effective auto_navigate: enabled=false, rewind_at_tokens=400000
+ rewindHintReserveTokens: off (default)
+ anchorStartAfterTurns: 2 (default)
+ parentHandoffMode: digest (default)
+ continuity.capture: false (global)
+ continuity.intentClassifier: off (default)
+ treeProposal.model: current (default)
+ auto_navigate.enabled: false (project)
+ auto_navigate.mode: anchor-and-rewind (default)
+ auto_navigate.milestone: recommended (default)
+ auto_navigate.check_every_turns: 6 (default)
+ auto_navigate.min_tokens_since_anchor: 25k (default)
+ auto_navigate.rewind_at_tokens: 400k (project)
+ auto_navigate.pressure: compact (default)
+ auto_navigate.keep_recent_share: 0.25 (default)
+ consolidation.enabled: true (default)
+ consolidation.max_handoffs: 4 (default)
+ consolidation.max_window_share: 0.1 (default)
+ consolidation.keep_newest: 2 (default)
+ Global: /tmp/navigator-policy-wdh3y41n/agent/tree-navigator.json
+ model_overrides["*scope-test*"].rewindHintReserveTokens: off (default)
+ model_overrides["*scope-test*"].auto_navigate.enabled: true (global)
+ model_overrides["*scope-test*"].auto_navigate.mode: anchor-and-rewind (default)
+ model_overrides["*scope-test*"].auto_navigate.milestone: recommended (default)
+ model_overrides["*scope-test*"].auto_navigate.check_every_turns: 6 (default)
+ model_overrides["*scope-test*"].auto_navigate.min_tokens_since_anchor: 25k (default)
+ model_overrides["*scope-test*"].auto_navigate.rewind_at_tokens: 200k (global)
+ model_overrides["*scope-test*"].auto_navigate.pressure: compact (default)
+ model_overrides["*scope-test*"].auto_navigate.keep_recent_share: 0.25 (default)
+ Project: /tmp/navigator-policy-wdh3y41n/work/.pi/tree-navigator.json
+ Runtime: session memory (cleared on reload or session switch)
+ Automatic folding: not paused (Session only)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/tmp/navigator-policy-wdh3y41n/work
+0.0%/1.0M (auto)                                                                                                                  scope-test

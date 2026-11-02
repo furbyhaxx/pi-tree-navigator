@@ -19,7 +19,7 @@ import {
 	type ExtensionCommandContext,
 	getAgentDir,
 } from "@earendil-works/pi-coding-agent";
-import { TREE_NAVIGATOR_CONFIG_FILENAME } from "../core/config.ts";
+import { resolveAutoNavigateConfig, TREE_NAVIGATOR_CONFIG_FILENAME } from "../core/config.ts";
 import { selectFrame } from "./frame.ts";
 import { SETTINGS } from "./settings-screen-catalog.ts";
 import {
@@ -99,8 +99,17 @@ export async function describeSettings(
 		const { value, source } = resolveDef(def, snap.current);
 		return `${def.key}: ${show(def, value)} (${source})`;
 	});
+	const model = ctx.model;
+	const modelKey = model ? `${model.provider}/${model.id}` : undefined;
+	const policy = resolveAutoNavigateConfig(snap.current.config, modelKey);
 	return [
 		"Anchor settings",
+		...(modelKey
+			? [
+					`Current model: ${modelKey}`,
+					`Effective auto_navigate: enabled=${policy.enabled}, rewind_at_tokens=${policy.rewindAtTokens}`,
+				]
+			: []),
 		...lines,
 		`Global: ${snap.paths.global}`,
 		...[PROPOSAL_TOOLS, AUTO_TOOLS].flatMap((group) =>
@@ -165,7 +174,12 @@ async function itemsScreen(
 		const pending = staged.size;
 		const paused = top ? deps.automaticFolding?.isPaused(ctx) : undefined;
 
-		const choice = await selectFrame(ctx, buildScreen(view, items, crumbs, cursor, top, paused));
+		const model = ctx.model;
+		const modelKey = model ? `${model.provider}/${model.id}` : undefined;
+		const choice = await selectFrame(
+			ctx,
+			buildScreen(view, items, crumbs, cursor, top, paused, modelKey),
+		);
 		if (!choice) {
 			if (!top || pending === 0) return "back";
 			const discard = await ctx.ui.confirm(

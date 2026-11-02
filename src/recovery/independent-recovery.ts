@@ -176,6 +176,7 @@ export function createIndependentRecoveryController({
 					...(state.config.autoNavigateBase === undefined
 						? {}
 						: { autoNavigate: state.config.autoNavigateBase }),
+					autoNavigateLayers: state.config.autoNavigateLayers,
 					autoNavigateByModel: state.config.autoNavigateByModel,
 					...(state.config.proposalConfig === undefined
 						? {}

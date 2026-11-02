@@ -22,7 +22,9 @@ if the pause changes before it lands. An already committed fold is not undone.
 Select **Resume automatic folding** to use the configured policy again; it does
 not force an otherwise disabled policy on. Both the pause and applied Session
 settings clear on `/reload`, session switch or shutdown. `/anchor settings show`
-reports the pause alongside the effective configuration.
+reports the pause alongside the effective configuration. With a current model,
+it also reports the resolved automatic-fold enabled state and pressure threshold;
+selecting either base setting in the panel shows those current-model values.
 
 ## Rewind hint (optional)
 
@@ -85,6 +87,19 @@ Different models need different budgets: a model that writes long summaries or g
   }
 }
 ```
+
+Automatic policies resolve in scope order: Global base + matching Global model
+policies, then trusted Project base + matching Project model policies, then Session
+base + matching Session model policies. Within each scope, broad wildcard matches
+apply before more specific matches and exact keys. Unspecified fields inherit;
+defaults are filled only after all scopes resolve. Thus Project
+`auto_navigate: { "enabled": false, "rewind_at_tokens": 400000 }` wins over a Global
+model override that enables folding at 200000. A matching Project model policy can
+still specialize that Project base, and Session settings win over both.
+
+Malformed automatic policies remain disabled. A higher-scope valid model entry
+can repair a malformed entry for the same pattern; another matching pattern or a
+base enable does not clear it. An invalid base policy remains fail-closed.
 
 When `auto_navigate.enabled` is true, two things happen at each turn boundary:
 

@@ -87,6 +87,26 @@ export interface ParsedLayer {
 	modelOverridesProblems: ModelOverridesProblems;
 }
 
+/** One scope's automatic policy, retained until model-specific resolution. */
+export interface AutoNavigateLayer {
+	readonly base: AutoNavigatePartial | null | undefined;
+	readonly models: ReadonlyMap<string, AutoNavigatePartial | null> | undefined;
+}
+
+function automaticLayer(layer: ParsedLayer) {
+	return {
+		base: layer.autoNavigate?.kind === "invalid" ? null : layer.autoNavigate?.value,
+		models: layer.modelAutoNavigate
+			? new Map(
+					[...layer.modelAutoNavigate].map(([key, field]) => [
+						key,
+						field.kind === "ok" ? field.value : null,
+					]),
+				)
+			: undefined,
+	} satisfies AutoNavigateLayer;
+}
+
 /**
  * Root parse result. A non-object root (null, array, primitive) is a
  * file-level failure so the other layer can still apply every field.
@@ -275,26 +295,34 @@ export function resolveRewindHintReserve(
 
 /**
  * Resolve the effective `AutoNavigateConfig` for `modelKey` (`provider/modelId`),
- * applying base `auto_navigate` and any matching wildcard or exact
- * `model_overrides` entry (ordered from least specific to most specific so
- * fields inherit cleanly while specific patterns win).
+ * applying each scope's base then matching model policies, in ascending scope
+ * order. Within a scope, more specific patterns win; defaults materialize last.
  */
 export function resolveAutoNavigateConfig(
 	config: {
 		autoNavigate?: AutoNavigatePartial;
 		autoNavigateByModel?: ReadonlyMap<string, AutoNavigatePartial | null>;
+		autoNavigateLayers?: readonly AutoNavigateLayer[] | undefined;
 		proposal?: ProposalOptions;
 	},
 	modelKey: string | undefined,
 ): AutoNavigateConfig {
-	let effective = config.autoNavigate;
-	if (modelKey !== undefined && config.autoNavigateByModel) {
+	let effective: AutoNavigatePartial | undefined;
+	let invalidBase = false;
+	const invalidModels = new Set<string>();
+	const layers = config.autoNavigateLayers ?? [
+		{ base: config.autoNavigate, models: config.autoNavigateByModel },
+	];
+	for (const layer of layers) {
+		if (layer.base === null) invalidBase = true;
+		else effective = mergeAutoNavigatePartial(effective, layer.base);
+		if (modelKey === undefined || !layer.models) continue;
 		const matches: Array<{
 			pattern: string;
 			partial: AutoNavigatePartial | null;
 			score: number;
 		}> = [];
-		for (const [pattern, partial] of config.autoNavigateByModel) {
+		for (const [pattern, partial] of layer.models) {
 			if (!matchesModelPattern(pattern, modelKey)) continue;
 			matches.push({
 				pattern,
@@ -304,13 +332,17 @@ export function resolveAutoNavigateConfig(
 		}
 		matches.sort((a, b) => a.score - b.score);
 		for (const match of matches) {
-			if (match.partial === null) {
-				return materializeAutoNavigateConfig({ ...effective, enabled: false }, config.proposal);
+			if (match.partial === null) invalidModels.add(match.pattern);
+			else {
+				invalidModels.delete(match.pattern);
+				effective = mergeAutoNavigatePartial(effective, match.partial);
 			}
-			effective = mergeAutoNavigatePartial(effective, match.partial);
 		}
 	}
-	return materializeAutoNavigateConfig(effective, config.proposal);
+	return materializeAutoNavigateConfig(
+		invalidBase || invalidModels.size > 0 ? { ...effective, enabled: false } : effective,
+		config.proposal,
+	);
 }
 
 /** Parse one layer's root and describe every field-level problem; `where` names the layer in warnings. */
@@ -374,6 +406,7 @@ export async function loadTreeNavigatorConfig(opts: {
 		proposalError?: string;
 		autoNavigate?: AutoNavigatePartial;
 		autoNavigateByModel?: Map<string, AutoNavigatePartial | null>;
+		autoNavigateLayers?: readonly AutoNavigateLayer[];
 	};
 	warnings: string[];
 }> {
@@ -395,12 +428,18 @@ export async function loadTreeNavigatorConfig(opts: {
 		projectLayer = projectResult.layer;
 	}
 
+	const automaticLayers = [globalResult.layer, projectLayer];
 	let effective = mergeTreeNavigatorConfig(globalResult.layer, projectLayer);
 	if (opts.runtime !== undefined) {
 		const runtimeResult = parseLayerRoot("runtime config", opts.runtime);
 		warnings.push(...runtimeResult.warnings);
 		effective = mergeTreeNavigatorConfig(effective, runtimeResult.layer);
+		automaticLayers.push(runtimeResult.layer);
 	}
+	const automatic = automaticLayer(effective);
+	const policyLayers = automaticLayers
+		.map(automaticLayer)
+		.filter((layer) => layer.base !== undefined || layer.models?.size);
 	return {
 		config: {
 			rewindHintReserveTokens: hintReserve(effective.hint),
@@ -447,21 +486,11 @@ export async function loadTreeNavigatorConfig(opts: {
 			...(effective.proposal?.kind === "invalid"
 				? { proposalError: effective.proposal.error }
 				: {}),
-			...(effective.autoNavigate?.kind === "ok"
-				? { autoNavigate: effective.autoNavigate.value }
-				: effective.autoNavigate?.kind === "invalid"
-					? { autoNavigate: { enabled: false } }
-					: {}),
-			...(effective.modelAutoNavigate && effective.modelAutoNavigate.size > 0
-				? {
-						autoNavigateByModel: new Map(
-							[...effective.modelAutoNavigate].map(([key, field]) => [
-								key,
-								field.kind === "ok" ? field.value : null,
-							]),
-						),
-					}
-				: {}),
+			...(automatic.base === undefined
+				? {}
+				: { autoNavigate: automatic.base ?? { enabled: false } }),
+			...(automatic.models?.size ? { autoNavigateByModel: automatic.models } : {}),
+			...(policyLayers.length > 0 ? { autoNavigateLayers: policyLayers } : {}),
 		},
 		warnings,
 	};

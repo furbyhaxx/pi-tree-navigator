@@ -271,4 +271,138 @@ describe("wildcard modelOverrides and snake_case auto_navigate", () => {
 		const opusAuto = resolveAutoNavigateConfig(loaded.config, "claude/claude-opus-5-5");
 		assert.equal(opusAuto.enabled, false);
 	});
+
+	for (const example of [
+		{
+			name: "project base overrides a global matching model policy",
+			project: { auto_navigate: { enabled: false, rewind_at_tokens: 400000 } },
+			runtime: {},
+			enabled: false,
+			threshold: 400000,
+		},
+		{
+			name: "enabled project uses its threshold rather than the global model threshold",
+			project: { auto_navigate: { enabled: true, rewind_at_tokens: 400000 } },
+			runtime: {},
+			enabled: true,
+			threshold: 400000,
+		},
+		{
+			name: "runtime base overrides project and global matching model policies",
+			project: {
+				model_overrides: {
+					"*model*": { auto_navigate: { enabled: true, rewind_at_tokens: 300000 } },
+				},
+			},
+			runtime: { auto_navigate: { enabled: false, rewind_at_tokens: 500000 } },
+			enabled: false,
+			threshold: 500000,
+		},
+		{
+			name: "higher-scope wildcard overrides a lower-scope exact model policy",
+			project: {
+				model_overrides: {
+					"*model*": { auto_navigate: { enabled: false, rewind_at_tokens: 400000 } },
+				},
+			},
+			runtime: {},
+			enabled: false,
+			threshold: 400000,
+		},
+	]) {
+		it(example.name, async () => {
+			const loaded = await loadTreeNavigatorConfig({
+				agentDir: "/agent",
+				projectPath: "/project/.pi/tree-navigator.json",
+				projectTrusted: true,
+				runtime: example.runtime,
+				readFile: async (path) =>
+					JSON.stringify(
+						path.startsWith("/agent/")
+							? {
+									auto_navigate: { enabled: true, tools: { read: "omit" } },
+									model_overrides: {
+										"*model*": {
+											auto_navigate: { enabled: true, rewind_at_tokens: 200000 },
+										},
+										"test/model-6": {
+											auto_navigate: { enabled: true, rewind_at_tokens: 200000 },
+										},
+									},
+								}
+							: example.project,
+					),
+			});
+			assert.deepEqual(loaded.warnings, []);
+			const resolved = resolveAutoNavigateConfig(loaded.config, "test/model-6");
+			assert.equal(resolved.enabled, example.enabled);
+			assert.equal(resolved.rewindAtTokens, example.threshold);
+			assert.equal(resolved.tools["read"], "omit");
+		});
+	}
+
+	it("ignores an untrusted project policy without reading it", async () => {
+		const loaded = await loadTreeNavigatorConfig({
+			agentDir: "/agent",
+			projectPath: "/project/.pi/tree-navigator.json",
+			projectTrusted: false,
+			readFile: async (path) => {
+				assert.ok(path.startsWith("/agent/"), "untrusted project must not be read");
+				return JSON.stringify({
+					model_overrides: {
+						"*model*": { auto_navigate: { enabled: true, rewind_at_tokens: 200000 } },
+					},
+				});
+			},
+		});
+		const resolved = resolveAutoNavigateConfig(loaded.config, "test/model-6");
+		assert.equal(resolved.enabled, true);
+		assert.equal(resolved.rewindAtTokens, 200000);
+	});
+
+	for (const example of [
+		{
+			name: "keeps an invalid base fail-closed despite valid model and higher-scope enablement",
+			global: { auto_navigate: { check_every_turns: 0 } },
+			project: {
+				auto_navigate: { enabled: true },
+				model_overrides: { "*model*": { auto_navigate: { enabled: true } } },
+			},
+			enabled: false,
+		},
+		{
+			name: "keeps an unrepaired matching model policy fail-closed",
+			global: {
+				model_overrides: { "*model*": { auto_navigate: { check_every_turns: 0 } } },
+			},
+			project: { auto_navigate: { enabled: true } },
+			enabled: false,
+		},
+		{
+			name: "lets a higher valid same-pattern model policy repair a malformed entry",
+			global: {
+				model_overrides: { "*model*": { auto_navigate: { check_every_turns: 0 } } },
+			},
+			project: {
+				model_overrides: {
+					"*model*": { auto_navigate: { enabled: true, rewind_at_tokens: 400000 } },
+				},
+			},
+			enabled: true,
+		},
+	]) {
+		it(example.name, async () => {
+			const loaded = await loadTreeNavigatorConfig({
+				agentDir: "/agent",
+				projectPath: "/project/.pi/tree-navigator.json",
+				projectTrusted: true,
+				readFile: async (path) =>
+					JSON.stringify(path.startsWith("/agent/") ? example.global : example.project),
+			});
+			assert.ok(loaded.warnings.length > 0);
+			const resolved = resolveAutoNavigateConfig(loaded.config, "test/model-6");
+			assert.equal(resolved.enabled, example.enabled);
+			if (example.enabled) assert.equal(resolved.rewindAtTokens, 400000);
+		});
+	}
 });

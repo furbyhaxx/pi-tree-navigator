@@ -151,6 +151,10 @@ for the clone workflow and supported inputs.
 
 ## Invariants
 
+- Automatic policies retain scope boundaries through runtime resolution: Global
+  base + matching model policies, then trusted Project, then Session. Model
+  specificity orders matches within a scope, never above a higher scope's base.
+  Defaults materialize last; editable merged maps do not replace ordered policies.
 - Folds preserve the abandoned branch and run independently of main-agent turns.
 - A fold to a target inside the latest compaction's kept range re-appends a copy
   of that compaction after its handoff (`details.carriedFrom`, no `usage`). Targets

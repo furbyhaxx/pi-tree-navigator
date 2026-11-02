@@ -1,0 +1,30 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ Anchor/Settings  target: Session ─
+ ❯ auto_navigate.enabled
+
+ → auto_…te.enabled  false · project
+      ↳ Current model: disabled · p…
+   auto_…_at_tokens  400k · project
+   auto_…cent_share  0.25 · default
+   auto_….milestone  recommended · …
+   auto_…igate.mode  anchor-and-rew…
+   auto_…very_turns  6 · default
+
+   Let a sidecar controller set
+   anchors and fold on its own as…
+ enter select  esc clear  …
+───────────── ↓ 1 more ─────────────
+/tmp/navigator-policy-wdh3y41n/work
+0.0%/1.0M (auto)          scope-test

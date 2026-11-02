@@ -2,9 +2,10 @@
 
 import { homedir } from "node:os";
 import { sep } from "node:path";
+import { resolveAutoNavigateConfig } from "../core/config.ts";
 import type { FrameRow, FrameScreen } from "./frame.ts";
 import { policyWarning } from "./policy-settings.ts";
-import { BASE_RESERVE } from "./settings-screen-catalog.ts";
+import { BASE_RESERVE, tokens } from "./settings-screen-catalog.ts";
 import {
 	INVALID_TEXT,
 	invalidIn,
@@ -273,6 +274,7 @@ export function buildScreen(
 	cursor: number,
 	top: boolean,
 	paused?: boolean,
+	modelKey?: string,
 ): FrameScreen {
 	const { snap, target, staged } = view;
 	const at = (index: number): Target | undefined => {
@@ -336,7 +338,18 @@ export function buildScreen(
 			enabled: () => pending > 0,
 		});
 	}
-	const rows = items.map((item) => itemRow(item, view));
+	const policy = modelKey ? resolveAutoNavigateConfig(view.preview.config, modelKey) : undefined;
+	const rows = items.map((item) => {
+		const row = itemRow(item, view);
+		if (
+			policy &&
+			"def" in item &&
+			["auto_navigate.enabled", "auto_navigate.rewind_at_tokens"].includes(item.def.key)
+		) {
+			row.detail = `Current model: ${policy.enabled ? "enabled" : "disabled"} · pressure at ${tokens(policy.rewindAtTokens)} · ${row.detail ?? ""}`;
+		}
+		return row;
+	});
 	if (top) {
 		rows.push(
 			{

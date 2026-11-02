@@ -135,7 +135,10 @@ runtime overrides set through `/anchor settings`:
 ```
 
 A runtime key wins over project, which wins over global (including the hint's
-disable sentinels); absent everywhere uses the field's default. Settings saves apply
+disable sentinels); absent everywhere uses the field's default. Automatic folding
+resolves each scope's base policy followed by its matching model overrides before
+moving to the next scope. A global model override cannot re-enable automatic folding
+or lower its threshold after Project or Session overrides those fields. Settings saves apply
 immediately to the current session; no reload is needed. Session overrides and the
 session automatic-fold pause clear on `/reload` or a session switch. Reset removes a key from
 the selected scope, revealing the lower layer rather than forcing the default.
